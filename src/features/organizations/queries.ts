@@ -34,6 +34,19 @@ export async function getMyOrg() {
   return data;
 }
 
+export async function getMyOrgWithTechnicianCount() {
+  const org = await getMyOrg();
+  if (!org) return null;
+
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("technician_profiles")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", org.id);
+
+  return { org, techCount: count ?? 0 };
+}
+
 export async function getOrgTechnicians(orgId: string) {
   const supabase = await createClient();
 

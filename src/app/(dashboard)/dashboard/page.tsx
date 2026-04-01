@@ -1,5 +1,6 @@
 import { getMyProfile } from "@/features/profiles/queries";
 import { getMyVehicles } from "@/features/vehicles/queries";
+import { getMyPpiRequestCount } from "@/features/ppi/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Car, ClipboardCheck, Plus } from "lucide-react";
@@ -10,7 +11,10 @@ export default async function DashboardPage() {
   const profile = await getMyProfile();
   if (!profile) redirect("/login");
 
-  const vehicles = await getMyVehicles();
+  const [vehicles, inspectionCount] = await Promise.all([
+    getMyVehicles(),
+    getMyPpiRequestCount(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -43,10 +47,10 @@ export default async function DashboardPage() {
             <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Start your first PPI
-            </p>
+            <div className="text-2xl font-bold">{inspectionCount}</div>
+            <Button variant="link" className="mt-1 h-auto p-0 text-xs" asChild>
+              <Link href="/dashboard/ppi">View all</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>

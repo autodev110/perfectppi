@@ -4,6 +4,7 @@ export async function getDirectory(filters?: {
   certification?: string;
   specialty?: string;
   orgId?: string;
+  isIndependent?: boolean;
 }) {
   const supabase = await createClient();
 
@@ -28,11 +29,16 @@ export async function getDirectory(filters?: {
     query = query.eq("organization_id", filters.orgId);
   }
 
+  if (filters?.isIndependent !== undefined) {
+    query = query.eq("is_independent", filters.isIndependent);
+  }
+
   const { data } = await query;
   return data ?? [];
 }
 
-export async function getTechProfile(profileId: string) {
+// id = technician_profiles.id (the PK used in /technicians/[id] URLs)
+export async function getTechProfile(id: string) {
   const supabase = await createClient();
 
   const { data } = await supabase
@@ -46,7 +52,7 @@ export async function getTechProfile(profileId: string) {
       organization:organizations(id, name, slug, logo_url)
     `
     )
-    .eq("profile_id", profileId)
+    .eq("id", id)
     .single();
 
   return data;

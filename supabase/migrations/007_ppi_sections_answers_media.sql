@@ -41,9 +41,9 @@ CREATE TABLE ppi_sections (
 
 CREATE INDEX ppi_sections_submission_id_idx ON ppi_sections(ppi_submission_id);
 
-CREATE TRIGGER handle_updated_at
+CREATE TRIGGER ppi_sections_updated_at
   BEFORE UPDATE ON ppi_sections
-  FOR EACH ROW EXECUTE PROCEDURE moddatetime(updated_at);
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 CREATE TABLE ppi_answers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -60,9 +60,9 @@ CREATE TABLE ppi_answers (
 
 CREATE INDEX ppi_answers_section_id_idx ON ppi_answers(ppi_section_id);
 
-CREATE TRIGGER handle_updated_at
+CREATE TRIGGER ppi_answers_updated_at
   BEFORE UPDATE ON ppi_answers
-  FOR EACH ROW EXECUTE PROCEDURE moddatetime(updated_at);
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 CREATE TABLE ppi_media (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

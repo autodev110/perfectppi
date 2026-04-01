@@ -54,6 +54,6 @@ CREATE INDEX ppi_requests_vehicle_id_idx ON ppi_requests(vehicle_id);
 CREATE INDEX ppi_requests_assigned_tech_id_idx ON ppi_requests(assigned_tech_id);
 CREATE INDEX ppi_requests_status_idx ON ppi_requests(status);
 
-CREATE TRIGGER handle_updated_at
+CREATE TRIGGER ppi_requests_updated_at
   BEFORE UPDATE ON ppi_requests
-  FOR EACH ROW EXECUTE PROCEDURE moddatetime(updated_at);
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();

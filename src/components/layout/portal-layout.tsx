@@ -13,6 +13,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Menu, LogOut, Settings, User } from "lucide-react";
 import Link from "next/link";
+import { NotificationBell } from "@/components/shared/notification-bell";
 
 interface PortalLayoutProps {
   children: React.ReactNode;
@@ -53,8 +54,9 @@ export function PortalLayout({
 
           <div className="lg:hidden" />
 
-          {/* User menu */}
-          <DropdownMenu>
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <User className="h-5 w-5" />
@@ -80,6 +82,7 @@ export function PortalLayout({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </header>
 
         {/* Page content */}

@@ -39,9 +39,9 @@ CREATE TABLE warranty_options (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TRIGGER handle_updated_at
+CREATE TRIGGER warranty_options_updated_at
   BEFORE UPDATE ON warranty_options
-  FOR EACH ROW EXECUTE PROCEDURE moddatetime(updated_at);
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 CREATE TABLE warranty_orders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -55,9 +55,9 @@ CREATE TABLE warranty_orders (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TRIGGER handle_updated_at
+CREATE TRIGGER warranty_orders_updated_at
   BEFORE UPDATE ON warranty_orders
-  FOR EACH ROW EXECUTE PROCEDURE moddatetime(updated_at);
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 CREATE TABLE contracts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
