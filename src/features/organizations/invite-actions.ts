@@ -74,7 +74,8 @@ export async function inviteTechnicianToOrg(techProfileId: string) {
   return { success: true };
 }
 
-export async function removeTechnicianFromOrg(techProfileId: string) {
+export async function removeTechnicianFromOrg(techProfileId: string, _formData?: FormData) {
+  void _formData;
   const profile = await requireRole(["org_manager"]);
 
   const supabase = await createClient();
@@ -86,7 +87,7 @@ export async function removeTechnicianFromOrg(techProfileId: string) {
     .single();
 
   if (!myTechProfile?.organization_id) {
-    return { error: "You are not associated with an organization" };
+    throw new Error("You are not associated with an organization");
   }
 
   const orgId = myTechProfile.organization_id;
@@ -99,7 +100,9 @@ export async function removeTechnicianFromOrg(techProfileId: string) {
     .eq("organization_id", orgId)
     .eq("role", "technician");
 
-  if (deleteError) return { error: deleteError.message };
+  if (deleteError) {
+    throw new Error(`Failed to remove organization membership: ${deleteError.message}`);
+  }
 
   // Unlink tech from org
   const { error: updateError } = await supabase
@@ -108,13 +111,15 @@ export async function removeTechnicianFromOrg(techProfileId: string) {
     .eq("id", techProfileId)
     .eq("organization_id", orgId);
 
-  if (updateError) return { error: updateError.message };
+  if (updateError) {
+    throw new Error(`Failed to unlink technician from organization: ${updateError.message}`);
+  }
 
   revalidatePath("/org/technicians");
-  return { success: true };
 }
 
-export async function leaveTechOrganization() {
+export async function leaveTechOrganization(_formData?: FormData) {
+  void _formData;
   const profile = await requireRole(["technician"]);
 
   const supabase = await createClient();
@@ -126,7 +131,7 @@ export async function leaveTechOrganization() {
     .single();
 
   if (!techProfile?.organization_id) {
-    return { error: "You are not in an organization" };
+    throw new Error("You are not in an organization");
   }
 
   // Delete membership row
@@ -136,7 +141,9 @@ export async function leaveTechOrganization() {
     .eq("technician_profile_id", techProfile.id)
     .eq("role", "technician");
 
-  if (deleteError) return { error: deleteError.message };
+  if (deleteError) {
+    throw new Error(`Failed to remove organization membership: ${deleteError.message}`);
+  }
 
   // Clear org from tech profile
   const { error: updateError } = await supabase
@@ -144,8 +151,9 @@ export async function leaveTechOrganization() {
     .update({ organization_id: null, is_independent: true })
     .eq("id", techProfile.id);
 
-  if (updateError) return { error: updateError.message };
+  if (updateError) {
+    throw new Error(`Failed to leave organization: ${updateError.message}`);
+  }
 
   revalidatePath("/tech/organization");
-  return { success: true };
 }

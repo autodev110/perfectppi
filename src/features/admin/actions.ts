@@ -4,7 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/features/auth/guards";
 import { revalidatePath } from "next/cache";
 
-export async function provisionAdmin(targetProfileId: string) {
+export async function provisionAdmin(targetProfileId: string, _formData?: FormData) {
+  void _formData;
   await requireRole(["admin"]);
 
   const supabase = createAdminClient();
@@ -13,13 +14,15 @@ export async function provisionAdmin(targetProfileId: string) {
     .update({ role: "admin" })
     .eq("id", targetProfileId);
 
-  if (error) return { error: error.message };
+  if (error) {
+    throw new Error(`Failed to make user admin: ${error.message}`);
+  }
 
   revalidatePath("/admin/users");
-  return { success: true };
 }
 
-export async function demoteToConsumer(targetProfileId: string) {
+export async function demoteToConsumer(targetProfileId: string, _formData?: FormData) {
+  void _formData;
   await requireRole(["admin"]);
 
   const supabase = createAdminClient();
@@ -28,8 +31,9 @@ export async function demoteToConsumer(targetProfileId: string) {
     .update({ role: "consumer" })
     .eq("id", targetProfileId);
 
-  if (error) return { error: error.message };
+  if (error) {
+    throw new Error(`Failed to demote user: ${error.message}`);
+  }
 
   revalidatePath("/admin/users");
-  return { success: true };
 }

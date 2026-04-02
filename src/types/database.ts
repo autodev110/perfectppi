@@ -145,6 +145,97 @@ export type Database = {
           }
         ];
       };
+      ppi_requests: {
+        Row: {
+          id: string;
+          vehicle_id: string;
+          requester_id: string;
+          assigned_tech_id: string | null;
+          whose_car: "own" | "other";
+          requester_role: "buying" | "selling" | "documenting";
+          performer_type: "self" | "technician";
+          ppi_type: "personal" | "general_tech" | "certified_tech";
+          status:
+            | "draft"
+            | "pending_assignment"
+            | "assigned"
+            | "accepted"
+            | "in_progress"
+            | "submitted"
+            | "needs_revision"
+            | "completed"
+            | "archived";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          vehicle_id: string;
+          requester_id: string;
+          assigned_tech_id?: string | null;
+          whose_car: "own" | "other";
+          requester_role: "buying" | "selling" | "documenting";
+          performer_type: "self" | "technician";
+          ppi_type?: "personal" | "general_tech" | "certified_tech";
+          status?:
+            | "draft"
+            | "pending_assignment"
+            | "assigned"
+            | "accepted"
+            | "in_progress"
+            | "submitted"
+            | "needs_revision"
+            | "completed"
+            | "archived";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          vehicle_id?: string;
+          requester_id?: string;
+          assigned_tech_id?: string | null;
+          whose_car?: "own" | "other";
+          requester_role?: "buying" | "selling" | "documenting";
+          performer_type?: "self" | "technician";
+          ppi_type?: "personal" | "general_tech" | "certified_tech";
+          status?:
+            | "draft"
+            | "pending_assignment"
+            | "assigned"
+            | "accepted"
+            | "in_progress"
+            | "submitted"
+            | "needs_revision"
+            | "completed"
+            | "archived";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ppi_requests_vehicle_id_fkey";
+            columns: ["vehicle_id"];
+            isOneToOne: false;
+            referencedRelation: "vehicles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ppi_requests_requester_id_fkey";
+            columns: ["requester_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ppi_requests_assigned_tech_id_fkey";
+            columns: ["assigned_tech_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       organizations: {
         Row: {
           id: string;
@@ -226,6 +317,68 @@ export type Database = {
           }
         ];
       };
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          type:
+            | "tech_request_new"
+            | "tech_request_accepted"
+            | "inspection_submitted"
+            | "inspection_updated"
+            | "warranty_available"
+            | "payment_completed"
+            | "message_received";
+          title: string;
+          body: string;
+          data: Json;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          type:
+            | "tech_request_new"
+            | "tech_request_accepted"
+            | "inspection_submitted"
+            | "inspection_updated"
+            | "warranty_available"
+            | "payment_completed"
+            | "message_received";
+          title: string;
+          body: string;
+          data?: Json;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          type?:
+            | "tech_request_new"
+            | "tech_request_accepted"
+            | "inspection_submitted"
+            | "inspection_updated"
+            | "warranty_available"
+            | "payment_completed"
+            | "message_received";
+          title?: string;
+          body?: string;
+          data?: Json;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       organization_memberships: {
         Row: {
           id: string;
@@ -287,8 +440,30 @@ export type Database = {
       user_role: "consumer" | "technician" | "org_manager" | "admin";
       vehicle_visibility: "public" | "private";
       media_type: "image" | "video";
+      ppi_request_status:
+        | "draft"
+        | "pending_assignment"
+        | "assigned"
+        | "accepted"
+        | "in_progress"
+        | "submitted"
+        | "needs_revision"
+        | "completed"
+        | "archived";
+      ppi_type: "personal" | "general_tech" | "certified_tech";
+      performer_type: "self" | "technician";
+      whose_car: "own" | "other";
+      requester_role: "buying" | "selling" | "documenting";
       certification_level: "none" | "ase" | "master" | "oem_qualified";
       org_member_role: "technician" | "manager";
+      notification_type:
+        | "tech_request_new"
+        | "tech_request_accepted"
+        | "inspection_submitted"
+        | "inspection_updated"
+        | "warranty_available"
+        | "payment_completed"
+        | "message_received";
     };
   };
 }

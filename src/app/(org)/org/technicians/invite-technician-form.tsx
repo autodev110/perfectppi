@@ -65,7 +65,7 @@ export function InviteTechnicianForm() {
     const result = await inviteTechnicianToOrg(techId);
     setInviting(null);
 
-    if ("error" in result) {
+    if (result.error) {
       setMessage({ id: techId, type: "error", text: result.error });
     } else {
       setMessage({ id: techId, type: "success", text: "Technician added to your organization." });
