@@ -4,53 +4,81 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* PerfectPPI Design System */
-  --background: 210 40% 98.8%; /* #F8FAFC */
-  --foreground: 222 47% 11.2%; /* #1E293B */
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11.2%;
+  /* PerfectPPI Stitch Design System — M3 Surface Hierarchy */
+  --background: 210 33% 98.4%; /* #f7f9fb */
+  --foreground: 210 14% 10.6%; /* #191c1e */
+  --card: 0 0% 100%; /* #ffffff — surface-container-lowest */
+  --card-foreground: 210 14% 10.6%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11.2%;
-  --primary: 222 84% 4.9%; /* #0F172A deep navy */
-  --primary-foreground: 210 40% 98%;
-  --secondary: 217 33% 17.6%; /* #1E293B slate */
-  --secondary-foreground: 210 40% 98%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215 16% 47%;
-  --accent: 221 83% 53.3%; /* #2563EB electric blue */
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 72% 51%; /* #DC2626 danger */
-  --destructive-foreground: 210 40% 98%;
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
-  --ring: 221 83% 53.3%; /* accent blue */
-  --radius: 0.75rem; /* 12px */
+  --popover-foreground: 210 14% 10.6%;
+  --primary: 0 0% 0%; /* #000000 */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 216 16% 39%; /* #545f73 */
+  --secondary-foreground: 0 0% 100%;
+  --muted: 210 18% 95.3%; /* #f2f4f6 — surface-container-low */
+  --muted-foreground: 225 5% 29%; /* #45464d */
+  --accent: 223 100% 64.5%; /* #497cff — on-tertiary-container */
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 73% 41.2%; /* #ba1a1a */
+  --destructive-foreground: 0 0% 100%;
+  --border: 228 6% 79.2%; /* #c6c6cd — outline-variant */
+  --input: 228 6% 79.2%;
+  --ring: 223 100% 64.5%;
+  --radius: 0.75rem;
 
-  /* PerfectPPI Custom Tokens */
-  --teal: 174 83% 34.5%; /* #0EA5A4 verified/positive */
-  --warning: 38 92% 50%; /* #F59E0B amber */
+  /* Surface hierarchy */
+  --surface: 210 33% 98.4%;
+  --surface-dim: 210 4% 85.1%;
+  --surface-container-lowest: 0 0% 100%;
+  --surface-container-low: 210 18% 95.3%;
+  --surface-container: 210 8% 93.3%;
+  --surface-container-high: 210 6% 90.8%;
+  --surface-container-highest: 210 5% 88.0%;
+  --on-surface: 210 14% 10.6%;
+  --on-surface-variant: 225 5% 29%;
+
+  /* Primary container — deep navy */
+  --primary-container: 225 43% 12.5%; /* #131b2e */
+  --on-primary-container: 225 11% 55%;
+  --primary-fixed-dim: 225 26% 81%;
+
+  /* Secondary container */
+  --secondary-container: 219 59% 90.4%; /* #d5e0f8 */
+  --on-secondary-container: 220 15% 40.6%;
+
+  /* Tertiary — accent blue */
+  --tertiary-container: 222 100% 14.7%; /* #00174b */
+  --on-tertiary-container: 223 100% 64.5%; /* #497cff */
+
+  /* Outline */
+  --outline: 225 3% 47.8%;
+  --outline-variant: 228 6% 79.2%;
+
+  /* Semantic extras */
+  --teal: 174 83% 34.5%;
+  --warning: 38 92% 50%;
 }
 
 .dark {
-  --background: 222 84% 4.9%;
-  --foreground: 210 40% 98%;
-  --card: 222 47% 11.2%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222 47% 11.2%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 210 40% 98%;
-  --primary-foreground: 222 84% 4.9%;
-  --secondary: 217 33% 17.6%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217 33% 17.6%;
+  --background: 225 43% 12.5%;
+  --foreground: 210 33% 98.4%;
+  --card: 210 14% 10.6%;
+  --card-foreground: 210 33% 98.4%;
+  --popover: 210 14% 10.6%;
+  --popover-foreground: 210 33% 98.4%;
+  --primary: 210 33% 98.4%;
+  --primary-foreground: 0 0% 0%;
+  --secondary: 216 16% 39%;
+  --secondary-foreground: 210 33% 98.4%;
+  --muted: 220 15% 16%;
   --muted-foreground: 215 20% 65%;
-  --accent: 221 83% 53.3%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 217 33% 17.6%;
-  --input: 217 33% 17.6%;
-  --ring: 221 83% 53.3%;
+  --accent: 223 100% 64.5%;
+  --accent-foreground: 210 33% 98.4%;
+  --destructive: 0 73% 41.2%;
+  --destructive-foreground: 210 33% 98.4%;
+  --border: 220 15% 16%;
+  --input: 220 15% 16%;
+  --ring: 223 100% 64.5%;
 }
 
 @theme inline {
@@ -74,14 +102,38 @@
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
 
-  /* PerfectPPI custom colors */
+  /* Surface hierarchy */
+  --color-surface: hsl(var(--surface));
+  --color-surface-dim: hsl(var(--surface-dim));
+  --color-surface-container-lowest: hsl(var(--surface-container-lowest));
+  --color-surface-container-low: hsl(var(--surface-container-low));
+  --color-surface-container: hsl(var(--surface-container));
+  --color-surface-container-high: hsl(var(--surface-container-high));
+  --color-surface-container-highest: hsl(var(--surface-container-highest));
+  --color-on-surface: hsl(var(--on-surface));
+  --color-on-surface-variant: hsl(var(--on-surface-variant));
+
+  /* Containers */
+  --color-primary-container: hsl(var(--primary-container));
+  --color-on-primary-container: hsl(var(--on-primary-container));
+  --color-primary-fixed-dim: hsl(var(--primary-fixed-dim));
+  --color-secondary-container: hsl(var(--secondary-container));
+  --color-on-secondary-container: hsl(var(--on-secondary-container));
+  --color-tertiary-container: hsl(var(--tertiary-container));
+  --color-on-tertiary-container: hsl(var(--on-tertiary-container));
+
+  /* Outline */
+  --color-outline: hsl(var(--outline));
+  --color-outline-variant: hsl(var(--outline-variant));
+
+  /* Semantic */
   --color-teal: hsl(var(--teal));
   --color-warning: hsl(var(--warning));
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px); /* 16px */
+  --radius-xl: calc(var(--radius) + 4px);
 
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-heading: "Manrope", ui-sans-serif, system-ui, sans-serif;
@@ -93,11 +145,26 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-surface text-on-surface;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
+  }
+}
+
+@layer utilities {
+  .glass-nav {
+    background-color: rgba(247, 249, 251, 0.8);
+    backdrop-filter: blur(24px);
+  }
+
+  .ghost-border {
+    outline: 1px solid rgba(198, 201, 205, 0.15);
+  }
+
+  .tonal-shift {
+    background-color: hsl(var(--surface-container-low));
   }
 }

@@ -1,9 +1,7 @@
 import { getMyProfile } from "@/features/profiles/queries";
 import { getMyVehicles } from "@/features/vehicles/queries";
 import { getMyPpiRequestCount } from "@/features/ppi/queries";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Car, ClipboardCheck, Plus } from "lucide-react";
+import { Car, ClipboardCheck, Plus, ArrowRight, Award } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -17,58 +15,162 @@ export default async function DashboardPage() {
   ]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">
-          Welcome{profile.display_name ? `, ${profile.display_name}` : ""}
-        </h1>
-        <p className="text-muted-foreground">
-          Your vehicle inspection dashboard.
-        </p>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Vehicles</CardTitle>
-            <Car className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{vehicles.length}</div>
-            <Button variant="link" className="mt-1 h-auto p-0 text-xs" asChild>
-              <Link href="/dashboard/vehicles">View all</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Inspections</CardTitle>
-            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{inspectionCount}</div>
-            <Button variant="link" className="mt-1 h-auto p-0 text-xs" asChild>
-              <Link href="/dashboard/ppi">View all</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="flex gap-3">
-        <Button asChild>
-          <Link href="/dashboard/vehicles/new">
-            <Plus className="mr-2 h-4 w-4" />
+    <div className="space-y-12">
+      {/* Header */}
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div>
+          <h1 className="text-4xl font-extrabold tracking-tight text-on-surface mb-2">
+            Hello{profile.display_name ? `, ${profile.display_name}` : ""}
+          </h1>
+          <p className="text-on-surface-variant font-medium">
+            Welcome back to your automotive ledger. Everything is in order.
+          </p>
+        </div>
+        <div className="flex gap-4">
+          <Link
+            href="/dashboard/vehicles/new"
+            className="bg-surface-container-lowest text-on-surface-variant font-semibold px-6 py-3 rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2 border border-outline-variant/20"
+          >
+            <Plus className="h-4 w-4" />
             Add Vehicle
           </Link>
-        </Button>
-        <Button variant="outline" asChild>
-          <Link href="/dashboard/ppi/new">
-            <ClipboardCheck className="mr-2 h-4 w-4" />
-            New Inspection
+          <Link
+            href="/dashboard/ppi/new"
+            className="bg-primary text-primary-foreground font-semibold px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+          >
+            <ClipboardCheck className="h-4 w-4" />
+            Start New Inspection
           </Link>
-        </Button>
-      </div>
+        </div>
+      </header>
+
+      {/* Stats — Asymmetric Grid */}
+      <section className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <div className="md:col-span-1 bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-outline-variant/10">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-4">
+            Fleet Status
+          </p>
+          <div className="flex items-end justify-between">
+            <div>
+              <h3 className="text-4xl font-black text-on-surface leading-none">
+                {String(vehicles.length).padStart(2, "0")}
+              </h3>
+              <p className="text-sm font-medium text-on-surface-variant mt-1">
+                Registered Vehicles
+              </p>
+            </div>
+            <div className="bg-secondary-container p-2 rounded-lg">
+              <Car className="h-5 w-5 text-on-secondary-container" />
+            </div>
+          </div>
+        </div>
+
+        <div className="md:col-span-1 bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-outline-variant/10">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-4">
+            Inspections
+          </p>
+          <div className="flex items-end justify-between">
+            <div>
+              <h3 className="text-4xl font-black text-on-surface leading-none">
+                {String(inspectionCount).padStart(2, "0")}
+              </h3>
+              <p className="text-sm font-medium text-on-surface-variant mt-1">
+                Total Inspections
+              </p>
+            </div>
+            <div className="bg-tertiary-container p-2 rounded-lg">
+              <ClipboardCheck className="h-5 w-5 text-on-tertiary-container" />
+            </div>
+          </div>
+        </div>
+
+        <div className="md:col-span-2 bg-primary-container p-6 rounded-xl shadow-lg flex flex-col justify-between text-white">
+          <div className="flex justify-between items-start">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-primary-fixed-dim">
+              Inspection Coverage
+            </p>
+          </div>
+          <div className="mt-4">
+            <h3 className="text-3xl font-bold text-white">
+              {inspectionCount > 0 ? "Active" : "Get Started"}
+            </h3>
+            <p className="text-xs mt-1 text-primary-fixed-dim">
+              {inspectionCount > 0
+                ? "Your vehicles are covered by PerfectPPI inspections"
+                : "Start your first inspection to begin building your vehicle ledger"}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Vehicle Portfolio */}
+      <section>
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl font-extrabold tracking-tight">
+            Your Portfolio
+          </h2>
+          <Link
+            href="/dashboard/vehicles"
+            className="text-sm font-bold text-on-tertiary-container flex items-center gap-1"
+          >
+            View All <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+
+        {vehicles.length === 0 ? (
+          <div className="bg-surface-container-lowest rounded-2xl p-12 text-center shadow-sm border border-outline-variant/10">
+            <Car className="h-12 w-12 text-on-surface-variant/30 mx-auto mb-4" />
+            <h3 className="text-lg font-bold mb-2">No vehicles yet</h3>
+            <p className="text-sm text-on-surface-variant mb-6">
+              Add your first vehicle to get started with inspections.
+            </p>
+            <Link
+              href="/dashboard/vehicles/new"
+              className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-bold text-sm"
+            >
+              <Plus className="h-4 w-4" />
+              Add Vehicle
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {vehicles.slice(0, 4).map((vehicle) => (
+              <Link
+                key={vehicle.id}
+                href={`/dashboard/vehicles/${vehicle.id}`}
+                className="group bg-surface-container-lowest rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-outline-variant/10 flex flex-col md:flex-row"
+              >
+                <div className="w-full md:w-2/5 relative h-56 md:h-auto bg-surface-container flex items-center justify-center">
+                  <Car className="h-16 w-16 text-on-surface-variant/20 group-hover:scale-110 transition-transform duration-500" />
+                </div>
+                <div className="flex-1 p-8 flex flex-col">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-on-surface">
+                        {vehicle.year} {vehicle.make} {vehicle.model}
+                      </h3>
+                      <p className="text-xs font-mono text-on-surface-variant uppercase mt-1">
+                        VIN: {vehicle.vin ? `${vehicle.vin.slice(0, 11)}*****` : "Not provided"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-400/20 bg-slate-400/10">
+                      <Award className="h-3.5 w-3.5 text-slate-500" />
+                      <span className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">
+                        {vehicle.visibility === "public" ? "Public" : "Private"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-auto pt-4 border-t border-outline-variant/10">
+                    <button className="w-full py-3 bg-secondary-container text-on-secondary-container rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-200 transition-colors">
+                      View Details
+                    </button>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

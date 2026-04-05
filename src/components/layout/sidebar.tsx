@@ -19,8 +19,10 @@ import {
   CreditCard,
   ScrollText,
   Settings,
+  LogOut,
 } from "lucide-react";
 import type { ComponentType } from "react";
+import { useSignOut } from "@/features/auth/hooks";
 
 const iconMap: Record<string, ComponentType<{ className?: string }>> = {
   LayoutDashboard,
@@ -53,20 +55,23 @@ interface SidebarProps {
 
 export function Sidebar({ items, title }: SidebarProps) {
   const pathname = usePathname();
+  const signOut = useSignOut();
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r bg-card">
-      <div className="flex h-16 items-center border-b px-6">
-        <Link href="/" className="font-heading text-lg font-bold text-primary">
+    <aside className="flex h-full w-64 flex-col bg-slate-100 py-6">
+      <div className="px-4 mb-8">
+        <Link
+          href="/"
+          className="text-lg font-black tracking-tighter text-slate-900"
+        >
           PerfectPPI
         </Link>
-      </div>
-      <div className="px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">
           {title}
         </p>
       </div>
-      <nav className="flex-1 space-y-1 px-3">
+
+      <nav className="flex-1 space-y-1 px-2">
         {items.map((item) => {
           const Icon = iconMap[item.icon] ?? LayoutDashboard;
           const isActive =
@@ -82,18 +87,28 @@ export function Sidebar({ items, title }: SidebarProps) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all",
                 isActive
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-200"
               )}
             >
-              <Icon className="h-4 w-4 shrink-0" />
+              <Icon className="h-[18px] w-[18px] shrink-0" />
               {item.label}
             </Link>
           );
         })}
       </nav>
+
+      <div className="mt-auto space-y-1 border-t border-outline-variant/20 px-2 pt-4">
+        <button
+          onClick={signOut}
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-slate-200"
+        >
+          <LogOut className="h-[18px] w-[18px] shrink-0" />
+          Sign Out
+        </button>
+      </div>
     </aside>
   );
 }

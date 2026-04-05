@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useSignOut } from "@/features/auth/hooks";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, LogOut, Settings, User } from "lucide-react";
+import { Menu, Settings, User, Search } from "lucide-react";
 import Link from "next/link";
 import { NotificationBell } from "@/components/shared/notification-bell";
 
@@ -29,18 +28,13 @@ export function PortalLayout({
   profileHref,
 }: PortalLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const signOut = useSignOut();
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Desktop sidebar */}
+    <div className="flex h-screen overflow-hidden bg-surface">
       <div className="hidden lg:flex">{sidebar}</div>
 
-      {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="flex h-16 items-center justify-between border-b bg-card px-4 lg:px-6">
-          {/* Mobile menu */}
+        <header className="flex h-14 items-center justify-between px-4 lg:px-8">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild className="lg:hidden">
               <Button variant="ghost" size="icon">
@@ -54,39 +48,46 @@ export function PortalLayout({
 
           <div className="lg:hidden" />
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <div className="relative hidden md:block">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
+              <input
+                type="text"
+                placeholder="Search..."
+                className="h-9 w-56 rounded-xl bg-surface-container-lowest pl-9 pr-4 text-sm ring-1 ring-outline-variant/20 placeholder:text-outline-variant focus:outline-none focus:ring-2 focus:ring-on-tertiary-container/30 transition-all"
+              />
+            </div>
+
             <NotificationBell />
+
             <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <User className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem asChild>
-                <Link href={profileHref}>
-                  <User className="mr-2 h-4 w-4" />
-                  Profile
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href={settingsHref}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={signOut}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-container text-xs font-bold text-white">
+                    <User className="h-4 w-4" />
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link href={profileHref}>
+                    <User className="mr-2 h-4 w-4" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href={settingsHref}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 lg:p-8">{children}</main>
       </div>
     </div>
   );
