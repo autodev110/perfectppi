@@ -418,6 +418,232 @@ export type Database = {
           }
         ];
       };
+      ppi_submissions: {
+        Row: {
+          id: string;
+          ppi_request_id: string;
+          performer_id: string;
+          version: number;
+          is_current: boolean;
+          status: "draft" | "in_progress" | "submitted" | "completed";
+          submitted_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ppi_request_id: string;
+          performer_id: string;
+          version?: number;
+          is_current?: boolean;
+          status?: "draft" | "in_progress" | "submitted" | "completed";
+          submitted_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          ppi_request_id?: string;
+          performer_id?: string;
+          version?: number;
+          is_current?: boolean;
+          status?: "draft" | "in_progress" | "submitted" | "completed";
+          submitted_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ppi_submissions_ppi_request_id_fkey";
+            columns: ["ppi_request_id"];
+            isOneToOne: false;
+            referencedRelation: "ppi_requests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ppi_submissions_performer_id_fkey";
+            columns: ["performer_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      ppi_sections: {
+        Row: {
+          id: string;
+          ppi_submission_id: string;
+          section_type:
+            | "vehicle_basics"
+            | "dashboard_warnings"
+            | "exterior"
+            | "interior"
+            | "engine_bay"
+            | "tires_brakes"
+            | "suspension_steering"
+            | "fluids"
+            | "electrical_controls"
+            | "underbody"
+            | "road_test"
+            | "modifications";
+          completion_state: "not_started" | "in_progress" | "completed";
+          notes: string | null;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          ppi_submission_id: string;
+          section_type:
+            | "vehicle_basics"
+            | "dashboard_warnings"
+            | "exterior"
+            | "interior"
+            | "engine_bay"
+            | "tires_brakes"
+            | "suspension_steering"
+            | "fluids"
+            | "electrical_controls"
+            | "underbody"
+            | "road_test"
+            | "modifications";
+          completion_state?: "not_started" | "in_progress" | "completed";
+          notes?: string | null;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          ppi_submission_id?: string;
+          section_type?:
+            | "vehicle_basics"
+            | "dashboard_warnings"
+            | "exterior"
+            | "interior"
+            | "engine_bay"
+            | "tires_brakes"
+            | "suspension_steering"
+            | "fluids"
+            | "electrical_controls"
+            | "underbody"
+            | "road_test"
+            | "modifications";
+          completion_state?: "not_started" | "in_progress" | "completed";
+          notes?: string | null;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ppi_sections_ppi_submission_id_fkey";
+            columns: ["ppi_submission_id"];
+            isOneToOne: false;
+            referencedRelation: "ppi_submissions";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      ppi_answers: {
+        Row: {
+          id: string;
+          ppi_section_id: string;
+          prompt: string;
+          answer_type: "text" | "yes_no" | "select" | "number";
+          answer_value: string | null;
+          options: Json | null;
+          is_required: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          ppi_section_id: string;
+          prompt: string;
+          answer_type?: "text" | "yes_no" | "select" | "number";
+          answer_value?: string | null;
+          options?: Json | null;
+          is_required?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          ppi_section_id?: string;
+          prompt?: string;
+          answer_type?: "text" | "yes_no" | "select" | "number";
+          answer_value?: string | null;
+          options?: Json | null;
+          is_required?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ppi_answers_ppi_section_id_fkey";
+            columns: ["ppi_section_id"];
+            isOneToOne: false;
+            referencedRelation: "ppi_sections";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      ppi_media: {
+        Row: {
+          id: string;
+          ppi_section_id: string;
+          ppi_answer_id: string | null;
+          url: string;
+          media_type: string;
+          caption: string | null;
+          captured_at: string | null;
+          metadata: Json | null;
+          uploaded_at: string;
+        };
+        Insert: {
+          id?: string;
+          ppi_section_id: string;
+          ppi_answer_id?: string | null;
+          url: string;
+          media_type: string;
+          caption?: string | null;
+          captured_at?: string | null;
+          metadata?: Json | null;
+          uploaded_at?: string;
+        };
+        Update: {
+          id?: string;
+          ppi_section_id?: string;
+          ppi_answer_id?: string | null;
+          url?: string;
+          media_type?: string;
+          caption?: string | null;
+          captured_at?: string | null;
+          metadata?: Json | null;
+          uploaded_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ppi_media_ppi_section_id_fkey";
+            columns: ["ppi_section_id"];
+            isOneToOne: false;
+            referencedRelation: "ppi_sections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ppi_media_ppi_answer_id_fkey";
+            columns: ["ppi_answer_id"];
+            isOneToOne: false;
+            referencedRelation: "ppi_answers";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -434,6 +660,10 @@ export type Database = {
       get_my_org_id: {
         Args: Record<string, never>;
         Returns: string;
+      };
+      can_access_submission: {
+        Args: { submission_id: string };
+        Returns: boolean;
       };
     };
     Enums: {
@@ -456,6 +686,22 @@ export type Database = {
       requester_role: "buying" | "selling" | "documenting";
       certification_level: "none" | "ase" | "master" | "oem_qualified";
       org_member_role: "technician" | "manager";
+      submission_status: "draft" | "in_progress" | "submitted" | "completed";
+      section_type:
+        | "vehicle_basics"
+        | "dashboard_warnings"
+        | "exterior"
+        | "interior"
+        | "engine_bay"
+        | "tires_brakes"
+        | "suspension_steering"
+        | "fluids"
+        | "electrical_controls"
+        | "underbody"
+        | "road_test"
+        | "modifications";
+      completion_state: "not_started" | "in_progress" | "completed";
+      answer_type: "text" | "yes_no" | "select" | "number";
       notification_type:
         | "tech_request_new"
         | "tech_request_accepted"

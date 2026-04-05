@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
+import { getTechQueue } from "@/features/ppi/queries";
+import type { PpiRequestStatus } from "@/types/enums";
 
-// GET /api/technicians/me/queue — assigned inspections filterable by status
-// TODO Phase B: implement full queue logic
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireApiRole(["technician"]);
   if ("response" in auth) return auth.response;
 
-  return NextResponse.json({ data: [], message: "Queue — Phase B" });
+  const { searchParams } = new URL(request.url);
+  const status = searchParams.get("status") as PpiRequestStatus | null;
+
+  const data = await getTechQueue(status ? { status } : undefined);
+  return NextResponse.json({ data });
 }

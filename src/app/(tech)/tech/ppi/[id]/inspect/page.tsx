@@ -1,25 +1,29 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InspectionWorkflowView } from "@/components/shared/inspection-workflow-view";
+import { getCurrentSubmission } from "@/features/ppi/queries";
+import { notFound } from "next/navigation";
 
-export default async function GuidedInspectionPage({
-  params,
-}: {
+interface PageProps {
   params: Promise<{ id: string }>;
-}) {
+  searchParams: Promise<{ sub?: string }>;
+}
+
+export default async function TechGuidedInspectionPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const { sub } = await searchParams;
+
+  let submissionId = sub;
+
+  if (!submissionId) {
+    const submission = await getCurrentSubmission(id);
+    if (!submission) notFound();
+    submissionId = submission.id;
+  }
 
   return (
-    <div className="space-y-6">
-      <h1 className="font-heading text-2xl font-bold">Guided Inspection Workflow</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Inspecting Request #{id}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">
-            The full-screen guided inspection workflow with section-by-section card steps, device camera capture, and progress tracking. Coming in Phase B.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+    <InspectionWorkflowView
+      requestId={id}
+      submissionId={submissionId}
+      returnPath={`/tech/ppi/${id}`}
+    />
   );
 }
