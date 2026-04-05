@@ -38,6 +38,8 @@ async function getAuthProfile() {
 
 const createRequestSchema = z.object({
   vehicle_id: z.string().uuid("Invalid vehicle"),
+  vin: z.string().trim().min(1, "VIN is required").max(17, "VIN must be 17 characters or less"),
+  mileage: z.coerce.number().min(0, "Mileage must be 0 or greater"),
   whose_car: z.enum(["own", "other"]),
   requester_role: z.enum(["buying", "selling", "documenting"]),
   performer_type: z.enum(["self", "technician"]),
@@ -55,8 +57,41 @@ export async function createPpiRequest(formData: FormData) {
   if (!ctx) return { error: "Not authenticated" };
   const { id: profileId, supabase } = ctx;
 
-  const { vehicle_id, whose_car, requester_role, performer_type, assigned_tech_profile_id } =
+  const {
+    vehicle_id,
+    vin,
+    mileage,
+    whose_car,
+    requester_role,
+    performer_type,
+    assigned_tech_profile_id,
+  } =
     parsed.data;
+
+  const normalizedVin = vin.trim().toUpperCase();
+
+  const { data: vehicle, error: vehicleError } = await supabase
+    .from("vehicles")
+    .select("id, owner_id")
+    .eq("id", vehicle_id)
+    .single();
+
+  if (vehicleError || !vehicle || vehicle.owner_id !== profileId) {
+    return { error: "Vehicle not found" };
+  }
+
+  const { error: vehicleUpdateError } = await supabase
+    .from("vehicles")
+    .update({
+      vin: normalizedVin,
+      mileage,
+    })
+    .eq("id", vehicle_id)
+    .eq("owner_id", profileId);
+
+  if (vehicleUpdateError) {
+    return { error: vehicleUpdateError.message };
+  }
 
   // Determine ppi_type and initial status
   let ppiType: "personal" | "general_tech" | "certified_tech" = "personal";
@@ -409,7 +444,7 @@ export async function saveAnswers(
 // saveSectionNotes
 // ============================================================================
 
-export async function saveSectionNotes(sectionId: string, notes: string) {
+export async function saveSectionNotes(sectionId: string, notes: string | null) {
   const supabase = await createClient();
 
   const { error } = await supabase

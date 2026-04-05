@@ -11,6 +11,7 @@ import { startInspection } from "@/features/ppi/actions";
 import { SECTION_QUESTION_TEMPLATES, SECTION_LABELS } from "@/features/ppi/constants";
 import type { SectionType, AnswerType } from "@/types/enums";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, AlertCircle, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -231,6 +232,12 @@ export function InspectionWorkflowView({
   if (!currentSection || !currentQuestion) return null;
 
   const sectionType = currentSection.section_type as SectionType;
+  const sectionStateLabel =
+    currentSection.completion_state === "completed"
+      ? "Completed"
+      : currentSection.completion_state === "in_progress"
+      ? "In Progress"
+      : "Not Started";
   const templates = SECTION_QUESTION_TEMPLATES[sectionType] ?? [];
   const template = templates[workflow.currentQuestionIdx];
   const requiresPhoto = template?.requiresPhoto ?? false;
@@ -301,6 +308,28 @@ export function InspectionWorkflowView({
             required={currentQuestion.is_required}
             hasError={hasError}
           />
+
+          <div className="rounded-xl border bg-card p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Section Notes</p>
+                <p className="text-xs text-muted-foreground">
+                  Optional notes saved with the current section.
+                </p>
+              </div>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                {sectionStateLabel}
+              </span>
+            </div>
+
+            <Textarea
+              value={currentSection.notes ?? ""}
+              onChange={(e) => workflow.setSectionNotes(currentSection.id, e.target.value)}
+              rows={3}
+              placeholder="Add any extra observations for this section..."
+              className="resize-none"
+            />
+          </div>
 
           {/* Camera capture button */}
           {requiresPhoto && (

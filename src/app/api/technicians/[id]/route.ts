@@ -13,13 +13,14 @@ export async function GET(
     .select(
       `
       *,
-      profile:profiles!technician_profiles_profile_id_fkey(
+      profile:profiles!technician_profiles_profile_id_fkey!inner(
         id, username, display_name, avatar_url, bio, is_public
       ),
       organization:organizations(id, name, slug, logo_url)
     `
     )
     .eq("id", id)
+    .eq("profile.is_public", true)
     .single();
 
   if (error || !data) {

@@ -9,7 +9,7 @@ import type {
   PpiAnswerItem,
   PpiMediaItem,
 } from "@/types/api";
-import type { SectionType } from "@/types/enums";
+import type { SectionType, CompletionState } from "@/types/enums";
 
 // ============================================================================
 // usePpiWizard
@@ -18,6 +18,7 @@ import type { SectionType } from "@/types/enums";
 
 export type WizardStep =
   | "vehicle"
+  | "vehicle_info"
   | "whose_car"
   | "requester_role"
   | "performer_type"
@@ -26,6 +27,8 @@ export type WizardStep =
 
 export interface WizardFormState {
   vehicle_id: string;
+  vin: string;
+  mileage: string;
   whose_car: "own" | "other" | null;
   requester_role: "buying" | "selling" | "documenting" | null;
   performer_type: "self" | "technician" | null;
@@ -35,6 +38,7 @@ export interface WizardFormState {
 
 const WIZARD_STEPS: WizardStep[] = [
   "vehicle",
+  "vehicle_info",
   "whose_car",
   "requester_role",
   "performer_type",
@@ -46,6 +50,8 @@ export function usePpiWizard() {
   const [step, setStep] = useState<WizardStep>("vehicle");
   const [form, setForm] = useState<WizardFormState>({
     vehicle_id: "",
+    vin: "",
+    mileage: "",
     whose_car: null,
     requester_role: null,
     performer_type: null,
@@ -87,6 +93,8 @@ export function usePpiWizard() {
     try {
       const payload: Record<string, string> = {
         vehicle_id: form.vehicle_id,
+        vin: form.vin.trim(),
+        mileage: form.mileage.trim(),
         whose_car: form.whose_car!,
         requester_role: form.requester_role!,
         performer_type: form.performer_type!,
@@ -142,6 +150,7 @@ interface WorkflowState {
   currentQuestionIdx: number;
   answers: Map<string, string>;
   dirtyAnswerIds: Set<string>;
+  dirtySectionIds: Set<string>;
   saving: "idle" | "saving" | "saved" | "error";
   lastSaved: Date | null;
   submitting: boolean;
@@ -152,6 +161,7 @@ interface WorkflowState {
 type WorkflowAction =
   | { type: "INIT"; sections: PpiSectionItem[] }
   | { type: "SET_ANSWER"; answerId: string; value: string }
+  | { type: "SET_SECTION_NOTES"; sectionId: string; notes: string }
   | { type: "ADD_MEDIA"; sectionId: string; media: PpiMediaItem }
   | { type: "NEXT_QUESTION" }
   | { type: "PREV_QUESTION" }
@@ -161,10 +171,55 @@ type WorkflowAction =
   | { type: "SAVE_START" }
   | { type: "SAVE_SUCCESS" }
   | { type: "SAVE_ERROR" }
-  | { type: "MARK_DIRTY_FLUSHED"; flushedIds: string[] }
+  | {
+      type: "MARK_DIRTY_FLUSHED";
+      flushedAnswerIds: string[];
+      flushedSectionIds: string[];
+    }
   | { type: "SUBMIT_START" }
   | { type: "SUBMIT_ERROR"; message: string; missingIds: string[] }
   | { type: "CLEAR_MISSING"; answerId: string };
+
+function sectionHasProgress(section: PpiSectionItem, answers: Map<string, string>) {
+  return (
+    section.answers.some((answer) => hasAnswerValue(answers.get(answer.id))) ||
+    section.media.length > 0 ||
+    hasAnswerValue(section.notes ?? undefined)
+  );
+}
+
+function hasAnswerValue(value: string | undefined) {
+  return value !== undefined && value.trim() !== "";
+}
+
+function hasRequiredPhoto(section: PpiSectionItem, answerId: string) {
+  return section.media.some(
+    (media) => media.ppi_answer_id === answerId || media.ppi_section_id === section.id
+  );
+}
+
+function isSectionComplete(section: PpiSectionItem, answers: Map<string, string>) {
+  const templates = SECTION_QUESTION_TEMPLATES[section.section_type as SectionType] ?? [];
+
+  return section.answers.every((answer, index) => {
+    const template = templates[index];
+    const answerFilled = hasAnswerValue(answers.get(answer.id));
+    const answerSatisfied = !answer.is_required || answerFilled;
+    const photoSatisfied =
+      !template?.requiresPhoto || hasRequiredPhoto(section, answer.id);
+
+    return answerSatisfied && photoSatisfied;
+  });
+}
+
+function deriveSectionState(
+  section: PpiSectionItem,
+  answers: Map<string, string>
+): CompletionState {
+  if (isSectionComplete(section, answers)) return "completed";
+  if (sectionHasProgress(section, answers)) return "in_progress";
+  return "not_started";
+}
 
 function workflowReducer(state: WorkflowState, action: WorkflowAction): WorkflowState {
   switch (action.type) {
@@ -175,10 +230,27 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
           answers.set(answer.id, answer.answer_value ?? "");
         }
       }
+
+      const dirtySectionIds = new Set<string>();
+      const sections = action.sections.map((section) => {
+        const completion_state = deriveSectionState(section, answers);
+        if (section.completion_state !== completion_state) {
+          dirtySectionIds.add(section.id);
+        }
+        return { ...section, completion_state };
+      });
+
       return {
         ...state,
-        sections: action.sections,
+        sections,
         answers,
+        dirtyAnswerIds: new Set(),
+        dirtySectionIds,
+        saving: "idle",
+        lastSaved: null,
+        submitting: false,
+        submitError: null,
+        missingAnswerIds: new Set(),
         currentSectionIdx: 0,
         currentQuestionIdx: 0,
       };
@@ -191,24 +263,82 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
       newDirty.add(action.answerId);
       const newMissing = new Set(state.missingAnswerIds);
       newMissing.delete(action.answerId);
+      const dirtySectionIds = new Set(state.dirtySectionIds);
+      const sections = state.sections.map((section) => {
+        if (!section.answers.some((answer) => answer.id === action.answerId)) {
+          return section;
+        }
+        dirtySectionIds.add(section.id);
+        return {
+          ...section,
+          completion_state: deriveSectionState(section, newAnswers),
+        };
+      });
       return {
         ...state,
+        sections,
         answers: newAnswers,
         dirtyAnswerIds: newDirty,
+        dirtySectionIds,
         missingAnswerIds: newMissing,
         saving: "idle",
       };
     }
 
-    case "ADD_MEDIA":
+    case "SET_SECTION_NOTES": {
+      const dirtySectionIds = new Set(state.dirtySectionIds);
+      dirtySectionIds.add(action.sectionId);
+      const sections = state.sections.map((section) => {
+        if (section.id !== action.sectionId) return section;
+        const nextSection = {
+          ...section,
+          notes: action.notes.trim() === "" ? null : action.notes,
+        };
+        return {
+          ...nextSection,
+          completion_state: deriveSectionState(nextSection, state.answers),
+        };
+      });
       return {
         ...state,
-        sections: state.sections.map((section) =>
-          section.id === action.sectionId
-            ? { ...section, media: [...section.media, action.media] }
-            : section
-        ),
+        sections,
+        dirtySectionIds,
+        saving: "idle",
       };
+    }
+
+    case "ADD_MEDIA":
+      {
+        const dirtySectionIds = new Set(state.dirtySectionIds);
+        dirtySectionIds.add(action.sectionId);
+        return {
+          ...state,
+          dirtySectionIds,
+          saving: "idle",
+          sections: state.sections.map((section) => {
+            if (section.id !== action.sectionId) return section;
+            const nextSection = { ...section, media: [...section.media, action.media] };
+            return {
+              ...nextSection,
+              completion_state: deriveSectionState(nextSection, state.answers),
+            };
+          }),
+        };
+      }
+
+    case "MARK_DIRTY_FLUSHED": {
+      const remainingDirtyAnswers = new Set(state.dirtyAnswerIds);
+      action.flushedAnswerIds.forEach((answerId) => remainingDirtyAnswers.delete(answerId));
+      const remainingDirtySections = new Set(state.dirtySectionIds);
+      action.flushedSectionIds.forEach((sectionId) => remainingDirtySections.delete(sectionId));
+      return {
+        ...state,
+        dirtyAnswerIds: remainingDirtyAnswers,
+        dirtySectionIds: remainingDirtySections,
+        saving: "saved",
+        lastSaved: new Date(),
+      };
+    }
 
     case "NEXT_QUESTION": {
       const section = state.sections[state.currentSectionIdx];
@@ -269,17 +399,6 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
     case "SAVE_ERROR":
       return { ...state, saving: "error" };
 
-    case "MARK_DIRTY_FLUSHED": {
-      const remainingDirty = new Set(state.dirtyAnswerIds);
-      action.flushedIds.forEach((answerId) => remainingDirty.delete(answerId));
-      return {
-        ...state,
-        dirtyAnswerIds: remainingDirty,
-        saving: "saved",
-        lastSaved: new Date(),
-      };
-    }
-
     case "SUBMIT_START":
       return { ...state, submitting: true, submitError: null };
 
@@ -308,36 +427,13 @@ const initialWorkflowState: WorkflowState = {
   currentQuestionIdx: 0,
   answers: new Map(),
   dirtyAnswerIds: new Set(),
+  dirtySectionIds: new Set(),
   saving: "idle",
   lastSaved: null,
   submitting: false,
   submitError: null,
   missingAnswerIds: new Set(),
 };
-
-function hasAnswerValue(value: string | undefined) {
-  return value !== undefined && value.trim() !== "";
-}
-
-function hasRequiredPhoto(section: PpiSectionItem, answerId: string) {
-  return section.media.some(
-    (media) => media.ppi_answer_id === answerId || media.ppi_section_id === section.id
-  );
-}
-
-function isSectionComplete(section: PpiSectionItem, answers: Map<string, string>) {
-  const templates = SECTION_QUESTION_TEMPLATES[section.section_type as SectionType] ?? [];
-
-  return section.answers.every((answer, index) => {
-    const template = templates[index];
-    const answerFilled = hasAnswerValue(answers.get(answer.id));
-    const answerSatisfied = !answer.is_required || answerFilled;
-    const photoSatisfied =
-      !template?.requiresPhoto || hasRequiredPhoto(section, answer.id);
-
-    return answerSatisfied && photoSatisfied;
-  });
-}
 
 export function useInspectionWorkflow(submissionId: string) {
   const [state, dispatch] = useReducer(workflowReducer, initialWorkflowState);
@@ -361,30 +457,68 @@ export function useInspectionWorkflow(submissionId: string) {
 
   // Debounced auto-save
   const flushDirty = useCallback(
-    async (dirtyIds: Set<string>, answers: Map<string, string>) => {
-      if (dirtyIds.size === 0) return;
+    async (
+      dirtyAnswerIds: Set<string>,
+      dirtySectionIds: Set<string>,
+      answers: Map<string, string>,
+      sections: PpiSectionItem[]
+    ) => {
+      if (dirtyAnswerIds.size === 0 && dirtySectionIds.size === 0) return true;
 
       dispatch({ type: "SAVE_START" });
-      const flushedIds = Array.from(dirtyIds);
-      const payload = Array.from(dirtyIds).map((answerId) => ({
-        answerId,
-        value: answers.get(answerId) ?? "",
-      }));
+      const flushedAnswerIds = Array.from(dirtyAnswerIds);
+      const flushedSectionIds = Array.from(dirtySectionIds);
 
       try {
-        const res = await fetch(`/api/ppi/submissions/${submissionId}/answers`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ answers: payload }),
-        });
+        if (dirtyAnswerIds.size > 0) {
+          const payload = Array.from(dirtyAnswerIds).map((answerId) => ({
+            answerId,
+            value: answers.get(answerId) ?? "",
+          }));
 
-        if (res.ok) {
-          dispatch({ type: "MARK_DIRTY_FLUSHED", flushedIds });
-        } else {
-          dispatch({ type: "SAVE_ERROR" });
+          const res = await fetch(`/api/ppi/submissions/${submissionId}/answers`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answers: payload }),
+          });
+
+          if (!res.ok) {
+            dispatch({ type: "SAVE_ERROR" });
+            return false;
+          }
         }
+
+        if (dirtySectionIds.size > 0) {
+          const dirtySections = sections.filter((section) => dirtySectionIds.has(section.id));
+          const results = await Promise.all(
+            dirtySections.map((section) =>
+              fetch(`/api/ppi/submissions/${submissionId}/sections`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  section_id: section.id,
+                  completion_state: section.completion_state,
+                  notes: section.notes,
+                }),
+              })
+            )
+          );
+
+          if (results.some((result) => !result.ok)) {
+            dispatch({ type: "SAVE_ERROR" });
+            return false;
+          }
+        }
+
+        dispatch({
+          type: "MARK_DIRTY_FLUSHED",
+          flushedAnswerIds,
+          flushedSectionIds,
+        });
+        return true;
       } catch {
         dispatch({ type: "SAVE_ERROR" });
+        return false;
       }
     },
     [submissionId]
@@ -392,26 +526,40 @@ export function useInspectionWorkflow(submissionId: string) {
 
   // Trigger debounced save whenever dirty set changes
   useEffect(() => {
-    if (state.dirtyAnswerIds.size === 0) return;
+    if (state.dirtyAnswerIds.size === 0 && state.dirtySectionIds.size === 0) return;
 
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => {
-      flushDirty(state.dirtyAnswerIds, state.answers);
+      void flushDirty(
+        state.dirtyAnswerIds,
+        state.dirtySectionIds,
+        state.answers,
+        state.sections
+      );
     }, 1500);
 
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
-  }, [state.dirtyAnswerIds, state.answers, flushDirty]);
+  }, [state.dirtyAnswerIds, state.dirtySectionIds, state.answers, state.sections, flushDirty]);
 
   // Immediate flush (called before navigating section)
   const immediateFlush = useCallback(async () => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    await flushDirty(state.dirtyAnswerIds, state.answers);
-  }, [flushDirty, state.dirtyAnswerIds, state.answers]);
+    return flushDirty(
+      state.dirtyAnswerIds,
+      state.dirtySectionIds,
+      state.answers,
+      state.sections
+    );
+  }, [flushDirty, state.dirtyAnswerIds, state.dirtySectionIds, state.answers, state.sections]);
 
   function setAnswer(answerId: string, value: string) {
     dispatch({ type: "SET_ANSWER", answerId, value });
+  }
+
+  function setSectionNotes(sectionId: string, notes: string) {
+    dispatch({ type: "SET_SECTION_NOTES", sectionId, notes });
   }
 
   function nextQuestion() {
@@ -444,7 +592,16 @@ export function useInspectionWorkflow(submissionId: string) {
   }
 
   async function submitInspection() {
-    await immediateFlush();
+    const flushSucceeded = await immediateFlush();
+    if (!flushSucceeded) {
+      dispatch({
+        type: "SUBMIT_ERROR",
+        message: "Could not save your latest inspection changes. Please try again.",
+        missingIds: [],
+      });
+      return null;
+    }
+
     dispatch({ type: "SUBMIT_START" });
 
     try {
@@ -497,7 +654,7 @@ export function useInspectionWorkflow(submissionId: string) {
         .replace(/\b\w/g, (c) => c.toUpperCase()),
       answered,
       total,
-      completed: isSectionComplete(s, state.answers),
+      completed: s.completion_state === "completed",
       active: state.sections.indexOf(s) === state.currentSectionIdx,
     };
   });
@@ -534,6 +691,7 @@ export function useInspectionWorkflow(submissionId: string) {
     submitError: state.submitError,
     missingAnswerIds: state.missingAnswerIds,
     setAnswer,
+    setSectionNotes,
     addMedia,
     nextQuestion,
     prevQuestion,

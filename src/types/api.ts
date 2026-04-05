@@ -127,6 +127,8 @@ export interface PresignedUrlResponse {
 // --- PPI ---
 export interface CreatePpiRequestPayload {
   vehicle_id: string;
+  vin: string;
+  mileage: number;
   whose_car: WhoseCar;
   requester_role: RequesterRole;
   performer_type: PerformerType;

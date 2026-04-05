@@ -35,27 +35,45 @@ export function InviteTechnicianForm() {
   const [searching, setSearching] = useState(false);
   const [inviting, setInviting] = useState<string | null>(null);
   const [message, setMessage] = useState<{ id: string; type: "success" | "error"; text: string } | null>(null);
+  const [searchMessage, setSearchMessage] = useState<string | null>(null);
 
   async function handleSearch() {
-    if (!search.trim()) return;
+    const term = search.trim().replace(/[,%()]/g, " ").replace(/\s+/g, " ");
+    if (!term) return;
     setSearching(true);
     setResults([]);
     setMessage(null);
+    setSearchMessage(null);
 
     const supabase = createClient();
-    const { data } = await supabase
+    let query = supabase
       .from("technician_profiles")
       .select(
         `id, certification_level, total_inspections,
-         profile:profiles!technician_profiles_profile_id_fkey(id, display_name, username, avatar_url)`
+         profile:profiles!technician_profiles_profile_id_fkey!inner(id, display_name, username, avatar_url)`
       )
       .eq("is_independent", true)
-      .or(
-        `profile.display_name.ilike.%${search}%,profile.username.ilike.%${search}%`
-      )
       .limit(10);
 
+    query = query.or(
+      `display_name.ilike.%${term}%,username.ilike.%${term}%`,
+      { referencedTable: "profile" }
+    );
+
+    const { data, error } = await query;
+
+    if (error) {
+      setSearchMessage("Search failed. Try again, and make sure the technician profile is public.");
+      setSearching(false);
+      return;
+    }
+
     setResults((data as TechResult[]) ?? []);
+    if (!data || data.length === 0) {
+      setSearchMessage(
+        "No matching independent technicians found. The account must already have technician access and a public profile."
+      );
+    }
     setSearching(false);
   }
 
@@ -75,9 +93,13 @@ export function InviteTechnicianForm() {
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Search only finds independent technician accounts. A person will not appear here unless they have already enabled technician access and made their profile public.
+      </p>
+
       <div className="flex gap-2">
         <Input
-          placeholder="Search by name or username…"
+          placeholder="Search technicians by name or username…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -88,6 +110,10 @@ export function InviteTechnicianForm() {
           {searching ? "Searching…" : "Search"}
         </Button>
       </div>
+
+      {searchMessage && (
+        <p className="text-sm text-muted-foreground">{searchMessage}</p>
+      )}
 
       {results.length > 0 && (
         <div className="divide-y rounded-lg border">
@@ -141,7 +167,7 @@ export function InviteTechnicianForm() {
         </div>
       )}
 
-      {!searching && search && results.length === 0 && (
+      {!searching && search && results.length === 0 && !searchMessage && (
         <p className="text-sm text-muted-foreground">No independent technicians found for &quot;{search}&quot;</p>
       )}
     </div>

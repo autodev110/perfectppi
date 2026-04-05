@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { usePpiWizard } from "@/features/ppi/hooks";
 import { TechSelector } from "@/components/shared/tech-selector";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ProgressTracker } from "@/components/shared/progress-tracker";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -27,10 +29,12 @@ interface Vehicle {
   model: string | null;
   trim: string | null;
   vin: string | null;
+  mileage: number | null;
 }
 
 const STEP_LABELS = [
   "Vehicle",
+  "Vehicle Info",
   "Ownership",
   "Your Role",
   "Performer",
@@ -103,7 +107,7 @@ export default function NewInspectionPage() {
 
       const { data } = await supabase
         .from("vehicles")
-        .select("id, year, make, model, trim, vin")
+        .select("id, year, make, model, trim, vin, mileage")
         .eq("owner_id", profile.id)
         .order("created_at", { ascending: false });
 
@@ -113,12 +117,15 @@ export default function NewInspectionPage() {
     loadVehicles();
   }, []);
 
-  const visibleStepCount = wizard.form.performer_type === "technician" ? 6 : 5;
+  const stepLabels = STEP_LABELS.filter(
+    (label) => label !== "Select Tech" || wizard.form.performer_type === "technician"
+  );
 
-  const stepLabels = STEP_LABELS.filter((_, i) => {
-    if (i === 4) return wizard.form.performer_type === "technician";
-    return true;
-  }).slice(0, visibleStepCount);
+  function handleVehicleSelect(vehicle: Vehicle) {
+    wizard.update("vehicle_id", vehicle.id);
+    wizard.update("vin", vehicle.vin ?? "");
+    wizard.update("mileage", vehicle.mileage != null ? String(vehicle.mileage) : "");
+  }
 
   async function handleSubmit() {
     const result = await wizard.submit();
@@ -188,7 +195,7 @@ export default function NewInspectionPage() {
                 return (
                   <button
                     key={v.id}
-                    onClick={() => wizard.update("vehicle_id", v.id)}
+                    onClick={() => handleVehicleSelect(v)}
                     className={cn(
                       "w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all",
                       selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
@@ -217,6 +224,56 @@ export default function NewInspectionPage() {
           >
             Continue
           </Button>
+        </div>
+      )}
+
+      {/* Step: Vehicle info */}
+      {wizard.step === "vehicle_info" && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-xl font-bold">Confirm the vehicle details</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Enter the VIN and current mileage before the inspection starts.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border bg-card p-6 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="vin">VIN</Label>
+              <Input
+                id="vin"
+                value={wizard.form.vin}
+                onChange={(e) => wizard.update("vin", e.target.value.toUpperCase())}
+                placeholder="17-character VIN"
+                maxLength={17}
+                className="font-mono uppercase"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="mileage">Mileage</Label>
+              <Input
+                id="mileage"
+                type="number"
+                min={0}
+                value={wizard.form.mileage}
+                onChange={(e) => wizard.update("mileage", e.target.value)}
+                placeholder="50000"
+                className="font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={wizard.back} className="flex-1">Back</Button>
+            <Button
+              onClick={wizard.next}
+              disabled={!wizard.form.vin.trim() || !wizard.form.mileage.trim()}
+              className="flex-1"
+            >
+              Continue
+            </Button>
+          </div>
         </div>
       )}
 
@@ -352,6 +409,9 @@ export default function NewInspectionPage() {
                         .filter(Boolean)
                         .join(" ")
                     : "Selected vehicle"}
+                </p>
+                <p className="text-sm text-muted-foreground font-mono mt-1">
+                  VIN {wizard.form.vin || "Not provided"} • {wizard.form.mileage || "0"} mi
                 </p>
               </div>
             </div>

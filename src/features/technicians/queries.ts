@@ -13,12 +13,13 @@ export async function getDirectory(filters?: {
     .select(
       `
       *,
-      profile:profiles!technician_profiles_profile_id_fkey(
+      profile:profiles!technician_profiles_profile_id_fkey!inner(
         id, username, display_name, avatar_url, bio, is_public
       ),
       organization:organizations(id, name, slug, logo_url)
     `
     )
+    .eq("profile.is_public", true)
     .order("total_inspections", { ascending: false });
 
   if (filters?.certification) {
@@ -46,13 +47,14 @@ export async function getTechProfile(id: string) {
     .select(
       `
       *,
-      profile:profiles!technician_profiles_profile_id_fkey(
+      profile:profiles!technician_profiles_profile_id_fkey!inner(
         id, username, display_name, avatar_url, bio, is_public
       ),
       organization:organizations(id, name, slug, logo_url)
     `
     )
     .eq("id", id)
+    .eq("profile.is_public", true)
     .single();
 
   return data;
