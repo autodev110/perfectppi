@@ -1,10 +1,12 @@
 -- ============================================================================
 -- Migration 019: RLS Policies for PPI Engine Tables
 -- Covers: ppi_requests, ppi_submissions, ppi_sections, ppi_answers, ppi_media
+-- Idempotent: safe to re-run (drops policies/function before recreating)
 -- ============================================================================
 
 -- Helper: check if current user can access a submission
 -- (either as performer or as requester of the parent ppi_request)
+DROP FUNCTION IF EXISTS public.can_access_submission(uuid) CASCADE;
 CREATE OR REPLACE FUNCTION public.can_access_submission(submission_id uuid)
 RETURNS boolean AS $$
   SELECT EXISTS (
@@ -23,29 +25,29 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 -- ============================================================================
 ALTER TABLE public.ppi_requests ENABLE ROW LEVEL SECURITY;
 
--- Requester can SELECT their own requests
+DROP POLICY IF EXISTS ppi_requests_select_requester ON public.ppi_requests;
 CREATE POLICY ppi_requests_select_requester ON public.ppi_requests
   FOR SELECT USING (requester_id = public.get_my_profile_id());
 
--- Assigned tech can SELECT requests assigned to them
+DROP POLICY IF EXISTS ppi_requests_select_tech ON public.ppi_requests;
 CREATE POLICY ppi_requests_select_tech ON public.ppi_requests
   FOR SELECT USING (assigned_tech_id = public.get_my_profile_id());
 
--- Requester can INSERT their own requests
+DROP POLICY IF EXISTS ppi_requests_insert ON public.ppi_requests;
 CREATE POLICY ppi_requests_insert ON public.ppi_requests
   FOR INSERT WITH CHECK (requester_id = public.get_my_profile_id());
 
--- Requester can UPDATE their own requests (status transitions, tech assignment)
+DROP POLICY IF EXISTS ppi_requests_update_requester ON public.ppi_requests;
 CREATE POLICY ppi_requests_update_requester ON public.ppi_requests
   FOR UPDATE USING (requester_id = public.get_my_profile_id())
   WITH CHECK (requester_id = public.get_my_profile_id());
 
--- Assigned tech can UPDATE the request (to transition status: accept, in_progress, submitted)
+DROP POLICY IF EXISTS ppi_requests_update_tech ON public.ppi_requests;
 CREATE POLICY ppi_requests_update_tech ON public.ppi_requests
   FOR UPDATE USING (assigned_tech_id = public.get_my_profile_id())
   WITH CHECK (assigned_tech_id = public.get_my_profile_id());
 
--- Admin full access
+DROP POLICY IF EXISTS ppi_requests_admin ON public.ppi_requests;
 CREATE POLICY ppi_requests_admin ON public.ppi_requests
   FOR ALL USING (public.get_my_role() = 'admin');
 
@@ -54,11 +56,11 @@ CREATE POLICY ppi_requests_admin ON public.ppi_requests
 -- ============================================================================
 ALTER TABLE public.ppi_submissions ENABLE ROW LEVEL SECURITY;
 
--- Performer can SELECT their own submissions
+DROP POLICY IF EXISTS ppi_submissions_select_performer ON public.ppi_submissions;
 CREATE POLICY ppi_submissions_select_performer ON public.ppi_submissions
   FOR SELECT USING (performer_id = public.get_my_profile_id());
 
--- Requester can SELECT submissions for their requests
+DROP POLICY IF EXISTS ppi_submissions_select_requester ON public.ppi_submissions;
 CREATE POLICY ppi_submissions_select_requester ON public.ppi_submissions
   FOR SELECT USING (
     EXISTS (
@@ -68,16 +70,16 @@ CREATE POLICY ppi_submissions_select_requester ON public.ppi_submissions
     )
   );
 
--- Performer can INSERT their own submissions
+DROP POLICY IF EXISTS ppi_submissions_insert ON public.ppi_submissions;
 CREATE POLICY ppi_submissions_insert ON public.ppi_submissions
   FOR INSERT WITH CHECK (performer_id = public.get_my_profile_id());
 
--- Performer can UPDATE their own submissions
+DROP POLICY IF EXISTS ppi_submissions_update ON public.ppi_submissions;
 CREATE POLICY ppi_submissions_update ON public.ppi_submissions
   FOR UPDATE USING (performer_id = public.get_my_profile_id())
   WITH CHECK (performer_id = public.get_my_profile_id());
 
--- Admin full access
+DROP POLICY IF EXISTS ppi_submissions_admin ON public.ppi_submissions;
 CREATE POLICY ppi_submissions_admin ON public.ppi_submissions
   FOR ALL USING (public.get_my_role() = 'admin');
 
@@ -86,11 +88,11 @@ CREATE POLICY ppi_submissions_admin ON public.ppi_submissions
 -- ============================================================================
 ALTER TABLE public.ppi_sections ENABLE ROW LEVEL SECURITY;
 
--- Anyone who can access the parent submission can SELECT sections
+DROP POLICY IF EXISTS ppi_sections_select ON public.ppi_sections;
 CREATE POLICY ppi_sections_select ON public.ppi_sections
   FOR SELECT USING (public.can_access_submission(ppi_submission_id));
 
--- Performer of the submission can INSERT sections
+DROP POLICY IF EXISTS ppi_sections_insert ON public.ppi_sections;
 CREATE POLICY ppi_sections_insert ON public.ppi_sections
   FOR INSERT WITH CHECK (
     EXISTS (
@@ -100,7 +102,7 @@ CREATE POLICY ppi_sections_insert ON public.ppi_sections
     )
   );
 
--- Performer of the submission can UPDATE sections (notes, completion_state)
+DROP POLICY IF EXISTS ppi_sections_update ON public.ppi_sections;
 CREATE POLICY ppi_sections_update ON public.ppi_sections
   FOR UPDATE USING (
     EXISTS (
@@ -108,9 +110,16 @@ CREATE POLICY ppi_sections_update ON public.ppi_sections
       WHERE s.id = ppi_sections.ppi_submission_id
         AND s.performer_id = public.get_my_profile_id()
     )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.ppi_submissions s
+      WHERE s.id = ppi_sections.ppi_submission_id
+        AND s.performer_id = public.get_my_profile_id()
+    )
   );
 
--- Admin full access
+DROP POLICY IF EXISTS ppi_sections_admin ON public.ppi_sections;
 CREATE POLICY ppi_sections_admin ON public.ppi_sections
   FOR ALL USING (public.get_my_role() = 'admin');
 
@@ -119,7 +128,7 @@ CREATE POLICY ppi_sections_admin ON public.ppi_sections
 -- ============================================================================
 ALTER TABLE public.ppi_answers ENABLE ROW LEVEL SECURITY;
 
--- Anyone who can access the parent submission can SELECT answers
+DROP POLICY IF EXISTS ppi_answers_select ON public.ppi_answers;
 CREATE POLICY ppi_answers_select ON public.ppi_answers
   FOR SELECT USING (
     EXISTS (
@@ -129,7 +138,7 @@ CREATE POLICY ppi_answers_select ON public.ppi_answers
     )
   );
 
--- Performer can INSERT answers
+DROP POLICY IF EXISTS ppi_answers_insert ON public.ppi_answers;
 CREATE POLICY ppi_answers_insert ON public.ppi_answers
   FOR INSERT WITH CHECK (
     EXISTS (
@@ -140,7 +149,7 @@ CREATE POLICY ppi_answers_insert ON public.ppi_answers
     )
   );
 
--- Performer can UPDATE answers (saving answer_value)
+DROP POLICY IF EXISTS ppi_answers_update ON public.ppi_answers;
 CREATE POLICY ppi_answers_update ON public.ppi_answers
   FOR UPDATE USING (
     EXISTS (
@@ -149,9 +158,17 @@ CREATE POLICY ppi_answers_update ON public.ppi_answers
       WHERE sec.id = ppi_answers.ppi_section_id
         AND s.performer_id = public.get_my_profile_id()
     )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.ppi_sections sec
+      JOIN public.ppi_submissions s ON s.id = sec.ppi_submission_id
+      WHERE sec.id = ppi_answers.ppi_section_id
+        AND s.performer_id = public.get_my_profile_id()
+    )
   );
 
--- Admin full access
+DROP POLICY IF EXISTS ppi_answers_admin ON public.ppi_answers;
 CREATE POLICY ppi_answers_admin ON public.ppi_answers
   FOR ALL USING (public.get_my_role() = 'admin');
 
@@ -160,7 +177,7 @@ CREATE POLICY ppi_answers_admin ON public.ppi_answers
 -- ============================================================================
 ALTER TABLE public.ppi_media ENABLE ROW LEVEL SECURITY;
 
--- Anyone who can access the parent submission can SELECT media
+DROP POLICY IF EXISTS ppi_media_select ON public.ppi_media;
 CREATE POLICY ppi_media_select ON public.ppi_media
   FOR SELECT USING (
     EXISTS (
@@ -170,7 +187,7 @@ CREATE POLICY ppi_media_select ON public.ppi_media
     )
   );
 
--- Performer can INSERT media
+DROP POLICY IF EXISTS ppi_media_insert ON public.ppi_media;
 CREATE POLICY ppi_media_insert ON public.ppi_media
   FOR INSERT WITH CHECK (
     EXISTS (
@@ -181,6 +198,6 @@ CREATE POLICY ppi_media_insert ON public.ppi_media
     )
   );
 
--- Admin full access
+DROP POLICY IF EXISTS ppi_media_admin ON public.ppi_media;
 CREATE POLICY ppi_media_admin ON public.ppi_media
   FOR ALL USING (public.get_my_role() = 'admin');

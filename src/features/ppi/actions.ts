@@ -126,6 +126,23 @@ export async function createSubmission(
 ): Promise<{ submissionId: string } | { error: string }> {
   const supabase = await createClient();
 
+  const { data: request } = await supabase
+    .from("ppi_requests")
+    .select("id, requester_id, assigned_tech_id, performer_type")
+    .eq("id", requestId)
+    .single();
+
+  if (!request) return { error: "Request not found" };
+
+  const canPerformSelfInspection =
+    request.performer_type === "self" && request.requester_id === performerId;
+  const canPerformTechInspection =
+    request.performer_type === "technician" && request.assigned_tech_id === performerId;
+
+  if (!canPerformSelfInspection && !canPerformTechInspection) {
+    return { error: "You are not allowed to create a submission for this request" };
+  }
+
   // Find the current highest version for this request
   const { data: existing } = await supabase
     .from("ppi_submissions")
@@ -297,21 +314,55 @@ export async function acceptRequest(requestId: string) {
 // ============================================================================
 
 export async function startInspection(requestId: string, submissionId: string) {
-  const supabase = await createClient();
+  const ctx = await getAuthProfile();
+  if (!ctx) return { error: "Not authenticated" };
+  const { id: profileId, supabase } = ctx;
 
-  const { error: reqError } = await supabase
-    .from("ppi_requests")
-    .update({ status: "in_progress" })
-    .eq("id", requestId);
-
-  if (reqError) return { error: reqError.message };
-
-  const { error: subError } = await supabase
+  const { data: submission } = await supabase
     .from("ppi_submissions")
-    .update({ status: "in_progress" })
-    .eq("id", submissionId);
+    .select("id, ppi_request_id, performer_id, status")
+    .eq("id", submissionId)
+    .single();
 
-  if (subError) return { error: subError.message };
+  if (!submission) return { error: "Submission not found" };
+  if (submission.ppi_request_id !== requestId) {
+    return { error: "Submission does not belong to this request" };
+  }
+  if (submission.performer_id !== profileId) {
+    return { error: "You are not allowed to start this inspection" };
+  }
+
+  const { data: request } = await supabase
+    .from("ppi_requests")
+    .select("status")
+    .eq("id", requestId)
+    .single();
+
+  if (!request) return { error: "Request not found" };
+  if (
+    request.status !== "in_progress" &&
+    !isValidTransition(request.status as PpiRequestStatus, "in_progress")
+  ) {
+    return { error: `Cannot start inspection from status: ${request.status}` };
+  }
+
+  if (request.status !== "in_progress") {
+    const { error: reqError } = await supabase
+      .from("ppi_requests")
+      .update({ status: "in_progress" })
+      .eq("id", requestId);
+
+    if (reqError) return { error: reqError.message };
+  }
+
+  if (submission.status !== "in_progress") {
+    const { error: subError } = await supabase
+      .from("ppi_submissions")
+      .update({ status: "in_progress" })
+      .eq("id", submissionId);
+
+    if (subError) return { error: subError.message };
+  }
 
   return { success: true };
 }
@@ -472,6 +523,14 @@ export async function resubmitPpi(requestId: string) {
   if (!ctx) return { error: "Not authenticated" };
   const { id: profileId, supabase } = ctx;
 
+  const { data: request } = await supabase
+    .from("ppi_requests")
+    .select("id, requester_id, performer_type")
+    .eq("id", requestId)
+    .single();
+
+  if (!request) return { error: "Request not found" };
+
   // Get the current submission with all sections and answers
   const { data: currentSub } = await supabase
     .from("ppi_submissions")
@@ -491,6 +550,14 @@ export async function resubmitPpi(requestId: string) {
 
   if (!currentSub) return { error: "No current submission found" };
 
+  const isCurrentPerformer = currentSub.performer_id === profileId;
+  const isSelfInspectionRequester =
+    request.performer_type === "self" && request.requester_id === profileId;
+
+  if (!isCurrentPerformer && !isSelfInspectionRequester) {
+    return { error: "Only the inspection performer can edit this submission" };
+  }
+
   // Mark the current submission as not current
   await supabase
     .from("ppi_submissions")
@@ -502,7 +569,7 @@ export async function resubmitPpi(requestId: string) {
     .from("ppi_submissions")
     .insert({
       ppi_request_id: requestId,
-      performer_id: profileId,
+      performer_id: currentSub.performer_id,
       version: currentSub.version + 1,
       is_current: true,
       status: "in_progress",

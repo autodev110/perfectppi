@@ -92,6 +92,7 @@ export default function TechInspectionDetailPage() {
   const canAccept = request.status === "assigned";
   const canInspect = ["accepted", "in_progress"].includes(request.status);
   const isSubmitted = ["submitted", "completed"].includes(request.status);
+  const canEdit = isSubmitted;
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -180,6 +181,12 @@ export default function TechInspectionDetailPage() {
           <Link href={`/tech/ppi/${id}/inspect`}>
             {request.status === "in_progress" ? "Continue Inspection" : "Begin Inspection"}
           </Link>
+        </Button>
+      )}
+
+      {canEdit && (
+        <Button variant="outline" asChild className="w-full h-12 font-bold">
+          <Link href={`/tech/ppi/${id}/edit`}>Edit & Resubmit</Link>
         </Button>
       )}
 

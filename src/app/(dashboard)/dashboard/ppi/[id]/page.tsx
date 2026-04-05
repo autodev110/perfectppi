@@ -37,7 +37,9 @@ export default async function InspectionDetailPage({ params }: PageProps) {
     : "Unknown Vehicle";
 
   const canContinue = ["draft", "in_progress"].includes(request.status);
-  const canEdit = ["submitted", "completed"].includes(request.status);
+  const canEdit =
+    request.performer_type === "self" &&
+    ["submitted", "completed"].includes(request.status);
   const isSubmitted = ["submitted", "completed"].includes(request.status);
 
   const sections = (submission as { sections?: { section_type: string; notes: string | null; answers: { prompt: string; answer_value: string | null; answer_type: string }[] }[] } | null)?.sections ?? [];

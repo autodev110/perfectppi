@@ -20,45 +20,68 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
   const [mode, setMode] = useState<"loading" | "camera" | "fallback" | "error">("loading");
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [capturing, setCapturing] = useState(false);
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  const startCamera = useCallback(
-    async (facing: "environment" | "user") => {
-      setMode("loading");
-      // Stop any existing stream
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-      }
+  const clearPreview = useCallback(() => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewFile(null);
+    setPreviewUrl(null);
+  }, [previewUrl]);
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facing },
-        });
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-        setMode("camera");
-      } catch {
-        // Fall back to file input
-        setMode("fallback");
-      }
+  const setPreview = useCallback(
+    (file: File) => {
+      clearPreview();
+      setPreviewFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
     },
-    []
+    [clearPreview]
   );
+
+  const startCamera = useCallback(async (facing: "environment" | "user") => {
+    setMode("loading");
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setMode("camera");
+    } catch {
+      setMode("fallback");
+    }
+  }, []);
 
   useEffect(() => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setMode("fallback");
       return;
     }
-    startCamera(facingMode);
+
+    startCamera("environment");
 
     return () => {
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [startCamera]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   function flipCamera() {
     const next = facingMode === "environment" ? "user" : "environment";
@@ -79,10 +102,11 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
     canvas.toBlob(
       (blob) => {
         if (blob) {
-          const file = new File([blob], `capture-${Date.now()}.jpg`, {
-            type: "image/jpeg",
-          });
-          onCapture(file);
+          setPreview(
+            new File([blob], `capture-${Date.now()}.jpg`, {
+              type: "image/jpeg",
+            })
+          );
         }
         setCapturing(false);
       },
@@ -93,85 +117,123 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) onCapture(file);
+    if (file) {
+      setPreview(file);
+    }
+  }
+
+  function handleClose() {
+    clearPreview();
+    onClose();
+  }
+
+  function handleUsePhoto() {
+    if (!previewFile) return;
+    onCapture(previewFile);
+    clearPreview();
   }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-black/60">
+      <div className="flex items-center justify-between bg-black/60 px-4 py-3">
         <button
-          onClick={onClose}
-          className="p-2 rounded-full text-white hover:bg-white/10 transition"
+          onClick={handleClose}
+          className="rounded-full p-2 text-white transition hover:bg-white/10"
         >
           <X className="h-6 w-6" />
         </button>
         {photoPrompt && (
-          <p className="text-white text-sm text-center flex-1 px-4 font-medium">
+          <p className="flex-1 px-4 text-center text-sm font-medium text-white">
             {photoPrompt}
           </p>
         )}
-        {mode === "camera" && (
+        {mode === "camera" && !previewUrl ? (
           <button
             onClick={flipCamera}
-            className="p-2 rounded-full text-white hover:bg-white/10 transition"
+            className="rounded-full p-2 text-white transition hover:bg-white/10"
           >
             <RefreshCw className="h-5 w-5" />
           </button>
+        ) : (
+          <div className="h-9 w-9" />
         )}
       </div>
 
-      {/* Camera view */}
-      <div className="flex-1 relative overflow-hidden">
-        {mode === "loading" && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      <div className="relative flex-1 overflow-hidden">
+        {previewUrl && (
+          <div className="absolute inset-0 p-4">
+            <div
+              className="h-full w-full rounded-2xl bg-cover bg-center bg-no-repeat"
+              style={{ backgroundImage: `url("${previewUrl}")` }}
+            />
           </div>
         )}
 
-        {mode === "camera" && (
+        {!previewUrl && mode === "loading" && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          </div>
+        )}
+
+        {!previewUrl && mode === "camera" && (
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
-            className="w-full h-full object-cover"
+            className="h-full w-full object-cover"
           />
         )}
 
-        {mode === "fallback" && (
+        {!previewUrl && mode === "fallback" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-8 text-center">
             <Camera className="h-16 w-16 text-white/40" />
-            <p className="text-white/70 text-sm">
+            <p className="text-sm text-white/70">
               Camera access not available. Use the button below to select a photo.
             </p>
           </div>
         )}
 
-        {mode === "error" && (
+        {!previewUrl && mode === "error" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8">
-            <p className="text-red-400 text-center text-sm">
+            <p className="text-center text-sm text-red-400">
               Could not access camera. Please allow camera permissions and try again.
             </p>
-            <Button variant="outline" onClick={() => startCamera(facingMode)} className="text-white border-white/30">
+            <Button
+              variant="outline"
+              onClick={() => startCamera(facingMode)}
+              className="border-white/30 text-white"
+            >
               Try Again
             </Button>
           </div>
         )}
       </div>
 
-      {/* Capture controls */}
-      <div className="px-8 pb-10 pt-6 bg-black/60 flex items-center justify-center gap-8">
-        {mode === "camera" ? (
+      <div className="flex items-center justify-center gap-8 bg-black/60 px-8 pb-10 pt-6">
+        {previewUrl ? (
+          <>
+            <Button
+              variant="outline"
+              onClick={clearPreview}
+              className="border-white/30 text-white hover:bg-white/10 hover:text-white"
+            >
+              Retake
+            </Button>
+            <Button onClick={handleUsePhoto} className="px-8 py-3 text-base">
+              Use Photo
+            </Button>
+          </>
+        ) : mode === "camera" ? (
           <button
             onClick={captureFrame}
             disabled={capturing}
             className={cn(
-              "w-20 h-20 rounded-full border-4 border-white flex items-center justify-center transition",
-              capturing ? "opacity-50" : "hover:scale-105 active:scale-95"
+              "flex h-20 w-20 items-center justify-center rounded-full border-4 border-white transition",
+              capturing ? "opacity-50" : "active:scale-95 hover:scale-105"
             )}
           >
-            <div className="w-14 h-14 rounded-full bg-white" />
+            <div className="h-14 w-14 rounded-full bg-white" />
           </button>
         ) : (
           <>
@@ -193,7 +255,6 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
         )}
       </div>
 
-      {/* Hidden canvas for frame capture */}
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );

@@ -34,6 +34,7 @@ export function InspectionWorkflowView({
   const [cameraAnswerId, setCameraAnswerId] = useState<string | undefined>();
   const [cameraSectionId, setCameraSectionId] = useState<string | undefined>();
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
 
   const workflow = useInspectionWorkflow(submissionId);
 
@@ -73,6 +74,7 @@ export function InspectionWorkflowView({
           setViewMode("workflow");
           if (!cameraSectionId) return;
           setUploadingMedia(true);
+          setMediaError(null);
 
           try {
             // Get presigned URL
@@ -87,18 +89,26 @@ export function InspectionWorkflowView({
               }),
             });
 
-            if (!presignRes.ok) return;
+            if (!presignRes.ok) {
+              setMediaError("Could not prepare the photo upload.");
+              return;
+            }
             const { uploadUrl, publicUrl } = await presignRes.json();
 
             // Upload to R2
-            await fetch(uploadUrl, {
+            const uploadRes = await fetch(uploadUrl, {
               method: "PUT",
               body: file,
               headers: { "Content-Type": file.type },
             });
 
+            if (!uploadRes.ok) {
+              setMediaError("Photo upload failed.");
+              return;
+            }
+
             // Attach media record
-            await fetch(`/api/ppi/submissions/${submissionId}/media`, {
+            const attachRes = await fetch(`/api/ppi/submissions/${submissionId}/media`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -109,6 +119,16 @@ export function InspectionWorkflowView({
                 captured_at: new Date().toISOString(),
               }),
             });
+
+            if (!attachRes.ok) {
+              setMediaError("Photo uploaded but could not be attached to the inspection.");
+              return;
+            }
+
+            const { data } = await attachRes.json();
+            workflow.addMedia(cameraSectionId, data);
+          } catch {
+            setMediaError("Photo upload failed. Please try again.");
           } finally {
             setUploadingMedia(false);
           }
@@ -214,6 +234,15 @@ export function InspectionWorkflowView({
   const templates = SECTION_QUESTION_TEMPLATES[sectionType] ?? [];
   const template = templates[workflow.currentQuestionIdx];
   const requiresPhoto = template?.requiresPhoto ?? false;
+  const currentQuestionMedia = currentSection.media.filter(
+    (media) =>
+      media.ppi_answer_id === currentQuestion.id ||
+      (requiresPhoto &&
+        media.ppi_answer_id === null &&
+        media.ppi_section_id === currentSection.id)
+  );
+  const hasRequiredPhoto = !requiresPhoto || currentQuestionMedia.length > 0;
+  const canGoNext = workflow.canGoNext && hasRequiredPhoto;
 
   const hasError = workflow.missingAnswerIds.has(currentQuestion.id);
 
@@ -238,7 +267,7 @@ export function InspectionWorkflowView({
         prompt={currentQuestion.prompt}
         isRequired={currentQuestion.is_required}
         saving={workflow.saving}
-        canGoNext={workflow.canGoNext}
+        canGoNext={canGoNext}
         isLastQuestion={workflow.isLastQuestion}
         isLastSection={workflow.isLastSection}
         onBack={
@@ -295,6 +324,35 @@ export function InspectionWorkflowView({
 
           {uploadingMedia && (
             <p className="text-xs text-muted-foreground text-center">Uploading photo…</p>
+          )}
+
+          {currentQuestionMedia.length > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              {currentQuestionMedia.map((media, index) => (
+                <div
+                  key={media.id}
+                  className="relative aspect-[4/3] overflow-hidden rounded-xl border bg-secondary"
+                >
+                  <div
+                    className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+                    style={{ backgroundImage: `url("${media.url}")` }}
+                  />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-xs font-medium text-white">
+                    Photo {index + 1}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {requiresPhoto && !hasRequiredPhoto && (
+            <p className="text-sm font-medium text-amber-700">
+              Capture at least one photo before continuing.
+            </p>
+          )}
+
+          {mediaError && (
+            <p className="text-sm font-medium text-destructive">{mediaError}</p>
           )}
 
           {hasError && (

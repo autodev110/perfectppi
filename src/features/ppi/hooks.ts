@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useEffect, useReducer, useCallback, useRef } from "react";
-import type { PpiRequestResponse, PpiSubmissionResponse, PpiSectionItem, PpiAnswerItem } from "@/types/api";
+import { SECTION_QUESTION_TEMPLATES } from "@/features/ppi/constants";
+import type {
+  PpiRequestResponse,
+  PpiSubmissionResponse,
+  PpiSectionItem,
+  PpiAnswerItem,
+  PpiMediaItem,
+} from "@/types/api";
+import type { SectionType } from "@/types/enums";
 
 // ============================================================================
 // usePpiWizard
@@ -132,7 +140,7 @@ interface WorkflowState {
   sections: PpiSectionItem[];
   currentSectionIdx: number;
   currentQuestionIdx: number;
-  answers: Map<string, string>;         // answerId → value
+  answers: Map<string, string>;
   dirtyAnswerIds: Set<string>;
   saving: "idle" | "saving" | "saved" | "error";
   lastSaved: Date | null;
@@ -144,6 +152,7 @@ interface WorkflowState {
 type WorkflowAction =
   | { type: "INIT"; sections: PpiSectionItem[] }
   | { type: "SET_ANSWER"; answerId: string; value: string }
+  | { type: "ADD_MEDIA"; sectionId: string; media: PpiMediaItem }
   | { type: "NEXT_QUESTION" }
   | { type: "PREV_QUESTION" }
   | { type: "NEXT_SECTION" }
@@ -152,7 +161,7 @@ type WorkflowAction =
   | { type: "SAVE_START" }
   | { type: "SAVE_SUCCESS" }
   | { type: "SAVE_ERROR" }
-  | { type: "MARK_DIRTY_FLUSHED" }
+  | { type: "MARK_DIRTY_FLUSHED"; flushedIds: string[] }
   | { type: "SUBMIT_START" }
   | { type: "SUBMIT_ERROR"; message: string; missingIds: string[] }
   | { type: "CLEAR_MISSING"; answerId: string };
@@ -190,6 +199,16 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
         saving: "idle",
       };
     }
+
+    case "ADD_MEDIA":
+      return {
+        ...state,
+        sections: state.sections.map((section) =>
+          section.id === action.sectionId
+            ? { ...section, media: [...section.media, action.media] }
+            : section
+        ),
+      };
 
     case "NEXT_QUESTION": {
       const section = state.sections[state.currentSectionIdx];
@@ -250,8 +269,16 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
     case "SAVE_ERROR":
       return { ...state, saving: "error" };
 
-    case "MARK_DIRTY_FLUSHED":
-      return { ...state, dirtyAnswerIds: new Set(), saving: "saved", lastSaved: new Date() };
+    case "MARK_DIRTY_FLUSHED": {
+      const remainingDirty = new Set(state.dirtyAnswerIds);
+      action.flushedIds.forEach((answerId) => remainingDirty.delete(answerId));
+      return {
+        ...state,
+        dirtyAnswerIds: remainingDirty,
+        saving: "saved",
+        lastSaved: new Date(),
+      };
+    }
 
     case "SUBMIT_START":
       return { ...state, submitting: true, submitError: null };
@@ -288,6 +315,30 @@ const initialWorkflowState: WorkflowState = {
   missingAnswerIds: new Set(),
 };
 
+function hasAnswerValue(value: string | undefined) {
+  return value !== undefined && value.trim() !== "";
+}
+
+function hasRequiredPhoto(section: PpiSectionItem, answerId: string) {
+  return section.media.some(
+    (media) => media.ppi_answer_id === answerId || media.ppi_section_id === section.id
+  );
+}
+
+function isSectionComplete(section: PpiSectionItem, answers: Map<string, string>) {
+  const templates = SECTION_QUESTION_TEMPLATES[section.section_type as SectionType] ?? [];
+
+  return section.answers.every((answer, index) => {
+    const template = templates[index];
+    const answerFilled = hasAnswerValue(answers.get(answer.id));
+    const answerSatisfied = !answer.is_required || answerFilled;
+    const photoSatisfied =
+      !template?.requiresPhoto || hasRequiredPhoto(section, answer.id);
+
+    return answerSatisfied && photoSatisfied;
+  });
+}
+
 export function useInspectionWorkflow(submissionId: string) {
   const [state, dispatch] = useReducer(workflowReducer, initialWorkflowState);
   const [loading, setLoading] = useState(true);
@@ -314,6 +365,7 @@ export function useInspectionWorkflow(submissionId: string) {
       if (dirtyIds.size === 0) return;
 
       dispatch({ type: "SAVE_START" });
+      const flushedIds = Array.from(dirtyIds);
       const payload = Array.from(dirtyIds).map((answerId) => ({
         answerId,
         value: answers.get(answerId) ?? "",
@@ -327,7 +379,7 @@ export function useInspectionWorkflow(submissionId: string) {
         });
 
         if (res.ok) {
-          dispatch({ type: "MARK_DIRTY_FLUSHED" });
+          dispatch({ type: "MARK_DIRTY_FLUSHED", flushedIds });
         } else {
           dispatch({ type: "SAVE_ERROR" });
         }
@@ -353,9 +405,9 @@ export function useInspectionWorkflow(submissionId: string) {
   }, [state.dirtyAnswerIds, state.answers, flushDirty]);
 
   // Immediate flush (called before navigating section)
-  const immediateFlush = useCallback(() => {
+  const immediateFlush = useCallback(async () => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    flushDirty(state.dirtyAnswerIds, state.answers);
+    await flushDirty(state.dirtyAnswerIds, state.answers);
   }, [flushDirty, state.dirtyAnswerIds, state.answers]);
 
   function setAnswer(answerId: string, value: string) {
@@ -363,32 +415,36 @@ export function useInspectionWorkflow(submissionId: string) {
   }
 
   function nextQuestion() {
-    immediateFlush();
+    void immediateFlush();
     dispatch({ type: "NEXT_QUESTION" });
   }
 
   function prevQuestion() {
-    immediateFlush();
+    void immediateFlush();
     dispatch({ type: "PREV_QUESTION" });
   }
 
   function nextSection() {
-    immediateFlush();
+    void immediateFlush();
     dispatch({ type: "NEXT_SECTION" });
   }
 
   function prevSection() {
-    immediateFlush();
+    void immediateFlush();
     dispatch({ type: "PREV_SECTION" });
   }
 
   function jumpToSection(idx: number) {
-    immediateFlush();
+    void immediateFlush();
     dispatch({ type: "JUMP_TO_SECTION", sectionIdx: idx });
   }
 
+  function addMedia(sectionId: string, media: PpiMediaItem) {
+    dispatch({ type: "ADD_MEDIA", sectionId, media });
+  }
+
   async function submitInspection() {
-    immediateFlush();
+    await immediateFlush();
     dispatch({ type: "SUBMIT_START" });
 
     try {
@@ -441,7 +497,7 @@ export function useInspectionWorkflow(submissionId: string) {
         .replace(/\b\w/g, (c) => c.toUpperCase()),
       answered,
       total,
-      completed: answered >= total || s.completion_state === "completed",
+      completed: isSectionComplete(s, state.answers),
       active: state.sections.indexOf(s) === state.currentSectionIdx,
     };
   });
@@ -478,6 +534,7 @@ export function useInspectionWorkflow(submissionId: string) {
     submitError: state.submitError,
     missingAnswerIds: state.missingAnswerIds,
     setAnswer,
+    addMedia,
     nextQuestion,
     prevQuestion,
     nextSection,

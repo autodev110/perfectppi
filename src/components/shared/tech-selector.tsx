@@ -54,13 +54,14 @@ export function TechSelector({ selectedId, onSelect }: TechSelectorProps) {
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
         const params = new URLSearchParams();
         if (certFilter) params.set("certification", certFilter);
         const res = await fetch(`/api/technicians?${params}`);
         if (res.ok) {
-          const { data } = await res.json();
-          setTechs(data);
+          const json = await res.json();
+          setTechs(Array.isArray(json) ? json : json.data ?? []);
         }
       } finally {
         setLoading(false);
