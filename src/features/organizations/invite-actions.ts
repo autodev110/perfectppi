@@ -82,7 +82,7 @@ export async function removeTechnicianFromOrg(techProfileId: string, _formData?:
 
   const { data: myTechProfile } = await supabase
     .from("technician_profiles")
-    .select("organization_id")
+    .select("id, organization_id")
     .eq("profile_id", profile.id)
     .single();
 
@@ -90,7 +90,31 @@ export async function removeTechnicianFromOrg(techProfileId: string, _formData?:
     throw new Error("You are not associated with an organization");
   }
 
+  if (techProfileId === myTechProfile.id) {
+    throw new Error("You cannot remove yourself from the organization");
+  }
+
   const orgId = myTechProfile.organization_id;
+
+  // Only technician-role members can be removed by this action.
+  const { data: membership, error: membershipError } = await supabase
+    .from("organization_memberships")
+    .select("role")
+    .eq("technician_profile_id", techProfileId)
+    .eq("organization_id", orgId)
+    .maybeSingle();
+
+  if (membershipError) {
+    throw new Error(`Failed to validate organization membership: ${membershipError.message}`);
+  }
+
+  if (!membership) {
+    throw new Error("Technician is not a member of your organization");
+  }
+
+  if (membership.role !== "technician") {
+    throw new Error("Organization managers cannot be removed from this page");
+  }
 
   // Delete membership row
   const { error: deleteError } = await supabase

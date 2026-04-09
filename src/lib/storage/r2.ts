@@ -44,6 +44,26 @@ export async function generatePresignedUrl(params: {
   return { uploadUrl, publicUrl };
 }
 
+export async function uploadObject(params: {
+  key: string;
+  body: Uint8Array | Buffer;
+  contentType: string;
+}): Promise<{ publicUrl: string }> {
+  const client = getS3Client();
+  const bucket = process.env.R2_BUCKET_NAME!;
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: params.key,
+      Body: params.body,
+      ContentType: params.contentType,
+    })
+  );
+
+  return { publicUrl: `${process.env.R2_PUBLIC_URL}/${params.key}` };
+}
+
 export function buildStorageKey(params: {
   entity: string;
   ownerId: string;

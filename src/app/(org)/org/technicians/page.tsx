@@ -16,7 +16,7 @@ const CERT_LABELS: Record<string, string> = {
 };
 
 export default async function ManageTechniciansPage() {
-  await requireRole(["org_manager"]);
+  const currentProfile = await requireRole(["org_manager"]);
 
   const org = await getMyOrg();
   if (!org) redirect("/login");
@@ -47,6 +47,7 @@ export default async function ManageTechniciansPage() {
             <tbody className="divide-y">
               {technicians.map((tech) => {
                 const profile = tech.profile;
+                const isCurrentManager = tech.profile_id === currentProfile.id;
                 return (
                   <tr key={tech.id} className="hover:bg-muted/30">
                     <td className="px-4 py-3">
@@ -74,11 +75,15 @@ export default async function ManageTechniciansPage() {
                       {tech.total_inspections}
                     </td>
                     <td className="px-4 py-3">
-                      <form action={removeTechnicianFromOrg.bind(null, tech.id)}>
-                        <Button type="submit" variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                          Remove
-                        </Button>
-                      </form>
+                      {isCurrentManager ? (
+                        <span className="text-xs text-muted-foreground">Current manager</span>
+                      ) : (
+                        <form action={removeTechnicianFromOrg.bind(null, tech.id)}>
+                          <Button type="submit" variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                            Remove
+                          </Button>
+                        </form>
+                      )}
                     </td>
                   </tr>
                 );

@@ -83,6 +83,13 @@ export const SECTION_DEFINITIONS: {
 export const UPLOAD_LIMITS = {
   maxImageSize: 10 * 1024 * 1024, // 10MB
   maxVideoSize: 50 * 1024 * 1024, // 50MB
-  allowedImageTypes: ["image/jpeg", "image/png", "image/webp", "image/heic"],
+  allowedImageTypes: [
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+  ],
   allowedVideoTypes: ["video/mp4", "video/quicktime"],
 } as const;

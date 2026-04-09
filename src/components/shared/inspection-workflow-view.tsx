@@ -78,7 +78,29 @@ export function InspectionWorkflowView({
           setMediaError(null);
 
           try {
-            // Get presigned URL
+            const uploadViaServer = async (): Promise<string> => {
+              const fd = new FormData();
+              fd.append("file", file);
+              fd.append("entity", "ppi_media");
+              fd.append("recordId", submissionId);
+
+              const directRes = await fetch("/api/upload/direct", {
+                method: "POST",
+                body: fd,
+              });
+
+              if (!directRes.ok) {
+                const payload = await directRes.json().catch(() => null);
+                throw new Error(payload?.error ?? "Photo upload failed.");
+              }
+
+              const payload = await directRes.json();
+              return payload.publicUrl as string;
+            };
+
+            let finalPublicUrl: string | null = null;
+
+            // Preferred path: presigned direct upload
             const presignRes = await fetch("/api/upload/presigned-url", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -90,22 +112,27 @@ export function InspectionWorkflowView({
               }),
             });
 
-            if (!presignRes.ok) {
-              setMediaError("Could not prepare the photo upload.");
-              return;
-            }
-            const { uploadUrl, publicUrl } = await presignRes.json();
+            if (presignRes.ok) {
+              const { uploadUrl, publicUrl } = await presignRes.json();
+              finalPublicUrl = publicUrl as string;
 
-            // Upload to R2
-            const uploadRes = await fetch(uploadUrl, {
-              method: "PUT",
-              body: file,
-              headers: { "Content-Type": file.type },
-            });
+              try {
+                const uploadRes = await fetch(uploadUrl, {
+                  method: "PUT",
+                  body: file,
+                  headers: { "Content-Type": file.type || "application/octet-stream" },
+                });
 
-            if (!uploadRes.ok) {
-              setMediaError("Photo upload failed.");
-              return;
+                if (!uploadRes.ok) {
+                  finalPublicUrl = await uploadViaServer();
+                }
+              } catch {
+                // Common if R2 CORS is not configured for browser PUT.
+                finalPublicUrl = await uploadViaServer();
+              }
+            } else {
+              // If presign fails, fallback to server upload.
+              finalPublicUrl = await uploadViaServer();
             }
 
             // Attach media record
@@ -115,7 +142,7 @@ export function InspectionWorkflowView({
               body: JSON.stringify({
                 ppi_section_id: cameraSectionId,
                 ppi_answer_id: cameraAnswerId ?? null,
-                url: publicUrl,
+                url: finalPublicUrl,
                 media_type: "image",
                 captured_at: new Date().toISOString(),
               }),
@@ -128,8 +155,10 @@ export function InspectionWorkflowView({
 
             const { data } = await attachRes.json();
             workflow.addMedia(cameraSectionId, data);
-          } catch {
-            setMediaError("Photo upload failed. Please try again.");
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : "Photo upload failed. Please try again.";
+            setMediaError(message);
           } finally {
             setUploadingMedia(false);
           }
