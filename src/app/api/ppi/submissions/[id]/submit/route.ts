@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
 import { submitPpi } from "@/features/ppi/actions";
+import { triggerOutputGeneration } from "@/features/outputs/actions";
 
 export async function POST(
   _request: Request,
@@ -18,6 +19,11 @@ export async function POST(
       { status: 400 }
     );
   }
+
+  // Fire-and-forget: trigger output generation in background
+  void triggerOutputGeneration(id, { actorId: auth.profile.id }).catch((err) =>
+    console.error("Output generation failed:", err)
+  );
 
   return NextResponse.json({ success: true, requestId: result.requestId });
 }

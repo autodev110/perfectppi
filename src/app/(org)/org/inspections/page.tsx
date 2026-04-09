@@ -10,7 +10,7 @@ export default function OrgInspectionsPage() {
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            View all inspections performed by your organization&apos;s technicians, filter by status, and track progress. Coming in Phase B.
+            Organization-wide inspection tracking and filters for your technicians are planned for a later phase.
           </p>
         </CardContent>
       </Card>

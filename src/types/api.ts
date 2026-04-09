@@ -14,6 +14,7 @@ import type {
   SectionType,
   CompletionState,
   AnswerType,
+  AuditAction,
 } from "./enums";
 
 // --- Auth ---
@@ -237,6 +238,91 @@ export interface AttachMediaPayload {
 
 export interface UpdateRequestStatusPayload {
   status: PpiRequestStatus;
+}
+
+// --- Standardized Output (Stage 1) ---
+export interface StandardizedContent {
+  vehicle: {
+    year: number | null;
+    make: string | null;
+    model: string | null;
+    trim: string | null;
+    vin: string | null;
+    mileage: number | null;
+  };
+  inspection_metadata: {
+    ppi_type: PpiType;
+    performer_type: PerformerType;
+    submitted_at: string;
+    version: number;
+  };
+  performer: {
+    display_name: string | null;
+    role: string;
+  };
+  sections: StandardizedSection[];
+  overall_summary: string;
+  notable_findings: string[];
+}
+
+export interface StandardizedSection {
+  section_type: SectionType;
+  section_label: string;
+  summary: string;
+  condition_rating: "excellent" | "good" | "fair" | "poor" | "not_applicable";
+  findings: StandardizedFinding[];
+  notes: string | null;
+}
+
+export interface StandardizedFinding {
+  prompt: string;
+  answer: string;
+  severity: "info" | "minor" | "moderate" | "major" | "critical";
+}
+
+export interface StandardizedOutputResponse {
+  id: string;
+  ppi_submission_id: string;
+  version: number;
+  document_url: string | null;
+  structured_content: StandardizedContent;
+  generated_at: string;
+}
+
+// --- VSC Output (Stage 2) ---
+export interface VscCoverageData {
+  overall_eligibility: "eligible" | "conditional" | "ineligible";
+  eligibility_summary: string;
+  components: VscComponentDetermination[];
+}
+
+export interface VscComponentDetermination {
+  component: string;
+  category: string;
+  determination: "covered" | "excluded" | "limited";
+  reasoning: string;
+  conditions: string[];
+}
+
+export interface VscOutputResponse {
+  id: string;
+  ppi_submission_id: string;
+  standardized_output_id: string;
+  version: number;
+  document_url: string | null;
+  coverage_data: VscCoverageData;
+  generated_at: string;
+}
+
+// --- Audit ---
+export interface AuditLogEntry {
+  id: string;
+  actor_id: string;
+  action: AuditAction;
+  target_type: string;
+  target_id: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
 }
 
 // --- Generic ---

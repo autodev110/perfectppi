@@ -10,7 +10,7 @@ export default function AllInspectionsPage() {
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            Platform-wide inspection list with filtering by status, type, technician, and date range. Coming in Phase B.
+            Platform-wide inspection oversight with filtering by status, type, technician, and date range is planned for a later phase.
           </p>
         </CardContent>
       </Card>

@@ -593,6 +593,139 @@ export type Database = {
           }
         ];
       };
+      standardized_outputs: {
+        Row: {
+          id: string;
+          ppi_submission_id: string;
+          version: number;
+          document_url: string | null;
+          structured_content: Json;
+          generated_at: string;
+        };
+        Insert: {
+          id?: string;
+          ppi_submission_id: string;
+          version?: number;
+          document_url?: string | null;
+          structured_content?: Json;
+          generated_at?: string;
+        };
+        Update: {
+          id?: string;
+          ppi_submission_id?: string;
+          version?: number;
+          document_url?: string | null;
+          structured_content?: Json;
+          generated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "standardized_outputs_ppi_submission_id_fkey";
+            columns: ["ppi_submission_id"];
+            isOneToOne: false;
+            referencedRelation: "ppi_submissions";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      vsc_outputs: {
+        Row: {
+          id: string;
+          ppi_submission_id: string;
+          standardized_output_id: string;
+          version: number;
+          document_url: string | null;
+          coverage_data: Json;
+          generated_at: string;
+        };
+        Insert: {
+          id?: string;
+          ppi_submission_id: string;
+          standardized_output_id: string;
+          version?: number;
+          document_url?: string | null;
+          coverage_data?: Json;
+          generated_at?: string;
+        };
+        Update: {
+          id?: string;
+          ppi_submission_id?: string;
+          standardized_output_id?: string;
+          version?: number;
+          document_url?: string | null;
+          coverage_data?: Json;
+          generated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "vsc_outputs_ppi_submission_id_fkey";
+            columns: ["ppi_submission_id"];
+            isOneToOne: false;
+            referencedRelation: "ppi_submissions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "vsc_outputs_standardized_output_id_fkey";
+            columns: ["standardized_output_id"];
+            isOneToOne: false;
+            referencedRelation: "standardized_outputs";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      audit_logs: {
+        Row: {
+          id: string;
+          actor_id: string;
+          action:
+            | "inspection_edited"
+            | "output_regenerated"
+            | "contract_state_changed"
+            | "payment_state_changed"
+            | "submission_resubmitted";
+          target_type: string;
+          target_id: string;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          actor_id: string;
+          action:
+            | "inspection_edited"
+            | "output_regenerated"
+            | "contract_state_changed"
+            | "payment_state_changed"
+            | "submission_resubmitted";
+          target_type: string;
+          target_id: string;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          actor_id?: string;
+          action?:
+            | "inspection_edited"
+            | "output_regenerated"
+            | "contract_state_changed"
+            | "payment_state_changed"
+            | "submission_resubmitted";
+          target_type?: string;
+          target_id?: string;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_actor_id_fkey";
+            columns: ["actor_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       ppi_media: {
         Row: {
           id: string;
@@ -702,6 +835,12 @@ export type Database = {
         | "modifications";
       completion_state: "not_started" | "in_progress" | "completed";
       answer_type: "text" | "yes_no" | "select" | "number";
+      audit_action:
+        | "inspection_edited"
+        | "output_regenerated"
+        | "contract_state_changed"
+        | "payment_state_changed"
+        | "submission_resubmitted";
       notification_type:
         | "tech_request_new"
         | "tech_request_accepted"

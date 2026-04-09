@@ -1,6 +1,10 @@
 import { getPpiRequest, getCurrentSubmission, getPpiSubmissionVersions } from "@/features/ppi/queries";
+import { getOutputPair } from "@/features/outputs/queries";
 import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
 import { PpiBadge } from "@/components/shared/ppi-badge";
+import { StandardizedOutputView } from "@/components/shared/standardized-output-view";
+import { VscCoverageView } from "@/components/shared/vsc-coverage-view";
+import { OutputGenerationStatus } from "@/components/shared/output-generation-status";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
@@ -8,6 +12,7 @@ import { notFound } from "next/navigation";
 import { Car, Calendar, User, ChevronRight, FileText } from "lucide-react";
 import { SECTION_LABELS } from "@/features/ppi/constants";
 import type { SectionType } from "@/types/enums";
+import type { StandardizedContent, VscCoverageData } from "@/types/api";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -20,6 +25,10 @@ export default async function InspectionDetailPage({ params }: PageProps) {
     getCurrentSubmission(id),
     getPpiSubmissionVersions(id),
   ]);
+
+  // Fetch outputs if there's a current submission
+  const submissionId = submission?.id ?? null;
+  const outputs = submissionId ? await getOutputPair(submissionId) : null;
 
   if (!request) notFound();
 
@@ -147,38 +156,77 @@ export default async function InspectionDetailPage({ params }: PageProps) {
         </CardContent>
       </Card>
 
-      {/* Results (if submitted) */}
+      {/* AI-Generated Outputs (if submitted) */}
+      {isSubmitted && submissionId && (
+        <>
+          {outputs?.standardized ? (
+            <div className="space-y-3">
+              <h2 className="font-heading text-lg font-bold">Inspection Report</h2>
+              <StandardizedOutputView
+                content={outputs.standardized.structured_content as unknown as StandardizedContent}
+                generatedAt={outputs.standardized.generated_at}
+              />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <h2 className="font-heading text-lg font-bold">Inspection Report</h2>
+              <OutputGenerationStatus submissionId={submissionId} />
+            </div>
+          )}
+
+          {(outputs?.vsc || outputs?.standardized) && (
+            <div className="space-y-3">
+              <h2 className="font-heading text-lg font-bold">VSC Coverage Determination</h2>
+              {outputs?.vsc ? (
+                <VscCoverageView
+                  coverage={outputs.vsc.coverage_data as unknown as VscCoverageData}
+                  generatedAt={outputs.vsc.generated_at}
+                />
+              ) : (
+                <OutputGenerationStatus submissionId={submissionId} waitFor="both" />
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Raw Results (if submitted) */}
       {isSubmitted && sections.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="font-heading text-lg font-bold">Inspection Results</h2>
-          {sections.map((section) => (
-            <Card key={section.section_type}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">
-                  {SECTION_LABELS[section.section_type as SectionType] ?? section.section_type}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                {section.answers
-                  .filter((a) => a.answer_value)
-                  .map((answer, idx) => (
-                    <div key={idx} className="flex flex-col gap-0.5">
-                      <p className="text-muted-foreground text-xs">{answer.prompt}</p>
-                      <p className="font-medium capitalize">
-                        {answer.answer_value}
-                      </p>
+        <details className="group">
+          <summary className="font-heading text-lg font-bold cursor-pointer list-none flex items-center gap-2">
+            <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+            Raw Inspection Data
+          </summary>
+          <div className="space-y-3 mt-3">
+            {sections.map((section) => (
+              <Card key={section.section_type}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">
+                    {SECTION_LABELS[section.section_type as SectionType] ?? section.section_type}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  {section.answers
+                    .filter((a) => a.answer_value)
+                    .map((answer, idx) => (
+                      <div key={idx} className="flex flex-col gap-0.5">
+                        <p className="text-muted-foreground text-xs">{answer.prompt}</p>
+                        <p className="font-medium capitalize">
+                          {answer.answer_value}
+                        </p>
+                      </div>
+                    ))}
+                  {section.notes && (
+                    <div>
+                      <p className="text-muted-foreground text-xs">Notes</p>
+                      <p className="font-medium">{section.notes}</p>
                     </div>
-                  ))}
-                {section.notes && (
-                  <div>
-                    <p className="text-muted-foreground text-xs">Notes</p>
-                    <p className="font-medium">{section.notes}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </details>
       )}
 
       {/* Draft state — not started yet */}

@@ -683,6 +683,19 @@ export async function resubmitPpi(requestId: string) {
     .update({ status: "in_progress" })
     .eq("id", requestId);
 
+  // Audit log for resubmission
+  const { insertAuditLog } = await import("@/features/outputs/actions");
+  await insertAuditLog({
+    actorId: profileId,
+    action: "submission_resubmitted",
+    targetType: "ppi_submission",
+    targetId: newSub.id,
+    metadata: {
+      previousSubmissionId: currentSub.id,
+      version: currentSub.version + 1,
+    },
+  });
+
   revalidatePath(`/dashboard/ppi/${requestId}`);
   revalidatePath("/dashboard/ppi");
 
