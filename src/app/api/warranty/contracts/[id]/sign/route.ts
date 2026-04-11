@@ -1,8 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getContractSigningUrl } from "@/features/warranty/actions";
 
-// POST /api/warranty/contracts/[id]/sign — record contract signature via DocuSeal callback
-// Must be signed before payment unlocks
-// TODO Phase D: implement full logic
-export async function POST() {
-  return NextResponse.json({ message: "Phase D" }, { status: 501 });
+// GET /api/warranty/contracts/[id]/sign — generate fresh DocuSeal embed_src on page open
+// IMPORTANT: embed_src expires — always call on page load, never cache
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const result = await getContractSigningUrl(id);
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error }, { status: 400 });
+  }
+  return NextResponse.json(result);
 }

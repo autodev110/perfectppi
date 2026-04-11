@@ -1,25 +1,35 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getFullWarrantyFlow } from "@/features/warranty/queries";
+import { notFound, redirect } from "next/navigation";
+import { WarrantyFlowClient } from "./warranty-flow-client";
 
-export default async function WarrantyDetailPage({
-  params,
-}: {
+interface PageProps {
   params: Promise<{ id: string }>;
-}) {
+  searchParams: Promise<{ payment?: string }>;
+}
+
+export default async function WarrantyDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const { payment } = await searchParams;
+
+  const flow = await getFullWarrantyFlow(id);
+  if (!flow) notFound();
+
+  // Redirect non-eligible back to warranty list
+  if (flow.option.plans.length === 0) {
+    redirect("/dashboard/warranty");
+  }
+
+  const vehicleName = flow.vehicle
+    ? [flow.vehicle.year, flow.vehicle.make, flow.vehicle.model, flow.vehicle.trim]
+        .filter(Boolean)
+        .join(" ")
+    : "Unknown Vehicle";
 
   return (
-    <div className="space-y-6">
-      <h1 className="font-heading text-2xl font-bold">Warranty Detail</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Warranty {id}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">
-            View warranty contract details, coverage, and payment status. Coming in Phase D.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+    <WarrantyFlowClient
+      flow={flow}
+      vehicleName={vehicleName}
+      paymentCallback={payment ?? null}
+    />
   );
 }

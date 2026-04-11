@@ -1,5 +1,6 @@
 import { getPpiRequest, getCurrentSubmission, getPpiSubmissionVersions } from "@/features/ppi/queries";
 import { getOutputPair } from "@/features/outputs/queries";
+import { getWarrantyOptionByVscOutput } from "@/features/warranty/queries";
 import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
 import { PpiBadge } from "@/components/shared/ppi-badge";
 import { StandardizedOutputView } from "@/components/shared/standardized-output-view";
@@ -9,8 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Car, Calendar, User, ChevronRight, FileText } from "lucide-react";
+import { Car, Calendar, User, ChevronRight, FileText, Shield } from "lucide-react";
 import { SECTION_LABELS } from "@/features/ppi/constants";
+import { GetCoverageButton } from "./get-coverage-button";
 import type { SectionType } from "@/types/enums";
 import type { StandardizedContent, VscCoverageData } from "@/types/api";
 
@@ -29,6 +31,12 @@ export default async function InspectionDetailPage({ params }: PageProps) {
   // Fetch outputs if there's a current submission
   const submissionId = submission?.id ?? null;
   const outputs = submissionId ? await getOutputPair(submissionId) : null;
+
+  // Check for existing warranty option on this VSC output
+  const vscOutputId = outputs?.vsc?.id ?? null;
+  const existingWarrantyOption = vscOutputId
+    ? await getWarrantyOptionByVscOutput(vscOutputId)
+    : null;
 
   if (!request) notFound();
 
@@ -178,10 +186,40 @@ export default async function InspectionDetailPage({ params }: PageProps) {
             <div className="space-y-3">
               <h2 className="font-heading text-lg font-bold">VSC Coverage Determination</h2>
               {outputs?.vsc ? (
-                <VscCoverageView
-                  coverage={outputs.vsc.coverage_data as unknown as VscCoverageData}
-                  generatedAt={outputs.vsc.generated_at}
-                />
+                <>
+                  <VscCoverageView
+                    coverage={outputs.vsc.coverage_data as unknown as VscCoverageData}
+                    generatedAt={outputs.vsc.generated_at}
+                  />
+                  {/* Warranty CTA — only if vehicle is eligible */}
+                  {(outputs.vsc.coverage_data as unknown as VscCoverageData).overall_eligibility !== "ineligible" && (
+                    <div className="bg-primary-container rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Shield className="h-5 w-5 text-white/80" />
+                          <span className="text-xs font-bold uppercase tracking-widest text-white/70">
+                            Coverage Available
+                          </span>
+                        </div>
+                        <h3 className="text-white font-bold text-lg leading-tight">
+                          This vehicle qualifies for a Vehicle Service Contract
+                        </h3>
+                        <p className="text-white/70 text-sm mt-1">
+                          Based on your inspection, select a plan to protect your investment.
+                        </p>
+                      </div>
+                      {existingWarrantyOption ? (
+                        <Button asChild className="shrink-0 bg-white text-primary-container font-bold hover:bg-white/90 rounded-xl">
+                          <Link href={`/dashboard/warranty/${existingWarrantyOption.id}`}>
+                            View Coverage Options
+                          </Link>
+                        </Button>
+                      ) : (
+                        <GetCoverageButton vscOutputId={outputs.vsc.id} />
+                      )}
+                    </div>
+                  )}
+                </>
               ) : (
                 <OutputGenerationStatus submissionId={submissionId} waitFor="both" />
               )}

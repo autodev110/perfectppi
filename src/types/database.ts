@@ -777,6 +777,156 @@ export type Database = {
           }
         ];
       };
+      warranty_options: {
+        Row: {
+          id: string;
+          vsc_output_id: string;
+          vehicle_id: string;
+          user_id: string;
+          plans: Json;
+          status: "not_offered" | "offered" | "viewed" | "selected" | "contract_pending" | "signed" | "payment_pending" | "paid" | "failed" | "cancelled";
+          offered_at: string | null;
+          viewed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          vsc_output_id: string;
+          vehicle_id: string;
+          user_id: string;
+          plans?: Json;
+          status?: "not_offered" | "offered" | "viewed" | "selected" | "contract_pending" | "signed" | "payment_pending" | "paid" | "failed" | "cancelled";
+          offered_at?: string | null;
+          viewed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          vsc_output_id?: string;
+          vehicle_id?: string;
+          user_id?: string;
+          plans?: Json;
+          status?: "not_offered" | "offered" | "viewed" | "selected" | "contract_pending" | "signed" | "payment_pending" | "paid" | "failed" | "cancelled";
+          offered_at?: string | null;
+          viewed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      warranty_orders: {
+        Row: {
+          id: string;
+          warranty_option_id: string;
+          plan_name: string;
+          term_years: number;
+          term_miles: number | null;
+          price_cents: number;
+          status: "not_offered" | "offered" | "viewed" | "selected" | "contract_pending" | "signed" | "payment_pending" | "paid" | "failed" | "cancelled";
+          selected_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          warranty_option_id: string;
+          plan_name: string;
+          term_years: number;
+          term_miles?: number | null;
+          price_cents: number;
+          status?: "not_offered" | "offered" | "viewed" | "selected" | "contract_pending" | "signed" | "payment_pending" | "paid" | "failed" | "cancelled";
+          selected_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          warranty_option_id?: string;
+          plan_name?: string;
+          term_years?: number;
+          term_miles?: number | null;
+          price_cents?: number;
+          status?: "not_offered" | "offered" | "viewed" | "selected" | "contract_pending" | "signed" | "payment_pending" | "paid" | "failed" | "cancelled";
+          selected_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      contracts: {
+        Row: {
+          id: string;
+          warranty_order_id: string;
+          document_url: string | null;
+          docuseal_id: string | null;
+          docuseal_submitter_slug: string | null;
+          presented_at: string;
+          signed_at: string | null;
+          signer_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          warranty_order_id: string;
+          document_url?: string | null;
+          docuseal_id?: string | null;
+          docuseal_submitter_slug?: string | null;
+          presented_at?: string;
+          signed_at?: string | null;
+          signer_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          warranty_order_id?: string;
+          document_url?: string | null;
+          docuseal_id?: string | null;
+          docuseal_submitter_slug?: string | null;
+          presented_at?: string;
+          signed_at?: string | null;
+          signer_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      payments: {
+        Row: {
+          id: string;
+          contract_id: string;
+          user_id: string;
+          amount_cents: number;
+          method: "card" | "bank_transfer" | "financing";
+          stripe_payment_id: string | null;
+          status: "pending" | "completed" | "failed" | "refunded";
+          receipt_url: string | null;
+          paid_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          user_id: string;
+          amount_cents: number;
+          method?: "card" | "bank_transfer" | "financing";
+          stripe_payment_id?: string | null;
+          status?: "pending" | "completed" | "failed" | "refunded";
+          receipt_url?: string | null;
+          paid_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          contract_id?: string;
+          user_id?: string;
+          amount_cents?: number;
+          method?: "card" | "bank_transfer" | "financing";
+          stripe_payment_id?: string | null;
+          status?: "pending" | "completed" | "failed" | "refunded";
+          receipt_url?: string | null;
+          paid_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

@@ -1,8 +1,22 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { initiatePayment } from "@/features/warranty/actions";
+import { z } from "zod";
 
-// POST /api/warranty/payments — initiate Stripe payment for a signed contract
-// Contract must be signed before this endpoint is reachable
-// TODO Phase D: implement full logic
-export async function POST() {
-  return NextResponse.json({ message: "Phase D" }, { status: 501 });
+const initiateSchema = z.object({
+  contractId: z.string().uuid(),
+});
+
+// POST /api/warranty/payments — create Stripe checkout for a signed contract
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => null);
+  const parsed = initiateSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  const result = await initiatePayment(parsed.data.contractId);
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error }, { status: 400 });
+  }
+  return NextResponse.json(result);
 }

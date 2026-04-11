@@ -1,7 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getWarrantyOrder } from "@/features/warranty/queries";
 
-// GET /api/warranty/orders/[id] — get a single warranty order and its status
-// TODO Phase D: implement full logic
-export async function GET() {
-  return NextResponse.json({ message: "Phase D" }, { status: 501 });
+// GET /api/warranty/orders/[id] — order status polling
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const order = await getWarrantyOrder(id);
+  if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json(order);
 }
