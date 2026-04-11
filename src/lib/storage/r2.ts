@@ -7,7 +7,21 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 let s3Client: S3Client | null = null;
 
+export function isR2Configured() {
+  return Boolean(
+    process.env.R2_ENDPOINT &&
+      process.env.R2_ACCESS_KEY_ID &&
+      process.env.R2_SECRET_ACCESS_KEY &&
+      process.env.R2_BUCKET_NAME &&
+      process.env.R2_PUBLIC_URL,
+  );
+}
+
 function getS3Client() {
+  if (!isR2Configured()) {
+    throw new Error("R2 is not configured");
+  }
+
   if (!s3Client) {
     s3Client = new S3Client({
       region: "auto",

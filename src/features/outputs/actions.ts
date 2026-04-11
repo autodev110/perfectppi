@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { generateStandardizedOutput } from "@/lib/ai/standardized-generator";
 import { generateVscCoverage } from "@/lib/ai/vsc-generator";
+import { generateStandardizedReportPdf } from "@/lib/pdf/standardized-report-pdf";
+import { isR2Configured, uploadObject } from "@/lib/storage/r2";
 import type { Json } from "@/types/database";
 import type { SectionType } from "@/types/enums";
 import type { AuditAction } from "@/types/enums";
@@ -163,13 +165,28 @@ export async function triggerOutputGeneration(
     return { error: `Stage 1 generation failed: ${err instanceof Error ? err.message : String(err)}` };
   }
 
+  let standardizedDocumentUrl: string | null = null;
+  if (isR2Configured()) {
+    try {
+      const pdfBuffer = generateStandardizedReportPdf(standardizedContent);
+      const uploaded = await uploadObject({
+        key: `standardized_outputs/${request.requester_id}/${submissionId}/v${nextVersion}.pdf`,
+        body: pdfBuffer,
+        contentType: "application/pdf",
+      });
+      standardizedDocumentUrl = uploaded.publicUrl;
+    } catch (err) {
+      console.error("Failed to upload standardized report PDF:", err);
+    }
+  }
+
   const { data: stdOutput, error: stdError } = await admin
     .from("standardized_outputs")
     .insert({
       ppi_submission_id: submissionId,
       version: nextVersion,
       structured_content: standardizedContent as unknown as Json,
-      document_url: null,
+      document_url: standardizedDocumentUrl,
     })
     .select()
     .single();

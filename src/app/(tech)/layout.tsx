@@ -16,6 +16,7 @@ export default async function TechLayout({
       sidebar={<TechSidebar />}
       settingsHref="/tech/profile"
       profileHref="/tech/profile"
+      messagesBase="/tech/messages"
     >
       {children}
     </PortalLayout>

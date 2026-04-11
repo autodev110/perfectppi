@@ -1,11 +1,30 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // GET /api/admin/payments — list all payments (admin only)
-// TODO Phase E: implement admin payments query
-export async function GET() {
+export async function GET(req: NextRequest) {
   const auth = await requireApiRole(["admin"]);
   if ("response" in auth) return auth.response;
 
-  return NextResponse.json({ data: [], message: "Phase E" });
+  const page = Math.max(1, Number(req.nextUrl.searchParams.get("page") ?? 1));
+  const perPage = Math.max(1, Math.min(200, Number(req.nextUrl.searchParams.get("perPage") ?? 50)));
+  const from = (page - 1) * perPage;
+  const to = from + perPage - 1;
+
+  const admin = createAdminClient();
+  const { data, count } = await admin
+    .from("payments")
+    .select("id, contract_id, user_id, amount_cents, method, status, stripe_payment_id, receipt_url, paid_at, created_at", {
+      count: "exact",
+    })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  return NextResponse.json({
+    data: data ?? [],
+    total: count ?? 0,
+    page,
+    perPage,
+  });
 }

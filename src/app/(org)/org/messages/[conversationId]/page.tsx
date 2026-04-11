@@ -4,14 +4,14 @@ import { getConversation } from "@/features/messages/queries";
 import { markConversationRead } from "@/features/messages/actions";
 import { ConversationThread } from "@/components/shared/conversation-thread";
 
-export default async function ConversationPage({
+export default async function OrgConversationPage({
   params,
   searchParams,
 }: {
   params: Promise<{ conversationId: string }>;
   searchParams: Promise<{ m?: string }>;
 }) {
-  const profile = await requireRole(["consumer"]);
+  const profile = await requireRole(["org_manager"]);
   const { conversationId } = await params;
   const { m: highlightMessageId } = await searchParams;
 
@@ -23,7 +23,7 @@ export default async function ConversationPage({
         <p className="text-sm text-muted-foreground">
           This thread was not found or you do not have access to it.
         </p>
-        <Link href="/dashboard/messages" className="text-sm font-medium text-primary hover:underline">
+        <Link href="/org/messages" className="text-sm font-medium text-primary hover:underline">
           Back to messages
         </Link>
       </div>
@@ -35,7 +35,7 @@ export default async function ConversationPage({
   return (
     <ConversationThread
       conversationId={conversationId}
-      routeBase="/dashboard/messages"
+      routeBase="/org/messages"
       myProfileId={profile.id}
       participants={conversation.participants}
       messages={conversation.messages}

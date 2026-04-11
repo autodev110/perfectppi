@@ -44,6 +44,7 @@ export async function POST(request: Request) {
   const allowedTypes = [
     ...UPLOAD_LIMITS.allowedImageTypes,
     ...UPLOAD_LIMITS.allowedVideoTypes,
+    ...(parsed.data.entity === "media_package" ? UPLOAD_LIMITS.allowedFileTypes : []),
   ];
   if (!(allowedTypes as string[]).includes(parsed.data.contentType)) {
     return NextResponse.json(

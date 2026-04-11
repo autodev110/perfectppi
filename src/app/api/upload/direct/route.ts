@@ -52,14 +52,23 @@ export async function POST(request: Request) {
 
   const allowedImageTypes = [...UPLOAD_LIMITS.allowedImageTypes] as string[];
   const allowedVideoTypes = [...UPLOAD_LIMITS.allowedVideoTypes] as string[];
-  const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
+  const allowedFileTypes =
+    parsed.data.entity === "media_package"
+      ? ([...UPLOAD_LIMITS.allowedFileTypes] as string[])
+      : [];
+  const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes, ...allowedFileTypes];
 
   if (!allowedTypes.includes(file.type)) {
     return NextResponse.json({ error: "File type not allowed" }, { status: 400 });
   }
 
   const isImage = allowedImageTypes.includes(file.type);
-  const maxBytes = isImage ? UPLOAD_LIMITS.maxImageSize : UPLOAD_LIMITS.maxVideoSize;
+  const isVideo = allowedVideoTypes.includes(file.type);
+  const maxBytes = isImage
+    ? UPLOAD_LIMITS.maxImageSize
+    : isVideo
+      ? UPLOAD_LIMITS.maxVideoSize
+      : UPLOAD_LIMITS.maxFileSize;
 
   if (file.size > maxBytes) {
     return NextResponse.json(

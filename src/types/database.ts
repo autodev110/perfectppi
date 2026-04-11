@@ -379,6 +379,202 @@ export type Database = {
           }
         ];
       };
+      conversations: {
+        Row: {
+          id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      conversation_participants: {
+        Row: {
+          conversation_id: string;
+          profile_id: string;
+        };
+        Insert: {
+          conversation_id: string;
+          profile_id: string;
+        };
+        Update: {
+          conversation_id?: string;
+          profile_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversation_participants_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversation_participants_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          content: string;
+          has_attachment: boolean;
+          attachment_url: string | null;
+          attachment_type: string | null;
+          status: "unread" | "read" | "archived";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_id: string;
+          content: string;
+          has_attachment?: boolean;
+          attachment_url?: string | null;
+          attachment_type?: string | null;
+          status?: "unread" | "read" | "archived";
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          sender_id?: string;
+          content?: string;
+          has_attachment?: boolean;
+          attachment_url?: string | null;
+          attachment_type?: string | null;
+          status?: "unread" | "read" | "archived";
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "messages_sender_id_fkey";
+            columns: ["sender_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      media_packages: {
+        Row: {
+          id: string;
+          creator_id: string;
+          title: string;
+          description: string | null;
+          ppi_submission_id: string | null;
+          items: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          creator_id: string;
+          title: string;
+          description?: string | null;
+          ppi_submission_id?: string | null;
+          items?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          creator_id?: string;
+          title?: string;
+          description?: string | null;
+          ppi_submission_id?: string | null;
+          items?: Json;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "media_packages_creator_id_fkey";
+            columns: ["creator_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "media_packages_ppi_submission_id_fkey";
+            columns: ["ppi_submission_id"];
+            isOneToOne: false;
+            referencedRelation: "ppi_submissions";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      share_links: {
+        Row: {
+          id: string;
+          media_package_id: string | null;
+          ppi_submission_id: string | null;
+          standardized_output_id: string | null;
+          token: string;
+          target_type: "media_package" | "inspection_result" | "standardized_output";
+          expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          media_package_id?: string | null;
+          ppi_submission_id?: string | null;
+          standardized_output_id?: string | null;
+          token?: string;
+          target_type: "media_package" | "inspection_result" | "standardized_output";
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          media_package_id?: string | null;
+          ppi_submission_id?: string | null;
+          standardized_output_id?: string | null;
+          token?: string;
+          target_type?: "media_package" | "inspection_result" | "standardized_output";
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "share_links_media_package_id_fkey";
+            columns: ["media_package_id"];
+            isOneToOne: false;
+            referencedRelation: "media_packages";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "share_links_ppi_submission_id_fkey";
+            columns: ["ppi_submission_id"];
+            isOneToOne: false;
+            referencedRelation: "ppi_submissions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "share_links_standardized_output_id_fkey";
+            columns: ["standardized_output_id"];
+            isOneToOne: false;
+            referencedRelation: "standardized_outputs";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       organization_memberships: {
         Row: {
           id: string;
@@ -999,6 +1195,11 @@ export type Database = {
         | "warranty_available"
         | "payment_completed"
         | "message_received";
+      message_status: "unread" | "read" | "archived";
+      share_target_type:
+        | "media_package"
+        | "inspection_result"
+        | "standardized_output";
     };
   };
 }

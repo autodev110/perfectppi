@@ -30,6 +30,7 @@ export const navConfig = {
     { label: "Technicians", href: "/org/technicians", icon: "Users" },
     { label: "Inspections", href: "/org/inspections", icon: "ClipboardCheck" },
     { label: "Profile", href: "/org/profile", icon: "Building2" },
+    { label: "Messages", href: "/org/messages", icon: "MessageSquare" },
   ],
   admin: [
     { label: "Overview", href: "/admin", icon: "LayoutDashboard" },
@@ -46,6 +47,7 @@ export const navConfig = {
     { label: "Warranties", href: "/admin/warranties", icon: "Shield" },
     { label: "Contracts", href: "/admin/contracts", icon: "FileSignature" },
     { label: "Payments", href: "/admin/payments", icon: "CreditCard" },
+    { label: "Messages", href: "/admin/messages", icon: "MessageSquare" },
     {
       label: "Communications",
       href: "/admin/communications",

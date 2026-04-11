@@ -13,12 +13,14 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Menu, Settings, User, Search } from "lucide-react";
 import Link from "next/link";
 import { NotificationBell } from "@/components/shared/notification-bell";
+import { PageReveal } from "@/components/shared/page-reveal";
 
 interface PortalLayoutProps {
   children: React.ReactNode;
   sidebar: React.ReactNode;
   settingsHref: string;
   profileHref: string;
+  messagesBase: string;
 }
 
 export function PortalLayout({
@@ -26,6 +28,7 @@ export function PortalLayout({
   sidebar,
   settingsHref,
   profileHref,
+  messagesBase,
 }: PortalLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -58,7 +61,7 @@ export function PortalLayout({
               />
             </div>
 
-            <NotificationBell />
+            <NotificationBell messagesBase={messagesBase} />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -87,7 +90,9 @@ export function PortalLayout({
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+          <PageReveal>{children}</PageReveal>
+        </main>
       </div>
     </div>
   );

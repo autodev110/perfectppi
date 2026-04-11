@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Shield, BadgeCheck, Fingerprint } from "lucide-react";
+import { PageReveal } from "@/components/shared/page-reveal";
 
 export default function AuthLayout({
   children,
@@ -57,7 +58,7 @@ export default function AuthLayout({
 
         {/* Right — Auth form */}
         <section className="flex flex-col justify-center px-8 md:px-16 py-12 bg-surface-container-lowest">
-          <div className="max-w-md mx-auto w-full">
+          <PageReveal className="max-w-md mx-auto w-full">
             {/* Mobile branding */}
             <Link
               href="/"
@@ -66,7 +67,7 @@ export default function AuthLayout({
               PerfectPPI
             </Link>
             {children}
-          </div>
+          </PageReveal>
         </section>
       </main>
     </div>

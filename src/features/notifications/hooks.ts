@@ -13,9 +13,12 @@ export function useRealtimeNotifications(profileId: string | null) {
   const fetchNotifications = useCallback(async () => {
     if (!profileId) return;
     const supabase = createClient();
+    // Explicit user_id filter — do NOT rely on RLS alone. Admin users have a
+    // FOR ALL policy on notifications that would otherwise leak every row.
     const { data } = await supabase
       .from("notifications")
       .select("*")
+      .eq("user_id", profileId)
       .order("created_at", { ascending: false })
       .limit(20);
 

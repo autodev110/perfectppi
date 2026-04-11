@@ -2,8 +2,8 @@ import { requireRole } from "@/features/auth/guards";
 import { getConversations, getMessageRecipientsDirectory } from "@/features/messages/queries";
 import { MessagesCenter } from "@/components/shared/messages-center";
 
-export default async function MessagesPage() {
-  await requireRole(["consumer"]);
+export default async function OrgMessagesPage() {
+  await requireRole(["org_manager"]);
 
   const [conversations, recipients] = await Promise.all([
     getConversations(),
@@ -14,9 +14,9 @@ export default async function MessagesPage() {
     <MessagesCenter
       conversations={conversations}
       recipients={recipients}
-      routeBase="/dashboard/messages"
+      routeBase="/org/messages"
       title="Messages"
-      description="Direct messages with technicians and other users."
+      description="Conversations with technicians, consumers, and teammates."
     />
   );
 }

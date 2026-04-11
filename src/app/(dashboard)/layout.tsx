@@ -16,6 +16,7 @@ export default async function DashboardLayout({
       sidebar={<DashboardSidebar />}
       settingsHref="/dashboard/settings"
       profileHref="/dashboard/profile"
+      messagesBase="/dashboard/messages"
     >
       {children}
     </PortalLayout>

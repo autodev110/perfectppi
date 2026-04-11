@@ -1,8 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { resolveShareLink } from "@/features/media/queries";
 
 // GET /api/share/[token] — resolve a share link token to its target resource
 // Public read-only access, no auth required
-// TODO Phase E: implement full logic
-export async function GET() {
-  return NextResponse.json({ message: "Phase E" }, { status: 501 });
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ token: string }> },
+) {
+  const { token } = await params;
+  const data = await resolveShareLink(token);
+
+  if (!data) {
+    return NextResponse.json({ error: "Invalid or expired share link" }, { status: 404 });
+  }
+
+  return NextResponse.json({ data });
 }

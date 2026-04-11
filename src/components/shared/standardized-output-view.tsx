@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { StandardizedContent, StandardizedSection, StandardizedFinding } from "@/types/api";
-import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, Info, XCircle } from "lucide-react";
 
 interface StandardizedOutputViewProps {
   content: StandardizedContent;
   generatedAt: string;
+  documentUrl?: string | null;
 }
 
 const ratingConfig: Record<
@@ -32,7 +33,7 @@ const severityConfig: Record<
   critical: { icon: XCircle, color: "text-red-600" },
 };
 
-export function StandardizedOutputView({ content, generatedAt }: StandardizedOutputViewProps) {
+export function StandardizedOutputView({ content, generatedAt, documentUrl }: StandardizedOutputViewProps) {
   const { vehicle, performer, sections, overall_summary, notable_findings } = content;
 
   const vehicleName = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim]
@@ -55,6 +56,17 @@ export function StandardizedOutputView({ content, generatedAt }: StandardizedOut
               <CheckCircle2 className="h-3 w-3 mr-1" />
               AI Generated
             </Badge>
+            {documentUrl ? (
+              <a
+                href={documentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+              >
+                <Download className="mr-1.5 h-3 w-3" />
+                Download PDF
+              </a>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent>
