@@ -178,4 +178,9 @@
   .tonal-shift {
     background-color: hsl(var(--surface-container-low));
   }
+
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
 }
