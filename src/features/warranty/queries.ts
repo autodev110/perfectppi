@@ -303,6 +303,59 @@ export async function getMyWarranties(): Promise<
   return results;
 }
 
+/** Get pending warranty opportunities (offered/viewed) for the current user — dashboard widget */
+export async function getMyWarrantyOpportunities(limit = 3): Promise<
+  Array<{
+    id: string;
+    status: string;
+    plans: WarrantyPlan[];
+    offered_at: string | null;
+    vehicle: { id: string; year: number | null; make: string | null; model: string | null } | null;
+  }>
+> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .single();
+  if (!profile) return [];
+
+  const { data: options, error } = await supabase
+    .from("warranty_options")
+    .select("id, status, plans, offered_at, vehicle_id")
+    .eq("user_id", profile.id)
+    .in("status", ["offered", "viewed"])
+    .order("offered_at", { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error || !options) return [];
+
+  const results = await Promise.all(
+    options.map(async (opt) => {
+      const { data: vehicle } = await supabase
+        .from("vehicles")
+        .select("id, year, make, model")
+        .eq("id", opt.vehicle_id)
+        .maybeSingle();
+      return {
+        id: opt.id,
+        status: opt.status,
+        plans: (opt.plans as unknown as WarrantyPlan[]) ?? [],
+        offered_at: opt.offered_at,
+        vehicle: vehicle ?? null,
+      };
+    }),
+  );
+
+  return results;
+}
+
 export interface PublicVehicleWarrantySnapshot {
   option: WarrantyOption;
   order: WarrantyOrder | null;

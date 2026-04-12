@@ -1,6 +1,9 @@
 import { getMyProfile } from "@/features/profiles/queries";
 import { getMyVehicles } from "@/features/vehicles/queries";
 import { getMyPpiRequestCount } from "@/features/ppi/queries";
+import { getMyWarrantyOpportunities } from "@/features/warranty/queries";
+import { getConversations } from "@/features/messages/queries";
+import { getMyMarketplaceListings } from "@/features/marketplace/queries";
 import {
   Car,
   ClipboardCheck,
@@ -9,18 +12,25 @@ import {
   Award,
   Newspaper,
   Tag,
+  MessageSquare,
+  ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { formatCurrency } from "@/lib/utils/formatting";
 
 export default async function DashboardPage() {
   const profile = await getMyProfile();
   if (!profile) redirect("/login");
 
-  const [vehicles, inspectionCount] = await Promise.all([
-    getMyVehicles(),
-    getMyPpiRequestCount(),
-  ]);
+  const [vehicles, inspectionCount, warrantyOpportunities, conversations, myListings] =
+    await Promise.all([
+      getMyVehicles(),
+      getMyPpiRequestCount(),
+      getMyWarrantyOpportunities(3),
+      getConversations(3),
+      getMyMarketplaceListings(),
+    ]);
 
   return (
     <div className="space-y-12">
@@ -150,6 +160,131 @@ export default async function DashboardPage() {
             <ArrowRight className="h-3.5 w-3.5" />
           </span>
         </Link>
+      </section>
+
+      {/* Activity Widgets */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Recent Messages */}
+        <div className="bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-outline-variant/10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="bg-secondary-container p-1.5 rounded-lg">
+                <MessageSquare className="h-4 w-4 text-on-secondary-container" />
+              </div>
+              <h3 className="font-bold text-sm">Messages</h3>
+            </div>
+            <Link href="/dashboard/messages" className="text-xs font-bold text-on-tertiary-container">
+              View all →
+            </Link>
+          </div>
+          {conversations.length === 0 ? (
+            <p className="text-xs text-on-surface-variant">No conversations yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {conversations.map((convo) => {
+                const other = convo.other_participants[0];
+                return (
+                  <li key={convo.id}>
+                    <Link
+                      href={`/dashboard/messages/${convo.id}`}
+                      className="block rounded-lg p-2 hover:bg-surface-container transition-colors"
+                    >
+                      <p className="text-sm font-semibold truncate">
+                        {other?.display_name ?? other?.username ?? "User"}
+                      </p>
+                      {convo.last_message && (
+                        <p className="text-xs text-on-surface-variant truncate">
+                          {convo.last_message.content}
+                        </p>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* Warranty Opportunities */}
+        <div className="bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-outline-variant/10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="bg-teal/10 p-1.5 rounded-lg">
+                <ShieldCheck className="h-4 w-4 text-teal" />
+              </div>
+              <h3 className="font-bold text-sm">VSC Offers</h3>
+            </div>
+            <Link href="/dashboard/warranty" className="text-xs font-bold text-on-tertiary-container">
+              View all →
+            </Link>
+          </div>
+          {warrantyOpportunities.length === 0 ? (
+            <p className="text-xs text-on-surface-variant">No active VSC offers.</p>
+          ) : (
+            <ul className="space-y-2">
+              {warrantyOpportunities.map((opp) => {
+                const vehicleName = opp.vehicle
+                  ? [opp.vehicle.year, opp.vehicle.make, opp.vehicle.model].filter(Boolean).join(" ")
+                  : "Vehicle";
+                const lowestPlan = opp.plans.sort((a, b) => a.price_cents - b.price_cents)[0];
+                return (
+                  <li key={opp.id}>
+                    <Link
+                      href={`/dashboard/warranty/${opp.id}`}
+                      className="block rounded-lg p-2 hover:bg-surface-container transition-colors"
+                    >
+                      <p className="text-sm font-semibold truncate">{vehicleName}</p>
+                      {lowestPlan && (
+                        <p className="text-xs text-on-surface-variant">
+                          From {formatCurrency(lowestPlan.price_cents)}
+                        </p>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* My Active Listings */}
+        <div className="bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-outline-variant/10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="bg-primary-container/30 p-1.5 rounded-lg">
+                <Tag className="h-4 w-4 text-primary" />
+              </div>
+              <h3 className="font-bold text-sm">My Listings</h3>
+            </div>
+            <Link href="/dashboard/listings" className="text-xs font-bold text-on-tertiary-container">
+              View all →
+            </Link>
+          </div>
+          {myListings.length === 0 ? (
+            <p className="text-xs text-on-surface-variant">No active listings.</p>
+          ) : (
+            <ul className="space-y-2">
+              {myListings.slice(0, 3).map((listing) => {
+                const vehicleName = listing.vehicle
+                  ? [listing.vehicle.year, listing.vehicle.make, listing.vehicle.model].filter(Boolean).join(" ")
+                  : listing.title ?? "Vehicle";
+                return (
+                  <li key={listing.id}>
+                    <Link
+                      href={`/vehicle/${listing.vehicle_id}?tab=marketplace`}
+                      className="block rounded-lg p-2 hover:bg-surface-container transition-colors"
+                    >
+                      <p className="text-sm font-semibold truncate">{vehicleName}</p>
+                      <p className="text-xs text-on-surface-variant">
+                        {formatCurrency(listing.asking_price_cents)} · {listing.status}
+                      </p>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </section>
 
       {/* Vehicle Portfolio */}

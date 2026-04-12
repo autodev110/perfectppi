@@ -233,6 +233,31 @@ export default function TechProfilePage() {
                   Independent technician
                 </Label>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="service_area">Service Area</Label>
+                <Input
+                  id="service_area"
+                  name="service_area"
+                  defaultValue={techProfile.service_area ?? ""}
+                  placeholder="e.g. Dallas–Fort Worth, TX"
+                />
+                <p className="text-xs text-muted-foreground">
+                  City, metro area, or region where you perform inspections.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="is_available"
+                  name="is_available"
+                  value="true"
+                  defaultChecked={techProfile.is_available}
+                  className="rounded"
+                />
+                <Label htmlFor="is_available">
+                  Available for new inspections
+                </Label>
+              </div>
               {organization && (
                 <p className="text-sm text-muted-foreground">
                   Affiliated organization:{" "}

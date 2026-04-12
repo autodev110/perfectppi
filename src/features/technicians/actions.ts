@@ -10,6 +10,8 @@ const updateTechProfileSchema = z.object({
     .enum(["none", "ase", "master", "oem_qualified"])
     .optional(),
   is_independent: z.boolean().optional(),
+  service_area: z.string().max(200).optional().nullable(),
+  is_available: z.boolean().optional(),
 });
 
 function normalizeSpecialties(values: string[]) {
@@ -27,6 +29,7 @@ export async function updateTechProfile(formData: FormData) {
   const specialties = normalizeSpecialties(
     formData.getAll("specialties") as string[]
   );
+  const serviceAreaRaw = formData.get("service_area") as string | null;
   const raw = {
     specialties: specialties.length > 0 ? specialties : undefined,
     certification_level:
@@ -34,6 +37,10 @@ export async function updateTechProfile(formData: FormData) {
     is_independent:
       formData.get("is_independent") === "true" ||
       formData.get("is_independent") === "on",
+    service_area: serviceAreaRaw?.trim() || null,
+    is_available:
+      formData.get("is_available") === "true" ||
+      formData.get("is_available") === "on",
   };
 
   const parsed = updateTechProfileSchema.safeParse(raw);

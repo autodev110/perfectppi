@@ -432,6 +432,10 @@ export type Database = {
           avg_rating: number;
           total_reviews: number;
           reputation_score: number;
+          service_area: string | null;
+          is_available: boolean;
+          is_featured: boolean;
+          is_verified: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -446,6 +450,10 @@ export type Database = {
           avg_rating?: number;
           total_reviews?: number;
           reputation_score?: number;
+          service_area?: string | null;
+          is_available?: boolean;
+          is_featured?: boolean;
+          is_verified?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -460,6 +468,10 @@ export type Database = {
           avg_rating?: number;
           total_reviews?: number;
           reputation_score?: number;
+          service_area?: string | null;
+          is_available?: boolean;
+          is_featured?: boolean;
+          is_verified?: boolean;
           created_at?: string;
           updated_at?: string;
         };

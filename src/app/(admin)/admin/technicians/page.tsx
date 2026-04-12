@@ -3,6 +3,7 @@ import { requireRole } from "@/features/auth/guards";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials, formatDate } from "@/lib/utils/formatting";
+import { TechToggles } from "./tech-toggles";
 
 const CERT_LABELS: Record<string, string> = {
   none: "Uncertified",
@@ -38,12 +39,13 @@ export default async function TechnicianManagementPage() {
               <th className="px-4 py-3 text-left font-medium">Organization</th>
               <th className="px-4 py-3 text-left font-medium">Inspections</th>
               <th className="px-4 py-3 text-left font-medium">Joined</th>
+              <th className="px-4 py-3 text-left font-medium">Moderation</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {technicians.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                   No technicians yet.
                 </td>
               </tr>
@@ -82,6 +84,13 @@ export default async function TechnicianManagementPage() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {formatDate(tech.created_at)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <TechToggles
+                        techId={tech.id}
+                        isFeatured={tech.is_featured}
+                        isVerified={tech.is_verified}
+                      />
                     </td>
                   </tr>
                 );

@@ -1,9 +1,15 @@
-import { getAdminMetrics } from "@/features/admin/queries";
-import { Users, Wrench, Building2, Car, TrendingUp } from "lucide-react";
+import { getAdminMetrics, getAdminRecentSignups, getAdminRecentPpiActivity } from "@/features/admin/queries";
+import { Users, Wrench, Building2, Car, TrendingUp, ClipboardCheck } from "lucide-react";
 import Link from "next/link";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getInitials, formatDate } from "@/lib/utils/formatting";
 
 export default async function AdminOverviewPage() {
-  const metrics = await getAdminMetrics();
+  const [metrics, recentSignups, recentActivity] = await Promise.all([
+    getAdminMetrics(),
+    getAdminRecentSignups(8),
+    getAdminRecentPpiActivity(8),
+  ]);
 
   const stats = [
     {
@@ -87,43 +93,102 @@ export default async function AdminOverviewPage() {
         ))}
       </div>
 
-      {/* Activity Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Activity */}
-        <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl shadow-sm ring-1 ring-outline-variant/10 p-6">
-          <h3 className="font-heading text-lg font-bold mb-6">
-            Quick Navigation
-          </h3>
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { label: "Users", href: "/admin/users", icon: Users },
-              { label: "Technicians", href: "/admin/technicians", icon: Wrench },
-              { label: "Vehicles", href: "/admin/vehicles", icon: Car },
-              { label: "Organizations", href: "/admin/organizations", icon: Building2 },
-            ].map(({ label, href, icon: NavIcon }) => (
-              <Link
-                key={href}
-                href={href}
-                className="flex items-center gap-3 p-4 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors"
-              >
-                <NavIcon className="h-5 w-5 text-on-surface-variant" />
-                <span className="font-semibold text-sm">{label}</span>
-              </Link>
-            ))}
+      {/* Quick Navigation */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Users", href: "/admin/users", icon: Users },
+          { label: "Technicians", href: "/admin/technicians", icon: Wrench },
+          { label: "Vehicles", href: "/admin/vehicles", icon: Car },
+          { label: "Organizations", href: "/admin/organizations", icon: Building2 },
+        ].map(({ label, href, icon: NavIcon }) => (
+          <Link
+            key={href}
+            href={href}
+            className="flex items-center gap-3 p-4 rounded-xl bg-surface-container-lowest ring-1 ring-outline-variant/10 hover:bg-surface-container transition-colors shadow-sm"
+          >
+            <NavIcon className="h-5 w-5 text-on-surface-variant" />
+            <span className="font-semibold text-sm">{label}</span>
+          </Link>
+        ))}
+      </div>
+
+      {/* Activity Feeds */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Signups */}
+        <div className="bg-surface-container-lowest rounded-xl shadow-sm ring-1 ring-outline-variant/10 p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-heading text-base font-bold">Recent Signups</h3>
+            <Link href="/admin/users" className="text-xs font-bold text-on-tertiary-container">
+              View all →
+            </Link>
           </div>
+          {recentSignups.length === 0 ? (
+            <p className="text-sm text-on-surface-variant">No signups yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {recentSignups.map((user) => (
+                <li key={user.id} className="flex items-center gap-3">
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarImage src={user.avatar_url ?? ""} />
+                    <AvatarFallback className="text-xs">
+                      {getInitials(user.display_name ?? "U")}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate">
+                      {user.display_name ?? user.username ?? "—"}
+                    </p>
+                    <p className="text-xs text-on-surface-variant">{user.role}</p>
+                  </div>
+                  <span className="text-xs text-on-surface-variant shrink-0">
+                    {formatDate(user.created_at)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
-        {/* Platform Stats */}
-        <div className="bg-gradient-to-br from-tertiary-container to-primary-container p-6 rounded-xl shadow-lg text-white">
-          <h4 className="font-heading font-bold text-sm mb-4">
-            Platform Status
-          </h4>
-          <div className="flex items-end gap-2 mb-2">
-            <span className="text-3xl font-black">Active</span>
+        {/* Recent PPI Activity */}
+        <div className="bg-surface-container-lowest rounded-xl shadow-sm ring-1 ring-outline-variant/10 p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-heading text-base font-bold">Recent PPI Activity</h3>
+            <Link href="/admin/inspections" className="text-xs font-bold text-on-tertiary-container">
+              View all →
+            </Link>
           </div>
-          <p className="text-[10px] text-primary-fixed-dim mt-4 uppercase font-bold tracking-widest">
-            All systems operational
-          </p>
+          {recentActivity.length === 0 ? (
+            <p className="text-sm text-on-surface-variant">No inspections yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {recentActivity.map((submission) => {
+                const req = submission.ppi_request as {
+                  ppi_type: string;
+                  vehicle: { year: number | null; make: string | null; model: string | null } | null;
+                } | null;
+                const vehicle = req?.vehicle;
+                const label = vehicle
+                  ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")
+                  : "Unknown Vehicle";
+                return (
+                  <li key={submission.id} className="flex items-center gap-3">
+                    <div className="h-8 w-8 shrink-0 rounded-lg bg-tertiary-container flex items-center justify-center">
+                      <ClipboardCheck className="h-4 w-4 text-on-tertiary-container" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{label}</p>
+                      <p className="text-xs text-on-surface-variant capitalize">
+                        {submission.status} · {req?.ppi_type ?? "—"}
+                      </p>
+                    </div>
+                    <span className="text-xs text-on-surface-variant shrink-0">
+                      {submission.submitted_at ? formatDate(submission.submitted_at) : "—"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </div>
     </div>

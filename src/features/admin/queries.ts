@@ -208,6 +208,36 @@ export async function getAdminOutputs(page = 1, perPage = 50) {
   };
 }
 
+export async function getAdminRecentSignups(limit = 8) {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, display_name, username, role, created_at, avatar_url")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return data ?? [];
+}
+
+export async function getAdminRecentPpiActivity(limit = 8) {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("ppi_submissions")
+    .select(`
+      id,
+      status,
+      version,
+      submitted_at,
+      ppi_request:ppi_requests!ppi_submissions_ppi_request_id_fkey(
+        id,
+        ppi_type,
+        vehicle:vehicles!ppi_requests_vehicle_id_fkey(year, make, model)
+      )
+    `)
+    .order("submitted_at", { ascending: false })
+    .limit(limit);
+  return data ?? [];
+}
+
 type AdminAuditActor = {
   id: string;
   display_name: string | null;

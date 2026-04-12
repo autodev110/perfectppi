@@ -37,3 +37,23 @@ export async function demoteToConsumer(targetProfileId: string, _formData?: Form
 
   revalidatePath("/admin/users");
 }
+
+export async function toggleTechnicianFeatured(techId: string, value: boolean) {
+  await requireRole(["admin"]);
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("technician_profiles")
+    .update({ is_featured: value })
+    .eq("id", techId);
+  return error ? { error: error.message } : { success: true };
+}
+
+export async function toggleTechnicianVerified(techId: string, value: boolean) {
+  await requireRole(["admin"]);
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("technician_profiles")
+    .update({ is_verified: value })
+    .eq("id", techId);
+  return error ? { error: error.message } : { success: true };
+}
