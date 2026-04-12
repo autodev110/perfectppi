@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Cloudflare R2 presigned URL generation
@@ -76,6 +76,24 @@ export async function uploadObject(params: {
   );
 
   return { publicUrl: `${process.env.R2_PUBLIC_URL}/${params.key}` };
+}
+
+/**
+ * Generate a presigned GET URL for a stored object.
+ * Extracts the key from a stored public URL and returns a time-limited signed URL.
+ * Use this instead of serving raw R2 public URLs — works regardless of bucket public access settings.
+ */
+export async function generatePresignedGetUrl(
+  storedPublicUrl: string,
+  expiresIn = 3600,
+): Promise<string> {
+  const client = getS3Client();
+  const bucket = process.env.R2_BUCKET_NAME!;
+  const publicUrlBase = process.env.R2_PUBLIC_URL!.replace(/\/$/, "");
+  const key = storedPublicUrl.replace(`${publicUrlBase}/`, "");
+
+  const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+  return getSignedUrl(client, command, { expiresIn });
 }
 
 export function buildStorageKey(params: {

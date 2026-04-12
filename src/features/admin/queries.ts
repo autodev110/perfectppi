@@ -101,6 +101,59 @@ interface AdminOutputRow {
   status: AdminOutputStatus;
 }
 
+export async function getAdminInspections(
+  page = 1,
+  perPage = 50,
+  filters?: {
+    status?: string;
+    ppiType?: string;
+    from?: string;
+    to?: string;
+  },
+) {
+  const supabase = createAdminClient();
+  const from = (page - 1) * perPage;
+  const to = from + perPage - 1;
+
+  // If filtering by ppiType, resolve matching request IDs first
+  let requestIdFilter: string[] | null = null;
+  if (filters?.ppiType) {
+    const { data: matchingRequests } = await supabase
+      .from("ppi_requests")
+      .select("id")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .eq("ppi_type", filters.ppiType as any);
+    requestIdFilter = (matchingRequests ?? []).map((r) => r.id);
+    if (requestIdFilter.length === 0) return { submissions: [], total: 0 };
+  }
+
+  let query = supabase
+    .from("ppi_submissions")
+    .select(
+      `
+      id, status, version, submitted_at, is_current, ppi_request_id,
+      ppi_request:ppi_requests!ppi_submissions_ppi_request_id_fkey(
+        id, ppi_type, performer_type,
+        vehicle:vehicles!ppi_requests_vehicle_id_fkey(year, make, model, vin),
+        requester:profiles!ppi_requests_requester_id_fkey(id, display_name, username)
+      ),
+      performer:profiles!ppi_submissions_performer_id_fkey(id, display_name, username)
+    `,
+      { count: "exact" },
+    )
+    .eq("is_current", true)
+    .order("submitted_at", { ascending: false, nullsFirst: false })
+    .range(from, to);
+
+  if (filters?.status) query = query.eq("status", filters.status as "draft" | "in_progress" | "submitted" | "completed");
+  if (filters?.from) query = query.gte("submitted_at", filters.from);
+  if (filters?.to) query = query.lte("submitted_at", filters.to);
+  if (requestIdFilter) query = query.in("ppi_request_id", requestIdFilter);
+
+  const { data, count } = await query;
+  return { submissions: data ?? [], total: count ?? 0 };
+}
+
 export async function getAdminOutputs(page = 1, perPage = 50) {
   const supabase = createAdminClient();
   const from = (page - 1) * perPage;
@@ -206,6 +259,75 @@ export async function getAdminOutputs(page = 1, perPage = 50) {
     totalVsc: totalVsc ?? 0,
     pendingVsc,
   };
+}
+
+export async function getAdminInspectionDetail(requestId: string) {
+  const supabase = createAdminClient();
+
+  const [{ data: request }, { data: submission }] = await Promise.all([
+    supabase
+      .from("ppi_requests")
+      .select(
+        `
+        *,
+        vehicle:vehicles(id, year, make, model, trim, vin, mileage),
+        requester:profiles!ppi_requests_requester_id_fkey(id, display_name, username, avatar_url),
+        assigned_tech:profiles!ppi_requests_assigned_tech_id_fkey(id, display_name, username, avatar_url)
+      `
+      )
+      .eq("id", requestId)
+      .single(),
+    supabase
+      .from("ppi_submissions")
+      .select(
+        `
+        *,
+        performer:profiles!ppi_submissions_performer_id_fkey(id, display_name, username),
+        sections:ppi_sections(
+          *,
+          answers:ppi_answers(*)
+        )
+      `
+      )
+      .eq("ppi_request_id", requestId)
+      .eq("is_current", true)
+      .single(),
+  ]);
+
+  if (!request) return null;
+
+  // Fetch outputs if there's a submission
+  let outputs: { standardized: { id: string; generated_at: string; document_url: string | null; structured_content: unknown } | null; vsc: { id: string; generated_at: string; coverage_data: unknown } | null } = { standardized: null, vsc: null };
+  if (submission) {
+    const [{ data: standardized }, { data: vsc }] = await Promise.all([
+      supabase
+        .from("standardized_outputs")
+        .select("id, generated_at, document_url, structured_content")
+        .eq("ppi_submission_id", submission.id)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("vsc_outputs")
+        .select("id, generated_at, coverage_data")
+        .eq("ppi_submission_id", submission.id)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    outputs = { standardized: standardized ?? null, vsc: vsc ?? null };
+  }
+
+  const sortedSubmission = submission
+    ? {
+        ...submission,
+        sections: ((submission.sections ?? []) as { sort_order: number; answers: { sort_order: number }[]; [key: string]: unknown }[])
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((s) => ({ ...s, answers: [...(s.answers ?? [])].sort((a, b) => a.sort_order - b.sort_order) })),
+      }
+    : null;
+
+  return { request, submission: sortedSubmission, outputs };
 }
 
 export async function getAdminRecentSignups(limit = 8) {

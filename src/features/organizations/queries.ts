@@ -47,6 +47,50 @@ export async function getMyOrgWithTechnicianCount() {
   return { org, techCount: count ?? 0 };
 }
 
+export async function getOrgInspections(
+  orgId: string,
+  page = 1,
+  perPage = 50,
+  filters?: { status?: string },
+) {
+  const supabase = await createClient();
+  const from = (page - 1) * perPage;
+  const to = from + perPage - 1;
+
+  // Get profile IDs of techs in this org
+  const { data: members } = await supabase
+    .from("technician_profiles")
+    .select("profile_id")
+    .eq("organization_id", orgId);
+
+  const profileIds = (members ?? []).map((m) => m.profile_id);
+  if (profileIds.length === 0) return { submissions: [], total: 0 };
+
+  let query = supabase
+    .from("ppi_submissions")
+    .select(
+      `
+      id, status, version, submitted_at,
+      ppi_request:ppi_requests!ppi_submissions_ppi_request_id_fkey(
+        id, ppi_type,
+        vehicle:vehicles!ppi_requests_vehicle_id_fkey(year, make, model),
+        requester:profiles!ppi_requests_requester_id_fkey(id, display_name, username)
+      ),
+      performer:profiles!ppi_submissions_performer_id_fkey(id, display_name, username)
+    `,
+      { count: "exact" },
+    )
+    .eq("is_current", true)
+    .in("performer_id", profileIds)
+    .order("submitted_at", { ascending: false, nullsFirst: false })
+    .range(from, to);
+
+  if (filters?.status) query = query.eq("status", filters.status as "draft" | "in_progress" | "submitted" | "completed");
+
+  const { data, count } = await query;
+  return { submissions: data ?? [], total: count ?? 0 };
+}
+
 export async function getOrgTechnicians(orgId: string) {
   const supabase = await createClient();
 

@@ -17,7 +17,7 @@ const commentSchema = z.object({
   content: z.string().trim().min(1, "Write a comment first").max(600),
 });
 
-const statusSchema = z.enum(["active", "hidden", "archived"]);
+const statusSchema = z.enum(["active", "archived"]);
 
 async function getCurrentProfileId() {
   const supabase = await createClient();
@@ -144,9 +144,54 @@ export async function archiveMyCommunityPost(formData: FormData) {
   const admin = createAdminClient();
   await admin
     .from("community_posts")
-    .update({ status: "archived" })
+    .update({ status: "archived", updated_at: new Date().toISOString() })
     .eq("id", postId)
     .eq("author_id", profile.profileId);
+
+  revalidatePath("/community");
+  revalidatePath("/dashboard/posts");
+  revalidatePath("/admin/community");
+}
+
+export async function restoreMyCommunityPost(formData: FormData) {
+  const postId = String(formData.get("post_id") ?? "");
+  if (!postId) return;
+
+  const profile = await getCurrentProfileId();
+  if ("error" in profile) return;
+
+  const admin = createAdminClient();
+  await admin
+    .from("community_posts")
+    .update({ status: "active" })
+    .eq("id", postId)
+    .eq("author_id", profile.profileId);
+
+  revalidatePath("/community");
+  revalidatePath("/dashboard/posts");
+  revalidatePath("/admin/community");
+}
+
+export async function deleteCommunityPost(formData: FormData) {
+  const postId = String(formData.get("post_id") ?? "");
+  if (!postId) return;
+
+  const profile = await getCurrentProfileId();
+  if ("error" in profile) return;
+
+  const admin = createAdminClient();
+
+  // Allow if admin or author
+  const { data: post } = await admin
+    .from("community_posts")
+    .select("id, author_id")
+    .eq("id", postId)
+    .single();
+
+  if (!post) return;
+  if (profile.role !== "admin" && post.author_id !== profile.profileId) return;
+
+  await admin.from("community_posts").delete().eq("id", postId);
 
   revalidatePath("/community");
   revalidatePath("/dashboard/posts");
@@ -162,9 +207,12 @@ export async function updateCommunityPostStatus(formData: FormData) {
   if ("error" in profile || profile.role !== "admin") return;
 
   const admin = createAdminClient();
+  const updates: { status: "active" | "archived"; updated_at?: string } = { status: parsedStatus.data };
+  if (parsedStatus.data === "archived") updates.updated_at = new Date().toISOString();
+
   await admin
     .from("community_posts")
-    .update({ status: parsedStatus.data })
+    .update(updates)
     .eq("id", postId);
 
   revalidatePath("/community");

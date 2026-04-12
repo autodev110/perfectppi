@@ -78,7 +78,21 @@ export async function getCommunityPosts() {
   return posts.filter((post) => !post.vehicle || post.vehicle.visibility === "public");
 }
 
-export async function getMyCommunityPosts() {
+const ARCHIVE_EXPIRY_DAYS = 30;
+
+export function archiveExpiresAt(updatedAt: string): Date {
+  const d = new Date(updatedAt);
+  d.setDate(d.getDate() + ARCHIVE_EXPIRY_DAYS);
+  return d;
+}
+
+export function archiveDaysRemaining(updatedAt: string): number {
+  const expires = archiveExpiresAt(updatedAt);
+  const diff = expires.getTime() - Date.now();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+export async function getMyCommunityPosts(status: "active" | "archived" = "active") {
   const supabase = await createClient();
   const {
     data: { user },
@@ -90,27 +104,45 @@ export async function getMyCommunityPosts() {
   if (!profile) return [];
 
   const admin = createAdminClient();
-  const { data } = await admin
+  let query = admin
     .from("community_posts")
     .select(COMMUNITY_POST_SELECT)
     .eq("author_id", profile.id)
+    .eq("status", status)
     .order("created_at", { ascending: false })
     .order("created_at", { ascending: true, referencedTable: "community_comments" });
 
+  // For archived posts, only show those within the 30-day window
+  if (status === "archived") {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - ARCHIVE_EXPIRY_DAYS);
+    query = query.gte("updated_at", cutoff.toISOString());
+  }
+
+  const { data } = await query;
   return cleanPosts((data ?? []) as CommunityPost[]);
 }
 
-export async function getAdminCommunityPosts(page = 1, perPage = 50) {
+export async function getAdminCommunityPosts(page = 1, perPage = 50, status?: "active" | "archived" | "all") {
   const admin = createAdminClient();
   const from = (page - 1) * perPage;
   const to = from + perPage - 1;
 
-  const { data, count } = await admin
+  let query = admin
     .from("community_posts")
     .select(COMMUNITY_POST_SELECT, { count: "exact" })
     .order("created_at", { ascending: false })
     .order("created_at", { ascending: true, referencedTable: "community_comments" })
     .range(from, to);
+
+  if (status && status !== "all") {
+    query = query.eq("status", status);
+  } else {
+    // Default: only active + archived (not hidden legacy)
+    query = query.in("status", ["active", "archived"]);
+  }
+
+  const { data, count } = await query;
 
   return {
     posts: (data ?? []) as CommunityPost[],
