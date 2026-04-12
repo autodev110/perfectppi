@@ -77,7 +77,7 @@ export function Sidebar({ items, title }: SidebarProps) {
         </p>
       </div>
 
-      <nav className="flex-1 space-y-1 px-2">
+      <nav className="flex-1 overflow-y-auto space-y-1 px-2">
         {items.map((item) => {
           const Icon = iconMap[item.icon] ?? LayoutDashboard;
           const isActive =
