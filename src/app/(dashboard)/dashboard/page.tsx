@@ -1,7 +1,15 @@
 import { getMyProfile } from "@/features/profiles/queries";
 import { getMyVehicles } from "@/features/vehicles/queries";
 import { getMyPpiRequestCount } from "@/features/ppi/queries";
-import { Car, ClipboardCheck, Plus, ArrowRight, Award } from "lucide-react";
+import {
+  Car,
+  ClipboardCheck,
+  Plus,
+  ArrowRight,
+  Award,
+  Newspaper,
+  Tag,
+} from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -103,6 +111,47 @@ export default async function DashboardPage() {
         </div>
       </section>
 
+      {/* Parent Platform Shortcuts */}
+      <section className="grid gap-4 md:grid-cols-2">
+        <Link
+          href="/dashboard/posts/new"
+          className="group rounded-2xl border border-outline-variant/10 bg-surface-container-lowest p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+        >
+          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-secondary-container text-on-secondary-container">
+            <Newspaper className="h-5 w-5" />
+          </div>
+          <p className="font-heading text-xl font-extrabold tracking-tight text-on-surface">
+            Create Community Post
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">
+            Share a public vehicle, active listing, or inspection discussion in the new community feed.
+          </p>
+          <span className="mt-5 inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-on-tertiary-container group-hover:gap-3 transition-all">
+            Open Posts
+            <ArrowRight className="h-3.5 w-3.5" />
+          </span>
+        </Link>
+
+        <Link
+          href="/dashboard/listings/new"
+          className="group rounded-2xl border border-outline-variant/10 bg-primary-container p-6 text-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+        >
+          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 text-white">
+            <Tag className="h-5 w-5" />
+          </div>
+          <p className="font-heading text-xl font-extrabold tracking-tight text-white">
+            Publish Marketplace Listing
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-primary-fixed-dim">
+            Turn a public vehicle profile into a buyer-facing marketplace listing with real vehicle context.
+          </p>
+          <span className="mt-5 inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary-fixed-dim group-hover:gap-3 transition-all">
+            Open Listings
+            <ArrowRight className="h-3.5 w-3.5" />
+          </span>
+        </Link>
+      </section>
+
       {/* Vehicle Portfolio */}
       <section>
         <div className="flex items-center justify-between mb-8">
@@ -140,8 +189,20 @@ export default async function DashboardPage() {
                 href={`/dashboard/vehicles/${vehicle.id}`}
                 className="group bg-surface-container-lowest rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-outline-variant/10 flex flex-col md:flex-row"
               >
-                <div className="w-full md:w-2/5 relative h-56 md:h-auto bg-surface-container flex items-center justify-center">
-                  <Car className="h-16 w-16 text-on-surface-variant/20 group-hover:scale-110 transition-transform duration-500" />
+                <div className="w-full md:w-2/5 relative h-56 md:h-auto bg-surface-container flex items-center justify-center overflow-hidden">
+                  {vehicle.vehicle_media?.[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={
+                        vehicle.vehicle_media.find((media) => media.is_primary)?.url ??
+                        vehicle.vehicle_media[0].url
+                      }
+                      alt={`${vehicle.year ?? ""} ${vehicle.make ?? ""} ${vehicle.model ?? ""}`.trim()}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  ) : (
+                    <Car className="h-16 w-16 text-on-surface-variant/20 group-hover:scale-110 transition-transform duration-500" />
+                  )}
                 </div>
                 <div className="flex-1 p-8 flex flex-col">
                   <div className="flex justify-between items-start mb-4">

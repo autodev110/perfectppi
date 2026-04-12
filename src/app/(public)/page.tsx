@@ -11,9 +11,17 @@ import {
   Award,
   ArrowRight,
   Check,
+  Gauge,
+  MapPin,
+  Tag,
 } from "lucide-react";
+import { getMarketplaceListings } from "@/features/marketplace/queries";
+import { formatCurrency, formatMileage } from "@/lib/utils/formatting";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const recentListings = await getMarketplaceListings();
+  const featuredListings = recentListings.slice(0, 3);
+
   return (
     <>
       {/* ── Hero ────────────────────────────────────────────────── */}
@@ -53,8 +61,14 @@ export default function HomePage() {
                 Start an Inspection
               </Link>
               <Link
-                href="/technicians"
+                href="/marketplace"
                 className="bg-surface-container-highest text-on-surface px-8 py-4 rounded-xl font-heading font-bold text-base ghost-border hover:bg-surface-container-high transition-all"
+              >
+                Browse Marketplace
+              </Link>
+              <Link
+                href="/technicians"
+                className="px-8 py-4 rounded-xl font-heading font-bold text-base ghost-border text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all"
               >
                 Find a Technician
               </Link>
@@ -369,6 +383,79 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ── Recent Marketplace Listings ─────────────────────────── */}
+      {featuredListings.length > 0 && (
+        <section className="py-20 px-8 bg-surface">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-end justify-between mb-10">
+              <div>
+                <h2 className="text-3xl font-extrabold tracking-tighter mb-2">
+                  Vehicles for Sale
+                </h2>
+                <p className="text-sm text-on-surface-variant max-w-md">
+                  Real listings from verified sellers with PPI inspection history attached.
+                </p>
+              </div>
+              <Link
+                href="/marketplace"
+                className="flex items-center gap-1.5 text-sm font-bold text-on-tertiary-container hover:gap-3 transition-all"
+              >
+                Browse all <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+            <div className="grid gap-5 md:grid-cols-3">
+              {featuredListings.map((listing) => {
+                const vehicle = listing.vehicle;
+                const media = vehicle?.vehicle_media?.find((m) => m.is_primary) ?? vehicle?.vehicle_media?.[0];
+                const vehicleName = [vehicle?.year, vehicle?.make, vehicle?.model].filter(Boolean).join(" ") || listing.title;
+                return (
+                  <Link
+                    key={listing.id}
+                    href={`/vehicle/${listing.vehicle_id}?tab=marketplace`}
+                    className="group bg-surface-container-lowest rounded-[1.5rem] overflow-hidden ghost-border shadow-sm hover:shadow-xl transition-all"
+                  >
+                    <div className="relative h-48 bg-surface-container-low overflow-hidden">
+                      {media ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={media.url} alt={vehicleName ?? ""} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center">
+                          <Car className="h-12 w-12 text-on-surface-variant/20" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-primary-container/60 via-transparent to-transparent" />
+                      <div className="absolute bottom-3 right-3">
+                        <span className="bg-white/90 text-primary text-sm font-black px-3 py-1 rounded-lg">
+                          {formatCurrency(listing.asking_price_cents)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-5">
+                      <p className="font-heading font-bold text-on-surface mb-2 truncate">{vehicleName || "Vehicle"}</p>
+                      <div className="flex flex-wrap gap-2 text-[11px] font-bold text-on-surface-variant">
+                        {vehicle?.mileage != null && (
+                          <span className="flex items-center gap-1 px-2.5 py-1 bg-surface-container rounded-full ghost-border">
+                            <Gauge className="h-3 w-3" />{formatMileage(vehicle.mileage)} mi
+                          </span>
+                        )}
+                        {listing.location && (
+                          <span className="flex items-center gap-1 px-2.5 py-1 bg-surface-container rounded-full ghost-border">
+                            <MapPin className="h-3 w-3" />{listing.location}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1 px-2.5 py-1 bg-teal/10 rounded-full text-teal">
+                          <Tag className="h-3 w-3" />PPI Listed
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── How It Works ────────────────────────────────────────── */}
       <section className="py-20 px-8 bg-surface-container-low">

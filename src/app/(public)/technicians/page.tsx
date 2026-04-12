@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils/formatting";
 import Link from "next/link";
+import { Star } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Find a Technician",
@@ -59,6 +60,10 @@ export default async function TechniciansDirectoryPage() {
                         </Badge>
                         <Badge variant="outline" className="text-xs">
                           {tech.total_inspections} inspections
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          <Star className="mr-1 h-3 w-3 text-amber-500" />
+                          {Number(tech.avg_rating ?? 0).toFixed(1)} ({tech.total_reviews ?? 0})
                         </Badge>
                       </div>
                     </div>

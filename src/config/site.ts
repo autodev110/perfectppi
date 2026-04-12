@@ -8,19 +8,26 @@ export const siteConfig = {
 export const navConfig = {
   public: [
     { label: "Home", href: "/" },
+    { label: "Marketplace", href: "/marketplace" },
+    { label: "Community", href: "/community" },
     { label: "Find a Technician", href: "/technicians" },
   ],
   dashboard: [
     { label: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
     { label: "Vehicles", href: "/dashboard/vehicles", icon: "Car" },
+    { label: "Listings", href: "/dashboard/listings", icon: "Tag" },
+    { label: "Posts", href: "/dashboard/posts", icon: "Newspaper" },
     { label: "Inspections", href: "/dashboard/ppi", icon: "ClipboardCheck" },
     { label: "Warranties", href: "/dashboard/warranty", icon: "Shield" },
     { label: "Messages", href: "/dashboard/messages", icon: "MessageSquare" },
     { label: "Media", href: "/dashboard/media", icon: "Image" },
+    { label: "Profile", href: "/dashboard/profile", icon: "User" },
+    { label: "Settings", href: "/dashboard/settings", icon: "Settings" },
   ],
   tech: [
     { label: "Dashboard", href: "/tech", icon: "LayoutDashboard" },
     { label: "Inspections", href: "/tech/ppi", icon: "ClipboardCheck" },
+    { label: "Reviews", href: "/tech/reviews", icon: "Star" },
     { label: "Profile", href: "/tech/profile", icon: "User" },
     { label: "Organization", href: "/tech/organization", icon: "Building2" },
     { label: "Messages", href: "/tech/messages", icon: "MessageSquare" },
@@ -36,6 +43,8 @@ export const navConfig = {
     { label: "Overview", href: "/admin", icon: "LayoutDashboard" },
     { label: "Users", href: "/admin/users", icon: "Users" },
     { label: "Vehicles", href: "/admin/vehicles", icon: "Car" },
+    { label: "Listings", href: "/admin/listings", icon: "Tag" },
+    { label: "Community", href: "/admin/community", icon: "Newspaper" },
     { label: "Technicians", href: "/admin/technicians", icon: "Wrench" },
     { label: "Organizations", href: "/admin/organizations", icon: "Building2" },
     {

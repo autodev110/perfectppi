@@ -1,6 +1,7 @@
 import { getPpiRequest, getCurrentSubmission, getPpiSubmissionVersions } from "@/features/ppi/queries";
 import { getOutputPair } from "@/features/outputs/queries";
 import { getWarrantyOptionByVscOutput } from "@/features/warranty/queries";
+import { getMyReviewForRequest } from "@/features/reviews/queries";
 import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
 import { PpiBadge } from "@/components/shared/ppi-badge";
 import { StandardizedOutputView } from "@/components/shared/standardized-output-view";
@@ -13,6 +14,7 @@ import { notFound } from "next/navigation";
 import { Car, Calendar, User, ChevronRight, FileText, Shield } from "lucide-react";
 import { SECTION_LABELS } from "@/features/ppi/constants";
 import { GetCoverageButton } from "./get-coverage-button";
+import { MarkCompleteButton } from "./mark-complete-button";
 import type { SectionType } from "@/types/enums";
 import type { StandardizedContent, VscCoverageData } from "@/types/api";
 
@@ -22,10 +24,11 @@ interface PageProps {
 
 export default async function InspectionDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const [request, submission, versions] = await Promise.all([
+  const [request, submission, versions, existingReview] = await Promise.all([
     getPpiRequest(id),
     getCurrentSubmission(id),
     getPpiSubmissionVersions(id),
+    getMyReviewForRequest(id),
   ]);
 
   // Fetch outputs if there's a current submission
@@ -58,6 +61,11 @@ export default async function InspectionDetailPage({ params }: PageProps) {
     request.performer_type === "self" &&
     ["submitted", "completed"].includes(request.status);
   const isSubmitted = ["submitted", "completed"].includes(request.status);
+  const canMarkCompleted = request.status === "submitted";
+  const canReviewTechnician =
+    request.status === "completed" &&
+    request.performer_type === "technician" &&
+    !!request.assigned_tech;
 
   const sections = (submission as { sections?: { section_type: string; notes: string | null; answers: { prompt: string; answer_value: string | null; answer_type: string }[] }[] } | null)?.sections ?? [];
 
@@ -81,6 +89,14 @@ export default async function InspectionDetailPage({ params }: PageProps) {
         </div>
 
         <div className="flex gap-2">
+          {canMarkCompleted && <MarkCompleteButton requestId={id} />}
+          {canReviewTechnician && (
+            <Button variant="outline" asChild>
+              <Link href={`/dashboard/ppi/${id}/review`}>
+                {existingReview ? "Edit Technician Review" : "Leave Technician Review"}
+              </Link>
+            </Button>
+          )}
           {canContinue && submission && (
             <Button asChild>
               <Link href={`/dashboard/ppi/${id}/inspect?sub=${submission.id}`}>

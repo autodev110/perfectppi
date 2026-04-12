@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // ============================================================================
 // Warranty Queries — Phase D
@@ -300,4 +301,84 @@ export async function getMyWarranties(): Promise<
   );
 
   return results;
+}
+
+export interface PublicVehicleWarrantySnapshot {
+  option: WarrantyOption;
+  order: WarrantyOrder | null;
+  contract: WarrantyContract | null;
+  payment: WarrantyPayment | null;
+}
+
+/** Public read model for /vehicle/[id]?tab=warranty */
+export async function getPublicVehicleWarrantySnapshot(
+  vehicleId: string,
+): Promise<PublicVehicleWarrantySnapshot | null> {
+  const admin = createAdminClient();
+
+  const { data: vehicle } = await admin
+    .from("vehicles")
+    .select("id, visibility")
+    .eq("id", vehicleId)
+    .maybeSingle();
+
+  if (!vehicle || vehicle.visibility !== "public") return null;
+
+  const { data: option } = await admin
+    .from("warranty_options")
+    .select("*")
+    .eq("vehicle_id", vehicleId)
+    .neq("status", "not_offered")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!option) return null;
+
+  const { data: order } = await admin
+    .from("warranty_orders")
+    .select("*")
+    .eq("warranty_option_id", option.id)
+    .order("selected_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let contract: WarrantyContract | null = null;
+  let payment: WarrantyPayment | null = null;
+
+  if (order) {
+    const { data: c } = await admin
+      .from("contracts")
+      .select("*")
+      .eq("warranty_order_id", order.id)
+      .maybeSingle();
+    contract = c as WarrantyContract | null;
+
+    if (contract) {
+      const { data: p } = await admin
+        .from("payments")
+        .select("*")
+        .eq("contract_id", contract.id)
+        .maybeSingle();
+      payment = p as WarrantyPayment | null;
+    }
+  }
+
+  return {
+    option: {
+      id: option.id,
+      vsc_output_id: option.vsc_output_id,
+      vehicle_id: option.vehicle_id,
+      user_id: option.user_id,
+      plans: (option.plans as unknown as WarrantyPlan[]) ?? [],
+      status: option.status,
+      offered_at: option.offered_at,
+      viewed_at: option.viewed_at,
+      created_at: option.created_at,
+      updated_at: option.updated_at,
+    },
+    order: order as WarrantyOrder | null,
+    contract,
+    payment,
+  };
 }

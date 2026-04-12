@@ -78,7 +78,7 @@ export async function getAdminVehicles(page = 1, perPage = 50) {
 
   const { data, count } = await supabase
     .from("vehicles")
-    .select("*, owner:profiles(id, display_name, username)", { count: "exact" })
+    .select("*, vehicle_media(*), owner:profiles(id, display_name, username)", { count: "exact" })
     .order("created_at", { ascending: false })
     .range(from, to);
 

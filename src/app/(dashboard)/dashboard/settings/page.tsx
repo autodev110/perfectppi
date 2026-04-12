@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   createOrganizationWorkspace,
   enableTechnicianAccess,
+  switchToConsumer,
 } from "@/features/profiles/actions";
 import { getRoleHomePath } from "@/features/auth/routing";
 import { createClient } from "@/lib/supabase/client";
@@ -27,8 +28,10 @@ export default function AccountSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [techSaving, setTechSaving] = useState(false);
   const [orgSaving, setOrgSaving] = useState(false);
+  const [switchSaving, setSwitchSaving] = useState(false);
   const [techMessage, setTechMessage] = useState<string | null>(null);
   const [orgMessage, setOrgMessage] = useState<string | null>(null);
+  const [switchMessage, setSwitchMessage] = useState<string | null>(null);
 
   async function fetchData() {
     const supabase = createClient();
@@ -85,6 +88,27 @@ export default function AccountSettingsPage() {
 
     setTechMessage("Technician access enabled.");
     setTechSaving(false);
+    await fetchData();
+  }
+
+  async function handleSwitchToConsumer() {
+    setSwitchSaving(true);
+    setSwitchMessage(null);
+
+    const result = await switchToConsumer();
+
+    if (result?.error) {
+      setSwitchMessage(result.error);
+      setSwitchSaving(false);
+      return;
+    }
+
+    if (result?.redirectTo) {
+      window.location.href = result.redirectTo;
+      return;
+    }
+
+    setSwitchSaving(false);
     await fetchData();
   }
 
@@ -309,6 +333,29 @@ export default function AccountSettingsPage() {
                 {orgSaving ? "Creating..." : "Create My Organization"}
               </Button>
             </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {profile?.role && profile.role !== "consumer" && profile.role !== "admin" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Switch Back to Consumer</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Your technician profile and data will be preserved. You can re-enable technician access from this page at any time.
+            </p>
+            {switchMessage && (
+              <p className="text-sm text-destructive">{switchMessage}</p>
+            )}
+            <Button
+              variant="outline"
+              disabled={switchSaving}
+              onClick={handleSwitchToConsumer}
+            >
+              {switchSaving ? "Switching..." : "Switch to Consumer"}
+            </Button>
           </CardContent>
         </Card>
       )}

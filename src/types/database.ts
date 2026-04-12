@@ -145,6 +145,160 @@ export type Database = {
           }
         ];
       };
+      marketplace_listings: {
+        Row: {
+          id: string;
+          vehicle_id: string;
+          seller_id: string;
+          title: string;
+          description: string | null;
+          asking_price_cents: number;
+          location: string | null;
+          status: "active" | "sold" | "archived";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          vehicle_id: string;
+          seller_id: string;
+          title: string;
+          description?: string | null;
+          asking_price_cents: number;
+          location?: string | null;
+          status?: "active" | "sold" | "archived";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          vehicle_id?: string;
+          seller_id?: string;
+          title?: string;
+          description?: string | null;
+          asking_price_cents?: number;
+          location?: string | null;
+          status?: "active" | "sold" | "archived";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_listings_vehicle_id_fkey";
+            columns: ["vehicle_id"];
+            isOneToOne: false;
+            referencedRelation: "vehicles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "marketplace_listings_seller_id_fkey";
+            columns: ["seller_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      community_posts: {
+        Row: {
+          id: string;
+          author_id: string;
+          vehicle_id: string | null;
+          marketplace_listing_id: string | null;
+          content: string;
+          status: "active" | "hidden" | "archived";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          author_id: string;
+          vehicle_id?: string | null;
+          marketplace_listing_id?: string | null;
+          content: string;
+          status?: "active" | "hidden" | "archived";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          author_id?: string;
+          vehicle_id?: string | null;
+          marketplace_listing_id?: string | null;
+          content?: string;
+          status?: "active" | "hidden" | "archived";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "community_posts_author_id_fkey";
+            columns: ["author_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "community_posts_vehicle_id_fkey";
+            columns: ["vehicle_id"];
+            isOneToOne: false;
+            referencedRelation: "vehicles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "community_posts_marketplace_listing_id_fkey";
+            columns: ["marketplace_listing_id"];
+            isOneToOne: false;
+            referencedRelation: "marketplace_listings";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      community_comments: {
+        Row: {
+          id: string;
+          post_id: string;
+          author_id: string;
+          content: string;
+          status: "active" | "hidden" | "archived";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          post_id: string;
+          author_id: string;
+          content: string;
+          status?: "active" | "hidden" | "archived";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          post_id?: string;
+          author_id?: string;
+          content?: string;
+          status?: "active" | "hidden" | "archived";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "community_comments_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "community_posts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "community_comments_author_id_fkey";
+            columns: ["author_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       ppi_requests: {
         Row: {
           id: string;
@@ -275,6 +429,9 @@ export type Database = {
           specialties: string[];
           is_independent: boolean;
           total_inspections: number;
+          avg_rating: number;
+          total_reviews: number;
+          reputation_score: number;
           created_at: string;
           updated_at: string;
         };
@@ -286,6 +443,9 @@ export type Database = {
           specialties?: string[];
           is_independent?: boolean;
           total_inspections?: number;
+          avg_rating?: number;
+          total_reviews?: number;
+          reputation_score?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -297,6 +457,9 @@ export type Database = {
           specialties?: string[];
           is_independent?: boolean;
           total_inspections?: number;
+          avg_rating?: number;
+          total_reviews?: number;
+          reputation_score?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -313,6 +476,67 @@ export type Database = {
             columns: ["organization_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      technician_reviews: {
+        Row: {
+          id: string;
+          technician_profile_id: string;
+          reviewer_id: string;
+          ppi_request_id: string;
+          rating: number;
+          title: string | null;
+          content: string | null;
+          status: "active" | "hidden";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          technician_profile_id: string;
+          reviewer_id: string;
+          ppi_request_id: string;
+          rating: number;
+          title?: string | null;
+          content?: string | null;
+          status?: "active" | "hidden";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          technician_profile_id?: string;
+          reviewer_id?: string;
+          ppi_request_id?: string;
+          rating?: number;
+          title?: string | null;
+          content?: string | null;
+          status?: "active" | "hidden";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "technician_reviews_technician_profile_id_fkey";
+            columns: ["technician_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "technician_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "technician_reviews_reviewer_id_fkey";
+            columns: ["reviewer_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "technician_reviews_ppi_request_id_fkey";
+            columns: ["ppi_request_id"];
+            isOneToOne: false;
+            referencedRelation: "ppi_requests";
             referencedColumns: ["id"];
           }
         ];
@@ -1149,6 +1373,8 @@ export type Database = {
       user_role: "consumer" | "technician" | "org_manager" | "admin";
       vehicle_visibility: "public" | "private";
       media_type: "image" | "video";
+      listing_status: "active" | "sold" | "archived";
+      community_content_status: "active" | "hidden" | "archived";
       ppi_request_status:
         | "draft"
         | "pending_assignment"
@@ -1164,6 +1390,7 @@ export type Database = {
       whose_car: "own" | "other";
       requester_role: "buying" | "selling" | "documenting";
       certification_level: "none" | "ase" | "master" | "oem_qualified";
+      review_status: "active" | "hidden";
       org_member_role: "technician" | "manager";
       submission_status: "draft" | "in_progress" | "submitted" | "completed";
       section_type:

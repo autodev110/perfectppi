@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTechProfile } from "@/features/technicians/queries";
+import { getTechnicianReviewSummary } from "@/features/reviews/queries";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,10 @@ export default async function TechnicianProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const tech = await getTechProfile(id);
+  const [tech, reviewSummary] = await Promise.all([
+    getTechProfile(id),
+    getTechnicianReviewSummary(id),
+  ]);
   if (!tech) notFound();
 
   const profile = tech.profile;
@@ -79,9 +83,20 @@ export default async function TechnicianProfilePage({
             <Badge variant="outline">
               {tech.total_inspections} inspections completed
             </Badge>
+            <Badge variant="outline">
+              {Number(reviewSummary?.avgRating ?? 0).toFixed(1)} / 5 ({reviewSummary?.totalReviews ?? 0} reviews)
+            </Badge>
             {tech.is_independent && (
               <Badge variant="secondary">Independent</Badge>
             )}
+          </div>
+
+          <div>
+            <Button variant="outline" asChild>
+              <Link href={`/technicians/${tech.id}/reviews`}>
+                View Reviews
+              </Link>
+            </Button>
           </div>
 
           {profile?.bio && (

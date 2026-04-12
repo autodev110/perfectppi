@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Menu, Settings, User, Search } from "lucide-react";
 import Link from "next/link";
 import { NotificationBell } from "@/components/shared/notification-bell";
@@ -45,6 +45,7 @@ export function PortalLayout({
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-64 p-0">
+              <SheetTitle className="sr-only">Navigation</SheetTitle>
               {sidebar}
             </SheetContent>
           </Sheet>

@@ -203,6 +203,37 @@ export async function enableTechnicianAccess(formData: FormData) {
   };
 }
 
+export async function switchToConsumer() {
+  const auth = await getCurrentProfile();
+  if ("error" in auth) {
+    return { error: auth.error };
+  }
+
+  const { supabase, profile } = auth;
+
+  if (profile.role === "consumer") {
+    return { success: true };
+  }
+
+  if (profile.role === "admin") {
+    return { error: "Admin role cannot be changed here." };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ role: "consumer" })
+    .eq("id", profile.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard");
+
+  return { success: true, redirectTo: "/dashboard" };
+}
+
 export async function createOrganizationWorkspace(formData: FormData) {
   const parsed = organizationAccessSchema.safeParse({
     organization_name: (formData.get("organization_name") as string) || "",

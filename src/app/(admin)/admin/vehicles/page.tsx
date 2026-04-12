@@ -36,12 +36,30 @@ export default async function VehicleManagementPage() {
             ) : (
               vehicles.map((vehicle) => {
                 const owner = vehicle.owner as { display_name: string | null; username: string | null } | null;
+                const primaryMedia =
+                  vehicle.vehicle_media?.find((media) => media.is_primary) ??
+                  vehicle.vehicle_media?.[0] ??
+                  null;
                 const label = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim]
                   .filter(Boolean)
                   .join(" ");
                 return (
                   <tr key={vehicle.id} className="hover:bg-muted/30">
-                    <td className="px-4 py-3 font-medium">{label || "—"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-16 overflow-hidden rounded-lg bg-muted">
+                          {primaryMedia ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={primaryMedia.url}
+                              alt={label || "Vehicle"}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
+                        </div>
+                        <span className="font-medium">{label || "—"}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                       {vehicle.vin ?? "—"}
                     </td>

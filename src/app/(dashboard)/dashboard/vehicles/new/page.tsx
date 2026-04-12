@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createVehicle } from "@/features/vehicles/actions";
 import { Button } from "@/components/ui/button";
@@ -12,14 +12,19 @@ export default function NewVehiclePage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   async function handleSubmit(formData: FormData) {
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
     setLoading(true);
     setError(null);
     const result = await createVehicle(formData);
     if (result?.error) {
       setError(result.error);
       setLoading(false);
+      submittingRef.current = false;
     } else if (result?.data) {
       router.push(`/dashboard/vehicles/${result.data.id}`);
     }
@@ -93,6 +98,21 @@ export default function NewVehiclePage() {
                   min={0}
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="visibility">Visibility</Label>
+              <select
+                id="visibility"
+                name="visibility"
+                defaultValue="private"
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <option value="private">Private - only visible in your dashboard</option>
+                <option value="public">Public - can be used for public profile and marketplace</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Keep private by default. Choose public only when you want the vehicle to appear on public pages.
+              </p>
             </div>
             {error && (
               <p className="text-sm text-destructive">{error}</p>

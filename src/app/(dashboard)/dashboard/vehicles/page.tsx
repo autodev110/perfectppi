@@ -41,48 +41,67 @@ export default async function VehiclesPage() {
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {vehicles.map((vehicle) => (
-            <Link
-              key={vehicle.id}
-              href={`/dashboard/vehicles/${vehicle.id}`}
-            >
-              <Card className="transition-shadow hover:shadow-md">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold">
-                        {vehicle.year} {vehicle.make} {vehicle.model}
-                      </p>
-                      {vehicle.trim && (
-                        <p className="text-sm text-muted-foreground">
-                          {vehicle.trim}
-                        </p>
-                      )}
-                    </div>
-                    <Badge
-                      variant={
-                        vehicle.visibility === "public"
-                          ? "default"
-                          : "secondary"
-                      }
-                    >
-                      {vehicle.visibility}
-                    </Badge>
+          {vehicles.map((vehicle) => {
+            const primaryMedia =
+              vehicle.vehicle_media?.find((media) => media.is_primary) ??
+              vehicle.vehicle_media?.[0] ??
+              null;
+
+            return (
+              <Link
+                key={vehicle.id}
+                href={`/dashboard/vehicles/${vehicle.id}`}
+              >
+                <Card className="overflow-hidden transition-shadow hover:shadow-md">
+                  <div className="flex h-40 items-center justify-center bg-muted">
+                    {primaryMedia ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={primaryMedia.url}
+                        alt={`${vehicle.year ?? ""} ${vehicle.make ?? ""} ${vehicle.model ?? ""}`.trim()}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Car className="h-12 w-12 text-muted-foreground/40" />
+                    )}
                   </div>
-                  {vehicle.mileage != null && (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {formatMileage(vehicle.mileage)} miles
-                    </p>
-                  )}
-                  {vehicle.vin && (
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">
-                      VIN: {vehicle.vin}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-semibold">
+                          {vehicle.year} {vehicle.make} {vehicle.model}
+                        </p>
+                        {vehicle.trim && (
+                          <p className="text-sm text-muted-foreground">
+                            {vehicle.trim}
+                          </p>
+                        )}
+                      </div>
+                      <Badge
+                        variant={
+                          vehicle.visibility === "public"
+                            ? "default"
+                            : "secondary"
+                        }
+                      >
+                        {vehicle.visibility}
+                      </Badge>
+                    </div>
+                    {vehicle.mileage != null && (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {formatMileage(vehicle.mileage)} miles
+                      </p>
+                    )}
+                    {vehicle.vin && (
+                      <p className="mt-1 font-mono text-xs text-muted-foreground">
+                        VIN: {vehicle.vin}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

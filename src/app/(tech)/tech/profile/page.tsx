@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { updateProfile } from "@/features/profiles/actions";
+import { updateProfile, switchToConsumer } from "@/features/profiles/actions";
 import { updateTechProfile } from "@/features/technicians/actions";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -25,8 +25,10 @@ export default function TechProfilePage() {
   const [loading, setLoading] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
   const [techSaving, setTechSaving] = useState(false);
+  const [switchSaving, setSwitchSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [techMessage, setTechMessage] = useState<string | null>(null);
+  const [switchMessage, setSwitchMessage] = useState<string | null>(null);
 
   async function fetchData() {
     const supabase = createClient();
@@ -108,6 +110,20 @@ export default function TechProfilePage() {
     setTechMessage("Technician profile updated.");
     setTechSaving(false);
     await fetchData();
+  }
+
+  async function handleSwitchToConsumer() {
+    setSwitchSaving(true);
+    setSwitchMessage(null);
+    const result = await switchToConsumer();
+    if (result?.error) {
+      setSwitchMessage(result.error);
+      setSwitchSaving(false);
+      return;
+    }
+    if (result?.redirectTo) {
+      window.location.href = result.redirectTo;
+    }
   }
 
   if (loading) {
@@ -237,6 +253,26 @@ export default function TechProfilePage() {
               Technician profile not found for this account.
             </p>
           )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Switch Back to Consumer</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Your technician profile and inspection history will be preserved. You can re-enable technician access from your account settings at any time.
+          </p>
+          {switchMessage && (
+            <p className="text-sm text-destructive">{switchMessage}</p>
+          )}
+          <Button
+            variant="outline"
+            disabled={switchSaving}
+            onClick={handleSwitchToConsumer}
+          >
+            {switchSaving ? "Switching..." : "Switch to Consumer"}
+          </Button>
         </CardContent>
       </Card>
     </div>

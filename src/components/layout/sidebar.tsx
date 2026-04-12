@@ -20,6 +20,9 @@ import {
   ScrollText,
   Settings,
   LogOut,
+  Tag,
+  Newspaper,
+  Star,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useSignOut } from "@/features/auth/hooks";
@@ -40,6 +43,9 @@ const iconMap: Record<string, ComponentType<{ className?: string }>> = {
   CreditCard,
   ScrollText,
   Settings,
+  Tag,
+  Newspaper,
+  Star,
 };
 
 interface SidebarItem {

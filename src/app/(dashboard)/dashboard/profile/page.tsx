@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { updateProfile } from "@/features/profiles/actions";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExternalLink } from "lucide-react";
 import type { Database } from "@/types/database";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -56,7 +58,17 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="font-heading text-2xl font-bold">Edit Profile</h1>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="font-heading text-2xl font-bold">Edit Profile</h1>
+        {profile?.is_public && profile?.username && (
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/profile/${profile.username}`} target="_blank">
+              <ExternalLink className="mr-2 h-3.5 w-3.5" />
+              View Public Profile
+            </Link>
+          </Button>
+        )}
+      </div>
 
       <Card>
         <CardHeader>
