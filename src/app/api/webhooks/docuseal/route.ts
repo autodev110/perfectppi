@@ -12,6 +12,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
  *
  * Events handled:
  *   form.completed     — all submitters finished → update contracts + advance order
+ *   submission.completed — completion event used by some DocuSeal builds
  *   submission.expired — signing link expired before completion
  */
 export async function POST(req: NextRequest) {
@@ -53,6 +54,7 @@ async function handleEvent(eventType: string, data: Record<string, unknown>) {
 
   switch (eventType) {
     case "form.completed":
+    case "submission.completed":
       await handleFormCompleted(submissionId);
       break;
     case "submission.expired":

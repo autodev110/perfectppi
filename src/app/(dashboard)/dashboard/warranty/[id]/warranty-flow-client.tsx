@@ -6,6 +6,7 @@ import type { FullWarrantyFlow, WarrantyPlan } from "@/features/warranty/queries
 import { Shield, Check, ChevronRight, FileText, CreditCard, CheckCircle, AlertCircle, Loader2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 // ============================================================================
 // Step indicator
@@ -128,91 +129,6 @@ function PlanCard({
 }
 
 // ============================================================================
-// DocuSeal embed
-// ============================================================================
-
-function DocuSealEmbed({
-  contractId,
-  onSigned,
-  getSigningUrl,
-}: {
-  contractId: string;
-  onSigned: () => void;
-  getSigningUrl: (id: string) => Promise<string | null>;
-}) {
-  const [embedSrc, setEmbedSrc] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    async function load() {
-      setLoading(true);
-      const url = await getSigningUrl(contractId);
-      if (!mounted) return;
-      if (url === "__SIGNED_ALREADY__") {
-        onSigned();
-        setLoading(false);
-        return;
-      }
-      if (!url) {
-        setError("Failed to load signing URL. Please try again.");
-      } else {
-        setEmbedSrc(url);
-      }
-      setLoading(false);
-    }
-    load();
-    return () => { mounted = false; };
-  }, [contractId, getSigningUrl]);
-
-  // Listen for DocuSeal completion postMessage
-  useEffect(() => {
-    function handleMessage(e: MessageEvent) {
-      if (
-        e.data?.type === "docuseal:completed" ||
-        e.data === "docuseal:completed"
-      ) {
-        onSigned();
-      }
-    }
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [onSigned]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 bg-surface-container rounded-xl">
-        <Loader2 className="h-6 w-6 animate-spin text-on-surface-variant" />
-      </div>
-    );
-  }
-
-  if (error || !embedSrc) {
-    return (
-      <div className="flex flex-col items-center justify-center h-40 bg-surface-container rounded-xl gap-3">
-        <AlertCircle className="h-6 w-6 text-red-500" />
-        <p className="text-sm text-on-surface-variant">{error ?? "Could not load contract"}</p>
-        <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
-          Retry
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-xl overflow-hidden border border-outline-variant/20">
-      <iframe
-        src={embedSrc}
-        className="w-full min-h-[600px]"
-        allow="camera; microphone"
-        title="Contract Signing"
-      />
-    </div>
-  );
-}
-
-// ============================================================================
 // Main client component
 // ============================================================================
 
@@ -226,6 +142,7 @@ export function WarrantyFlowClient({
   paymentCallback: string | null;
 }) {
   const { option, order, contract, payment } = flow;
+  const router = useRouter();
   const {
     isPending,
     error,
@@ -235,17 +152,29 @@ export function WarrantyFlowClient({
     handleGetSigningUrl,
     handleInitiatePayment,
     handleMarkViewed,
+    handleSyncSignatureStatus,
   } = useWarrantyFlow(option.id);
 
   const [selectedPlanIndex, setSelectedPlanIndex] = useState<number | null>(null);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(order?.id ?? null);
   const [currentContractId, setCurrentContractId] = useState<string | null>(contract?.id ?? null);
   const [contractSigned, setContractSigned] = useState(
-    !!contract?.signed_at || (!!contract && !contract.docuseal_submitter_slug),
+    !!contract?.signed_at,
   );
-  const [paymentComplete, setPaymentComplete] = useState(
-    payment?.status === "completed" || paymentCallback === "success",
+  const [signingUrl, setSigningUrl] = useState<string | null>(null);
+  const [signingUrlLoading, setSigningUrlLoading] = useState(false);
+  const [paymentComplete] = useState(payment?.status === "completed");
+  const [awaitingPaymentConfirmation, setAwaitingPaymentConfirmation] = useState(
+    paymentCallback === "success" && payment?.status !== "completed",
   );
+
+  useEffect(() => {
+    if (paymentCallback === "success" && payment?.status !== "completed") {
+      setAwaitingPaymentConfirmation(true);
+    } else {
+      setAwaitingPaymentConfirmation(false);
+    }
+  }, [paymentCallback, payment?.status]);
 
   // Determine current step from DB state
   function computeStep(): number {
@@ -282,10 +211,6 @@ export function WarrantyFlowClient({
     }
   }
 
-  const handleSigned = useCallback(() => {
-    setContractSigned(true);
-  }, []);
-
   async function onProceedToPayment() {
     if (!currentContractId) return;
     const checkoutUrl = await handleInitiatePayment(currentContractId);
@@ -293,6 +218,77 @@ export function WarrantyFlowClient({
       window.location.href = checkoutUrl;
     }
   }
+
+  async function onCheckSignatureStatus() {
+    if (!currentContractId) return;
+    const signed = await handleSyncSignatureStatus(currentContractId);
+    if (signed) {
+      setContractSigned(true);
+      router.refresh();
+    }
+  }
+
+  const tryAutoSyncSignature = useCallback(async () => {
+    if (!currentContractId || contractSigned) return;
+    const signed = await handleSyncSignatureStatus(currentContractId);
+    if (signed) {
+      setContractSigned(true);
+      router.refresh();
+    }
+  }, [currentContractId, contractSigned, handleSyncSignatureStatus, router]);
+
+  useEffect(() => {
+    if (!currentContractId || contractSigned) return;
+
+    const interval = window.setInterval(() => {
+      void tryAutoSyncSignature();
+    }, 8000);
+
+    const onFocus = () => {
+      void tryAutoSyncSignature();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [currentContractId, contractSigned, tryAutoSyncSignature]);
+
+  useEffect(() => {
+    const contractId = currentContractId;
+    if (!contractId || contractSigned) {
+      setSigningUrl(null);
+      setSigningUrlLoading(false);
+      return;
+    }
+
+    const ensuredContractId: string = contractId;
+    let active = true;
+    async function loadSigningUrl() {
+      setSigningUrlLoading(true);
+      const url = await handleGetSigningUrl(ensuredContractId);
+      if (!active) return;
+
+      if (url === "__SIGNED_ALREADY__") {
+        setContractSigned(true);
+        setSigningUrlLoading(false);
+        router.refresh();
+        return;
+      }
+
+      setSigningUrl(url);
+      setSigningUrlLoading(false);
+    }
+
+    void loadSigningUrl();
+    return () => {
+      active = false;
+    };
+  }, [contractSigned, currentContractId, handleGetSigningUrl, router]);
 
   const selectedPlan = option.plans[selectedPlanIndex ?? -1] ?? (currentOrderId ? {
     name: order?.plan_name ?? "",
@@ -396,11 +392,36 @@ export function WarrantyFlowClient({
           </p>
 
           {currentContractId && !contractSigned && (
-            <DocuSealEmbed
-              contractId={currentContractId}
-              onSigned={handleSigned}
-              getSigningUrl={handleGetSigningUrl}
-            />
+            <div className="space-y-3">
+              {signingUrlLoading && (
+                <div className="flex items-center justify-center h-20 bg-surface-container rounded-xl">
+                  <Loader2 className="h-5 w-5 animate-spin text-on-surface-variant" />
+                </div>
+              )}
+              {signingUrl && (
+                <a
+                  href={signingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-on-tertiary-container hover:underline"
+                >
+                  Open signing page in new tab
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              )}
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                Sign in the new tab, then click <span className="font-semibold">I&apos;ve Signed - Check Status</span>.
+              </div>
+              <Button
+                variant="outline"
+                onClick={onCheckSignatureStatus}
+                disabled={isPending}
+                className="rounded-xl"
+              >
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                I&apos;ve Signed - Check Status
+              </Button>
+            </div>
           )}
 
           {contractSigned && (
@@ -433,16 +454,35 @@ export function WarrantyFlowClient({
           <p className="text-sm text-on-surface-variant">
             Your contract is signed. Click below to complete your secure payment.
           </p>
-          <Button
-            onClick={onProceedToPayment}
-            disabled={isPending}
-            className="bg-primary-container text-white hover:bg-primary-container/90 rounded-xl px-6"
-          >
-            {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            <CreditCard className="h-4 w-4 mr-2" />
-            Pay {selectedPlan ? (selectedPlan.price_cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" }) : ""}
-            <ExternalLink className="h-3.5 w-3.5 ml-1.5 opacity-60" />
-          </Button>
+
+          {awaitingPaymentConfirmation && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <p className="font-semibold mb-1">Payment submitted</p>
+              <p className="text-amber-700">
+                Waiting for Stripe webhook confirmation. Refresh status in a few seconds.
+              </p>
+              <Button
+                variant="outline"
+                className="mt-3 border-amber-300 text-amber-800 hover:bg-amber-100"
+                onClick={() => router.refresh()}
+              >
+                Check Payment Status
+              </Button>
+            </div>
+          )}
+
+          {!awaitingPaymentConfirmation && (
+            <Button
+              onClick={onProceedToPayment}
+              disabled={isPending}
+              className="bg-primary-container text-white hover:bg-primary-container/90 rounded-xl px-6"
+            >
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              <CreditCard className="h-4 w-4 mr-2" />
+              Pay {selectedPlan ? (selectedPlan.price_cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" }) : ""}
+              <ExternalLink className="h-3.5 w-3.5 ml-1.5 opacity-60" />
+            </Button>
+          )}
         </div>
       )}
 

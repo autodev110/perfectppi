@@ -11,6 +11,7 @@ export interface DocuSealTemplate {
 
 export interface DocuSealSubmitter {
   id: number;
+  submission_id?: number;
   slug: string;
   email: string;
   name: string;
@@ -31,6 +32,12 @@ export interface DocuSealSubmission {
 
 function getBaseUrl(): string {
   return process.env.DOCUSEAL_API_URL ?? "https://api.docuseal.com";
+}
+
+function getPublicBaseUrl(): string {
+  const explicit = process.env.DOCUSEAL_PUBLIC_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  return getBaseUrl().replace(/\/api\/?$/, "");
 }
 
 function isConfigured(): boolean {
@@ -85,6 +92,7 @@ export async function createSubmission(params: {
   templateId: number;
   customerEmail: string;
   customerName: string;
+  customerRole?: string;
   staffEmail?: string;
   staffName?: string;
   /** Pre-fill template fields */
@@ -92,7 +100,7 @@ export async function createSubmission(params: {
 }): Promise<DocuSealSubmitter[]> {
   const submitters: Record<string, unknown>[] = [
     {
-      role: "Customer",
+      role: params.customerRole ?? "Customer",
       email: params.customerEmail,
       name: params.customerName,
       send_email: true,
@@ -121,7 +129,26 @@ export async function createSubmission(params: {
  * Call this on page load, not when creating the submission.
  */
 export async function getSubmitter(slug: string): Promise<DocuSealSubmitter> {
-  return request<DocuSealSubmitter>("GET", `/submitters/${slug}`);
+  try {
+    return await request<DocuSealSubmitter>("GET", `/submitters/${slug}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // Older/self-hosted DocuSeal builds may not expose /submitters/:slug.
+    // Fall back to the direct signing URL format.
+    if (message.includes("404")) {
+      return {
+        id: 0,
+        slug,
+        email: "",
+        name: "",
+        role: "",
+        status: "sent",
+        embed_src: `${getPublicBaseUrl()}/s/${slug}`,
+        completed_at: null,
+      };
+    }
+    throw error;
+  }
 }
 
 export async function getSubmission(submissionId: number): Promise<DocuSealSubmission> {

@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
-import { createSubmission, getSubmitter, docusealIsConfigured } from "@/lib/docuseal/client";
+import { createSubmission, getSubmission, getSubmitter, docusealIsConfigured } from "@/lib/docuseal/client";
 import { createCheckoutSession } from "@/lib/stripe/helpers";
 import { stripeIsConfigured } from "@/lib/stripe/client";
 import type { VscCoverageData } from "@/types/api";
@@ -318,13 +318,29 @@ export async function presentContract(
         .single()
     : { data: null };
 
+  const docusealEnabled = docusealIsConfigured();
+  const templateIdRaw = process.env.DOCUSEAL_WARRANTY_TEMPLATE_ID;
+
+  // If API key exists but template is missing, fail loudly instead of silently auto-signing.
+  if (docusealEnabled && !templateIdRaw) {
+    return { error: "DOCUSEAL_WARRANTY_TEMPLATE_ID is missing." };
+  }
+
   let docusealId: string | null = null;
   let submitterSlug: string | null = null;
 
-  if (docusealIsConfigured() && process.env.DOCUSEAL_WARRANTY_TEMPLATE_ID) {
-    const templateId = parseInt(process.env.DOCUSEAL_WARRANTY_TEMPLATE_ID, 10);
+  if (docusealEnabled && templateIdRaw) {
+    const templateId = Number.parseInt(templateIdRaw, 10);
+    if (Number.isNaN(templateId)) {
+      return { error: "DOCUSEAL_WARRANTY_TEMPLATE_ID must be a number." };
+    }
 
     try {
+      const configuredRole = process.env.DOCUSEAL_CUSTOMER_ROLE?.trim();
+      const roleCandidates = Array.from(
+        new Set([configuredRole, "Customer", "First Party"].filter(Boolean) as string[]),
+      );
+
       const values: Record<string, string> = {
         plan_name: order.plan_name,
         term: `${order.term_years} year${order.term_years > 1 ? "s" : ""}${order.term_miles ? ` / ${order.term_miles.toLocaleString()} miles` : ""}`,
@@ -339,24 +355,52 @@ export async function presentContract(
         mileage: vehicle?.mileage ? vehicle.mileage.toLocaleString() : "",
       };
 
-      const submitters = await createSubmission({
-        templateId,
-        customerEmail,
-        customerName,
-        values,
-      });
-
-      const customerSubmitter = submitters.find(
-        (s) => s.role === "Customer",
-      );
-
-      if (customerSubmitter) {
-        docusealId = String(customerSubmitter.id);
-        submitterSlug = customerSubmitter.slug;
+      let submitters: Awaited<ReturnType<typeof createSubmission>> | null = null;
+      let lastRoleError: unknown = null;
+      for (const role of roleCandidates) {
+        try {
+          submitters = await createSubmission({
+            templateId,
+            customerEmail,
+            customerName,
+            customerRole: role,
+            values,
+          });
+          break;
+        } catch (roleErr) {
+          lastRoleError = roleErr;
+          const message = roleErr instanceof Error ? roleErr.message : String(roleErr);
+          if (!message.includes("Unknown submitter role")) {
+            throw roleErr;
+          }
+        }
       }
+
+      if (!submitters) {
+        throw (lastRoleError ?? new Error("DocuSeal role negotiation failed"));
+      }
+
+      const customerSubmitter =
+        submitters.find((s) => roleCandidates.includes(s.role)) ?? submitters[0];
+      if (!customerSubmitter) {
+        return {
+          error:
+            "DocuSeal template has no submitter roles available.",
+        };
+      }
+
+      const submissionId = (customerSubmitter as { submission_id?: number }).submission_id;
+      // Webhook events are keyed by DocuSeal submission ID.
+      docusealId = String(submissionId ?? customerSubmitter.id);
+      submitterSlug = customerSubmitter.slug;
     } catch (err) {
       console.error("DocuSeal submission failed:", err);
-      // Continue without DocuSeal — contract will be auto-signed in dev
+      return {
+        error:
+          err instanceof Error
+            ? `DocuSeal submission failed: ${err.message}`
+            : "DocuSeal submission failed.",
+      };
     }
   }
 
@@ -368,16 +412,16 @@ export async function presentContract(
       docuseal_id: docusealId,
       docuseal_submitter_slug: submitterSlug,
       presented_at: new Date().toISOString(),
-      // In dev (no DocuSeal), auto-sign immediately
-      signed_at: docusealId ? null : new Date().toISOString(),
+      // In local/dev without DocuSeal configured, auto-sign immediately.
+      signed_at: docusealEnabled ? null : new Date().toISOString(),
     })
     .select("id")
     .single();
 
   if (contractErr || !contract) return { error: "Failed to create contract" };
 
-  // If DocuSeal not configured, advance order to 'signed' immediately
-  if (!docusealId) {
+  // If DocuSeal is not configured at all, advance order to signed immediately.
+  if (!docusealEnabled) {
     await admin
       .from("warranty_orders")
       .update({ status: "signed" })
@@ -421,6 +465,76 @@ export async function getContractSigningUrl(
   } catch (e) {
     console.error("Failed to get DocuSeal embed_src:", e);
     return { error: "Failed to load signing URL" };
+  }
+}
+
+// ============================================================================
+// syncContractSignatureStatus
+// Manual fallback for local/dev when webhook cannot reach localhost.
+// Checks DocuSeal submission status and advances contract/order if completed.
+// ============================================================================
+
+export async function syncContractSignatureStatus(
+  contractId: string,
+): Promise<{ signed: boolean } | { error: string }> {
+  const auth = await getAuthProfile();
+  if (!auth) return { error: "Not authenticated" };
+
+  const supabase = auth.supabase;
+  const admin = createAdminClient();
+
+  const { data: contract, error } = await supabase
+    .from("contracts")
+    .select("id, signer_id, signed_at, warranty_order_id, docuseal_id")
+    .eq("id", contractId)
+    .single();
+
+  if (error || !contract) return { error: "Contract not found" };
+  if (contract.signer_id !== auth.id) return { error: "Not authorized" };
+  if (contract.signed_at) return { signed: true };
+  if (!contract.docuseal_id) return { signed: false };
+
+  const submissionId = Number.parseInt(contract.docuseal_id, 10);
+  if (Number.isNaN(submissionId)) {
+    return { error: "Invalid DocuSeal submission reference." };
+  }
+
+  try {
+    const submission = await getSubmission(submissionId);
+    const submitters = Array.isArray(submission.submitters) ? submission.submitters : [];
+    const allCompleted =
+      submission.status === "completed" ||
+      (submitters.length > 0 && submitters.every((s) => !!s.completed_at));
+
+    if (!allCompleted) {
+      return { signed: false };
+    }
+
+    const signedAt = new Date().toISOString();
+
+    await admin
+      .from("contracts")
+      .update({ signed_at: signedAt })
+      .eq("id", contract.id)
+      .is("signed_at", null);
+
+    await admin
+      .from("warranty_orders")
+      .update({ status: "signed" })
+      .eq("id", contract.warranty_order_id);
+
+    revalidatePath(`/dashboard/warranty/${contract.warranty_order_id}`);
+    revalidatePath(`/dashboard/warranty`);
+
+    return { signed: true };
+  } catch (e) {
+    console.error("DocuSeal signature sync failed:", e);
+    return {
+      error:
+        e instanceof Error
+          ? `Signature sync failed: ${e.message}`
+          : "Signature sync failed.",
+    };
   }
 }
 

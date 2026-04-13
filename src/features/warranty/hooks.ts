@@ -7,6 +7,7 @@ import {
   getContractSigningUrl,
   initiatePayment,
   markWarrantyViewed,
+  syncContractSignatureStatus,
 } from "./actions";
 
 export type WarrantyStep =
@@ -90,6 +91,21 @@ export function useWarrantyFlow(warrantyOptionId: string) {
     await markWarrantyViewed(warrantyOptionId);
   }, [warrantyOptionId]);
 
+  const handleSyncSignatureStatus = useCallback(async (contractId: string): Promise<boolean> => {
+    setError(null);
+    return new Promise((resolve) => {
+      startTransition(async () => {
+        const result = await syncContractSignatureStatus(contractId);
+        if ("error" in result) {
+          setError(result.error);
+          resolve(false);
+        } else {
+          resolve(result.signed);
+        }
+      });
+    });
+  }, [startTransition]);
+
   return {
     isPending,
     error,
@@ -99,5 +115,6 @@ export function useWarrantyFlow(warrantyOptionId: string) {
     handleGetSigningUrl,
     handleInitiatePayment,
     handleMarkViewed,
+    handleSyncSignatureStatus,
   };
 }
