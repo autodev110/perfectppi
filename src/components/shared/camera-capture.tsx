@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { X, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,11 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [supportsBrowserCamera, setSupportsBrowserCamera] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const attachStreamToVideo = useCallback((video: HTMLVideoElement, stream: MediaStream) => {
     if (video.srcObject !== stream) {
@@ -184,8 +190,10 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
     clearPreview();
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black">
+  if (!mounted) return null;
+
+  const overlay = (
+    <div className="fixed inset-0 z-[100] flex flex-col bg-black">
       <div className="flex items-center justify-between bg-black/60 px-4 py-3">
         <button
           onClick={handleClose}
@@ -220,10 +228,15 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
             playsInline
             muted
             onLoadedMetadata={() => {
-              setVideoReady(true);
               videoRef.current?.play().catch((err) => {
                 console.error("Video play failed onLoadedMetadata:", err);
               });
+            }}
+            onPlaying={() => setVideoReady(true)}
+            onCanPlay={() => {
+              if (videoRef.current && videoRef.current.readyState >= 3) {
+                setVideoReady(true);
+              }
             }}
             className={cn(
               "h-full w-full object-cover",
@@ -334,4 +347,6 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );
+
+  return createPortal(overlay, document.body);
 }
