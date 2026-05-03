@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
-import { X, Camera, RefreshCw } from "lucide-react";
+import { X, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -18,12 +18,13 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
 
-  const [mode, setMode] = useState<"loading" | "camera" | "fallback" | "error">("loading");
+  const [mode, setMode] = useState<"loading" | "camera" | "fallback" | "error">("fallback");
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [capturing, setCapturing] = useState(false);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [supportsBrowserCamera, setSupportsBrowserCamera] = useState(false);
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -81,23 +82,14 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
   }, [stopStream]);
 
   useEffect(() => {
-    const supportsLiveCamera =
-      window.isSecureContext && typeof navigator.mediaDevices?.getUserMedia === "function";
-    const prefersNativeCapture =
-      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-      (navigator.userAgent.includes("Mac") && navigator.maxTouchPoints > 1);
-
-    if (!supportsLiveCamera || prefersNativeCapture) {
-      setMode("fallback");
-      return;
-    }
-
-    startCamera("environment");
+    setSupportsBrowserCamera(
+      window.isSecureContext && typeof navigator.mediaDevices?.getUserMedia === "function"
+    );
 
     return () => {
       stopStream();
     };
-  }, [startCamera, stopStream]);
+  }, [stopStream]);
 
   useEffect(() => {
     return () => {
@@ -116,12 +108,6 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
     video.srcObject = stream;
     void video.play().catch(() => {});
   }, [mode]);
-
-  function flipCamera() {
-    const next = facingMode === "environment" ? "user" : "environment";
-    setFacingMode(next);
-    startCamera(next);
-  }
 
   function captureFrame() {
     const video = videoRef.current;
@@ -183,31 +169,18 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
             {photoPrompt}
           </p>
         )}
-        {mode === "camera" && !previewUrl ? (
-          <button
-            onClick={flipCamera}
-            className="rounded-full p-2 text-white transition hover:bg-white/10"
-          >
-            <RefreshCw className="h-5 w-5" />
-          </button>
-        ) : (
-          <div className="h-9 w-9" />
-        )}
+        <div className="h-9 w-9" />
       </div>
 
       <div className="relative flex-1 overflow-hidden">
         {previewUrl && (
           <div className="absolute inset-0 p-4">
-            <div
-              className="h-full w-full rounded-2xl bg-cover bg-center bg-no-repeat"
-              style={{ backgroundImage: `url("${previewUrl}")` }}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewUrl}
+              alt="Captured preview"
+              className="h-full w-full rounded-2xl object-cover"
             />
-          </div>
-        )}
-
-        {!previewUrl && mode === "loading" && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
           </div>
         )}
 
@@ -225,8 +198,7 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-8 text-center">
             <Camera className="h-16 w-16 text-white/40" />
             <p className="text-sm text-white/70">
-              Live camera preview is not available here. You can still take a photo with your
-              device camera or choose one from your library.
+              Take a photo with your device camera or choose one from your library.
             </p>
           </div>
         )}
@@ -241,7 +213,7 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
               onClick={() => startCamera(facingMode)}
               className="border-white/30 text-white"
             >
-              Try Again
+              Use Browser Camera
             </Button>
           </div>
         )}
@@ -287,6 +259,15 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
             >
               Choose from Library
             </Button>
+            {supportsBrowserCamera && (
+              <Button
+                variant="ghost"
+                onClick={() => startCamera(facingMode)}
+                className="text-white hover:bg-white/10 hover:text-white"
+              >
+                Use Browser Camera Instead
+              </Button>
+            )}
             <input
               ref={cameraInputRef}
               type="file"

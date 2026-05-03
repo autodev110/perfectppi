@@ -391,9 +391,11 @@ export function InspectionWorkflowView({
                   key={media.id}
                   className="relative aspect-[4/3] overflow-hidden rounded-xl border bg-secondary"
                 >
-                  <div
-                    className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-                    style={{ backgroundImage: `url("${media.url}")` }}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={media.url}
+                    alt={`Inspection photo ${index + 1}`}
+                    className="absolute inset-0 h-full w-full object-cover"
                   />
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-xs font-medium text-white">
                     Photo {index + 1}
