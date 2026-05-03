@@ -15,13 +15,25 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
 
   const [mode, setMode] = useState<"loading" | "camera" | "fallback" | "error">("loading");
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [capturing, setCapturing] = useState(false);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
+  const stopStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, []);
 
   const clearPreview = useCallback(() => {
     if (previewUrl) {
@@ -42,9 +54,8 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
 
   const startCamera = useCallback(async (facing: "environment" | "user") => {
     setMode("loading");
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-    }
+    setCameraError(null);
+    stopStream();
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -53,15 +64,30 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
       }
+      setFacingMode(facing);
       setMode("camera");
-    } catch {
-      setMode("fallback");
+    } catch (error) {
+      const message =
+        error instanceof DOMException && error.name === "NotAllowedError"
+          ? "Camera permission was blocked. You can allow access and try again, or use the native photo picker below."
+          : error instanceof DOMException && error.name === "NotFoundError"
+            ? "No camera was found on this device. Use the photo picker below instead."
+            : "Could not start the live camera. Use the photo picker below instead.";
+      setCameraError(message);
+      setMode("error");
     }
-  }, []);
+  }, [stopStream]);
 
   useEffect(() => {
-    if (!navigator.mediaDevices?.getUserMedia) {
+    const supportsLiveCamera =
+      window.isSecureContext && typeof navigator.mediaDevices?.getUserMedia === "function";
+    const prefersNativeCapture =
+      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (navigator.userAgent.includes("Mac") && navigator.maxTouchPoints > 1);
+
+    if (!supportsLiveCamera || prefersNativeCapture) {
       setMode("fallback");
       return;
     }
@@ -69,11 +95,9 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
     startCamera("environment");
 
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
+      stopStream();
     };
-  }, [startCamera]);
+  }, [startCamera, stopStream]);
 
   useEffect(() => {
     return () => {
@@ -120,9 +144,11 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
     if (file) {
       setPreview(file);
     }
+    e.target.value = "";
   }
 
   function handleClose() {
+    stopStream();
     clearPreview();
     onClose();
   }
@@ -189,7 +215,8 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-8 text-center">
             <Camera className="h-16 w-16 text-white/40" />
             <p className="text-sm text-white/70">
-              Camera access not available. Use the button below to select a photo.
+              Live camera preview is not available here. You can still take a photo with your
+              device camera or choose one from your library.
             </p>
           </div>
         )}
@@ -197,7 +224,7 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
         {!previewUrl && mode === "error" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8">
             <p className="text-center text-sm text-red-400">
-              Could not access camera. Please allow camera permissions and try again.
+              {cameraError ?? "Could not access camera. Please allow camera permissions and try again."}
             </p>
             <Button
               variant="outline"
@@ -238,16 +265,30 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
         ) : (
           <>
             <Button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => cameraInputRef.current?.click()}
               className="px-8 py-3 text-base"
             >
-              Choose Photo
+              Take Photo
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => libraryInputRef.current?.click()}
+              className="border-white/30 text-white hover:bg-white/10 hover:text-white"
+            >
+              Choose from Library
             </Button>
             <input
-              ref={fileInputRef}
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <input
+              ref={libraryInputRef}
+              type="file"
+              accept="image/*"
               className="hidden"
               onChange={handleFileChange}
             />
