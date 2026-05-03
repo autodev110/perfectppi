@@ -396,6 +396,14 @@ export function InspectionWorkflowView({
                     src={`/api/ppi/media/${media.id}`}
                     alt={`Inspection photo ${index + 1}`}
                     className="absolute inset-0 h-full w-full object-cover"
+                    onError={(e) => {
+                      console.error("[inspection] image failed to load", {
+                        mediaId: media.id,
+                        rawUrl: media.url,
+                        endpoint: `/api/ppi/media/${media.id}`,
+                        currentSrc: e.currentTarget.currentSrc,
+                      });
+                    }}
                   />
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-xs font-medium text-white">
                     Photo {index + 1}
