@@ -12,7 +12,7 @@ interface CameraCaptureProps {
 }
 
 export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCaptureProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -25,6 +25,29 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [supportsBrowserCamera, setSupportsBrowserCamera] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+
+  const attachStreamToVideo = useCallback((video: HTMLVideoElement, stream: MediaStream) => {
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+    const playPromise = video.play();
+    if (playPromise && typeof playPromise.then === "function") {
+      playPromise.catch((err) => {
+        console.error("Video play failed:", err);
+      });
+    }
+  }, []);
+
+  const videoCallbackRef = useCallback(
+    (node: HTMLVideoElement | null) => {
+      videoRef.current = node;
+      if (node && streamRef.current) {
+        attachStreamToVideo(node, streamRef.current);
+      }
+    },
+    [attachStreamToVideo]
+  );
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -34,6 +57,7 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    setVideoReady(false);
   }, []);
 
   const clearPreview = useCallback(() => {
@@ -53,33 +77,39 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
     [clearPreview]
   );
 
-  const startCamera = useCallback(async (facing: "environment" | "user") => {
-    setMode("loading");
-    setCameraError(null);
-    stopStream();
+  const startCamera = useCallback(
+    async (facing: "environment" | "user") => {
+      setMode("loading");
+      setCameraError(null);
+      stopStream();
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facing },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: facing } },
+          audio: false,
+        });
+        streamRef.current = stream;
+        setFacingMode(facing);
+        setMode("camera");
+        // If the video element is already mounted (e.g., switching cameras while
+        // already in camera mode) attach immediately. Otherwise the videoCallbackRef
+        // will attach the stream the moment the element mounts.
+        if (videoRef.current) {
+          attachStreamToVideo(videoRef.current, stream);
+        }
+      } catch (error) {
+        const message =
+          error instanceof DOMException && error.name === "NotAllowedError"
+            ? "Camera permission was blocked. You can allow access and try again, or use the native photo picker below."
+            : error instanceof DOMException && error.name === "NotFoundError"
+              ? "No camera was found on this device. Use the photo picker below instead."
+              : "Could not start the live camera. Use the photo picker below instead.";
+        setCameraError(message);
+        setMode("error");
       }
-      setFacingMode(facing);
-      setMode("camera");
-    } catch (error) {
-      const message =
-        error instanceof DOMException && error.name === "NotAllowedError"
-          ? "Camera permission was blocked. You can allow access and try again, or use the native photo picker below."
-          : error instanceof DOMException && error.name === "NotFoundError"
-            ? "No camera was found on this device. Use the photo picker below instead."
-            : "Could not start the live camera. Use the photo picker below instead.";
-      setCameraError(message);
-      setMode("error");
-    }
-  }, [stopStream]);
+    },
+    [stopStream, attachStreamToVideo]
+  );
 
   useEffect(() => {
     setSupportsBrowserCamera(
@@ -99,25 +129,24 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
     };
   }, [previewUrl]);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    const stream = streamRef.current;
-
-    if (mode !== "camera" || !video || !stream) return;
-
-    video.srcObject = stream;
-    void video.play().catch(() => {});
-  }, [mode]);
-
   function captureFrame() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
+    if (!video.videoWidth || !video.videoHeight) {
+      setCameraError("Camera is still initializing — please wait a moment and try again.");
+      return;
+    }
 
     setCapturing(true);
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    canvas.getContext("2d")?.drawImage(video, 0, 0);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      setCapturing(false);
+      return;
+    }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     canvas.toBlob(
       (blob) => {
@@ -184,14 +213,29 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
           </div>
         )}
 
-        {!previewUrl && mode === "camera" && (
+        {!previewUrl && (mode === "camera" || mode === "loading") && (
           <video
-            ref={videoRef}
+            ref={videoCallbackRef}
             autoPlay
             playsInline
             muted
-            className="h-full w-full object-cover"
+            onLoadedMetadata={() => {
+              setVideoReady(true);
+              videoRef.current?.play().catch((err) => {
+                console.error("Video play failed onLoadedMetadata:", err);
+              });
+            }}
+            className={cn(
+              "h-full w-full object-cover",
+              mode === "camera" ? "block" : "hidden"
+            )}
           />
+        )}
+
+        {!previewUrl && mode === "loading" && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          </div>
         )}
 
         {!previewUrl && mode === "fallback" && (
@@ -233,13 +277,13 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
               Use Photo
             </Button>
           </>
-        ) : mode === "camera" ? (
+        ) : mode === "camera" || mode === "loading" ? (
           <button
             onClick={captureFrame}
-            disabled={capturing}
+            disabled={capturing || !videoReady}
             className={cn(
               "flex h-20 w-20 items-center justify-center rounded-full border-4 border-white transition",
-              capturing ? "opacity-50" : "active:scale-95 hover:scale-105"
+              capturing || !videoReady ? "opacity-50" : "active:scale-95 hover:scale-105"
             )}
           >
             <div className="h-14 w-14 rounded-full bg-white" />
