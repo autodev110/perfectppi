@@ -107,6 +107,16 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
     };
   }, [previewUrl]);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+
+    if (mode !== "camera" || !video || !stream) return;
+
+    video.srcObject = stream;
+    void video.play().catch(() => {});
+  }, [mode]);
+
   function flipCamera() {
     const next = facingMode === "environment" ? "user" : "environment";
     setFacingMode(next);
