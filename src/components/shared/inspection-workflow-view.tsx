@@ -393,7 +393,7 @@ export function InspectionWorkflowView({
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={media.url}
+                    src={`/api/ppi/media/${media.id}`}
                     alt={`Inspection photo ${index + 1}`}
                     className="absolute inset-0 h-full w-full object-cover"
                   />
