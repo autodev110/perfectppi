@@ -51,7 +51,10 @@ export async function GET(
     });
     if (object.etag) headers.set("ETag", object.etag);
 
-    return new NextResponse(object.bytes, { status: 200, headers });
+    const blob = new Blob([new Uint8Array(object.bytes)], {
+      type: object.contentType,
+    });
+    return new NextResponse(blob, { status: 200, headers });
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     const errName = err instanceof Error ? err.name : undefined;
