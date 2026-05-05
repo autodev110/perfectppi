@@ -79,8 +79,23 @@ export async function uploadObject(params: {
 }
 
 /**
+ * Extract the storage key from a URL we previously generated.
+ * Falls back to the URL pathname if R2_PUBLIC_URL doesn't match (e.g. it changed).
+ */
+export function extractKeyFromStoredUrl(storedPublicUrl: string): string {
+  const publicUrlBase = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
+  if (publicUrlBase && storedPublicUrl.startsWith(publicUrlBase + "/")) {
+    return storedPublicUrl.slice(publicUrlBase.length + 1);
+  }
+  try {
+    return new URL(storedPublicUrl).pathname.replace(/^\//, "");
+  } catch {
+    return storedPublicUrl;
+  }
+}
+
+/**
  * Generate a presigned GET URL for a stored object.
- * Extracts the key from a stored public URL and returns a time-limited signed URL.
  * Use this instead of serving raw R2 public URLs — works regardless of bucket public access settings.
  */
 export async function generatePresignedGetUrl(
@@ -89,11 +104,42 @@ export async function generatePresignedGetUrl(
 ): Promise<string> {
   const client = getS3Client();
   const bucket = process.env.R2_BUCKET_NAME!;
-  const publicUrlBase = process.env.R2_PUBLIC_URL!.replace(/\/$/, "");
-  const key = storedPublicUrl.replace(`${publicUrlBase}/`, "");
+  const key = extractKeyFromStoredUrl(storedPublicUrl);
 
   const command = new GetObjectCommand({ Bucket: bucket, Key: key });
   return getSignedUrl(client, command, { expiresIn });
+}
+
+/**
+ * Fetch an object's bytes + content-type via the S3 API.
+ * Use this when the browser cannot reach R2 directly (private bucket, no custom domain,
+ * Cloudflare WAF in front, etc.) — we proxy the file through our server.
+ */
+export async function getObjectFromStoredUrl(storedPublicUrl: string): Promise<{
+  body: ReadableStream<Uint8Array>;
+  contentType: string;
+  contentLength?: number;
+  etag?: string;
+}> {
+  const client = getS3Client();
+  const bucket = process.env.R2_BUCKET_NAME!;
+  const key = extractKeyFromStoredUrl(storedPublicUrl);
+
+  const response = await client.send(
+    new GetObjectCommand({ Bucket: bucket, Key: key })
+  );
+
+  if (!response.Body) {
+    throw new Error("Empty response body from R2");
+  }
+
+  // The AWS SDK v3 returns a Web ReadableStream (or compatible) in Node 18+.
+  return {
+    body: response.Body.transformToWebStream(),
+    contentType: response.ContentType ?? "application/octet-stream",
+    contentLength: response.ContentLength,
+    etag: response.ETag,
+  };
 }
 
 export function buildStorageKey(params: {

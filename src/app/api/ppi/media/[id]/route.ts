@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isR2Configured, generatePresignedGetUrl } from "@/lib/storage/r2";
+import { isR2Configured, getObjectFromStoredUrl } from "@/lib/storage/r2";
 import { requireApiRole } from "@/features/auth/api";
 
 export async function GET(
@@ -30,18 +30,28 @@ export async function GET(
   }
 
   if (!isR2Configured()) {
-    console.warn("[ppi/media] R2 not configured, redirecting to raw URL", {
-      id,
-      url: media.url,
-    });
+    // Local/dev without R2 — redirect to whatever URL was stored.
     return NextResponse.redirect(media.url);
   }
 
   try {
-    const signedUrl = await generatePresignedGetUrl(media.url, 3600);
-    return NextResponse.redirect(signedUrl, { status: 307 });
+    const object = await getObjectFromStoredUrl(media.url);
+    const headers = new Headers({
+      "Content-Type": object.contentType,
+      "Cache-Control": "private, max-age=300",
+    });
+    if (object.contentLength != null) {
+      headers.set("Content-Length", String(object.contentLength));
+    }
+    if (object.etag) headers.set("ETag", object.etag);
+
+    return new NextResponse(object.body, { status: 200, headers });
   } catch (err) {
-    console.error("[ppi/media] failed to sign URL", { id, url: media.url, err });
-    return new NextResponse("Failed to generate media URL", { status: 500 });
+    console.error("[ppi/media] failed to fetch object", {
+      id,
+      url: media.url,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return new NextResponse("Failed to load media", { status: 500 });
   }
 }
