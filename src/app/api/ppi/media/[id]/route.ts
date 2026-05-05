@@ -1,7 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isR2Configured, getObjectFromStoredUrl } from "@/lib/storage/r2";
+import {
+  isR2Configured,
+  getObjectFromStoredUrl,
+  extractKeyFromStoredUrl,
+} from "@/lib/storage/r2";
 import { requireApiRole } from "@/features/auth/api";
+
+export const runtime = "nodejs";
 
 export async function GET(
   _req: NextRequest,
@@ -21,12 +27,14 @@ export async function GET(
 
   if (error) {
     console.error("[ppi/media] DB lookup failed", { id, error });
-    return new NextResponse("Media lookup failed", { status: 500 });
+    return NextResponse.json(
+      { error: "Media lookup failed", detail: error.message },
+      { status: 500 }
+    );
   }
 
   if (!media?.url) {
-    console.warn("[ppi/media] media row not found", { id });
-    return new NextResponse("Media not found", { status: 404 });
+    return NextResponse.json({ error: "Media not found" }, { status: 404 });
   }
 
   if (!isR2Configured()) {
@@ -38,20 +46,34 @@ export async function GET(
     const object = await getObjectFromStoredUrl(media.url);
     const headers = new Headers({
       "Content-Type": object.contentType,
+      "Content-Length": String(object.bytes.byteLength),
       "Cache-Control": "private, max-age=300",
     });
-    if (object.contentLength != null) {
-      headers.set("Content-Length", String(object.contentLength));
-    }
     if (object.etag) headers.set("ETag", object.etag);
 
-    return new NextResponse(object.body, { status: 200, headers });
+    return new NextResponse(object.bytes, { status: 200, headers });
   } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    const errName = err instanceof Error ? err.name : undefined;
     console.error("[ppi/media] failed to fetch object", {
       id,
       url: media.url,
-      err: err instanceof Error ? err.message : String(err),
+      key: extractKeyFromStoredUrl(media.url),
+      bucket: process.env.R2_BUCKET_NAME,
+      hasEndpoint: Boolean(process.env.R2_ENDPOINT),
+      errName,
+      detail,
     });
-    return new NextResponse("Failed to load media", { status: 500 });
+    // Surface the underlying error to the client so it shows up in the browser
+    // network tab without needing access to server logs. (No secrets included.)
+    return NextResponse.json(
+      {
+        error: "Failed to load media",
+        errName,
+        detail,
+        key: extractKeyFromStoredUrl(media.url),
+      },
+      { status: 500 }
+    );
   }
 }

@@ -114,11 +114,14 @@ export async function generatePresignedGetUrl(
  * Fetch an object's bytes + content-type via the S3 API.
  * Use this when the browser cannot reach R2 directly (private bucket, no custom domain,
  * Cloudflare WAF in front, etc.) — we proxy the file through our server.
+ *
+ * Returns a Uint8Array (buffered) rather than a stream — simpler, works on every
+ * runtime/SDK version, and image responses are small enough that streaming isn't worth
+ * the version-compatibility risk.
  */
 export async function getObjectFromStoredUrl(storedPublicUrl: string): Promise<{
-  body: ReadableStream<Uint8Array>;
+  bytes: Uint8Array;
   contentType: string;
-  contentLength?: number;
   etag?: string;
 }> {
   const client = getS3Client();
@@ -129,15 +132,33 @@ export async function getObjectFromStoredUrl(storedPublicUrl: string): Promise<{
     new GetObjectCommand({ Bucket: bucket, Key: key })
   );
 
-  if (!response.Body) {
+  const body = response.Body;
+  if (!body) {
     throw new Error("Empty response body from R2");
   }
 
-  // The AWS SDK v3 returns a Web ReadableStream (or compatible) in Node 18+.
+  let bytes: Uint8Array;
+  // AWS SDK v3: Body has transformToByteArray() in Node 18+.
+  if (typeof (body as { transformToByteArray?: unknown }).transformToByteArray === "function") {
+    bytes = await (body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray();
+  } else {
+    // Fallback: collect chunks from a Node Readable stream.
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of body as AsyncIterable<Uint8Array>) {
+      chunks.push(chunk);
+    }
+    const total = chunks.reduce((acc, c) => acc + c.length, 0);
+    bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) {
+      bytes.set(c, offset);
+      offset += c.length;
+    }
+  }
+
   return {
-    body: response.Body.transformToWebStream(),
+    bytes,
     contentType: response.ContentType ?? "application/octet-stream",
-    contentLength: response.ContentLength,
     etag: response.ETag,
   };
 }
