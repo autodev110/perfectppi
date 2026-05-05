@@ -53,7 +53,7 @@ export async function generatePresignedUrl(params: {
     expiresIn: params.expiresIn ?? 600, // 10 minutes
   });
 
-  const publicUrl = `${process.env.R2_PUBLIC_URL}/${params.key}`;
+  const publicUrl = `${process.env.R2_PUBLIC_URL!.replace(/\/$/, "")}/${params.key}`;
 
   return { uploadUrl, publicUrl };
 }
@@ -75,7 +75,7 @@ export async function uploadObject(params: {
     })
   );
 
-  return { publicUrl: `${process.env.R2_PUBLIC_URL}/${params.key}` };
+  return { publicUrl: `${process.env.R2_PUBLIC_URL!.replace(/\/$/, "")}/${params.key}` };
 }
 
 /**
@@ -84,14 +84,20 @@ export async function uploadObject(params: {
  */
 export function extractKeyFromStoredUrl(storedPublicUrl: string): string {
   const publicUrlBase = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
+  let key: string;
   if (publicUrlBase && storedPublicUrl.startsWith(publicUrlBase + "/")) {
-    return storedPublicUrl.slice(publicUrlBase.length + 1);
+    key = storedPublicUrl.slice(publicUrlBase.length + 1);
+  } else {
+    try {
+      key = new URL(storedPublicUrl).pathname;
+    } catch {
+      key = storedPublicUrl;
+    }
   }
-  try {
-    return new URL(storedPublicUrl).pathname.replace(/^\//, "");
-  } catch {
-    return storedPublicUrl;
-  }
+  // Strip any leading slashes — historical URLs were built with `${R2_PUBLIC_URL}/${key}`
+  // which produced `r2.dev//ppi_media/...` if the env var had a trailing slash, leaving
+  // a leading "/" on the key after extraction. R2 keys don't start with "/".
+  return key.replace(/^\/+/, "");
 }
 
 /**
