@@ -1,5 +1,5 @@
 import SwiftUI
-import AVFoundation
+@preconcurrency import AVFoundation
 import PhotosUI
 
 /// AVFoundation-based capture screen, mirroring the web's
@@ -206,11 +206,17 @@ final class CameraController: NSObject, ObservableObject, AVCapturePhotoCaptureD
     @Published var isReady = false
     @Published var isCapturing = false
 
-    let session = AVCaptureSession()
-    private let photoOutput = AVCapturePhotoOutput()
-    private var currentInput: AVCaptureDeviceInput?
-    private var position: AVCaptureDevice.Position = .back
+    // AVCaptureSession and friends are not Sendable and must be configured and
+    // mutated on a single serial queue (never the main thread, since
+    // `startRunning()` blocks). These live off the actor; `sessionQueue` — not
+    // the main actor — is what serializes access to them, which is exactly the
+    // synchronization `nonisolated(unsafe)` asserts we are providing.
+    nonisolated(unsafe) let session = AVCaptureSession()
+    nonisolated(unsafe) private let photoOutput = AVCapturePhotoOutput()
+    nonisolated(unsafe) private var currentInput: AVCaptureDeviceInput?
+    private let sessionQueue = DispatchQueue(label: "com.perfectppi.camera.session")
 
+    private var position: AVCaptureDevice.Position = .back
     private var captureContinuation: CheckedContinuation<UIImage?, Never>?
 
     func start() async {
@@ -236,7 +242,7 @@ final class CameraController: NSObject, ObservableObject, AVCapturePhotoCaptureD
     }
 
     func stop() {
-        Task.detached { [session] in
+        sessionQueue.async { [session] in
             if session.isRunning { session.stopRunning() }
         }
     }
@@ -251,8 +257,10 @@ final class CameraController: NSObject, ObservableObject, AVCapturePhotoCaptureD
         isCapturing = true
         return await withCheckedContinuation { cont in
             captureContinuation = cont
-            let settings = AVCapturePhotoSettings()
-            photoOutput.capturePhoto(with: settings, delegate: self)
+            sessionQueue.async { [photoOutput] in
+                let settings = AVCapturePhotoSettings()
+                photoOutput.capturePhoto(with: settings, delegate: self)
+            }
         }
     }
 
@@ -261,13 +269,15 @@ final class CameraController: NSObject, ObservableObject, AVCapturePhotoCaptureD
         didFinishProcessingPhoto photo: AVCapturePhoto,
         error: Error?
     ) {
+        // Extract the bytes here (off the main actor) so only Sendable `Data`
+        // crosses the isolation boundary, never the non-Sendable AVCapturePhoto.
+        let data = photo.fileDataRepresentation()
         Task { @MainActor in
             defer {
                 self.captureContinuation = nil
                 self.isCapturing = false
             }
-            if let data = photo.fileDataRepresentation(),
-               let image = UIImage(data: data) {
+            if let data, let image = UIImage(data: data) {
                 self.captureContinuation?.resume(returning: image)
             } else {
                 self.captureContinuation?.resume(returning: nil)
@@ -279,43 +289,47 @@ final class CameraController: NSObject, ObservableObject, AVCapturePhotoCaptureD
         isReady = false
         cameraUnavailable = false
 
-        await Task.detached(priority: .userInitiated) { [self] in
-            session.beginConfiguration()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            sessionQueue.async { [self] in
+                session.beginConfiguration()
 
-            // Remove old input.
-            if let currentInput = await currentInput {
-                session.removeInput(currentInput)
-            }
+                // Remove old input.
+                if let currentInput {
+                    session.removeInput(currentInput)
+                }
 
-            guard let device = AVCaptureDevice.default(
-                .builtInWideAngleCamera,
-                for: .video,
-                position: position
-            ),
-                  let input = try? AVCaptureDeviceInput(device: device),
-                  session.canAddInput(input) else {
+                guard let device = AVCaptureDevice.default(
+                    .builtInWideAngleCamera,
+                    for: .video,
+                    position: position
+                ),
+                      let input = try? AVCaptureDeviceInput(device: device),
+                      session.canAddInput(input) else {
+                    session.commitConfiguration()
+                    Task { @MainActor in self.cameraUnavailable = true }
+                    continuation.resume()
+                    return
+                }
+                session.addInput(input)
+                currentInput = input
+
+                if !session.outputs.contains(photoOutput) && session.canAddOutput(photoOutput) {
+                    session.addOutput(photoOutput)
+                }
+
+                if session.canSetSessionPreset(.photo) {
+                    session.sessionPreset = .photo
+                }
+
                 session.commitConfiguration()
-                await MainActor.run { self.cameraUnavailable = true }
-                return
+
+                if !session.isRunning {
+                    session.startRunning()
+                }
+
+                Task { @MainActor in self.isReady = true }
+                continuation.resume()
             }
-            session.addInput(input)
-            await MainActor.run { self.currentInput = input }
-
-            if !session.outputs.contains(photoOutput) && session.canAddOutput(photoOutput) {
-                session.addOutput(photoOutput)
-            }
-
-            if session.canSetSessionPreset(.photo) {
-                session.sessionPreset = .photo
-            }
-
-            session.commitConfiguration()
-
-            if !session.isRunning {
-                session.startRunning()
-            }
-
-            await MainActor.run { self.isReady = true }
-        }.value
+        }
     }
 }

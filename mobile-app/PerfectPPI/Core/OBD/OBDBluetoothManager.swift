@@ -1,5 +1,10 @@
 import Foundation
-import CoreBluetooth
+// CoreBluetooth's handle types (CBPeripheral, CBService, CBCharacteristic) are
+// not marked Sendable. Our central manager runs on `.main`, so every delegate
+// callback already arrives on the main actor and the hop into `Task { @MainActor }`
+// is safe. `@preconcurrency` tells the compiler we've accounted for that and
+// clears the Swift 6 "sending non-Sendable value" errors.
+@preconcurrency import CoreBluetooth
 import Combine
 
 /// CoreBluetooth wrapper for the OBDLink CX. Handles:

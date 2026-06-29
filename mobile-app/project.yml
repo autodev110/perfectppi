@@ -46,8 +46,10 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        UIBackgroundModes:
-          - remote-notification
+        # Push capability — requires a paid Apple Developer account. Re-enable
+        # for TestFlight/production (free personal teams can't sign it).
+        # UIBackgroundModes:
+        #   - remote-notification
         NSBluetoothAlwaysUsageDescription: PerfectPPI uses Bluetooth to connect to the OBDLink CX adapter and pull diagnostic data from the vehicle.
         NSCameraUsageDescription: PerfectPPI uses the camera so technicians can attach photos to inspection questions.
         NSPhotoLibraryUsageDescription: PerfectPPI lets you pick existing photos to attach to inspection questions.
@@ -65,17 +67,24 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.perfectppi.app
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
+        # Personal Apple Developer team for on-device signing. Change to your
+        # own team ID (Xcode → Settings → Accounts → team, or the cert's OU).
+        DEVELOPMENT_TEAM: 4LR7VCM69X
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         CURRENT_PROJECT_VERSION: "1"
         MARKETING_VERSION: "1.0"
         GENERATE_INFOPLIST_FILE: NO
-    entitlements:
-      path: PerfectPPI/Resources/PerfectPPI.entitlements
-      properties:
-        aps-environment: development
-        com.apple.developer.associated-domains:
-          - applinks:perfectppi.com
-          - webcredentials:perfectppi.com
+    # Entitlements disabled so a free/personal Apple team can sign and run on a
+    # physical device. Push Notifications (aps-environment) and Associated
+    # Domains require the paid Apple Developer Program. Restore this whole block
+    # for TestFlight/production builds.
+    # entitlements:
+    #   path: PerfectPPI/Resources/PerfectPPI.entitlements
+    #   properties:
+    #     aps-environment: development
+    #     com.apple.developer.associated-domains:
+    #       - applinks:perfectppi.com
+    #       - webcredentials:perfectppi.com
     dependencies:
       - package: Supabase
         product: Supabase

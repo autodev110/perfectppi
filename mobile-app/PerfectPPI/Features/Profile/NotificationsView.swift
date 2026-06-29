@@ -38,7 +38,7 @@ struct NotificationsView: View {
                                 if n.readAt == nil {
                                     Button("Mark Read") {
                                         Task {
-                                            try? await NotificationsAPI.markRead(id: n.id, read: true)
+                                            _ = try? await NotificationsAPI.markRead(id: n.id, read: true)
                                             reloadToken = UUID()
                                         }
                                     }

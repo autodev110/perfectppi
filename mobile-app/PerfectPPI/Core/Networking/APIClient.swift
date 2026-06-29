@@ -189,13 +189,17 @@ extension JSONDecoder.DateDecodingStrategy {
     }
 }
 
-private let isoFormatter: ISO8601DateFormatter = {
+// ISO8601DateFormatter isn't marked `Sendable`, but it is safe to call
+// `date(from:)` concurrently once its `formatOptions` are configured and never
+// mutated again. `nonisolated(unsafe)` documents that guarantee and clears the
+// Swift 6 strict-concurrency error.
+nonisolated(unsafe) private let isoFormatter: ISO8601DateFormatter = {
     let f = ISO8601DateFormatter()
     f.formatOptions = [.withInternetDateTime]
     return f
 }()
 
-private let isoFormatterFractional: ISO8601DateFormatter = {
+nonisolated(unsafe) private let isoFormatterFractional: ISO8601DateFormatter = {
     let f = ISO8601DateFormatter()
     f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     return f

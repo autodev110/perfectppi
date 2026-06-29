@@ -3,11 +3,11 @@ import Foundation
 /// Descriptor for one Mode 01 live-data PID: how to label it, its unit, and how
 /// to turn the raw data bytes (everything after the `41 <pid>` header) into a
 /// numeric value. `decode` returns nil when the reply is too short to trust.
-struct OBDLivePID {
+struct OBDLivePID: Sendable {
     let pid: UInt8
     let name: String
     let unit: String
-    let decode: ([UInt8]) -> Double?
+    let decode: @Sendable ([UInt8]) -> Double?
 }
 
 /// Parsers for the small set of OBD-II responses we read during a basic scan.

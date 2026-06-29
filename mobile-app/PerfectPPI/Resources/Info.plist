@@ -47,10 +47,6 @@
 	<string>PerfectPPI saves inspection photos you capture to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>PerfectPPI lets you pick existing photos to attach to inspection questions.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
