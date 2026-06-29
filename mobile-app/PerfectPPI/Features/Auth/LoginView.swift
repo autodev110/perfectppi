@@ -13,64 +13,105 @@ struct LoginView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Spacer().frame(height: 24)
-                Text("PerfectPPI")
-                    .font(.system(size: 42, weight: .black, design: .rounded))
+            ScrollView {
+                VStack(spacing: Theme.Space.lg) {
+                    Spacer().frame(height: 28)
+
+                    // Hero
+                    VStack(spacing: 14) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(Theme.brandGradient)
+                                .frame(width: 84, height: 84)
+                                .shadow(color: Theme.Palette.primary.opacity(0.4), radius: 16, y: 8)
+                            Image(systemName: "car.side.fill")
+                                .font(.system(size: 38, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                        Text("PerfectPPI")
+                            .font(.system(size: 34, weight: .black, design: .rounded))
+                        Text(mode == .signIn ? "Welcome back." : "Create your account.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    // Fields
+                    VStack(spacing: 12) {
+                        fieldRow(icon: "envelope.fill") {
+                            TextField("Email", text: $email)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .keyboardType(.emailAddress)
+                                .textContentType(.emailAddress)
+                        }
+                        fieldRow(icon: "lock.fill") {
+                            SecureField("Password", text: $password)
+                                .textContentType(mode == .signIn ? .password : .newPassword)
+                        }
+                    }
+
+                    if let errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.circle.fill")
+                            .font(.callout)
+                            .foregroundStyle(Theme.Palette.danger)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    VStack(spacing: 12) {
+                        Button(mode == .signIn ? "Sign In" : "Create Account") {
+                            Task { await submit() }
+                        }
+                        .buttonStyle(PrimaryButtonStyle(isLoading: isWorking))
+                        .disabled(isWorking || !canSubmit)
+
+                        HStack {
+                            Rectangle().fill(Theme.Palette.hairline).frame(height: 1)
+                            Text("or").font(.caption).foregroundStyle(.secondary)
+                            Rectangle().fill(Theme.Palette.hairline).frame(height: 1)
+                        }
+                        .padding(.vertical, 2)
+
+                        Button {
+                            Task { await oauth(.google) }
+                        } label: {
+                            Label("Continue with Google", systemImage: "globe")
+                        }
+                        .buttonStyle(OutlineButtonStyle())
+                        .disabled(isWorking)
+                    }
+
+                    Button(mode == .signIn ? "Need an account? Sign up" : "Have an account? Sign in") {
+                        withAnimation(.easeInOut) {
+                            mode = mode == .signIn ? .signUp : .signIn
+                            errorMessage = nil
+                        }
+                    }
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(Theme.Palette.primary)
-                Text(mode == .signIn ? "Welcome back." : "Create your account.")
-                    .foregroundStyle(.secondary)
 
-                VStack(spacing: 12) {
-                    TextField("Email", text: $email)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.emailAddress)
-                        .textContentType(.emailAddress)
-                        .padding()
-                        .background(Theme.Palette.subtle)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                    SecureField("Password", text: $password)
-                        .textContentType(mode == .signIn ? .password : .newPassword)
-                        .padding()
-                        .background(Theme.Palette.subtle)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    Spacer(minLength: 12)
                 }
-                .padding(.horizontal)
-
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.callout)
-                        .foregroundStyle(Theme.Palette.danger)
-                        .padding(.horizontal)
-                }
-
-                Button(mode == .signIn ? "Sign In" : "Create Account") {
-                    Task { await submit() }
-                }
-                .buttonStyle(PrimaryButtonStyle(isLoading: isWorking))
-                .disabled(isWorking || !canSubmit)
-                .padding(.horizontal)
-
-                Button("Continue with Google") {
-                    Task { await oauth(.google) }
-                }
-                .buttonStyle(OutlineButtonStyle())
-                .disabled(isWorking)
-                .padding(.horizontal)
-
-                Button(mode == .signIn ? "Need an account? Sign up" : "Have an account? Sign in") {
-                    mode = mode == .signIn ? .signUp : .signIn
-                    errorMessage = nil
-                }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-                Spacer()
+                .padding(.horizontal, Theme.Space.lg)
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationBarHidden(true)
             .background(Color(.systemBackground).ignoresSafeArea())
         }
+    }
+
+    @ViewBuilder
+    private func fieldRow<Content: View>(icon: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+            content()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 15)
+        .background(Theme.Palette.subtle)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
     }
 
     private var canSubmit: Bool {

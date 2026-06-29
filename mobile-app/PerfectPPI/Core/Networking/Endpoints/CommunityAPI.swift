@@ -45,7 +45,12 @@ enum CommunityAPI {
         let content: String
     }
 
-    static func comment(postId: String, content: String) async throws -> CommunityComment {
+    /// The server responds with only `{ id }` for a created comment, so we
+    /// don't try to decode a full `CommunityComment` here (that mismatch is
+    /// what made commenting surface "couldn't read the server response" even
+    /// though the insert succeeded). Callers reload the feed to pick up the new
+    /// comment with its full shape.
+    static func comment(postId: String, content: String) async throws -> Empty {
         try await APIClient.shared.post(
             "/api/community/posts/\(postId)/comments",
             body: CommentPayload(content: content)

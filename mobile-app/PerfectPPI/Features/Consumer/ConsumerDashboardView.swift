@@ -42,29 +42,37 @@ private struct RequestCard: View {
     let request: PpiRequest
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(vehicleLabel).font(.headline)
-                Spacer()
-                StatusBadge(text: request.status.rawValue.replacingOccurrences(of: "_", with: " "),
-                            color: Theme.Palette.primary)
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.Palette.primary.opacity(0.12))
+                    .frame(width: 46, height: 46)
+                Image(systemName: "car.side.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(Theme.Palette.primary)
             }
-            Text(request.ppiType?.rawValue
-                    .replacingOccurrences(of: "_", with: " ")
-                    .capitalized
-                 ?? "PPI")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-            if let updated = request.updatedAt {
-                Text(updated, style: .relative)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(vehicleLabel)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(request.ppiType?.rawValue
+                        .replacingOccurrences(of: "_", with: " ")
+                        .capitalized
+                     ?? "PPI")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                StatusBadge(text: request.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized,
+                            color: statusTint(request.status.rawValue))
             }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.tertiary)
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.Palette.subtle)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius))
+        .cardSurface()
     }
 
     private var vehicleLabel: String {

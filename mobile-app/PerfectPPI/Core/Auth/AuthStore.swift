@@ -23,6 +23,13 @@ final class AuthStore: ObservableObject {
 
     @Published private(set) var state: State = .loading
 
+    /// The signed-in profile, if any. Convenience for views that need the
+    /// current user (e.g. optimistic UI) without switching on `state`.
+    var profile: Profile? {
+        if case .signedIn(let p) = state { return p }
+        return nil
+    }
+
     let client: SupabaseClient
 
     private var sessionTask: Task<Void, Never>?

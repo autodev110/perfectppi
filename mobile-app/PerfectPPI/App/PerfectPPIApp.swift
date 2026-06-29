@@ -6,10 +6,12 @@ struct PerfectPPIApp: App {
     @StateObject private var auth = AuthStore()
     @StateObject private var router = URLRouter.shared
     @StateObject private var offline = OfflineQueue.shared
+    @AppStorage(AppAppearance.storageKey) private var appearanceRaw = AppAppearance.system.rawValue
 
     var body: some Scene {
         WindowGroup {
             RootView()
+                .preferredColorScheme(AppAppearance(rawValue: appearanceRaw)?.colorScheme)
                 .environmentObject(auth)
                 .environmentObject(router)
                 .environmentObject(offline)

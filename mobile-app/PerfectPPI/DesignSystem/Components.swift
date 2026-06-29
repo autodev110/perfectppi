@@ -12,11 +12,14 @@ struct PrimaryButtonStyle: ButtonStyle {
                 .font(.headline)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
+        .padding(.vertical, 15)
         .foregroundStyle(.white)
-        .background(Theme.Palette.primary)
+        .background(Theme.brandGradient)
         .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
-        .opacity(configuration.isPressed ? 0.85 : 1.0)
+        .shadow(color: Theme.Palette.primary.opacity(configuration.isPressed ? 0.15 : 0.35),
+                radius: configuration.isPressed ? 4 : 12, y: configuration.isPressed ? 2 : 6)
+        .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
@@ -25,13 +28,35 @@ struct OutlineButtonStyle: ButtonStyle {
         configuration.label
             .font(.headline)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, 15)
             .foregroundStyle(Theme.Palette.primary)
             .background(
                 RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                    .stroke(Theme.Palette.primary, lineWidth: 1.5)
+                    .fill(Theme.Palette.primary.opacity(0.06))
             )
-            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                    .stroke(Theme.Palette.primary.opacity(0.45), lineWidth: 1.5)
+            )
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+/// Soft, tinted fill button for secondary actions that still want presence.
+struct SoftButtonStyle: ButtonStyle {
+    var tint: Color = Theme.Palette.primary
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 15)
+            .foregroundStyle(tint)
+            .background(tint.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
@@ -63,6 +88,8 @@ struct AsyncContent<Value, Loaded: View, ErrorView: View>: View {
             switch state {
             case .loading:
                 ProgressView()
+                    .controlSize(.large)
+                    .tint(Theme.Palette.primary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .loaded(let value):
                 loaded(value)
@@ -88,13 +115,18 @@ struct StatusBadge: View {
     let color: Color
 
     var body: some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.15))
-            .foregroundStyle(color)
-            .clipShape(Capsule())
+        HStack(spacing: 5) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(text)
+                .font(.caption.weight(.semibold))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(color.opacity(0.14))
+        .foregroundStyle(color)
+        .clipShape(Capsule())
     }
 }
 
@@ -103,13 +135,22 @@ struct ErrorView: View {
     let retry: () -> Void
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.largeTitle)
-                .foregroundStyle(.orange)
+        VStack(spacing: 18) {
+            ZStack {
+                Circle()
+                    .fill(Theme.Palette.warning.opacity(0.14))
+                    .frame(width: 84, height: 84)
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 34))
+                    .foregroundStyle(Theme.Palette.warning)
+            }
+            Text("Something went wrong")
+                .font(.title3.weight(.semibold))
             Text(message)
+                .font(.subheadline)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
+                .padding(.horizontal)
             Button("Try Again", action: retry)
                 .buttonStyle(OutlineButtonStyle())
                 .fixedSize(horizontal: true, vertical: false)
@@ -128,19 +169,105 @@ struct EmptyStateCard: View {
     let systemImage: String
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 32))
-                .foregroundStyle(.secondary)
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Theme.Palette.primary.opacity(0.12))
+                    .frame(width: 72, height: 72)
+                Image(systemName: systemImage)
+                    .font(.system(size: 30, weight: .medium))
+                    .foregroundStyle(Theme.Palette.primary)
+            }
             Text(title).font(.headline)
             Text(message)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
-        .padding(24)
+        .padding(28)
         .frame(maxWidth: .infinity)
-        .background(Theme.Palette.subtle)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius))
+        .background(Theme.Palette.card)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+                .stroke(Theme.Palette.hairline, lineWidth: 1)
+        )
+        .shadow(color: Theme.Shadow.color, radius: Theme.Shadow.radius, y: Theme.Shadow.y)
+    }
+}
+
+/// Modern label/value detail row rendered as an elevated card. When
+/// `valueColor` is supplied, the value renders as a colored status pill —
+/// ideal for "Status" rows.
+struct InfoRow: View {
+    let label: String
+    let value: String
+    var icon: String? = nil
+    var valueColor: Color? = nil
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.primary)
+                    .frame(width: 22)
+            }
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+            if let valueColor {
+                StatusBadge(text: value, color: valueColor)
+            } else {
+                Text(value)
+                    .font(.subheadline.weight(.semibold))
+                    .multilineTextAlignment(.trailing)
+            }
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 16)
+        .background(Theme.Palette.card)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+                .stroke(Theme.Palette.hairline, lineWidth: 1)
+        )
+    }
+}
+
+/// Maps a status string (e.g. "in_progress", "completed") to a semantic tint
+/// so status pills read at a glance across the app.
+func statusTint(_ raw: String) -> Color {
+    switch raw.lowercased() {
+    case "completed", "approved", "reviewed", "active", "signed", "paid", "delivered":
+        return Theme.Palette.success
+    case "cancelled", "canceled", "rejected", "expired", "failed", "archived":
+        return Theme.Palette.danger
+    case "pending", "draft", "assigned", "in_progress", "in progress", "processing", "awaiting":
+        return Theme.Palette.warning
+    default:
+        return Theme.Palette.primary
+    }
+}
+
+/// Circular monogram avatar used across feed/profile rows.
+struct Avatar: View {
+    let name: String
+    var size: CGFloat = 40
+
+    private var initials: String {
+        let parts = name.split(separator: " ").prefix(2)
+        let letters = parts.compactMap { $0.first }.map(String.init).joined()
+        return letters.isEmpty ? "?" : letters.uppercased()
+    }
+
+    var body: some View {
+        Text(initials)
+            .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(Theme.brandGradient)
+            .clipShape(Circle())
     }
 }

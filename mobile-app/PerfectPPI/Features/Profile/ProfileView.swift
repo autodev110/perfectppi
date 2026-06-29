@@ -4,6 +4,7 @@ struct ProfileView: View {
     let profile: Profile
     @EnvironmentObject private var auth: AuthStore
     @State private var currentProfile: Profile
+    @AppStorage(AppAppearance.storageKey) private var appearanceRaw = AppAppearance.system.rawValue
 
     init(profile: Profile) {
         self.profile = profile
@@ -38,6 +39,17 @@ struct ProfileView: View {
                 }
                 LabeledContent("Role",
                                value: currentProfile.role?.rawValue.replacingOccurrences(of: "_", with: " ").capitalized ?? "—")
+            }
+
+            Section("Preferences") {
+                Picker(selection: $appearanceRaw) {
+                    ForEach(AppAppearance.allCases) { option in
+                        Label(option.label, systemImage: option.icon).tag(option.rawValue)
+                    }
+                } label: {
+                    Label("Appearance", systemImage: "paintbrush.fill")
+                }
+                .pickerStyle(.menu)
             }
 
             Section {

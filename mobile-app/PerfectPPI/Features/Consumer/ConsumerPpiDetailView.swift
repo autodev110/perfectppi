@@ -13,10 +13,14 @@ struct ConsumerPpiDetailView: View {
             if let request {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.spacing) {
-                        Row(label: "Type",
-                            value: request.ppiType?.rawValue ?? "-")
-                        Row(label: "Status",
-                            value: request.status.rawValue.replacingOccurrences(of: "_", with: " "))
+                        InfoRow(label: "Type",
+                                value: (request.ppiType?.rawValue ?? "-")
+                                    .replacingOccurrences(of: "_", with: " ").capitalized,
+                                icon: "wrench.and.screwdriver.fill")
+                        InfoRow(label: "Status",
+                                value: request.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized,
+                                icon: "circle.dashed",
+                                valueColor: statusTint(request.status.rawValue))
 
                         if request.performerType == .selfInspection,
                            let submission,
@@ -89,22 +93,6 @@ struct ConsumerPpiDetailView: View {
             // Tolerate — we just won't show the "Continue Inspection" button.
             self.submission = nil
         }
-    }
-}
-
-private struct Row: View {
-    let label: String
-    let value: String
-    var body: some View {
-        HStack {
-            Text(label).foregroundStyle(.secondary)
-            Spacer()
-            Text(value).fontWeight(.medium)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(Theme.Palette.subtle)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 

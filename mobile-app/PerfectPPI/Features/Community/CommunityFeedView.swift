@@ -55,39 +55,49 @@ private struct CommunityPostRow: View {
     let post: CommunityPost
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(authorName)
-                    .font(.headline)
-                Spacer()
-                if let created = post.createdAt {
-                    Text(created, style: .relative)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Avatar(name: authorName, size: 38)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(authorName)
+                        .font(.subheadline.weight(.semibold))
+                    if let created = post.createdAt {
+                        Text(created, style: .relative)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                Spacer()
             }
 
             Text(post.content)
                 .font(.subheadline)
+                .foregroundStyle(.primary.opacity(0.9))
                 .lineLimit(4)
 
             if let listing = post.marketplaceListing {
-                Label(listing.title, systemImage: "tag")
-                    .font(.caption)
+                Label(listing.title, systemImage: "tag.fill")
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(Theme.Palette.primary)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Theme.Palette.primary.opacity(0.1))
+                    .clipShape(Capsule())
             } else if let vehicle = post.vehicle {
-                Label(vehicleLabel(vehicle), systemImage: "car")
-                    .font(.caption)
+                Label(vehicleLabel(vehicle), systemImage: "car.fill")
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Theme.Palette.subtle)
+                    .clipShape(Capsule())
             }
 
             if let count = post.comments?.count, count > 0 {
-                Text("\(count) comment\(count == 1 ? "" : "s")")
+                Label("\(count) comment\(count == 1 ? "" : "s")", systemImage: "bubble.left")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
     }
 
     private var authorName: String {
@@ -105,9 +115,17 @@ private struct CommunityPostDetailView: View {
     let post: CommunityPost
     let onChanged: () -> Void
 
+    @EnvironmentObject private var auth: AuthStore
+    @State private var comments: [CommunityComment]
     @State private var comment = ""
     @State private var submitting = false
     @State private var error: String?
+
+    init(post: CommunityPost, onChanged: @escaping () -> Void) {
+        self.post = post
+        self.onChanged = onChanged
+        _comments = State(initialValue: post.comments ?? [])
+    }
 
     var body: some View {
         List {
@@ -127,13 +145,16 @@ private struct CommunityPostDetailView: View {
                 .padding(.vertical, 6)
             }
 
-            Section("Comments") {
-                ForEach(post.comments ?? []) { comment in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(comment.author?.displayName ?? comment.author?.username ?? "Member")
-                            .font(.caption.weight(.semibold))
-                        Text(comment.content)
-                            .font(.subheadline)
+            Section(comments.isEmpty ? "Comments" : "Comments (\(comments.count))") {
+                ForEach(comments) { comment in
+                    HStack(alignment: .top, spacing: 10) {
+                        Avatar(name: comment.author?.displayName ?? comment.author?.username ?? "Member", size: 32)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(comment.author?.displayName ?? comment.author?.username ?? "Member")
+                                .font(.caption.weight(.semibold))
+                            Text(comment.content)
+                                .font(.subheadline)
+                        }
                     }
                     .padding(.vertical, 4)
                 }
@@ -164,11 +185,33 @@ private struct CommunityPostDetailView: View {
         guard !text.isEmpty, !submitting else { return }
         submitting = true
         defer { submitting = false }
+
+        // Show the comment immediately, then reconcile with the server.
+        let optimistic = CommunityComment(
+            id: "optimistic-\(UUID().uuidString)",
+            postId: post.id,
+            authorId: auth.profile?.id ?? "",
+            content: text,
+            status: .active,
+            createdAt: Date(),
+            updatedAt: nil,
+            author: auth.profile
+        )
+        comments.append(optimistic)
+        comment = ""
+
         do {
             _ = try await CommunityAPI.comment(postId: post.id, content: text)
-            comment = ""
             onChanged()
+            // Replace the optimistic placeholder with the canonical rows so the
+            // count and author details match the server.
+            if let fresh = try? await CommunityAPI.feed().first(where: { $0.id == post.id }),
+               let freshComments = fresh.comments {
+                comments = freshComments
+            }
         } catch {
+            comments.removeAll { $0.id == optimistic.id }
+            comment = text
             self.error = error.localizedDescription
         }
     }

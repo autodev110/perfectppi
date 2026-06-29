@@ -17,15 +17,21 @@ struct WarrantyOrderDetailView: View {
             if let order {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.spacing) {
-                        Row(label: "Status",
-                            value: order.status.rawValue.replacingOccurrences(of: "_", with: " "))
-                        Row(label: "Plan", value: order.planName)
-                        Row(label: "Price", value: price(order.priceCents))
+                        InfoRow(label: "Status",
+                                value: order.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized,
+                                icon: "circle.dashed",
+                                valueColor: statusTint(order.status.rawValue))
+                        InfoRow(label: "Plan", value: order.planName, icon: "shield.lefthalf.filled")
+                        InfoRow(label: "Price", value: price(order.priceCents), icon: "creditcard.fill")
                         if let signed = order.contract?.signedAt {
-                            Row(label: "Signed", value: signed.formatted(date: .abbreviated, time: .shortened))
+                            InfoRow(label: "Signed",
+                                    value: signed.formatted(date: .abbreviated, time: .shortened),
+                                    icon: "signature")
                         }
                         if let paid = order.payment?.paidAt {
-                            Row(label: "Paid", value: paid.formatted(date: .abbreviated, time: .shortened))
+                            InfoRow(label: "Paid",
+                                    value: paid.formatted(date: .abbreviated, time: .shortened),
+                                    icon: "checkmark.seal.fill")
                         }
 
                         actionButton(for: order)
@@ -141,18 +147,3 @@ extension URL: @retroactive Identifiable {
     public var id: String { absoluteString }
 }
 
-private struct Row: View {
-    let label: String
-    let value: String
-    var body: some View {
-        HStack {
-            Text(label).foregroundStyle(.secondary)
-            Spacer()
-            Text(value).fontWeight(.medium)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(Theme.Palette.subtle)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-}

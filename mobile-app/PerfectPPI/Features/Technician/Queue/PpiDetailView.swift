@@ -13,14 +13,20 @@ struct PpiDetailView: View {
             if let request {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.spacing) {
-                        DetailRow(label: "Type",
-                                  value: request.ppiType?.rawValue ?? "-")
-                        DetailRow(label: "Status",
-                                  value: request.status.rawValue.replacingOccurrences(of: "_", with: " "))
-                        DetailRow(label: "Whose car",
-                                  value: request.whoseCar?.rawValue ?? "-")
-                        DetailRow(label: "Requester role",
-                                  value: request.requesterRole?.rawValue ?? "-")
+                        InfoRow(label: "Type",
+                                value: (request.ppiType?.rawValue ?? "-")
+                                    .replacingOccurrences(of: "_", with: " ").capitalized,
+                                icon: "wrench.and.screwdriver.fill")
+                        InfoRow(label: "Status",
+                                value: request.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized,
+                                icon: "circle.dashed",
+                                valueColor: statusTint(request.status.rawValue))
+                        InfoRow(label: "Whose car",
+                                value: (request.whoseCar?.rawValue ?? "-").capitalized,
+                                icon: "person.fill")
+                        InfoRow(label: "Requester role",
+                                value: (request.requesterRole?.rawValue ?? "-").capitalized,
+                                icon: "person.text.rectangle.fill")
 
                         Spacer().frame(height: Theme.spacing)
 
@@ -89,19 +95,3 @@ struct PpiDetailView: View {
     }
 }
 
-private struct DetailRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack {
-            Text(label).foregroundStyle(.secondary)
-            Spacer()
-            Text(value).fontWeight(.medium)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(Theme.Palette.subtle)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-}
