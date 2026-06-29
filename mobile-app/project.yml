@@ -90,6 +90,9 @@ targets:
     platform: iOS
     sources:
       - PerfectPPITests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: PerfectPPI
 
@@ -98,5 +101,8 @@ targets:
     platform: iOS
     sources:
       - PerfectPPIUITests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: PerfectPPI

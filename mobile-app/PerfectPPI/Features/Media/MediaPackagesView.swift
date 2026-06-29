@@ -152,8 +152,14 @@ private struct ShareLinkRow: View {
     let urlText: String
 
     var body: some View {
-        ShareLink(item: URL(string: urlText) ?? urlText) {
-            Label(urlText, systemImage: "square.and.arrow.up")
+        if let url = URL(string: urlText) {
+            ShareLink(item: url) {
+                Label(urlText, systemImage: "square.and.arrow.up")
+                    .font(.caption)
+                    .lineLimit(2)
+            }
+        } else {
+            Label(urlText, systemImage: "link")
                 .font(.caption)
                 .lineLimit(2)
         }
