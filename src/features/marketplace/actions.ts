@@ -21,7 +21,7 @@ const createListingSchema = z.object({
 const listingStatusSchema = z.enum(["active", "sold", "archived"]);
 const contactSellerSchema = z.object({
   listingId: z.string().uuid(),
-  vehicleId: z.string().uuid(),
+  vehicleId: z.string().uuid().optional(),
 });
 
 async function getCurrentProfileId() {
@@ -45,14 +45,19 @@ async function getCurrentProfileId() {
 
 export async function createMarketplaceListing(formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
-  const parsed = createListingSchema.safeParse(raw);
+  const result = await createMarketplaceListingFromInput(raw);
 
+  return result;
+}
+
+export async function createMarketplaceListingFromInput(input: unknown) {
+  const parsed = createListingSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.errors[0].message };
   }
 
   const profile = await getCurrentProfileId();
-  if ("error" in profile) return profile;
+  if ("error" in profile) return { error: profile.error };
 
   const admin = createAdminClient();
   const { data: vehicle } = await admin
@@ -115,7 +120,7 @@ export async function updateMarketplaceListingStatus(
   if (!parsedStatus.success) return { error: "Invalid listing status" };
 
   const profile = await getCurrentProfileId();
-  if ("error" in profile) return profile;
+  if ("error" in profile) return { error: profile.error };
 
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -165,10 +170,20 @@ export async function contactSellerFromListing(formData: FormData) {
 
   if (!parsed.success) redirect("/marketplace");
 
-  const profile = await getCurrentProfileId();
-  if ("error" in profile) {
-    redirect(`/login?redirect=/vehicle/${parsed.data.vehicleId}%3Ftab%3Dmarketplace`);
+  const result = await contactSellerForListing(parsed.data);
+  if ("error" in result) {
+    redirect(`/vehicle/${parsed.data.vehicleId}?tab=marketplace`);
   }
+
+  redirect(`/dashboard/messages/${result.data.conversationId}`);
+}
+
+export async function contactSellerForListing(input: unknown) {
+  const parsed = contactSellerSchema.safeParse(input);
+  if (!parsed.success) return { error: "Invalid listing" };
+
+  const profile = await getCurrentProfileId();
+  if ("error" in profile) return { error: profile.error };
 
   const admin = createAdminClient();
   const { data: listing } = await admin
@@ -178,11 +193,13 @@ export async function contactSellerFromListing(formData: FormData) {
     .eq("status", "active")
     .maybeSingle();
 
-  if (!listing) redirect(`/vehicle/${parsed.data.vehicleId}?tab=marketplace`);
-  if (listing.seller_id === profile.profileId) redirect("/dashboard/listings");
+  if (!listing) return { error: "Listing not found" };
+  if (listing.seller_id === profile.profileId) {
+    return { error: "You cannot contact yourself about your own listing" };
+  }
 
   const conversation = await createConversation({ participantId: listing.seller_id });
-  if ("error" in conversation) redirect(`/vehicle/${parsed.data.vehicleId}?tab=marketplace`);
+  if ("error" in conversation) return conversation;
 
   const vehicle = listing.vehicles as {
     year: number | null;
@@ -201,5 +218,5 @@ export async function contactSellerFromListing(formData: FormData) {
     });
   }
 
-  redirect(`/dashboard/messages/${conversation.data.conversationId}`);
+  return { data: conversation.data };
 }

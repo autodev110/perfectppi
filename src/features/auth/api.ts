@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createApiClient, createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/enums";
 
 type ApiRoleResult =
@@ -17,7 +17,7 @@ type ApiRoleResult =
 export async function requireApiRole(
   allowedRoles: UserRole[]
 ): Promise<ApiRoleResult> {
-  const supabase = await createClient();
+  const supabase = await createApiClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

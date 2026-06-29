@@ -203,3 +203,29 @@ export async function getReviewEligibilityForRequest(ppiRequestId: string) {
     canReview: !!technicianProfile,
   };
 }
+
+export async function getAdminTechnicianReviews(
+  page = 1,
+  perPage = 50,
+  status?: "active" | "hidden" | "all",
+) {
+  const admin = createAdminClient();
+  const from = (page - 1) * perPage;
+  const to = from + perPage - 1;
+
+  let query = admin
+    .from("technician_reviews")
+    .select(REVIEW_SELECT, { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (status && status !== "all") {
+    query = query.eq("status", status);
+  }
+
+  const { data, count } = await query;
+  return {
+    reviews: (data ?? []) as TechnicianReview[],
+    total: count ?? 0,
+  };
+}

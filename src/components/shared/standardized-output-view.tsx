@@ -34,7 +34,7 @@ const severityConfig: Record<
 };
 
 export function StandardizedOutputView({ content, generatedAt, documentUrl }: StandardizedOutputViewProps) {
-  const { vehicle, performer, sections, overall_summary, notable_findings } = content;
+  const { vehicle, performer, sections, diagnostics, overall_summary, notable_findings } = content;
 
   const vehicleName = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim]
     .filter(Boolean)
@@ -129,6 +129,43 @@ export function StandardizedOutputView({ content, generatedAt, documentUrl }: St
           )}
         </CardContent>
       </Card>
+
+      {diagnostics?.obd_snapshot_present && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">OBD-II Diagnostics</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              {diagnostics.vin && (
+                <div>
+                  <p className="text-muted-foreground text-xs">Reported VIN</p>
+                  <p className="font-mono font-medium text-xs">{diagnostics.vin}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-muted-foreground text-xs">MIL</p>
+                <p className="font-medium">
+                  {diagnostics.mil_on === null ? "Unknown" : diagnostics.mil_on ? "On" : "Off"}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Stored DTCs</p>
+                <p className="font-medium">
+                  {diagnostics.stored_dtcs.length ? diagnostics.stored_dtcs.join(", ") : "None"}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Pending DTCs</p>
+                <p className="font-medium">
+                  {diagnostics.pending_dtcs.length ? diagnostics.pending_dtcs.join(", ") : "None"}
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">{diagnostics.summary}</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Section Cards */}
       {sections.map((section) => {

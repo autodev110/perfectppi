@@ -44,16 +44,19 @@ function nullableUuid(value: FormDataEntryValue | null) {
 }
 
 export async function createCommunityPost(formData: FormData) {
-  const parsed = postSchema.safeParse({
+  return createCommunityPostFromInput({
     content: formData.get("content"),
     vehicleId: nullableUuid(formData.get("vehicle_id")),
     listingId: nullableUuid(formData.get("listing_id")),
   });
+}
 
+export async function createCommunityPostFromInput(input: unknown) {
+  const parsed = postSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
   const profile = await getCurrentProfileId();
-  if ("error" in profile) return profile;
+  if ("error" in profile) return { error: profile.error };
 
   const admin = createAdminClient();
   let vehicleId = parsed.data.vehicleId ?? null;
@@ -103,15 +106,22 @@ export async function createCommunityPost(formData: FormData) {
 }
 
 export async function createCommunityComment(formData: FormData) {
-  const parsed = commentSchema.safeParse({
+  const result = await createCommunityCommentFromInput({
     postId: formData.get("post_id"),
     content: formData.get("content"),
   });
 
-  if (!parsed.success) return;
+  if ("error" in result && result.error === "Not authenticated") {
+    redirect("/login?redirect=/community");
+  }
+}
+
+export async function createCommunityCommentFromInput(input: unknown) {
+  const parsed = commentSchema.safeParse(input);
+  if (!parsed.success) return { error: "Invalid comment" };
 
   const profile = await getCurrentProfileId();
-  if ("error" in profile) redirect("/login?redirect=/community");
+  if ("error" in profile) return { error: profile.error };
 
   const admin = createAdminClient();
   const { data: post } = await admin
@@ -121,63 +131,68 @@ export async function createCommunityComment(formData: FormData) {
     .eq("status", "active")
     .maybeSingle();
 
-  if (!post) return;
+  if (!post) return { error: "Post not found" };
 
-  await admin.from("community_comments").insert({
+  const { data, error } = await admin.from("community_comments").insert({
     post_id: post.id,
     author_id: profile.profileId,
     content: parsed.data.content,
     status: "active",
-  });
+  }).select("id").single();
+
+  if (error) return { error: error.message };
 
   revalidatePath("/community");
   revalidatePath("/admin/community");
+  return { data };
 }
 
 export async function archiveMyCommunityPost(formData: FormData) {
   const postId = String(formData.get("post_id") ?? "");
   if (!postId) return;
 
-  const profile = await getCurrentProfileId();
-  if ("error" in profile) return;
-
-  const admin = createAdminClient();
-  await admin
-    .from("community_posts")
-    .update({ status: "archived", updated_at: new Date().toISOString() })
-    .eq("id", postId)
-    .eq("author_id", profile.profileId);
-
-  revalidatePath("/community");
-  revalidatePath("/dashboard/posts");
-  revalidatePath("/admin/community");
+  await updateMyCommunityPostStatus(postId, "archived");
 }
 
 export async function restoreMyCommunityPost(formData: FormData) {
   const postId = String(formData.get("post_id") ?? "");
   if (!postId) return;
 
+  await updateMyCommunityPostStatus(postId, "active");
+}
+
+export async function updateMyCommunityPostStatus(postId: string, status: "active" | "archived") {
   const profile = await getCurrentProfileId();
-  if ("error" in profile) return;
+  if ("error" in profile) return { error: profile.error };
 
   const admin = createAdminClient();
-  await admin
+  const updates: { status: "active" | "archived"; updated_at?: string } = { status };
+  if (status === "archived") updates.updated_at = new Date().toISOString();
+
+  const { error } = await admin
     .from("community_posts")
-    .update({ status: "active" })
+    .update(updates)
     .eq("id", postId)
     .eq("author_id", profile.profileId);
+
+  if (error) return { error: error.message };
 
   revalidatePath("/community");
   revalidatePath("/dashboard/posts");
   revalidatePath("/admin/community");
+  return { success: true };
 }
 
 export async function deleteCommunityPost(formData: FormData) {
   const postId = String(formData.get("post_id") ?? "");
   if (!postId) return;
 
+  await deleteCommunityPostById(postId);
+}
+
+export async function deleteCommunityPostById(postId: string) {
   const profile = await getCurrentProfileId();
-  if ("error" in profile) return;
+  if ("error" in profile) return { error: profile.error };
 
   const admin = createAdminClient();
 
@@ -188,14 +203,18 @@ export async function deleteCommunityPost(formData: FormData) {
     .eq("id", postId)
     .single();
 
-  if (!post) return;
-  if (profile.role !== "admin" && post.author_id !== profile.profileId) return;
+  if (!post) return { error: "Post not found" };
+  if (profile.role !== "admin" && post.author_id !== profile.profileId) {
+    return { error: "Not authorized" };
+  }
 
-  await admin.from("community_posts").delete().eq("id", postId);
+  const { error } = await admin.from("community_posts").delete().eq("id", postId);
+  if (error) return { error: error.message };
 
   revalidatePath("/community");
   revalidatePath("/dashboard/posts");
   revalidatePath("/admin/community");
+  return { success: true };
 }
 
 export async function updateCommunityPostStatus(formData: FormData) {

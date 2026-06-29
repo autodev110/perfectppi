@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { selectPlan } from "@/features/warranty/actions";
+import { getMyWarranties } from "@/features/warranty/queries";
 import { z } from "zod";
 
 const selectPlanSchema = z.object({
   warrantyOptionId: z.string().uuid(),
   planIndex: z.number().int().min(0),
 });
+
+// GET /api/warranty/orders — mobile warranty inbox
+export async function GET() {
+  const data = await getMyWarranties();
+  return NextResponse.json({ data });
+}
 
 // POST /api/warranty/orders — plan selection, creates warranty_orders row
 export async function POST(req: NextRequest) {

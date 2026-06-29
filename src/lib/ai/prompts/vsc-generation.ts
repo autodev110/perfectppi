@@ -19,6 +19,15 @@ export function buildVscPrompt(standardized: StandardizedContent): string {
     })
     .join("\n\n");
 
+  const diagnosticsText = standardized.diagnostics
+    ? `## OBD-II DIAGNOSTICS
+- MIL / Check Engine: ${standardized.diagnostics.mil_on === null ? "Unknown" : standardized.diagnostics.mil_on ? "On" : "Off"}
+- ECU Stored DTC Count: ${standardized.diagnostics.stored_dtc_count ?? "Unknown"}
+- Stored DTCs: ${standardized.diagnostics.stored_dtcs.length ? standardized.diagnostics.stored_dtcs.join(", ") : "None reported"}
+- Pending DTCs: ${standardized.diagnostics.pending_dtcs.length ? standardized.diagnostics.pending_dtcs.join(", ") : "None reported"}
+- Diagnostic Summary: ${standardized.diagnostics.summary}`
+    : "## OBD-II DIAGNOSTICS\nNo OBD-II diagnostic snapshot was saved with this inspection.";
+
   return `You are an expert vehicle service contract (VSC) underwriting analyst. Using the standardized inspection report below, determine warranty coverage eligibility for each vehicle component category.
 
 ## VEHICLE
@@ -38,6 +47,8 @@ ${standardized.notable_findings.map((f) => `- ${f}`).join("\n")}
 
 ## SECTION DETAILS
 ${sectionsText}
+
+${diagnosticsText}
 
 ## KNOWLEDGE BASE — VSC COVERAGE RULES
 
@@ -91,6 +102,7 @@ Return a JSON object with this exact structure:
 - Base determinations on actual inspection findings, not assumptions
 - If a section was "not_applicable" or not inspected, mark components as "limited" with condition "Not inspected — limited coverage pending verification"
 - If notable findings mention issues in a system, those specific components should be "excluded" with the finding as reasoning
+- If OBD-II diagnostics show MIL on, stored DTCs, or pending DTCs, treat affected components as pre-existing or limited unless inspection evidence clearly resolves the issue
 - overall_eligibility: "eligible" if most components covered, "conditional" if significant exclusions, "ineligible" if major safety/mechanical failures
 - PPI type affects confidence: "certified_tech" inspections carry highest confidence, "personal" inspections may have lower confidence (note in conditions if relevant)
 - Return ONLY the JSON object, no markdown or explanation`;

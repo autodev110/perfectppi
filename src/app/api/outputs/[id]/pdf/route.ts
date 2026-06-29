@@ -1,15 +1,24 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireApiRole } from "@/features/auth/api";
 import { isR2Configured, generatePresignedGetUrl } from "@/lib/storage/r2";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireApiRole([
+    "consumer",
+    "technician",
+    "org_manager",
+    "admin",
+  ]);
+  if ("response" in auth) return auth.response;
+
   const { id } = await params;
 
-  const admin = createAdminClient();
-  const { data: output } = await admin
+  const supabase = auth.profile.role === "admin" ? createAdminClient() : auth.supabase;
+  const { data: output } = await supabase
     .from("standardized_outputs")
     .select("document_url")
     .eq("id", id)

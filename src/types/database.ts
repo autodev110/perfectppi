@@ -901,6 +901,84 @@ export type Database = {
           }
         ];
       };
+      obd_snapshots: {
+        Row: {
+          id: string;
+          ppi_submission_id: string;
+          captured_by: string;
+          vin: string | null;
+          adapter_name: string | null;
+          mil_on: boolean | null;
+          stored_dtc_count: number | null;
+          stored_dtcs: string[];
+          pending_dtcs: string[];
+          supported_pids: string[];
+          monitor_status: Json | null;
+          live_readings: Json;
+          raw_payload: Json;
+          raw_transcript: Json;
+          started_at: string | null;
+          completed_at: string | null;
+          is_current: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ppi_submission_id: string;
+          captured_by: string;
+          vin?: string | null;
+          adapter_name?: string | null;
+          mil_on?: boolean | null;
+          stored_dtc_count?: number | null;
+          stored_dtcs?: string[];
+          pending_dtcs?: string[];
+          supported_pids?: string[];
+          monitor_status?: Json | null;
+          live_readings?: Json;
+          raw_payload: Json;
+          raw_transcript?: Json;
+          started_at?: string | null;
+          completed_at?: string | null;
+          is_current?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          ppi_submission_id?: string;
+          captured_by?: string;
+          vin?: string | null;
+          adapter_name?: string | null;
+          mil_on?: boolean | null;
+          stored_dtc_count?: number | null;
+          stored_dtcs?: string[];
+          pending_dtcs?: string[];
+          supported_pids?: string[];
+          monitor_status?: Json | null;
+          live_readings?: Json;
+          raw_payload?: Json;
+          raw_transcript?: Json;
+          started_at?: string | null;
+          completed_at?: string | null;
+          is_current?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "obd_snapshots_ppi_submission_id_fkey";
+            columns: ["ppi_submission_id"];
+            isOneToOne: false;
+            referencedRelation: "ppi_submissions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "obd_snapshots_captured_by_fkey";
+            columns: ["captured_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       ppi_sections: {
         Row: {
           id: string;
@@ -1359,6 +1437,47 @@ export type Database = {
         };
         Relationships: [];
       };
+      device_tokens: {
+        Row: {
+          id: string;
+          profile_id: string;
+          token: string;
+          platform: "ios" | "android";
+          env: "prod" | "sandbox";
+          app_version: string | null;
+          last_seen_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          token: string;
+          platform: "ios" | "android";
+          env?: "prod" | "sandbox";
+          app_version?: string | null;
+          last_seen_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          profile_id?: string;
+          token?: string;
+          platform?: "ios" | "android";
+          env?: "prod" | "sandbox";
+          app_version?: string | null;
+          last_seen_at?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "device_tokens_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -1385,6 +1504,8 @@ export type Database = {
       user_role: "consumer" | "technician" | "org_manager" | "admin";
       vehicle_visibility: "public" | "private";
       media_type: "image" | "video";
+      device_platform: "ios" | "android";
+      device_env: "prod" | "sandbox";
       listing_status: "active" | "sold" | "archived";
       community_content_status: "active" | "hidden" | "archived";
       ppi_request_status:

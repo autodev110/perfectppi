@@ -239,7 +239,13 @@ export async function getMyWarranties(): Promise<
   Array<{
     option: WarrantyOption;
     order: WarrantyOrder | null;
-    vehicle: { year: number | null; make: string | null; model: string | null; trim: string | null } | null;
+    vehicle: {
+      id: string;
+      year: number | null;
+      make: string | null;
+      model: string | null;
+      trim: string | null;
+    } | null;
   }>
 > {
   const supabase = await createClient();
@@ -276,7 +282,7 @@ export async function getMyWarranties(): Promise<
           .maybeSingle(),
         supabase
           .from("vehicles")
-          .select("year, make, model, trim")
+          .select("id, year, make, model, trim")
           .eq("id", opt.vehicle_id)
           .maybeSingle(),
       ]);

@@ -126,6 +126,25 @@ export async function getVehicleActiveListing(vehicleId: string) {
   return (data as MarketplaceListing | null) ?? null;
 }
 
+export async function getMarketplaceListing(listingId: string) {
+  const supabase = createAdminClient();
+
+  const { data } = await supabase
+    .from("marketplace_listings")
+    .select(LISTING_SELECT)
+    .eq("id", listingId)
+    .maybeSingle();
+
+  const listing = (data as MarketplaceListing | null) ?? null;
+  if (!listing) return null;
+
+  const isPublicActive =
+    listing.status === "active" && listing.vehicle?.visibility === "public";
+
+  if (!isPublicActive) return null;
+  return listing;
+}
+
 export async function getMyMarketplaceListings() {
   const supabase = await createClient();
   const {

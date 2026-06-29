@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import {
   isR2Configured,
   getObjectFromStoredUrl,
@@ -13,13 +12,12 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireApiRole(["consumer", "technician", "admin"]);
+  const auth = await requireApiRole(["consumer", "technician", "admin", "org_manager"]);
   if ("response" in auth) return auth.response;
 
   const { id } = await params;
 
-  const admin = createAdminClient();
-  const { data: media, error } = await admin
+  const { data: media, error } = await auth.supabase
     .from("ppi_media")
     .select("url")
     .eq("id", id)

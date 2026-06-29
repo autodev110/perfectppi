@@ -5,6 +5,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const certification = searchParams.get("certification");
   const orgId = searchParams.get("org_id");
+  const independent = searchParams.get("independent");
 
   const supabase = await createClient();
 
@@ -27,6 +28,9 @@ export async function GET(request: Request) {
   }
   if (orgId) {
     query = query.eq("organization_id", orgId);
+  }
+  if (independent === "true") {
+    query = query.eq("is_independent", true);
   }
 
   const { data, error } = await query;

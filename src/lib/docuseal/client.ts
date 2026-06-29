@@ -197,16 +197,21 @@ export async function archiveSubmission(submissionId: number): Promise<void> {
 /**
  * Verify HMAC-SHA256 webhook signature.
  * DocuSeal sends it in the X-DocuSeal-Signature header.
- * Returns true if no secret configured (dev).
+ * Returns true without a secret only outside production.
  */
 export async function verifyWebhookSignature(
   rawBody: Buffer,
   signature: string,
 ): Promise<boolean> {
   const secret = process.env.DOCUSEAL_WEBHOOK_SECRET;
-  if (!secret) return true;
+  if (!secret) {
+    return process.env.NODE_ENV !== "production";
+  }
+  if (!signature) return false;
 
-  const { createHmac } = await import("crypto");
+  const { createHmac, timingSafeEqual } = await import("crypto");
   const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-  return signature === expected;
+  const received = Buffer.from(signature, "hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+  return received.length === expectedBuffer.length && timingSafeEqual(received, expectedBuffer);
 }

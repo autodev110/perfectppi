@@ -23,6 +23,25 @@ const sectionSchema = z.object({
   notes: z.string().nullable(),
 });
 
+const diagnosticsSchema = z.object({
+  obd_snapshot_present: z.boolean(),
+  vin: z.string().nullable(),
+  adapter_name: z.string().nullable(),
+  mil_on: z.boolean().nullable(),
+  stored_dtc_count: z.number().int().nullable(),
+  stored_dtcs: z.array(z.string()),
+  pending_dtcs: z.array(z.string()),
+  live_readings: z.array(
+    z.object({
+      pid: z.string(),
+      name: z.string(),
+      value: z.number(),
+      unit: z.string(),
+    }),
+  ),
+  summary: z.string(),
+});
+
 const standardizedContentSchema = z.object({
   vehicle: z.object({
     year: z.number().nullable(),
@@ -43,6 +62,7 @@ const standardizedContentSchema = z.object({
     role: z.string(),
   }),
   sections: z.array(sectionSchema),
+  diagnostics: diagnosticsSchema.nullable(),
   overall_summary: z.string(),
   notable_findings: z.array(z.string()),
 });
@@ -73,6 +93,18 @@ interface GeneratorInput {
     notes: string | null;
     answers: { prompt: string; answer_value: string | null; answer_type: string }[];
   }[];
+  obdSnapshot?: {
+    vin: string | null;
+    adapter_name: string | null;
+    mil_on: boolean | null;
+    stored_dtc_count: number | null;
+    stored_dtcs: string[];
+    pending_dtcs: string[];
+    supported_pids: string[];
+    live_readings: unknown;
+    started_at: string | null;
+    completed_at: string | null;
+  } | null;
 }
 
 export async function generateStandardizedOutput(
@@ -86,6 +118,7 @@ export async function generateStandardizedOutput(
     submittedAt: data.submission.submitted_at ?? new Date().toISOString(),
     version: data.submission.version,
     sections: data.sections,
+    obdSnapshot: data.obdSnapshot ?? null,
   });
 
   return generateStructuredOutput<StandardizedContent>(prompt, standardizedContentSchema);

@@ -3,11 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { generatePresignedUrl, buildStorageKey } from "@/lib/storage/r2";
 import { z } from "zod";
 import { UPLOAD_LIMITS } from "@/config/constants";
+import { canUploadToTarget } from "@/features/uploads/access";
 
 const presignSchema = z.object({
   filename: z.string().min(1),
   contentType: z.string().min(1),
-  entity: z.string().min(1),
+  entity: z.enum(["ppi_media", "vehicle_media", "media_package"]),
   recordId: z.string().uuid(),
 });
 
@@ -50,6 +51,19 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "File type not allowed" },
       { status: 400 }
+    );
+  }
+
+  const canUpload = await canUploadToTarget(
+    supabase,
+    profile.id,
+    parsed.data.entity,
+    parsed.data.recordId
+  );
+  if (!canUpload) {
+    return NextResponse.json(
+      { error: "Upload target not found" },
+      { status: 404 }
     );
   }
 

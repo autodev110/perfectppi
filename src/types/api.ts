@@ -236,6 +236,65 @@ export interface AttachMediaPayload {
   metadata?: Record<string, unknown>;
 }
 
+export interface ObdMonitorStatus {
+  milOn: boolean;
+  storedDTCCount: number;
+  rawStatusBytes: number[];
+}
+
+export interface ObdLiveReading {
+  pid: number;
+  name: string;
+  value: number;
+  unit: string;
+  rawResponse: string;
+}
+
+export interface ObdExchange {
+  id?: string;
+  timestamp: string;
+  command: string;
+  rawResponse: string;
+}
+
+export interface ObdDiagnosticSnapshotPayload {
+  vin?: string | null;
+  supportedPids: number[];
+  monitorStatus?: ObdMonitorStatus | null;
+  storedDTCs: string[];
+  pendingDTCs: string[];
+  liveReadings: ObdLiveReading[];
+  adapterName?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  rawSupportedPidsResponse?: string | null;
+  rawMonitorStatusResponse?: string | null;
+  rawVinResponse?: string | null;
+  rawStoredDtcsResponse?: string | null;
+  rawPendingDtcsResponse?: string | null;
+}
+
+export interface ObdSnapshotResponse {
+  id: string;
+  ppi_submission_id: string;
+  captured_by: string;
+  vin: string | null;
+  adapter_name: string | null;
+  mil_on: boolean | null;
+  stored_dtc_count: number | null;
+  stored_dtcs: string[];
+  pending_dtcs: string[];
+  supported_pids: string[];
+  monitor_status: Record<string, unknown> | null;
+  live_readings: ObdLiveReading[];
+  raw_payload: ObdDiagnosticSnapshotPayload;
+  raw_transcript: ObdExchange[];
+  started_at: string | null;
+  completed_at: string | null;
+  is_current: boolean;
+  created_at: string;
+}
+
 export interface UpdateRequestStatusPayload {
   status: PpiRequestStatus;
 }
@@ -261,8 +320,26 @@ export interface StandardizedContent {
     role: string;
   };
   sections: StandardizedSection[];
+  diagnostics?: StandardizedDiagnostics | null;
   overall_summary: string;
   notable_findings: string[];
+}
+
+export interface StandardizedDiagnostics {
+  obd_snapshot_present: boolean;
+  vin: string | null;
+  adapter_name: string | null;
+  mil_on: boolean | null;
+  stored_dtc_count: number | null;
+  stored_dtcs: string[];
+  pending_dtcs: string[];
+  live_readings: Array<{
+    pid: string;
+    name: string;
+    value: number;
+    unit: string;
+  }>;
+  summary: string;
 }
 
 export interface StandardizedSection {

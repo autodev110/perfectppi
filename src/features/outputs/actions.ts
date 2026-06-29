@@ -137,6 +137,17 @@ export async function triggerOutputGeneration(
         })),
     }));
 
+  const { data: obdSnapshot } = await admin
+    .from("obd_snapshots")
+    .select(
+      "vin, adapter_name, mil_on, stored_dtc_count, stored_dtcs, pending_dtcs, supported_pids, live_readings, started_at, completed_at",
+    )
+    .eq("ppi_submission_id", submissionId)
+    .eq("is_current", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   // Determine next version numbers
   const { data: existingStd } = await admin
     .from("standardized_outputs")
@@ -160,6 +171,7 @@ export async function triggerOutputGeneration(
         role: performer?.role ?? "consumer",
       },
       sections: sortedSections,
+      obdSnapshot: obdSnapshot ?? null,
     });
   } catch (err) {
     return { error: `Stage 1 generation failed: ${err instanceof Error ? err.message : String(err)}` };

@@ -43,6 +43,30 @@ export function generateStandardizedReportPdf(content: StandardizedContent) {
     lines.push({ text: " ", fontSize: 8, gapAfter: 8 });
   }
 
+  if (content.diagnostics?.obd_snapshot_present) {
+    const diagnostics = content.diagnostics;
+    lines.push({ text: "OBD-II Diagnostics", fontSize: 12, font: "bold", gapAfter: 3 });
+    addLabelValue(lines, "Adapter", diagnostics.adapter_name);
+    addLabelValue(lines, "Reported VIN", diagnostics.vin);
+    addLabelValue(
+      lines,
+      "MIL / Check Engine",
+      diagnostics.mil_on === null ? "Unknown" : diagnostics.mil_on ? "On" : "Off",
+    );
+    addLabelValue(lines, "ECU Stored DTC Count", diagnostics.stored_dtc_count);
+    addLabelValue(
+      lines,
+      "Stored DTCs",
+      diagnostics.stored_dtcs.length ? diagnostics.stored_dtcs.join(", ") : "None reported",
+    );
+    addLabelValue(
+      lines,
+      "Pending DTCs",
+      diagnostics.pending_dtcs.length ? diagnostics.pending_dtcs.join(", ") : "None reported",
+    );
+    lines.push({ text: diagnostics.summary, fontSize: 10, gapAfter: 10 });
+  }
+
   for (const section of content.sections) {
     lines.push({ text: section.section_label, fontSize: 13, font: "bold", gapAfter: 3 });
     lines.push({ text: `Condition: ${section.condition_rating}`, fontSize: 10, font: "bold" });

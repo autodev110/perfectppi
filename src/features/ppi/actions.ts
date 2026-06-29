@@ -677,6 +677,38 @@ export async function resubmitPpi(requestId: string) {
     }
   }
 
+  const { data: currentObdSnapshots } = await supabase
+    .from("obd_snapshots")
+    .select(
+      "captured_by, vin, adapter_name, mil_on, stored_dtc_count, stored_dtcs, pending_dtcs, supported_pids, monitor_status, live_readings, raw_payload, raw_transcript, started_at, completed_at",
+    )
+    .eq("ppi_submission_id", currentSub.id)
+    .eq("is_current", true)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (currentObdSnapshots?.length) {
+    const snapshot = currentObdSnapshots[0];
+    await supabase.from("obd_snapshots").insert({
+      ppi_submission_id: newSub.id,
+      captured_by: snapshot.captured_by,
+      vin: snapshot.vin,
+      adapter_name: snapshot.adapter_name,
+      mil_on: snapshot.mil_on,
+      stored_dtc_count: snapshot.stored_dtc_count,
+      stored_dtcs: snapshot.stored_dtcs,
+      pending_dtcs: snapshot.pending_dtcs,
+      supported_pids: snapshot.supported_pids,
+      monitor_status: snapshot.monitor_status as Json | null,
+      live_readings: snapshot.live_readings as Json,
+      raw_payload: snapshot.raw_payload as Json,
+      raw_transcript: snapshot.raw_transcript as Json,
+      started_at: snapshot.started_at,
+      completed_at: snapshot.completed_at,
+      is_current: true,
+    });
+  }
+
   // Update request status back to in_progress
   await supabase
     .from("ppi_requests")
