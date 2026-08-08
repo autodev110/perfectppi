@@ -77,23 +77,31 @@ struct VehicleDetailView: View {
                 List {
                     if let primary = primaryMedia(for: vehicle) {
                         Section {
-                            AsyncImage(url: URL(string: primary.url)) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .aspectRatio(4 / 3, contentMode: .fill)
-                                case .failure:
-                                    Image(systemName: "photo")
-                                        .font(.largeTitle)
-                                        .frame(maxWidth: .infinity, minHeight: 180)
-                                        .foregroundStyle(.secondary)
-                                default:
-                                    ProgressView()
-                                        .frame(maxWidth: .infinity, minHeight: 180)
+                            // The fill-mode image has no intrinsic bound, so it
+                            // needs a definite 4:3 box to live in — otherwise a
+                            // large photo sizes the row itself and the card runs
+                            // off the edge of the screen.
+                            Color.clear
+                                .aspectRatio(4 / 3, contentMode: .fit)
+                                .overlay {
+                                    AsyncImage(url: URL(string: primary.url)) { phase in
+                                        switch phase {
+                                        case .success(let image):
+                                            image
+                                                .resizable()
+                                                .scaledToFill()
+                                        case .failure:
+                                            Image(systemName: "photo")
+                                                .font(.largeTitle)
+                                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                                .foregroundStyle(.secondary)
+                                        default:
+                                            ProgressView()
+                                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        }
+                                    }
                                 }
-                            }
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
                         }
                     }
 

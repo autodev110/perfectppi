@@ -218,15 +218,19 @@ export async function attachVehiclePhoto(input: {
 }
 
 export async function deleteVehiclePhoto(formData: FormData) {
-  const parsed = deleteVehiclePhotoSchema.safeParse({
-    vehicleId: formData.get("vehicle_id"),
-    mediaId: formData.get("media_id"),
+  await removeVehiclePhoto({
+    vehicleId: String(formData.get("vehicle_id") ?? ""),
+    mediaId: String(formData.get("media_id") ?? ""),
   });
+}
 
-  if (!parsed.success) return;
+export async function removeVehiclePhoto(input: { vehicleId: string; mediaId: string }) {
+  const parsed = deleteVehiclePhotoSchema.safeParse(input);
+
+  if (!parsed.success) return { error: "Invalid photo" };
 
   const profile = await getCurrentProfileId();
-  if ("error" in profile) return;
+  if ("error" in profile) return { error: "Not authenticated" };
 
   const admin = createAdminClient();
   const { data: vehicle } = await admin
@@ -235,7 +239,9 @@ export async function deleteVehiclePhoto(formData: FormData) {
     .eq("id", parsed.data.vehicleId)
     .single();
 
-  if (!vehicle || vehicle.owner_id !== profile.profileId) return;
+  if (!vehicle || vehicle.owner_id !== profile.profileId) {
+    return { error: "You can only remove photos from vehicles you own" };
+  }
 
   await admin
     .from("vehicle_media")
@@ -266,6 +272,8 @@ export async function deleteVehiclePhoto(formData: FormData) {
   revalidatePath("/dashboard/listings");
   revalidatePath("/admin/vehicles");
   revalidatePath("/admin/listings");
+
+  return { success: true };
 }
 
 export async function deleteVehicle(vehicleId: string) {

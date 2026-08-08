@@ -1,12 +1,12 @@
 "use client";
 
-import { ChangeEvent, useState } from "react";
+import { ChangeEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { attachVehiclePhoto } from "@/features/vehicles/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Camera, Loader2 } from "lucide-react";
+import { Camera, Loader2, X } from "lucide-react";
 
 type VehiclePhotoUploaderProps = {
   vehicleId: string;
@@ -14,6 +14,7 @@ type VehiclePhotoUploaderProps = {
 
 export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -26,6 +27,15 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
 
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(nextFile ? URL.createObjectURL(nextFile) : null);
+  }
+
+  function clearSelection() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setFile(null);
+    setError(null);
+    // Reset the input too, so re-picking the same file still fires onChange.
+    if (inputRef.current) inputRef.current.value = "";
   }
 
   async function uploadViaServer(selectedFile: File) {
@@ -100,8 +110,7 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
 
       if (result?.error) throw new Error(result.error);
 
-      setFile(null);
-      setPreviewUrl(null);
+      clearSelection();
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Vehicle photo upload failed");
@@ -116,6 +125,7 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
         <Label htmlFor="vehicle-photo">Upload vehicle photo</Label>
         <Input
           id="vehicle-photo"
+          ref={inputRef}
           type="file"
           accept="image/*"
           onChange={onPickFile}
@@ -127,9 +137,19 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
       </div>
 
       {previewUrl && (
-        <div className="overflow-hidden rounded-xl border bg-muted">
+        <div className="relative overflow-hidden rounded-xl border bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={previewUrl} alt="Selected vehicle upload preview" className="h-48 w-full object-cover" />
+          <button
+            type="button"
+            aria-label="Remove selected photo"
+            title="Remove selected photo"
+            disabled={uploading}
+            onClick={clearSelection}
+            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white shadow-sm backdrop-blur-sm transition-all hover:bg-destructive hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 

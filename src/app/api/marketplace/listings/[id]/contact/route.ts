@@ -12,7 +12,7 @@ export async function POST(
   const { id } = await params;
   const result = await contactSellerForListing({ listingId: id });
 
-  if ("error" in result) {
+  if (!result.data) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
 

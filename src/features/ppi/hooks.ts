@@ -163,6 +163,7 @@ type WorkflowAction =
   | { type: "SET_ANSWER"; answerId: string; value: string }
   | { type: "SET_SECTION_NOTES"; sectionId: string; notes: string }
   | { type: "ADD_MEDIA"; sectionId: string; media: PpiMediaItem }
+  | { type: "REMOVE_MEDIA"; sectionId: string; mediaId: string }
   | { type: "NEXT_QUESTION" }
   | { type: "PREV_QUESTION" }
   | { type: "NEXT_SECTION" }
@@ -325,6 +326,22 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
           }),
         };
       }
+
+    case "REMOVE_MEDIA":
+      return {
+        ...state,
+        sections: state.sections.map((section) => {
+          if (section.id !== action.sectionId) return section;
+          const nextSection = {
+            ...section,
+            media: section.media.filter((media) => media.id !== action.mediaId),
+          };
+          return {
+            ...nextSection,
+            completion_state: deriveSectionState(nextSection, state.answers),
+          };
+        }),
+      };
 
     case "MARK_DIRTY_FLUSHED": {
       const remainingDirtyAnswers = new Set(state.dirtyAnswerIds);
@@ -591,6 +608,10 @@ export function useInspectionWorkflow(submissionId: string) {
     dispatch({ type: "ADD_MEDIA", sectionId, media });
   }
 
+  function removeMedia(sectionId: string, mediaId: string) {
+    dispatch({ type: "REMOVE_MEDIA", sectionId, mediaId });
+  }
+
   async function submitInspection() {
     const flushSucceeded = await immediateFlush();
     if (!flushSucceeded) {
@@ -693,6 +714,7 @@ export function useInspectionWorkflow(submissionId: string) {
     setAnswer,
     setSectionNotes,
     addMedia,
+    removeMedia,
     nextQuestion,
     prevQuestion,
     nextSection,

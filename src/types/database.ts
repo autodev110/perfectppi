@@ -619,16 +619,27 @@ export type Database = {
         Row: {
           id: string;
           created_at: string;
+          marketplace_listing_id: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
+          marketplace_listing_id?: string | null;
         };
         Update: {
           id?: string;
           created_at?: string;
+          marketplace_listing_id?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "conversations_marketplace_listing_id_fkey";
+            columns: ["marketplace_listing_id"];
+            isOneToOne: false;
+            referencedRelation: "marketplace_listings";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       conversation_participants: {
         Row: {

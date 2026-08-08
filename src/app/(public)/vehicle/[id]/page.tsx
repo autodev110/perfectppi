@@ -39,7 +39,7 @@ import {
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; contact_error?: string }>;
 };
 
 // ── Metadata ──────────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ const WARRANTY_STATUS_LABEL: Record<string, string> = {
 
 export default async function PublicVehiclePage({ params, searchParams }: PageProps) {
   const { id } = await params;
-  const { tab } = await searchParams;
+  const { tab, contact_error: contactError } = await searchParams;
   const activeTab =
     tab === "ppi-history" ||
     tab === "marketplace" ||
@@ -172,8 +172,8 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
 
         {/* Info row */}
         <div className="px-7 py-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
-          <div>
-            <h1 className="font-heading text-2xl font-extrabold tracking-tight text-on-surface mb-1">
+          <div className="min-w-0">
+            <h1 className="font-heading text-2xl font-extrabold tracking-tight text-on-surface mb-1 break-words">
               {vehicleName || "Unknown Vehicle"}
             </h1>
             {vehicle.trim && (
@@ -188,9 +188,9 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                 </span>
               )}
               {vehicle.vin && (
-                <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant font-mono">
-                  <Hash className="h-3 w-3" />
-                  {vehicle.vin}
+                <span className="flex max-w-full items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant font-mono">
+                  <Hash className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{vehicle.vin}</span>
                 </span>
               )}
               <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant">
@@ -226,7 +226,9 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
       </div>
 
       {/* ── Tabs ──────────────────────────────────────────────────── */}
-      <div className="flex gap-1 p-1 bg-surface-container rounded-xl ghost-border mb-6 w-fit">
+      {/* Five tabs are wider than a phone viewport — scroll the strip itself
+          rather than letting it push the whole page sideways. */}
+      <div className="flex max-w-full gap-1 overflow-x-auto p-1 bg-surface-container rounded-xl ghost-border mb-6 w-full sm:w-fit">
         {[
           { key: "overview", label: "Overview" },
           { key: "ppi-history", label: `PPI History${ppiHistory.length > 0 ? ` (${ppiHistory.length})` : ""}` },
@@ -237,7 +239,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
           <Link
             key={key}
             href={key === "overview" ? `/vehicle/${id}` : `/vehicle/${id}?tab=${key}`}
-            className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${
+            className={`shrink-0 whitespace-nowrap px-5 py-2 rounded-lg text-sm font-bold transition-all ${
               activeTab === key
                 ? "bg-surface-container-lowest shadow-sm text-on-surface"
                 : "text-on-surface-variant hover:text-on-surface"
@@ -269,7 +271,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                   <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">
                     {label}
                   </p>
-                  <p className={`text-sm font-semibold text-on-surface ${mono ? "font-mono" : ""}`}>
+                  <p className={`text-sm font-semibold text-on-surface break-words ${mono ? "font-mono break-all" : ""}`}>
                     {value}
                   </p>
                 </div>
@@ -357,18 +359,18 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
         <div className="bg-surface-container-lowest rounded-[1.25rem] p-6 ghost-border shadow-sm">
           {activeListing ? (
             <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr] md:items-start">
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-3">
                   <Tag className="h-4 w-4 text-on-tertiary-container" />
                   <Badge className="bg-teal/10 text-teal hover:bg-teal/10">
                     Active Listing
                   </Badge>
                 </div>
-                <h2 className="font-heading text-2xl font-extrabold tracking-tight text-on-surface mb-2">
+                <h2 className="font-heading text-2xl font-extrabold tracking-tight text-on-surface mb-2 break-words">
                   {activeListing.title}
                 </h2>
                 {activeListing.description ? (
-                  <p className="text-sm text-on-surface-variant leading-relaxed">
+                  <p className="text-sm text-on-surface-variant leading-relaxed break-words">
                     {activeListing.description}
                   </p>
                 ) : (
@@ -378,7 +380,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                 )}
               </div>
 
-              <div className="rounded-2xl bg-surface-container p-5 ghost-border">
+              <div className="min-w-0 rounded-2xl bg-surface-container p-5 ghost-border">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">
                   Asking Price
                 </p>
@@ -410,6 +412,14 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                     <ArrowRight className="h-4 w-4" />
                   </button>
                 </form>
+                <p className="mt-2 text-[11px] text-on-surface-variant">
+                  Opens your existing thread with this seller, or starts a new one.
+                </p>
+                {contactError && (
+                  <p className="mt-2 text-xs font-semibold text-destructive break-words">
+                    {contactError}
+                  </p>
+                )}
               </div>
             </div>
           ) : (

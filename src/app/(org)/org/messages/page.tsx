@@ -3,7 +3,7 @@ import { getConversations, getMessageRecipientsDirectory } from "@/features/mess
 import { MessagesCenter } from "@/components/shared/messages-center";
 
 export default async function OrgMessagesPage() {
-  await requireRole(["org_manager"]);
+  const profile = await requireRole(["org_manager"]);
 
   const [conversations, recipients] = await Promise.all([
     getConversations(),
@@ -14,6 +14,7 @@ export default async function OrgMessagesPage() {
     <MessagesCenter
       conversations={conversations}
       recipients={recipients}
+      myProfileId={profile.id}
       routeBase="/org/messages"
       title="Messages"
       description="Conversations with technicians, consumers, and teammates."

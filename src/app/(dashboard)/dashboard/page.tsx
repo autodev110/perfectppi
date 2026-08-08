@@ -3,6 +3,7 @@ import { getMyVehicles } from "@/features/vehicles/queries";
 import { getMyPpiRequestCount } from "@/features/ppi/queries";
 import { getMyWarrantyOpportunities } from "@/features/warranty/queries";
 import { getConversations } from "@/features/messages/queries";
+import { conversationTitle } from "@/features/messages/format";
 import { getMyMarketplaceListings } from "@/features/marketplace/queries";
 import {
   Car,
@@ -182,16 +183,18 @@ export default async function DashboardPage() {
           ) : (
             <ul className="space-y-2">
               {conversations.map((convo) => {
-                const other = convo.other_participants[0];
+                const title = conversationTitle(
+                  convo.participants,
+                  profile.id,
+                  convo.listing_context,
+                );
                 return (
                   <li key={convo.id}>
                     <Link
                       href={`/dashboard/messages/${convo.id}`}
                       className="block rounded-lg p-2 hover:bg-surface-container transition-colors"
                     >
-                      <p className="text-sm font-semibold truncate">
-                        {other?.display_name ?? other?.username ?? "User"}
-                      </p>
+                      <p className="text-sm font-semibold truncate">{title}</p>
                       {convo.last_message && (
                         <p className="text-xs text-on-surface-variant truncate">
                           {convo.last_message.content}
@@ -324,7 +327,7 @@ export default async function DashboardPage() {
                 href={`/dashboard/vehicles/${vehicle.id}`}
                 className="group bg-surface-container-lowest rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-outline-variant/10 flex flex-col md:flex-row"
               >
-                <div className="w-full md:w-2/5 relative h-56 md:h-auto bg-surface-container flex items-center justify-center overflow-hidden">
+                <div className="w-full md:w-2/5 relative h-56 md:h-auto md:min-h-56 bg-surface-container flex items-center justify-center overflow-hidden">
                   {vehicle.vehicle_media?.[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -333,13 +336,13 @@ export default async function DashboardPage() {
                         vehicle.vehicle_media[0].url
                       }
                       alt={`${vehicle.year ?? ""} ${vehicle.make ?? ""} ${vehicle.model ?? ""}`.trim()}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   ) : (
                     <Car className="h-16 w-16 text-on-surface-variant/20 group-hover:scale-110 transition-transform duration-500" />
                   )}
                 </div>
-                <div className="flex-1 p-8 flex flex-col">
+                <div className="min-w-0 flex-1 p-8 flex flex-col">
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="text-xl font-bold text-on-surface">

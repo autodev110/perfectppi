@@ -780,6 +780,31 @@ export async function attachMedia(data: {
   return { data: media };
 }
 
+/**
+ * Removes an inspection photo. Authorization rides on the user-scoped client:
+ * the ppi_media DELETE policy already restricts this to the inspection's own
+ * technician/requester, so a stray id from another submission deletes nothing.
+ */
+export async function deletePpiMedia(mediaId: string) {
+  if (!z.string().uuid().safeParse(mediaId).success) {
+    return { error: "Invalid photo" };
+  }
+
+  const supabase = await createClient();
+
+  const { data: deleted, error } = await supabase
+    .from("ppi_media")
+    .delete()
+    .eq("id", mediaId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  if (!deleted) return { error: "Photo not found or not yours to delete" };
+
+  return { data: { id: deleted.id } };
+}
+
 // ============================================================================
 // updateRequestStatus — state-machine-guarded status transitions
 // ============================================================================

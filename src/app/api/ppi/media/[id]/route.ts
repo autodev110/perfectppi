@@ -5,6 +5,7 @@ import {
   extractKeyFromStoredUrl,
 } from "@/lib/storage/r2";
 import { requireApiRole } from "@/features/auth/api";
+import { deletePpiMedia } from "@/features/ppi/actions";
 
 export const runtime = "nodejs";
 
@@ -77,4 +78,22 @@ export async function GET(
       { status: 500 }
     );
   }
+}
+
+// DELETE /api/ppi/media/[id] — remove an inspection photo the caller captured.
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireApiRole(["consumer", "technician", "admin"]);
+  if ("response" in auth) return auth.response;
+
+  const { id } = await params;
+  const result = await deletePpiMedia(id);
+
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error }, { status: 400 });
+  }
+
+  return NextResponse.json({ data: result.data });
 }

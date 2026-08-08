@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { createConversation, sendMessage } from "@/features/messages/actions";
+import { getMessagesBasePath } from "@/features/auth/routing";
 
 const createListingSchema = z.object({
   vehicle_id: z.string().uuid("Choose a vehicle to list"),
@@ -34,13 +35,13 @@ async function getCurrentProfileId() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id, role")
     .eq("auth_user_id", user.id)
     .single();
 
   if (!profile) return { error: "Profile not found" as const };
 
-  return { profileId: profile.id };
+  return { profileId: profile.id, role: profile.role };
 }
 
 export async function createMarketplaceListing(formData: FormData) {
@@ -171,19 +172,41 @@ export async function contactSellerFromListing(formData: FormData) {
   if (!parsed.success) redirect("/marketplace");
 
   const result = await contactSellerForListing(parsed.data);
-  if ("error" in result) {
-    redirect(`/vehicle/${parsed.data.vehicleId}?tab=marketplace`);
+
+  if (!result.data) {
+    if (result.error === "Not authenticated" || result.error === "Profile not found") {
+      redirect("/login");
+    }
+
+    // Bounce back to the listing carrying the reason, so the button doesn't
+    // just silently reload the page it was clicked from.
+    const reason = result.error ?? "Could not contact this seller";
+    const back = parsed.data.vehicleId ? `/vehicle/${parsed.data.vehicleId}` : "/marketplace";
+    redirect(`${back}?tab=marketplace&contact_error=${encodeURIComponent(reason)}`);
   }
 
-  redirect(`/dashboard/messages/${result.data.conversationId}`);
+  redirect(`${result.data.messagesPath}/${result.data.conversationId}`);
 }
 
-export async function contactSellerForListing(input: unknown) {
+export type ContactSellerResult =
+  | { error: string; data?: undefined }
+  | {
+      error?: undefined;
+      data: {
+        conversationId: string;
+        existing: boolean;
+        listingChanged: boolean;
+        /** Role-scoped inbox base, e.g. "/tech/messages". */
+        messagesPath: string;
+      };
+    };
+
+export async function contactSellerForListing(input: unknown): Promise<ContactSellerResult> {
   const parsed = contactSellerSchema.safeParse(input);
   if (!parsed.success) return { error: "Invalid listing" };
 
   const profile = await getCurrentProfileId();
-  if ("error" in profile) return { error: profile.error };
+  if ("error" in profile) return { error: profile.error ?? "Not authenticated" };
 
   const admin = createAdminClient();
   const { data: listing } = await admin
@@ -198,8 +221,15 @@ export async function contactSellerForListing(input: unknown) {
     return { error: "You cannot contact yourself about your own listing" };
   }
 
-  const conversation = await createConversation({ participantId: listing.seller_id });
-  if ("error" in conversation) return conversation;
+  // Reuses the existing buyer/seller thread when there is one, and creates it
+  // otherwise — either way the caller gets a conversation id to open directly.
+  const conversation = await createConversation({
+    participantId: listing.seller_id,
+    marketplaceListingId: listing.id,
+  });
+  if (!conversation.data) {
+    return { error: conversation.error ?? "Could not start a conversation" };
+  }
 
   const vehicle = listing.vehicles as {
     year: number | null;
@@ -211,12 +241,20 @@ export async function contactSellerForListing(input: unknown) {
     [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ") ||
     "your vehicle";
 
-  if (!conversation.data.existing) {
+  // Post the intro for a brand new thread, and again when an existing thread
+  // is now about a different car — otherwise re-opening an old thread would
+  // silently drop the buyer in with no indication of which listing they clicked.
+  if (!conversation.data.existing || conversation.data.listingChanged) {
     await sendMessage({
       conversationId: conversation.data.conversationId,
       content: `Hi, I am interested in your PerfectPPI listing for ${vehicleLabel}: ${listing.title}.`,
     });
   }
 
-  return { data: conversation.data };
+  return {
+    data: {
+      ...conversation.data,
+      messagesPath: getMessagesBasePath(profile.role),
+    },
+  };
 }

@@ -7,6 +7,9 @@ import { z } from "zod";
 
 const createConversationSchema = z.object({
   participantId: z.string().uuid(),
+  // Set when the thread is started from a marketplace "Contact Seller" click,
+  // so the conversation can be titled with the car being discussed.
+  marketplaceListingId: z.string().uuid().optional(),
 });
 
 const sendMessageSchema = z.object({
@@ -34,7 +37,22 @@ async function getAuthProfile() {
   return { supabase, profile };
 }
 
-export async function createConversation(input: { participantId: string }) {
+export type CreateConversationResult =
+  | { error: string; data?: undefined }
+  | {
+      error?: undefined;
+      data: {
+        conversationId: string;
+        existing: boolean;
+        /** True when this call pointed the thread at a different listing. */
+        listingChanged: boolean;
+      };
+    };
+
+export async function createConversation(input: {
+  participantId: string;
+  marketplaceListingId?: string;
+}): Promise<CreateConversationResult> {
   const parsed = createConversationSchema.safeParse(input);
   if (!parsed.success) return { error: "Invalid participant" };
 
@@ -76,11 +94,13 @@ export async function createConversation(input: { participantId: string }) {
     .map((row) => row.conversation_id)
     .filter((id) => mineSet.has(id));
 
+  const listingId = parsed.data.marketplaceListingId ?? null;
+
   if (sharedConversationIds.length > 0) {
     const [{ data: existingConversations }, { data: existingMessages }] = await Promise.all([
       admin
         .from("conversations")
-        .select("id, created_at")
+        .select("id, created_at, marketplace_listing_id")
         .in("id", sharedConversationIds),
       admin
         .from("messages")
@@ -108,7 +128,30 @@ export async function createConversation(input: { participantId: string }) {
       return new Date(bActivityAt).getTime() - new Date(aActivityAt).getTime();
     })[0];
 
-    return { data: { conversationId: existingConversationId, existing: true } };
+    // Threads are deduped per pair of people, so re-contacting the same seller
+    // about a different car lands in the existing thread. Repoint it at the
+    // listing now being discussed so the title stays accurate, and tell the
+    // caller it moved so it can post a fresh intro message.
+    const previousListingId =
+      (existingConversations ?? []).find(
+        (conversation) => conversation.id === existingConversationId,
+      )?.marketplace_listing_id ?? null;
+
+    const listingChanged = !!listingId && listingId !== previousListingId;
+    if (listingChanged) {
+      await admin
+        .from("conversations")
+        .update({ marketplace_listing_id: listingId })
+        .eq("id", existingConversationId);
+    }
+
+    return {
+      data: {
+        conversationId: existingConversationId,
+        existing: true,
+        listingChanged,
+      },
+    };
   }
 
   // Create both conversation + participants with admin client.
@@ -116,7 +159,7 @@ export async function createConversation(input: { participantId: string }) {
   // so insert(...).select() with user client can fail before participants exist.
   const { data: conversation, error: convoErr } = await admin
     .from("conversations")
-    .insert({})
+    .insert({ marketplace_listing_id: listingId })
     .select("id")
     .single();
 
@@ -142,7 +185,7 @@ export async function createConversation(input: { participantId: string }) {
   revalidatePath("/org/messages");
   revalidatePath("/admin/messages");
 
-  return { data: { conversationId: conversation.id, existing: false } };
+  return { data: { conversationId: conversation.id, existing: false, listingChanged: !!listingId } };
 }
 
 export async function sendMessage(input: {

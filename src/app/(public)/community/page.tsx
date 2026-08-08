@@ -100,17 +100,21 @@ export default async function CommunityPage() {
                       href={`/vehicle/${post.vehicle.id}${post.marketplace_listing_id ? "?tab=marketplace" : ""}`}
                       className="mx-6 mb-6 grid overflow-hidden rounded-2xl bg-surface-container transition-colors ghost-border hover:bg-surface-container-high sm:grid-cols-[180px_1fr]"
                     >
-                      <div className="h-40 bg-surface-container-low sm:h-full">
+                      <div className="relative h-40 overflow-hidden bg-surface-container-low sm:h-full sm:min-h-40">
                         {primaryMedia ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={primaryMedia.url} alt={vehicleName} className="h-full w-full object-cover" />
+                          <img
+                            src={primaryMedia.url}
+                            alt={vehicleName}
+                            className="absolute inset-0 h-full w-full object-cover"
+                          />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center">
+                          <div className="absolute inset-0 flex items-center justify-center">
                             <Car className="h-10 w-10 text-on-surface-variant/30" />
                           </div>
                         )}
                       </div>
-                      <div className="p-5">
+                      <div className="min-w-0 p-5">
                         <div className="mb-2 flex flex-wrap gap-2">
                           {post.marketplace_listing ? (
                             <Badge className="bg-teal/10 text-teal hover:bg-teal/10">
@@ -121,7 +125,7 @@ export default async function CommunityPage() {
                             <Badge variant="outline">Vehicle Profile</Badge>
                           )}
                         </div>
-                        <p className="font-heading text-lg font-extrabold tracking-tight text-on-surface">
+                        <p className="font-heading text-lg font-extrabold tracking-tight text-on-surface break-words">
                           {vehicleName || "Vehicle profile"}
                         </p>
                         <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold text-on-surface-variant">

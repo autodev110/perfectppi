@@ -61,30 +61,32 @@ export default async function DashboardListingsPage() {
               <Card key={listing.id} className="overflow-hidden">
                 <CardContent className="p-0">
                   <div className="flex flex-col sm:flex-row">
-                    <div className="h-44 sm:h-auto sm:w-48 bg-muted flex-shrink-0">
+                    {/* Fixed box + absolutely positioned image: a tall source
+                        photo must not be able to stretch the row. */}
+                    <div className="relative h-44 w-full shrink-0 overflow-hidden bg-muted sm:h-auto sm:min-h-44 sm:w-48">
                       {primaryMedia ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={primaryMedia.url}
                           alt={vehicleName}
-                          className="h-full w-full object-cover"
+                          className="absolute inset-0 h-full w-full object-cover"
                         />
                       ) : (
-                        <div className="h-full w-full flex items-center justify-center">
+                        <div className="absolute inset-0 flex items-center justify-center">
                           <Car className="h-10 w-10 text-muted-foreground/40" />
                         </div>
                       )}
                     </div>
 
-                    <div className="flex-1 p-5 space-y-4">
+                    <div className="min-w-0 flex-1 p-5 space-y-4">
                       <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <h2 className="font-heading text-lg font-bold tracking-tight">
+                        <div className="min-w-0">
+                          <h2 className="font-heading text-lg font-bold tracking-tight break-words">
                             {listing.title}
                           </h2>
-                          <p className="text-sm text-muted-foreground">{vehicleName}</p>
+                          <p className="text-sm text-muted-foreground break-words">{vehicleName}</p>
                         </div>
-                        <Badge variant="outline" className={STATUS_BADGE[listing.status]}>
+                        <Badge variant="outline" className={`${STATUS_BADGE[listing.status]} shrink-0`}>
                           {listing.status}
                         </Badge>
                       </div>

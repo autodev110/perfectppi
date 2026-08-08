@@ -15,6 +15,8 @@ struct InspectionWorkflowView: View {
     @State private var submitting = false
     @State private var showSubmittedAlert = false
     @State private var errorMessage: String?
+    @State private var pendingPhotoDeletion: PpiMedia?
+    @State private var deletingPhotoId: String?
 
     var body: some View {
         Group {
@@ -56,6 +58,24 @@ struct InspectionWorkflowView: View {
                     showOBDScanner = false
                 }
             }
+        }
+        .confirmationDialog(
+            "Delete this photo?",
+            isPresented: .init(
+                get: { pendingPhotoDeletion != nil },
+                set: { if !$0 { pendingPhotoDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete Photo", role: .destructive) {
+                if let media = pendingPhotoDeletion {
+                    pendingPhotoDeletion = nil
+                    Task { await deletePhoto(media) }
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingPhotoDeletion = nil }
+        } message: {
+            Text("This removes the photo from the inspection. It cannot be undone.")
         }
         .alert("Inspection submitted", isPresented: $showSubmittedAlert) {
             Button("OK", role: .cancel) {}
@@ -208,6 +228,21 @@ struct InspectionWorkflowView: View {
                             SecureImage(path: "/api/ppi/media/\(media.id)")
                         }
                         .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(alignment: .topTrailing) {
+                            Button {
+                                pendingPhotoDeletion = media
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 24, height: 24)
+                                    .background(.black.opacity(0.6), in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(6)
+                            .disabled(deletingPhotoId == media.id)
+                            .accessibilityLabel("Delete photo")
+                        }
                 }
             }
         }
@@ -245,6 +280,17 @@ struct InspectionWorkflowView: View {
         }
         .padding()
         .background(.bar)
+    }
+
+    private func deletePhoto(_ media: PpiMedia) async {
+        guard deletingPhotoId == nil else { return }
+        deletingPhotoId = media.id
+        defer { deletingPhotoId = nil }
+        do {
+            try await model.deleteMedia(media)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func capture(_ data: Data) async {

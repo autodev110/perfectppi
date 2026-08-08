@@ -148,6 +148,19 @@ final class InspectionWorkflowModel: ObservableObject {
         allMedia.append(media)
     }
 
+    /// Deletes a captured photo server-side, then drops it locally. Also clears
+    /// the local "photo captured" marker for the answer when its last photo is
+    /// gone, so a required-photo question goes back to blocking Next.
+    func deleteMedia(_ media: PpiMedia) async throws {
+        try await PpiAPI.deleteMedia(mediaId: media.id)
+        allMedia.removeAll { $0.id == media.id }
+
+        if let answerId = media.ppiAnswerId,
+           !allMedia.contains(where: { $0.ppiAnswerId == answerId }) {
+            localPhotoAnswerIds.remove(answerId)
+        }
+    }
+
     func markLocalPhoto(answerId: String) {
         localPhotoAnswerIds.insert(answerId)
     }

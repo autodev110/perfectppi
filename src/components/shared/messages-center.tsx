@@ -6,6 +6,12 @@ import { useRouter } from "next/navigation";
 import { createConversation } from "@/features/messages/actions";
 import { useRealtimeConversationSync } from "@/features/messages/hooks";
 import type { ConversationSummary, MessageRecipient } from "@/features/messages/queries";
+import {
+  conversationPeopleLabel,
+  conversationTitle,
+  listingCarLabel,
+  participantDisplayName,
+} from "@/features/messages/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -26,17 +32,27 @@ function participantLabel(recipient: MessageRecipient) {
   return recipient.id.slice(0, 8);
 }
 
-function conversationName(conversation: ConversationSummary) {
-  const other = conversation.other_participants[0] ?? conversation.participants[0] ?? null;
-  if (!other) return "Conversation";
-  if (other.display_name?.trim()) return other.display_name;
-  if (other.username?.trim()) return `@${other.username}`;
-  return other.id.slice(0, 8);
+function conversationName(conversation: ConversationSummary, myProfileId: string) {
+  return conversationTitle(
+    conversation.participants,
+    myProfileId,
+    conversation.listing_context,
+  );
 }
 
 function conversationRole(conversation: ConversationSummary) {
   const other = conversation.other_participants[0] ?? conversation.participants[0] ?? null;
   return other?.role ?? null;
+}
+
+/** Initials come from the counterparty, not the full two-person title. */
+function conversationAvatarSeed(conversation: ConversationSummary, myProfileId: string) {
+  return (
+    conversation.other_participants[0] ??
+    conversation.participants.find((p) => p.id !== myProfileId) ??
+    conversation.participants[0] ??
+    null
+  );
 }
 
 function conversationPreview(conversation: ConversationSummary) {
@@ -57,12 +73,14 @@ export function MessagesCenter({
   conversations,
   recipients,
   routeBase,
+  myProfileId,
   title,
   description,
 }: {
   conversations: ConversationSummary[];
   recipients: MessageRecipient[];
   routeBase: string;
+  myProfileId: string;
   title: string;
   description: string;
 }) {
@@ -121,11 +139,11 @@ export function MessagesCenter({
     if (filter === "unread") list = list.filter((c) => c.unread_count > 0);
     if (!q) return list;
     return list.filter((conversation) => {
-      const name = conversationName(conversation).toLowerCase();
+      const name = conversationName(conversation, myProfileId).toLowerCase();
       const preview = conversationPreview(conversation).toLowerCase();
       return name.includes(q) || preview.includes(q);
     });
-  }, [conversations, conversationQuery, filter]);
+  }, [conversations, conversationQuery, filter, myProfileId]);
 
   function handleStartConversation(participantId?: string) {
     const target = participantId ?? selectedRecipient;
@@ -328,12 +346,16 @@ export function MessagesCenter({
         ) : (
           <ul className="divide-y divide-outline-variant/10">
             {filteredConversations.map((conversation) => {
-              const displayName = conversationName(conversation);
+              const peopleLabel = conversationPeopleLabel(
+                conversation.participants,
+                myProfileId,
+              ) || "Conversation";
+              const carLabel = listingCarLabel(conversation.listing_context);
               const role = conversationRole(conversation);
               const preview = conversationPreview(conversation);
               const timestamp = conversation.last_message?.created_at ?? conversation.created_at;
-              const initials = getInitials(displayName || "U");
-              const other = conversation.other_participants[0] ?? conversation.participants[0] ?? null;
+              const other = conversationAvatarSeed(conversation, myProfileId);
+              const initials = getInitials(other ? participantDisplayName(other) : peopleLabel);
               const hue = other ? avatarHue(other.id) : 220;
               const unread = conversation.unread_count > 0;
 
@@ -363,8 +385,12 @@ export function MessagesCenter({
                             unread ? "font-extrabold" : "font-semibold"
                           }`}
                         >
-                          {displayName}
-                          {role ? (
+                          {peopleLabel}
+                          {carLabel ? (
+                            <span className="ml-1.5 text-xs font-semibold text-muted-foreground">
+                              · {carLabel}
+                            </span>
+                          ) : role ? (
                             <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                               · {role}
                             </span>

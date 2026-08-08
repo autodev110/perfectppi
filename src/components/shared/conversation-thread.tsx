@@ -4,13 +4,19 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { markConversationRead, sendMessage } from "@/features/messages/actions";
+import {
+  conversationPeopleLabel,
+  listingCarLabel,
+  participantDisplayName,
+} from "@/features/messages/format";
+import type { ConversationListingContext } from "@/features/messages/queries";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime, formatRelativeTime, getInitials } from "@/lib/utils/formatting";
-import { ArrowLeft, Radio, SendHorizontal, CheckCheck, Check } from "lucide-react";
+import { ArrowLeft, Car, Radio, SendHorizontal, CheckCheck, Check } from "lucide-react";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 
@@ -19,12 +25,7 @@ type Participant = Pick<
   "id" | "display_name" | "username" | "role"
 >;
 
-function participantName(participant: Participant | undefined) {
-  if (!participant) return "Unknown";
-  if (participant.display_name?.trim()) return participant.display_name;
-  if (participant.username?.trim()) return `@${participant.username}`;
-  return participant.id.slice(0, 8);
-}
+const participantName = participantDisplayName;
 
 function avatarHue(id: string) {
   let hash = 0;
@@ -72,6 +73,7 @@ export function ConversationThread({
   routeBase,
   myProfileId,
   participants,
+  listingContext,
   messages: initialMessages,
   highlightMessageId,
 }: {
@@ -79,6 +81,7 @@ export function ConversationThread({
   routeBase: string;
   myProfileId: string;
   participants: Participant[];
+  listingContext?: ConversationListingContext | null;
   messages: MessageRow[];
   highlightMessageId?: string;
 }) {
@@ -105,9 +108,16 @@ export function ConversationThread({
   );
 
   const primaryOther = otherParticipants[0] ?? null;
-  const primaryOtherLabel = primaryOther ? participantName(primaryOther) : "No participants";
-  const primaryOtherInitials = getInitials(primaryOtherLabel || "?");
+  const primaryOtherInitials = getInitials(
+    primaryOther ? participantName(primaryOther) : "?",
+  );
   const primaryOtherHue = primaryOther ? avatarHue(primaryOther.id) : 220;
+
+  // Title names everyone in the thread; the car it is about (marketplace
+  // threads) sits on the subtitle line so it survives a narrow header.
+  const peopleLabel =
+    conversationPeopleLabel(participants, myProfileId) || "No participants";
+  const carLabel = listingCarLabel(listingContext);
 
   const refetch = useCallback(async () => {
     const supabase = createClient();
@@ -315,11 +325,12 @@ export function ConversationThread({
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="font-heading text-lg font-extrabold leading-tight truncate">
-              {primaryOtherLabel}
+              {peopleLabel}
             </h1>
-            {otherParticipants.length > 1 ? (
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                +{otherParticipants.length - 1} more participants
+            {carLabel ? (
+              <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-semibold text-muted-foreground">
+                <Car className="h-3 w-3 shrink-0" />
+                <span className="truncate">{carLabel}</span>
               </p>
             ) : primaryOther ? (
               <p className="mt-0.5 text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">

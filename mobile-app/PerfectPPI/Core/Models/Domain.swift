@@ -160,11 +160,28 @@ struct ConversationLastMessage: Codable, Identifiable, Hashable {
     let hasAttachment: Bool?
 }
 
+/// The marketplace listing a thread is about, when it was started from
+/// "Contact Seller". Absent for ordinary direct messages.
+struct ConversationListingContext: Codable, Hashable {
+    let listingId: String
+    let title: String?
+    let vehicleId: String?
+    let vehicleLabel: String?
+
+    /// Car name for a conversation title, e.g. "2019 Toyota Supra".
+    var carLabel: String? {
+        if let vehicleLabel, !vehicleLabel.isEmpty { return vehicleLabel }
+        if let title, !title.isEmpty { return title }
+        return nil
+    }
+}
+
 struct ConversationSummary: Codable, Identifiable, Hashable {
     let id: String
     let createdAt: Date?
     let participants: [ConversationProfile]
     let otherParticipants: [ConversationProfile]
+    let listingContext: ConversationListingContext?
     let lastMessage: ConversationLastMessage?
     let unreadCount: Int
 }
@@ -185,6 +202,7 @@ struct ConversationThread: Codable, Identifiable, Hashable {
     let id: String
     let createdAt: Date?
     let participants: [ConversationProfile]
+    let listingContext: ConversationListingContext?
     let messages: [ConversationMessage]
 }
 
@@ -198,6 +216,7 @@ struct MessageRecipient: Codable, Identifiable, Hashable {
 struct CreateConversationResult: Codable, Hashable {
     let conversationId: String
     let existing: Bool
+    let listingChanged: Bool?
 }
 
 // MARK: - Reviews

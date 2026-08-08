@@ -187,7 +187,7 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                   <Link
                     key={listing.id}
                     href={`/vehicle/${listing.vehicle_id}?tab=marketplace`}
-                    className="group bg-surface-container-lowest rounded-[1.5rem] overflow-hidden ghost-border shadow-sm hover:shadow-xl transition-all"
+                    className="group min-w-0 bg-surface-container-lowest rounded-[1.5rem] overflow-hidden ghost-border shadow-sm hover:shadow-xl transition-all"
                   >
                     <div className="relative h-56 bg-surface-container-low overflow-hidden">
                       {primaryMedia ? (
@@ -195,31 +195,31 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                         <img
                           src={primaryMedia.url}
                           alt={vehicleName ?? ""}
-                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                         />
                       ) : (
-                        <div className="h-full w-full flex items-center justify-center">
+                        <div className="absolute inset-0 flex items-center justify-center">
                           <Car className="h-14 w-14 text-on-surface-variant/20" />
                         </div>
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-primary-container/70 via-transparent to-transparent opacity-80" />
                       <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
-                        <div>
-                          <p className="text-white font-heading font-extrabold text-xl tracking-tight leading-tight">
+                        <div className="min-w-0">
+                          <p className="text-white font-heading font-extrabold text-xl tracking-tight leading-tight line-clamp-2">
                             {vehicleName}
                           </p>
                           {vehicle?.trim && (
-                            <p className="text-white/70 text-xs font-bold mt-1">{vehicle.trim}</p>
+                            <p className="text-white/70 text-xs font-bold mt-1 truncate">{vehicle.trim}</p>
                           )}
                         </div>
-                        <Badge className="bg-white/90 text-primary hover:bg-white/90">
+                        <Badge className="shrink-0 bg-white/90 text-primary hover:bg-white/90">
                           {formatCurrency(listing.asking_price_cents)}
                         </Badge>
                       </div>
                     </div>
 
-                    <div className="p-5 space-y-4">
-                      <div>
+                    <div className="min-w-0 p-5 space-y-4">
+                      <div className="min-w-0">
                         <p className="font-heading font-bold text-on-surface line-clamp-1">
                           {listing.title ?? vehicleName}
                         </p>
@@ -238,9 +238,9 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                           </span>
                         )}
                         {listing.location && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-[11px] font-bold text-on-surface-variant ghost-border">
-                            <MapPin className="h-3 w-3" />
-                            {listing.location}
+                          <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-[11px] font-bold text-on-surface-variant ghost-border">
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{listing.location}</span>
                           </span>
                         )}
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-teal/10 px-3 py-1 text-[11px] font-bold text-teal ghost-border">
@@ -249,11 +249,11 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-between pt-1">
-                        <p className="text-xs text-on-surface-variant">
+                      <div className="flex items-center justify-between gap-3 pt-1">
+                        <p className="min-w-0 truncate text-xs text-on-surface-variant">
                           {listing.seller?.display_name ?? listing.seller?.username ?? "PerfectPPI user"}
                         </p>
-                        <span className="flex items-center gap-1 text-xs font-bold text-on-tertiary-container group-hover:gap-2 transition-all">
+                        <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-on-tertiary-container group-hover:gap-2 transition-all">
                           View details
                           <ArrowRight className="h-3.5 w-3.5" />
                         </span>

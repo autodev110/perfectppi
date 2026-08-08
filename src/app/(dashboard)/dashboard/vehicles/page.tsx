@@ -53,13 +53,13 @@ export default async function VehiclesPage() {
                 href={`/dashboard/vehicles/${vehicle.id}`}
               >
                 <Card className="overflow-hidden transition-shadow hover:shadow-md">
-                  <div className="flex h-40 items-center justify-center bg-muted">
+                  <div className="relative flex h-40 items-center justify-center overflow-hidden bg-muted">
                     {primaryMedia ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={primaryMedia.url}
                         alt={`${vehicle.year ?? ""} ${vehicle.make ?? ""} ${vehicle.model ?? ""}`.trim()}
-                        className="h-full w-full object-cover"
+                        className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : (
                       <Car className="h-12 w-12 text-muted-foreground/40" />

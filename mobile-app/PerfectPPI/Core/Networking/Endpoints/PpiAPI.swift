@@ -150,4 +150,15 @@ enum PpiAPI {
         let (data, _) = try await APIClient.shared.bytes("/api/ppi/media/\(mediaId)")
         return data
     }
+
+    struct DeleteMediaResult: Codable {
+        let id: String
+    }
+
+    /// Removes a captured inspection photo. Only allowed while the submission
+    /// is still a draft / in progress — the server enforces that.
+    @discardableResult
+    static func deleteMedia(mediaId: String) async throws -> DeleteMediaResult {
+        try await APIClient.shared.delete("/api/ppi/media/\(mediaId)")
+    }
 }

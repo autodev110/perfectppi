@@ -10,11 +10,24 @@ type ConversationProfile = Pick<
   "id" | "display_name" | "username" | "avatar_url" | "role"
 >;
 
+/**
+ * The marketplace listing a thread is about, when it was started from a
+ * "Contact Seller" click. Drives the "· 2019 Toyota Supra" half of a
+ * conversation title on both web and iOS.
+ */
+export interface ConversationListingContext {
+  listing_id: string;
+  title: string | null;
+  vehicle_id: string | null;
+  vehicle_label: string | null;
+}
+
 export interface ConversationSummary {
   id: string;
   created_at: string;
   participants: ConversationProfile[];
   other_participants: ConversationProfile[];
+  listing_context: ConversationListingContext | null;
   last_message: Pick<
     MessageRow,
     "id" | "sender_id" | "content" | "status" | "created_at" | "has_attachment"
@@ -26,6 +39,7 @@ export interface ConversationThread {
   id: string;
   created_at: string;
   participants: ConversationProfile[];
+  listing_context: ConversationListingContext | null;
   messages: MessageRow[];
 }
 
@@ -53,6 +67,48 @@ async function getMyProfileId() {
   return { supabase, profileId: profile?.id ?? null };
 }
 
+/**
+ * Resolves listing id -> car label for conversation titles. Uses the admin
+ * client because the buyer must still see which car a thread is about after
+ * the seller marks the listing sold or archived, which the public
+ * `listings_select_active` policy hides.
+ */
+async function getListingContexts(
+  listingIds: string[],
+): Promise<Map<string, ConversationListingContext>> {
+  const byId = new Map<string, ConversationListingContext>();
+  if (listingIds.length === 0) return byId;
+
+  const admin = createAdminClient();
+  const { data: listings } = await admin
+    .from("marketplace_listings")
+    .select("id, title, vehicle_id, vehicles(year, make, model, trim)")
+    .in("id", listingIds);
+
+  for (const listing of listings ?? []) {
+    const vehicle = listing.vehicles as {
+      year: number | null;
+      make: string | null;
+      model: string | null;
+      trim: string | null;
+    } | null;
+
+    const vehicleLabel =
+      [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim]
+        .filter(Boolean)
+        .join(" ") || null;
+
+    byId.set(listing.id, {
+      listing_id: listing.id,
+      title: listing.title,
+      vehicle_id: listing.vehicle_id,
+      vehicle_label: vehicleLabel,
+    });
+  }
+
+  return byId;
+}
+
 export async function getConversations(limit = 50): Promise<ConversationSummary[]> {
   const { supabase, profileId } = await getMyProfileId();
   if (!profileId) return [];
@@ -66,17 +122,25 @@ export async function getConversations(limit = 50): Promise<ConversationSummary[
   const conversationIds = (myMemberships ?? []).map((row) => row.conversation_id);
   if (conversationIds.length === 0) return [];
 
+  // Authorization is already settled above: `conversationIds` only contains
+  // threads this profile is a participant of. Everything below reads with the
+  // admin client because the `profiles` SELECT policy is own-or-public-only —
+  // under the user client a counterparty with `is_public = false` returns no
+  // row, the participant list comes back empty, and every thread in the list
+  // renders as the generic "Conversation" instead of the people in it.
+  const admin = createAdminClient();
+
   const [{ data: conversations }, { data: memberships }, { data: messages }] = await Promise.all([
-    supabase
+    admin
       .from("conversations")
-      .select("id, created_at")
+      .select("id, created_at, marketplace_listing_id")
       .in("id", conversationIds)
       .order("created_at", { ascending: false }),
-    supabase
+    admin
       .from("conversation_participants")
       .select("conversation_id, profile_id")
       .in("conversation_id", conversationIds),
-    supabase
+    admin
       .from("messages")
       .select("id, conversation_id, sender_id, content, status, created_at, has_attachment")
       .in("conversation_id", conversationIds)
@@ -89,12 +153,23 @@ export async function getConversations(limit = 50): Promise<ConversationSummary[
     new Set((memberships ?? []).map((row) => row.profile_id)),
   );
 
-  const { data: profiles } = profileIds.length
-    ? await supabase
-        .from("profiles")
-        .select("id, display_name, username, avatar_url, role")
-        .in("id", profileIds)
-    : { data: [] as ConversationProfile[] };
+  const [{ data: profiles }, listingContexts] = await Promise.all([
+    profileIds.length
+      ? admin
+          .from("profiles")
+          .select("id, display_name, username, avatar_url, role")
+          .in("id", profileIds)
+      : Promise.resolve({ data: [] as ConversationProfile[] }),
+    getListingContexts(
+      Array.from(
+        new Set(
+          conversations
+            .map((conversation) => conversation.marketplace_listing_id)
+            .filter((id): id is string => !!id),
+        ),
+      ),
+    ),
+  ]);
 
   const profileById = new Map<string, ConversationProfile>();
   for (const profile of profiles ?? []) {
@@ -146,6 +221,9 @@ export async function getConversations(limit = 50): Promise<ConversationSummary[
       created_at: conversation.created_at,
       participants,
       other_participants: otherParticipants,
+      listing_context: conversation.marketplace_listing_id
+        ? listingContexts.get(conversation.marketplace_listing_id) ?? null
+        : null,
       last_message: firstMessageByConversation.get(conversation.id) ?? null,
       unread_count: unreadCountByConversation.get(conversation.id) ?? 0,
     };
@@ -209,7 +287,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
   const [{ data: conversation }, { data: participants }, { data: messages }] = await Promise.all([
     admin
       .from("conversations")
-      .select("id, created_at")
+      .select("id, created_at, marketplace_listing_id")
       .eq("id", conversationId)
       .maybeSingle(),
     admin
@@ -226,17 +304,25 @@ export async function getConversation(conversationId: string): Promise<Conversat
   if (!conversation) return null;
 
   const participantIds = Array.from(new Set((participants ?? []).map((p) => p.profile_id)));
-  const { data: profiles } = participantIds.length
-    ? await admin
-        .from("profiles")
-        .select("id, display_name, username, avatar_url, role")
-        .in("id", participantIds)
-    : { data: [] as ConversationProfile[] };
+  const [{ data: profiles }, listingContexts] = await Promise.all([
+    participantIds.length
+      ? admin
+          .from("profiles")
+          .select("id, display_name, username, avatar_url, role")
+          .in("id", participantIds)
+      : Promise.resolve({ data: [] as ConversationProfile[] }),
+    getListingContexts(
+      conversation.marketplace_listing_id ? [conversation.marketplace_listing_id] : [],
+    ),
+  ]);
 
   return {
     id: conversation.id,
     created_at: conversation.created_at,
     participants: (profiles ?? []) as ConversationProfile[],
+    listing_context: conversation.marketplace_listing_id
+      ? listingContexts.get(conversation.marketplace_listing_id) ?? null
+      : null,
     messages: (messages ?? []) as MessageRow[],
   };
 }

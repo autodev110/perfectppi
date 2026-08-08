@@ -7,7 +7,8 @@ import { AnswerInput } from "@/components/shared/answer-input";
 import { ProgressTracker } from "@/components/shared/progress-tracker";
 import { CameraCapture } from "@/components/shared/camera-capture";
 import { useInspectionWorkflow } from "@/features/ppi/hooks";
-import { startInspection } from "@/features/ppi/actions";
+import { deletePpiMedia, startInspection } from "@/features/ppi/actions";
+import { DeletePhotoButton } from "@/components/shared/delete-photo-button";
 import { SECTION_QUESTION_TEMPLATES, SECTION_LABELS } from "@/features/ppi/constants";
 import type { SectionType, AnswerType } from "@/types/enums";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,16 @@ export function InspectionWorkflowView({
   const [mediaError, setMediaError] = useState<string | null>(null);
 
   const workflow = useInspectionWorkflow(submissionId);
+
+  async function deleteCapturedPhoto(sectionId: string, mediaId: string) {
+    setMediaError(null);
+    const result = await deletePpiMedia(mediaId);
+    if ("error" in result) {
+      setMediaError(result.error ?? "Could not delete that photo.");
+      return;
+    }
+    workflow.removeMedia(sectionId, mediaId);
+  }
 
   // Start the inspection on mount
   useEffect(() => {
@@ -389,8 +400,13 @@ export function InspectionWorkflowView({
               {currentQuestionMedia.map((media, index) => (
                 <div
                   key={media.id}
-                  className="relative aspect-[4/3] overflow-hidden rounded-xl border bg-secondary"
+                  className="group relative aspect-[4/3] overflow-hidden rounded-xl border bg-secondary"
                 >
+                  <DeletePhotoButton
+                    label={`Delete photo ${index + 1}`}
+                    confirmMessage="Delete this inspection photo? This cannot be undone."
+                    onDelete={() => deleteCapturedPhoto(currentSection.id, media.id)}
+                  />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={`/api/ppi/media/${media.id}`}

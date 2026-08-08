@@ -38,6 +38,7 @@ export default async function AdminConversationPage({
       routeBase="/admin/messages"
       myProfileId={profile.id}
       participants={conversation.participants}
+      listingContext={conversation.listing_context}
       messages={conversation.messages}
       highlightMessageId={highlightMessageId}
     />

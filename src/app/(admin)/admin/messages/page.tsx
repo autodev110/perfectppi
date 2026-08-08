@@ -3,7 +3,7 @@ import { getConversations, getMessageRecipientsDirectory } from "@/features/mess
 import { MessagesCenter } from "@/components/shared/messages-center";
 
 export default async function AdminMessagesPage() {
-  await requireRole(["admin"]);
+  const profile = await requireRole(["admin"]);
 
   const [conversations, recipients] = await Promise.all([
     getConversations(),
@@ -14,6 +14,7 @@ export default async function AdminMessagesPage() {
     <MessagesCenter
       conversations={conversations}
       recipients={recipients}
+      myProfileId={profile.id}
       routeBase="/admin/messages"
       title="Messages"
       description="Direct messages across platform users."

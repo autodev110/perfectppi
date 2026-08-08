@@ -30,7 +30,10 @@ struct MessagesView: View {
                                     currentProfileId: currentProfileId
                                 )
                             } label: {
-                                ConversationRow(conversation: conversation)
+                                ConversationRow(
+                                    conversation: conversation,
+                                    currentProfileId: currentProfileId
+                                )
                             }
                         }
                         .listStyle(.insetGrouped)
@@ -60,16 +63,24 @@ struct MessagesView: View {
 
 private struct ConversationRow: View {
     let conversation: ConversationSummary
+    let currentProfileId: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
                 Text(title)
                     .font(.headline)
-                Spacer()
+                    .lineLimit(2)
+                Spacer(minLength: 8)
                 if conversation.unreadCount > 0 {
                     StatusBadge(text: "\(conversation.unreadCount)", color: Theme.Palette.primary)
                 }
+            }
+            if let car = conversation.listingContext?.carLabel {
+                Label(car, systemImage: "car")
+                    .font(.caption)
+                    .foregroundStyle(Theme.Palette.primary)
+                    .lineLimit(1)
             }
             if let content = conversation.lastMessage?.content, !content.isEmpty {
                 Text(content)
@@ -90,10 +101,13 @@ private struct ConversationRow: View {
         .padding(.vertical, 4)
     }
 
+    /// Car name lives on its own line below, so the title is people only.
     private var title: String {
-        let names = conversation.otherParticipants
-            .map { $0.displayName ?? $0.username ?? $0.id.prefix(8).uppercased() }
-        return names.isEmpty ? "Conversation" : names.joined(separator: ", ")
+        let people = ConversationTitle.peopleLabel(
+            participants: conversation.participants,
+            myProfileId: currentProfileId
+        )
+        return people.isEmpty ? "Conversation" : people
     }
 }
 
@@ -158,8 +172,11 @@ struct MessageThreadView: View {
 
     private var threadTitle: String {
         guard let thread else { return "Conversation" }
-        let names = thread.participants.map { $0.displayName ?? $0.username ?? "Member" }
-        return names.isEmpty ? "Conversation" : names.joined(separator: ", ")
+        return ConversationTitle.full(
+            participants: thread.participants,
+            myProfileId: currentProfileId,
+            listing: thread.listingContext
+        )
     }
 
     private func load() async {

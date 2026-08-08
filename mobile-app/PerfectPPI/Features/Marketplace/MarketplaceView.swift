@@ -80,17 +80,20 @@ private struct MarketplaceListingRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                HStack {
+                HStack(spacing: 8) {
                     Text("$\((listing.askingPriceCents / 100).formatted())")
                         .font(.subheadline.weight(.semibold))
+                        .layoutPriority(1)
                     if let location = listing.location, !location.isEmpty {
                         Text(location)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                            .truncationMode(.tail)
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 4)
     }
@@ -109,13 +112,16 @@ private struct MarketplaceListingDetailView: View {
 
     @State private var contacting = false
     @State private var notice: String?
+    @State private var openConversationId: String?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.spacing) {
+                // Aspect ratio first, then fill the width: the reverse order
+                // lets the hero size itself from the photo and overflow.
                 ListingThumbnail(listing: listing)
-                    .frame(maxWidth: .infinity)
                     .aspectRatio(4 / 3, contentMode: .fit)
+                    .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -169,6 +175,12 @@ private struct MarketplaceListingDetailView: View {
         }
         .navigationTitle("Listing")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $openConversationId) { conversationId in
+            MessageThreadView(
+                conversationId: conversationId,
+                currentProfileId: currentProfileId
+            )
+        }
         .alert("Marketplace",
                isPresented: .constant(notice != nil),
                actions: { Button("OK") { notice = nil } },
@@ -202,13 +214,16 @@ private struct MarketplaceListingDetailView: View {
         return parts.isEmpty ? "Vehicle" : parts.joined(separator: " ")
     }
 
+    /// The API creates the thread when there isn't one and returns the existing
+    /// one when there is, so either way this pushes straight into the
+    /// conversation rather than telling the buyer to go find it in Messages.
     private func contactSeller() async {
         guard !contacting else { return }
         contacting = true
         defer { contacting = false }
         do {
-            _ = try await MarketplaceAPI.contactSeller(listingId: listing.id)
-            notice = "Conversation created. Open Messages to continue."
+            let result = try await MarketplaceAPI.contactSeller(listingId: listing.id)
+            openConversationId = result.conversationId
         } catch {
             notice = error.localizedDescription
         }
@@ -401,14 +416,26 @@ private struct NewListingView: View {
 private struct ListingThumbnail: View {
     let listing: MarketplaceListing
 
+    /// `Color.clear` is fully flexible, so this view adopts exactly the frame
+    /// its caller sets and never reports the photo's own size. The image rides
+    /// in an overlay (which does not participate in layout) and is clipped, so
+    /// a large or oddly-proportioned listing photo can no longer push the row
+    /// wider than the screen and get cut off.
     var body: some View {
+        Color.clear
+            .overlay { content }
+            .clipped()
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if let url = listing.vehicle?.vehicleMedia?.first(where: { $0.isPrimary == true })?.url
             ?? listing.vehicle?.vehicleMedia?.first?.url,
            let imageURL = URL(string: url) {
             AsyncImage(url: imageURL) { phase in
                 switch phase {
                 case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fill)
+                    image.resizable().scaledToFill()
                 case .failure:
                     placeholder
                 default:
