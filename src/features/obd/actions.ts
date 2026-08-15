@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { decodeVinDetails } from "@/lib/vehicles/vin-decoder";
+import { formatVin } from "@/lib/utils/vin";
 import type { Database, Json } from "@/types/database";
 import type {
   ObdDiagnosticSnapshotPayload,
@@ -88,6 +91,91 @@ function normalizeRow(row: ObdSnapshotRow): ObdSnapshotResponse {
     raw_transcript: row.raw_transcript as unknown as ObdExchange[],
     monitor_status: row.monitor_status as Record<string, unknown> | null,
   };
+}
+
+async function syncVehicleDetailsFromSnapshot(
+  requestId: string,
+  snapshotVin: string | null | undefined,
+): Promise<void> {
+  const normalizedVin = snapshotVin ? formatVin(snapshotVin) : "";
+  if (!normalizedVin) return;
+
+  const admin = createAdminClient();
+  const { data: request } = await admin
+    .from("ppi_requests")
+    .select("vehicle_id")
+    .eq("id", requestId)
+    .single();
+
+  if (!request?.vehicle_id) return;
+
+  const { data: vehicle } = await admin
+    .from("vehicles")
+    .select("id, vin, year, make, model, trim")
+    .eq("id", request.vehicle_id)
+    .single();
+
+  if (!vehicle) return;
+
+  const existingVin = vehicle.vin ? formatVin(vehicle.vin) : "";
+  if (existingVin && existingVin !== normalizedVin) {
+    return;
+  }
+
+  const updates: Database["public"]["Tables"]["vehicles"]["Update"] = {};
+
+  if (!existingVin) {
+    updates.vin = normalizedVin;
+  }
+
+  const needsDecodedFields =
+    vehicle.year == null ||
+    !vehicle.make?.trim() ||
+    !vehicle.model?.trim() ||
+    !vehicle.trim?.trim();
+
+  if (needsDecodedFields) {
+    try {
+      const decoded = await decodeVinDetails(normalizedVin, vehicle.year);
+      if (decoded) {
+        if (vehicle.year == null && decoded.year != null) {
+          updates.year = decoded.year;
+        }
+        if (!vehicle.make?.trim() && decoded.make) {
+          updates.make = decoded.make;
+        }
+        if (!vehicle.model?.trim() && decoded.model) {
+          updates.model = decoded.model;
+        }
+        if (!vehicle.trim?.trim() && decoded.trim) {
+          updates.trim = decoded.trim;
+        }
+      }
+    } catch (error) {
+      console.error("[obd] VIN decode sync failed", {
+        requestId,
+        vehicleId: vehicle.id,
+        vin: normalizedVin,
+        error,
+      });
+    }
+  }
+
+  if (Object.keys(updates).length === 0) return;
+
+  const { error } = await admin
+    .from("vehicles")
+    .update(updates)
+    .eq("id", vehicle.id);
+
+  if (error) {
+    console.error("[obd] Vehicle sync failed", {
+      requestId,
+      vehicleId: vehicle.id,
+      vin: normalizedVin,
+      error: error.message,
+    });
+  }
 }
 
 export async function listObdSnapshots(
@@ -177,8 +265,11 @@ export async function saveObdSnapshot(
     return { error: error?.message ?? "Failed to save OBD diagnostics" };
   }
 
+  await syncVehicleDetailsFromSnapshot(submission.ppi_request_id, snapshot.vin);
+
   revalidatePath(`/dashboard/ppi/${submission.ppi_request_id}`);
   revalidatePath(`/tech/ppi/${submission.ppi_request_id}`);
+  revalidatePath("/dashboard/vehicles");
 
   return { data: normalizeRow(data) };
 }

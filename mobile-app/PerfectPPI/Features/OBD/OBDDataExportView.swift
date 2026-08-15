@@ -7,7 +7,7 @@ struct OBDDataExportView: View {
     @ObservedObject var session: OBDSession
     @ObservedObject var bluetooth: OBDBluetoothManager
     var submissionId: String?
-    var onSaved: ((OBDSnapshotRecord) -> Void)?
+    var onSaved: ((OBDSnapshotRecord?) -> Void)?
     var onDisconnect: () -> Void
 
     @State private var shareItem: ShareItem?
@@ -229,6 +229,7 @@ struct OBDDataExportView: View {
                 snapshot: session.snapshot,
                 transcript: bluetooth.transcript
             )
+            onSaved?(nil)
             savedMessage = "Queued for sync."
             return
         }

@@ -7,6 +7,11 @@ import SwiftUI
 /// step through one question at a time, supports per-question photo capture,
 /// queues changes offline if the network is down, then submits at the end.
 struct InspectionWorkflowView: View {
+    private enum ScannerEntryChoice {
+        case withScanner
+        case withoutScanner
+    }
+
     let submissionId: String
 
     @StateObject private var model = InspectionWorkflowModel()
@@ -17,6 +22,7 @@ struct InspectionWorkflowView: View {
     @State private var errorMessage: String?
     @State private var pendingPhotoDeletion: PpiMedia?
     @State private var deletingPhotoId: String?
+    @State private var scannerEntryChoice: ScannerEntryChoice?
 
     var body: some View {
         Group {
@@ -26,6 +32,8 @@ struct InspectionWorkflowView: View {
                 ErrorView(message: error.localizedDescription) {
                     Task { await model.load(submissionId: submissionId) }
                 }
+            } else if shouldPromptForScannerAtStart {
+                scannerEntryView
             } else if let section = model.currentSection,
                       let answer = model.currentAnswer {
                 workflowBody(section: section, answer: answer)
@@ -54,7 +62,10 @@ struct InspectionWorkflowView: View {
         .sheet(isPresented: $showOBDScanner) {
             NavigationStack {
                 OBDScannerView(submissionId: submissionId) { snapshot in
-                    model.setOBDSnapshot(snapshot)
+                    if let snapshot {
+                        model.setOBDSnapshot(snapshot)
+                    }
+                    scannerEntryChoice = .withScanner
                     showOBDScanner = false
                 }
             }
@@ -92,6 +103,8 @@ struct InspectionWorkflowView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.spacing) {
+                    obdDiagnosticsCard
+
                     Text(section.sectionType.rawValue
                             .replacingOccurrences(of: "_", with: " ")
                             .capitalized)
@@ -127,15 +140,67 @@ struct InspectionWorkflowView: View {
                         Label("Capture Photo", systemImage: "camera")
                     }
                     .buttonStyle(OutlineButtonStyle())
-
-                    if model.atLast {
-                        obdDiagnosticsCard
-                    }
                 }
                 .padding()
             }
 
             navBar
+        }
+    }
+
+    @ViewBuilder
+    private var scannerEntryView: some View {
+        VStack(spacing: Theme.spacing) {
+            Spacer(minLength: 0)
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.title2)
+                        .foregroundStyle(Theme.Palette.primary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Start With a Scanner?")
+                            .font(.title3.bold())
+                        Text("Swift can connect to the OBD adapter over Bluetooth before the inspection begins.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Text("If you scan now, we'll save the VIN and diagnostic trouble codes with this inspection and use them in the generated AI report.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Pull check-engine and pending codes up front", systemImage: "checkmark.circle.fill")
+                    Label("Save the OBD VIN with the inspection", systemImage: "checkmark.circle.fill")
+                    Label("Use scanner data in the final report and warranty analysis", systemImage: "checkmark.circle.fill")
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+                Button {
+                    showOBDScanner = true
+                } label: {
+                    Label("Use Scanner", systemImage: "dot.radiowaves.left.and.right")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+
+                Button {
+                    scannerEntryChoice = .withoutScanner
+                } label: {
+                    Text("Proceed Without Scanner")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(OutlineButtonStyle())
+            }
+            .padding()
+            .background(Theme.Palette.subtle)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius))
+            .padding()
+
+            Spacer(minLength: 0)
         }
     }
 
@@ -155,6 +220,19 @@ struct InspectionWorkflowView: View {
             }
 
             if let snapshot = model.currentOBDSnapshot {
+                if let vin = snapshot.vin, !vin.isEmpty {
+                    ResultLine(label: "VIN", value: vin)
+                }
+                ResultLine(
+                    label: "Check Engine",
+                    value: snapshot.milOn == nil ? "Unknown" : (snapshot.milOn == true ? "On" : "Off")
+                )
+                if !snapshot.storedDtcs.isEmpty {
+                    ResultLine(label: "Stored Codes", value: snapshot.storedDtcs.joined(separator: ", "))
+                }
+                if !snapshot.pendingDtcs.isEmpty {
+                    ResultLine(label: "Pending Codes", value: snapshot.pendingDtcs.joined(separator: ", "))
+                }
                 Text(snapshot.summaryLine)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -168,7 +246,9 @@ struct InspectionWorkflowView: View {
                     .font(.footnote)
                     .foregroundStyle(Theme.Palette.warning)
             } else {
-                Text("No OBD snapshot saved")
+                Text(scannerEntryChoice == .withoutScanner
+                     ? "Inspection started without a scanner. You can add one any time."
+                     : "No OBD snapshot saved")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -176,7 +256,7 @@ struct InspectionWorkflowView: View {
             Button {
                 showOBDScanner = true
             } label: {
-                Label(model.currentOBDSnapshot == nil ? "Scan OBD" : "Re-scan OBD",
+                Label(model.currentOBDSnapshot == nil ? "Scan Vehicle" : "Re-scan Vehicle",
                       systemImage: "dot.radiowaves.left.and.right")
             }
             .buttonStyle(OutlineButtonStyle())
@@ -369,5 +449,27 @@ struct InspectionWorkflowView: View {
         return OfflineQueue.shared.pendingAnswers.contains { $0.submissionId == submissionId } ||
         OfflineQueue.shared.pendingMedia.contains { $0.submissionId == submissionId } ||
         OfflineQueue.shared.pendingOBDSnapshots.contains { $0.submissionId == submissionId }
+    }
+
+    private var shouldPromptForScannerAtStart: Bool {
+        model.currentAnswer != nil &&
+        model.currentOBDSnapshot == nil &&
+        !OfflineQueue.shared.pendingOBDSnapshots.contains(where: { $0.submissionId == submissionId }) &&
+        scannerEntryChoice == nil
+    }
+}
+
+private struct ResultLine: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline.monospaced())
+        }
     }
 }

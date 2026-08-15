@@ -7,7 +7,7 @@ struct OBDScannerView: View {
     @StateObject private var session: OBDSession
     @State private var step: ConnectionStep = .prepare
     private let submissionId: String?
-    private let onSaved: ((OBDSnapshotRecord) -> Void)?
+    private let onSaved: ((OBDSnapshotRecord?) -> Void)?
 
     enum ConnectionStep: Int, CaseIterable {
         case prepare    // permission/BT ready + intro instructions
@@ -20,7 +20,7 @@ struct OBDScannerView: View {
 
     init(
         submissionId: String? = nil,
-        onSaved: ((OBDSnapshotRecord) -> Void)? = nil
+        onSaved: ((OBDSnapshotRecord?) -> Void)? = nil
     ) {
         // Single shared OBDBluetoothManager instance the session also points
         // to. No inline default — that path would build a throw-away manager
