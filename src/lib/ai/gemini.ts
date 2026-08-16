@@ -9,9 +9,20 @@ function getGeminiApiKey(): string {
   return key;
 }
 
-const genAI = new GoogleGenerativeAI(getGeminiApiKey());
+// Constructed on first use, not at import time. Building the app — or loading
+// any module that transitively imports this one — must not require the key to
+// be present, and a missing key should surface as a failed generation job with
+// a clear error rather than a module that throws on load.
+let genAI: GoogleGenerativeAI | null = null;
+
+export function isGeminiConfigured(): boolean {
+  return Boolean(process.env.GEMINI_PERFECTPPI ?? process.env.GEMINI_API_KEY);
+}
 
 export function getGeminiModel(modelName = "gemini-2.0-flash") {
+  if (!genAI) {
+    genAI = new GoogleGenerativeAI(getGeminiApiKey());
+  }
   return genAI.getGenerativeModel({ model: modelName });
 }
 

@@ -2,6 +2,7 @@ import { getTechQueue } from "@/features/ppi/queries";
 import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
 import Link from "next/link";
 import { ChevronRight, ClipboardCheck } from "lucide-react";
+import { SourceBadge } from "@/components/shared/source-badge";
 import type { PpiRequestStatus } from "@/types/enums";
 
 const QUEUE_TABS: { label: string; value: PpiRequestStatus | "active" }[] = [
@@ -72,6 +73,9 @@ export default async function InspectionQueuePage({ searchParams }: PageProps) {
               : "Unknown Vehicle";
 
             const requester = req.requester as { display_name: string | null } | null;
+            // Organization-requested inspections have no consumer requester.
+            const sourceLabel =
+              req.source_system === "dealerspace" ? "DealerSpace" : "Consumer";
 
             const canAction = ["assigned", "accepted"].includes(req.status);
             const actionLabel =
@@ -87,9 +91,12 @@ export default async function InspectionQueuePage({ searchParams }: PageProps) {
                 className="flex items-center gap-4 p-4 rounded-xl border bg-card"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">{vehicleName}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold truncate">{vehicleName}</p>
+                    <SourceBadge sourceSystem={req.source_system} />
+                  </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    From {requester?.display_name ?? "Consumer"} ·{" "}
+                    From {requester?.display_name ?? sourceLabel} ·{" "}
                     {new Date(req.created_at).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",

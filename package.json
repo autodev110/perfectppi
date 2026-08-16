@@ -6,7 +6,12 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json",
+    "test": "npm run test:unit",
+    "test:unit": "node --test \"tests/unit/*.test.mts\"",
+    "test:db": "psql \"$TEST_DATABASE_URL\" -v ON_ERROR_STOP=1 -f supabase/tests/partner_integration.test.sql",
+    "test:api": "next build && node --test tests/api/partner-api.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1021.0",

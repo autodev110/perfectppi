@@ -270,6 +270,8 @@ struct ReviewEligibilityResponse: Codable, Hashable {
 
 struct PpiRequest: Codable, Identifiable, Hashable {
     let id: String
+    /// Nil for organization-requested inspections: a dealership sends these
+    /// through the partner API, so there is no consumer requester to point at.
     let requesterId: String?
     let vehicleId: String?
     let assignedTechId: String?
@@ -280,9 +282,28 @@ struct PpiRequest: Codable, Identifiable, Hashable {
     let performerType: PerformerType?
     let createdAt: Date?
     let updatedAt: Date?
+    /// "perfectppi" for consumer inspections, "dealerspace" for ones pushed in
+    /// by a connected dealership management system. Optional so older builds
+    /// and trimmed embeds keep decoding.
+    let sourceSystem: String?
     let vehicle: Vehicle?
     let requester: Profile?
     let assignedTech: Profile?
+
+    /// True when this inspection arrived from a partner system.
+    var isExternalSource: Bool {
+        guard let sourceSystem else { return false }
+        return sourceSystem != "perfectppi"
+    }
+
+    /// Short label for the source badge.
+    var sourceLabel: String? {
+        switch sourceSystem {
+        case "dealerspace": return "DealerSpace"
+        case "perfectppi", nil: return nil
+        default: return sourceSystem?.capitalized
+        }
+    }
 }
 
 // MARK: - PPI Submission

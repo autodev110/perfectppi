@@ -206,7 +206,7 @@ export default function AccountSettingsPage() {
                     id="tech-specialties"
                     name="specialties"
                     placeholder="European, EVs, Diagnostics"
-                    defaultValue={techProfile?.specialties.join(", ") ?? ""}
+                    defaultValue={techProfile?.specialties?.join(", ") ?? ""}
                   />
                   <p className="text-xs text-muted-foreground">
                     Separate specialties with commas.
@@ -272,7 +272,7 @@ export default function AccountSettingsPage() {
                     id="org-specialties"
                     name="specialties"
                     placeholder="Luxury, Imports, Electrical"
-                    defaultValue={techProfile?.specialties.join(", ") ?? ""}
+                    defaultValue={techProfile?.specialties?.join(", ") ?? ""}
                   />
                 </div>
                 {orgMessage && (
@@ -318,7 +318,7 @@ export default function AccountSettingsPage() {
                   id="org-specialties"
                   name="specialties"
                   placeholder="Diagnostics, Performance, EVs"
-                  defaultValue={techProfile?.specialties.join(", ") ?? ""}
+                  defaultValue={techProfile?.specialties?.join(", ") ?? ""}
                 />
               </div>
               <input

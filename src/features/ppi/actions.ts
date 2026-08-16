@@ -10,6 +10,7 @@ import {
 } from "./constants";
 import type { PpiRequestStatus, SectionType } from "@/types/enums";
 import type { Json } from "@/types/database";
+import { syncPartnerLifecycle } from "@/features/partner/events";
 
 // ============================================================================
 // Helpers
@@ -339,6 +340,10 @@ export async function acceptRequest(requestId: string) {
   const submissionResult = await createSubmission(requestId, profileId);
   if ("error" in submissionResult) return { error: submissionResult.error };
 
+  await syncPartnerLifecycle(requestId, "accepted", {
+    submissionId: submissionResult.submissionId,
+  });
+
   revalidatePath("/tech/ppi");
   revalidatePath(`/tech/ppi/${requestId}`);
   return { data: { submissionId: submissionResult.submissionId } };
@@ -398,6 +403,8 @@ export async function startInspection(requestId: string, submissionId: string) {
 
     if (subError) return { error: subError.message };
   }
+
+  await syncPartnerLifecycle(requestId, "in_progress", { submissionId });
 
   return { success: true };
 }
@@ -541,6 +548,8 @@ export async function submitPpi(submissionId: string) {
     .eq("id", sub.ppi_request_id);
 
   if (reqError) return { error: reqError.message };
+
+  await syncPartnerLifecycle(sub.ppi_request_id, "submitted", { submissionId });
 
   revalidatePath(`/dashboard/ppi/${sub.ppi_request_id}`);
   revalidatePath("/dashboard/ppi");
@@ -715,6 +724,10 @@ export async function resubmitPpi(requestId: string) {
     .update({ status: "in_progress" })
     .eq("id", requestId);
 
+  // The partner integration tracks the new version, so its manifest and
+  // delivery state follow the resubmission rather than the abandoned one.
+  await syncPartnerLifecycle(requestId, "in_progress", { submissionId: newSub.id });
+
   // Audit log for resubmission
   const { insertAuditLog } = await import("@/features/outputs/actions");
   await insertAuditLog({
@@ -833,6 +846,8 @@ export async function updateRequestStatus(
     .eq("id", requestId);
 
   if (error) return { error: error.message };
+
+  await syncPartnerLifecycle(requestId, newStatus);
 
   revalidatePath(`/dashboard/ppi/${requestId}`);
   revalidatePath(`/tech/ppi/${requestId}`);

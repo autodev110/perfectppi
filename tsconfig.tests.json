@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "jsx": "react-jsx",
+    "incremental": false,
+    // Node's test runner strips types and resolves the real file, so test
+    // imports must name the .ts extension.
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["tests/**/*.ts", "tests/**/*.mts"],
+  "exclude": []
+}

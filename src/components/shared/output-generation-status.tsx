@@ -89,11 +89,11 @@ export function OutputGenerationStatus({
             Generating {outputLabel}...
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            If this takes too long, you can trigger regeneration manually.
+            If this takes too long, you can nudge the queue manually.
           </p>
           <Button variant="outline" size="sm" className="mt-3" onClick={generate}>
             <RefreshCw className="h-3.5 w-3.5 mr-1" />
-            Regenerate Now
+            Retry Now
           </Button>
         </CardContent>
       </Card>
@@ -124,7 +124,7 @@ export function OutputGenerationStatus({
         <CardContent className="py-6 text-center">
           <CheckCircle2 className="h-5 w-5 mx-auto text-emerald-600" />
           <p className="text-sm font-medium text-emerald-700 mt-2">
-            Report generated successfully
+            Report generation queued
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             Refreshing...

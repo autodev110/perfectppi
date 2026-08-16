@@ -3,12 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
-import { generateStandardizedOutput } from "@/lib/ai/standardized-generator";
-import { generateVscCoverage } from "@/lib/ai/vsc-generator";
-import { generateStandardizedReportPdf } from "@/lib/pdf/standardized-report-pdf";
-import { isR2Configured, uploadObject } from "@/lib/storage/r2";
+import { enqueueOutputGeneration, runOutputWorkerTick } from "./worker";
 import type { Json } from "@/types/database";
-import type { SectionType } from "@/types/enums";
 import type { AuditAction } from "@/types/enums";
 
 // ============================================================================
@@ -58,221 +54,99 @@ export async function insertAuditLog(params: {
 }
 
 // ============================================================================
-// triggerOutputGeneration — two-stage pipeline
+// Output generation entry points
+//
+// Generation itself lives in features/outputs/pipeline.ts and is driven by the
+// output_generation_jobs queue. Everything here only enqueues: no caller waits
+// on Gemini or on an R2 upload inside a request.
 // ============================================================================
 
-export async function triggerOutputGeneration(
-  submissionId: string,
-  options?: { actorId?: string }
-) {
-  const admin = createAdminClient();
+/**
+ * Resume a stalled or failed generation. The *same* output version is retried,
+ * so artifacts already stored are reused rather than duplicated under a new
+ * version number.
+ */
+export async function retryOutputGeneration(submissionId: string) {
+  const ctx = await getAuthProfile();
+  if (!ctx) return { error: "Not authenticated" };
 
-  // Load submission with nested sections/answers
-  const { data: submission, error: subError } = await admin
-    .from("ppi_submissions")
-    .select(
-      `
-      id, ppi_request_id, performer_id, version, status, submitted_at,
-      sections:ppi_sections(
-        id, section_type, notes, sort_order,
-        answers:ppi_answers(prompt, answer_value, answer_type, sort_order)
-      )
-    `
-    )
-    .eq("id", submissionId)
-    .single();
+  const authorized = await canAccessSubmission(ctx, submissionId);
+  if (!authorized) return { error: "Not authorized to access this submission" };
 
-  if (subError || !submission) {
-    return { error: subError?.message ?? "Submission not found" };
-  }
-
-  if (submission.status !== "submitted") {
-    return { error: `Submission status is "${submission.status}", expected "submitted"` };
-  }
-
-  // Load the parent request + vehicle
-  const { data: request } = await admin
-    .from("ppi_requests")
-    .select(
-      `
-      id, ppi_type, performer_type, requester_id,
-      vehicle:vehicles(year, make, model, trim, vin, mileage)
-    `
-    )
-    .eq("id", submission.ppi_request_id)
-    .single();
-
-  if (!request) {
-    return { error: "Parent request not found" };
-  }
-
-  // Load performer profile
-  const { data: performer } = await admin
-    .from("profiles")
-    .select("display_name, role")
-    .eq("id", submission.performer_id)
-    .single();
-
-  const vehicle = request.vehicle as {
-    year: number | null;
-    make: string | null;
-    model: string | null;
-    trim: string | null;
-    vin: string | null;
-    mileage: number | null;
-  } | null;
-
-  // Sort sections and answers by sort_order
-  const sortedSections = [...(submission.sections ?? [])]
-    .sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order)
-    .map((s) => ({
-      section_type: s.section_type as SectionType,
-      notes: s.notes,
-      answers: [...(s.answers ?? [])]
-        .sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order)
-        .map((a) => ({
-          prompt: a.prompt,
-          answer_value: a.answer_value,
-          answer_type: a.answer_type,
-        })),
-    }));
-
-  const { data: obdSnapshot } = await admin
-    .from("obd_snapshots")
-    .select(
-      "vin, adapter_name, mil_on, stored_dtc_count, stored_dtcs, pending_dtcs, supported_pids, live_readings, started_at, completed_at",
-    )
-    .eq("ppi_submission_id", submissionId)
-    .eq("is_current", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  // Determine next version numbers
-  const { data: existingStd } = await admin
-    .from("standardized_outputs")
-    .select("version")
-    .eq("ppi_submission_id", submissionId)
-    .order("version", { ascending: false })
-    .limit(1);
-
-  const nextVersion =
-    existingStd && existingStd.length > 0 ? existingStd[0].version + 1 : 1;
-
-  // --- Stage 1: Standardized Output ---
-  let standardizedContent;
-  try {
-    standardizedContent = await generateStandardizedOutput({
-      vehicle: vehicle ?? { year: null, make: null, model: null, trim: null, vin: null, mileage: null },
-      request: { ppi_type: request.ppi_type, performer_type: request.performer_type },
-      submission: { submitted_at: submission.submitted_at, version: submission.version },
-      performer: {
-        display_name: performer?.display_name ?? null,
-        role: performer?.role ?? "consumer",
-      },
-      sections: sortedSections,
-      obdSnapshot: obdSnapshot ?? null,
-    });
-  } catch (err) {
-    return { error: `Stage 1 generation failed: ${err instanceof Error ? err.message : String(err)}` };
-  }
-
-  let standardizedDocumentUrl: string | null = null;
-  if (isR2Configured()) {
-    try {
-      const pdfBuffer = generateStandardizedReportPdf(standardizedContent);
-      const uploaded = await uploadObject({
-        key: `standardized_outputs/${request.requester_id}/${submissionId}/v${nextVersion}.pdf`,
-        body: pdfBuffer,
-        contentType: "application/pdf",
-      });
-      standardizedDocumentUrl = uploaded.publicUrl;
-    } catch (err) {
-      console.error("Failed to upload standardized report PDF:", err);
-    }
-  }
-
-  const { data: stdOutput, error: stdError } = await admin
-    .from("standardized_outputs")
-    .insert({
-      ppi_submission_id: submissionId,
-      version: nextVersion,
-      structured_content: standardizedContent as unknown as Json,
-      document_url: standardizedDocumentUrl,
-    })
-    .select()
-    .single();
-
-  if (stdError || !stdOutput) {
-    return { error: stdError?.message ?? "Failed to insert standardized output" };
-  }
-
-  // --- Stage 2: VSC Coverage ---
-  let coverageData;
-  try {
-    coverageData = await generateVscCoverage(standardizedContent);
-  } catch (err) {
-    return { error: `Stage 2 generation failed: ${err instanceof Error ? err.message : String(err)}` };
-  }
-
-  const { data: vscOutput, error: vscError } = await admin
-    .from("vsc_outputs")
-    .insert({
-      ppi_submission_id: submissionId,
-      standardized_output_id: stdOutput.id,
-      version: nextVersion,
-      coverage_data: coverageData as unknown as Json,
-      document_url: null,
-    })
-    .select()
-    .single();
-
-  if (vscError || !vscOutput) {
-    return { error: vscError?.message ?? "Failed to insert VSC output" };
-  }
-
-  // --- Audit log ---
-  await insertAuditLog({
-    actorId: options?.actorId ?? submission.performer_id,
-    action: "output_regenerated",
-    targetType: "ppi_submission",
-    targetId: submissionId,
-    metadata: {
-      version: nextVersion,
-      standardized_output_id: stdOutput.id,
-      vsc_output_id: vscOutput.id,
-    },
+  const job = await enqueueOutputGeneration({
+    submissionId,
+    trigger: "manual_retry",
+    requestedBy: ctx.id,
   });
+  if ("error" in job) return { error: job.error };
 
-  // Revalidate the detail page
-  revalidatePath(`/dashboard/ppi/${request.id}`);
-  revalidatePath(`/tech/ppi/${request.id}`);
+  void runOutputWorkerTick({ limit: 1 }).catch((error) =>
+    console.error("outputs: manual retry tick failed", error),
+  );
 
-  return {
-    data: {
-      standardizedOutputId: stdOutput.id,
-      vscOutputId: vscOutput.id,
-    },
-  };
+  return { data: { jobId: job.jobId, outputVersion: job.outputVersion } };
 }
 
-// ============================================================================
-// regenerateOutputs — authenticated wrapper
-// ============================================================================
-
+/**
+ * Deliberately produce a *new* immutable output version. Previous versions and
+ * their artifacts stay exactly as they were, so a partner that already imported
+ * version 1 keeps a valid record of what it received.
+ */
 export async function regenerateOutputs(submissionId: string) {
   const ctx = await getAuthProfile();
   if (!ctx) return { error: "Not authenticated" };
 
-  const { data: accessibleSubmission, error: accessError } = await ctx.supabase
+  const authorized = await canAccessSubmission(ctx, submissionId);
+  if (!authorized) return { error: "Not authorized to access this submission" };
+
+  const job = await enqueueOutputGeneration({
+    submissionId,
+    trigger: "manual_regeneration",
+    requestedBy: ctx.id,
+    forceNewVersion: true,
+  });
+  if ("error" in job) return { error: job.error };
+
+  await insertAuditLog({
+    actorId: ctx.id,
+    action: "output_regenerated",
+    targetType: "ppi_submission",
+    targetId: submissionId,
+    metadata: { jobId: job.jobId, outputVersion: job.outputVersion },
+  });
+
+  void runOutputWorkerTick({ limit: 1 }).catch((error) =>
+    console.error("outputs: regeneration tick failed", error),
+  );
+
+  const { data: submission } = await ctx.supabase
+    .from("ppi_submissions")
+    .select("ppi_request_id")
+    .eq("id", submissionId)
+    .maybeSingle();
+
+  if (submission) {
+    revalidatePath(`/dashboard/ppi/${submission.ppi_request_id}`);
+    revalidatePath(`/tech/ppi/${submission.ppi_request_id}`);
+  }
+
+  return { data: { jobId: job.jobId, outputVersion: job.outputVersion } };
+}
+
+/**
+ * Authorization rides on the user-scoped client: the submission RLS policies
+ * already encode performer, requester, organization-manager and admin access,
+ * so a submission the caller cannot read simply comes back empty.
+ */
+async function canAccessSubmission(
+  ctx: NonNullable<Awaited<ReturnType<typeof getAuthProfile>>>,
+  submissionId: string,
+): Promise<boolean> {
+  const { data } = await ctx.supabase
     .from("ppi_submissions")
     .select("id")
     .eq("id", submissionId)
     .maybeSingle();
 
-  if (accessError || !accessibleSubmission) {
-    return { error: "Not authorized to access this submission" };
-  }
-
-  return triggerOutputGeneration(submissionId, { actorId: ctx.id });
+  return Boolean(data);
 }

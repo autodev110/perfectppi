@@ -148,8 +148,8 @@ struct StandardizedReportView: View {
             HStack(spacing: 12) {
                 Button("Retry") { Task { await load() } }
                     .buttonStyle(.bordered)
-                Button(regenerating ? "Regenerating…" : "Regenerate") {
-                    Task { await regenerate() }
+                Button(regenerating ? "Retrying…" : "Retry generation") {
+                    Task { await retryGeneration() }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(regenerating || submissionId == nil)
@@ -159,14 +159,27 @@ struct StandardizedReportView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Resumes the pending output version. Used while the report is still
+    /// being generated — forcing a new version there would leave the
+    /// inspection with two competing report versions.
+    private func retryGeneration() async {
+        await requestGeneration(path: "/api/ppi/outputs/retry")
+    }
+
+    /// Deliberately produces a new immutable version of a report that already
+    /// exists. Only offered from the report view.
     private func regenerate() async {
+        await requestGeneration(path: "/api/ppi/outputs/regenerate")
+    }
+
+    private func requestGeneration(path: String) async {
         guard let submissionId else { return }
         regenerating = true
         defer { regenerating = false }
         do {
             struct Body: Encodable { let submissionId: String }
             let _: Empty = try await APIClient.shared.postCamel(
-                "/api/ppi/outputs/regenerate",
+                path,
                 body: Body(submissionId: submissionId)
             )
             await load()

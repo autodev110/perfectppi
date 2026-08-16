@@ -169,6 +169,52 @@ export async function getObjectFromStoredUrl(storedPublicUrl: string): Promise<{
   };
 }
 
+/**
+ * Fetch an object by its storage key.
+ *
+ * Partner artifacts are addressed by key, not by public URL: the bytes are
+ * streamed back through an authenticated route, so the bucket never needs to be
+ * public and no expiring link becomes a permanent record on the partner's side.
+ */
+export async function getObjectByKey(key: string): Promise<{
+  bytes: Uint8Array;
+  contentType: string;
+}> {
+  const client = getS3Client();
+  const bucket = process.env.R2_BUCKET_NAME!;
+
+  const response = await client.send(
+    new GetObjectCommand({ Bucket: bucket, Key: key.replace(/^\/+/, "") }),
+  );
+
+  const body = response.Body;
+  if (!body) {
+    throw new Error("Empty response body from R2");
+  }
+
+  let bytes: Uint8Array;
+  if (typeof (body as { transformToByteArray?: unknown }).transformToByteArray === "function") {
+    bytes = await (body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray();
+  } else {
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of body as AsyncIterable<Uint8Array>) {
+      chunks.push(chunk);
+    }
+    const total = chunks.reduce((acc, c) => acc + c.length, 0);
+    bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) {
+      bytes.set(c, offset);
+      offset += c.length;
+    }
+  }
+
+  return {
+    bytes,
+    contentType: response.ContentType ?? "application/octet-stream",
+  };
+}
+
 export function buildStorageKey(params: {
   entity: string;
   ownerId: string;

@@ -212,7 +212,7 @@ export default function TechProfilePage() {
                 <Input
                   id="specialties"
                   name="specialties"
-                  defaultValue={techProfile.specialties.join(", ")}
+                  defaultValue={techProfile.specialties?.join(", ") ?? ""}
                   placeholder="Diagnostics, Imports, EVs"
                 />
                 <p className="text-xs text-muted-foreground">

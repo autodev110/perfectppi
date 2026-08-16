@@ -52,36 +52,64 @@ export function useOutputs(submissionId: string | null) {
   return { standardized, vsc, loading, error, refetch: fetchOutputs };
 }
 
+/**
+ * Drives report generation from the UI.
+ *
+ * `generate` retries the *pending* version — that is what the "still
+ * generating" and "failed" states need, and it is why this hook does not call
+ * /outputs/regenerate: forcing a new version while version 1 is still in flight
+ * would produce two jobs, two versions, and two artifact sets for one
+ * inspection.
+ *
+ * `regenerate` is the deliberate "produce a fresh version of a report I can
+ * already see" action, and belongs only on screens where an output exists.
+ *
+ * Both now enqueue and return; the queue does the work, so `complete` means
+ * "accepted", not "finished". The caller keeps polling for the output itself.
+ */
 export function useOutputGeneration(submissionId: string | null) {
   const [status, setStatus] = useState<
     "idle" | "generating" | "complete" | "error"
   >("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const generate = useCallback(async () => {
-    if (!submissionId) return;
+  const request = useCallback(
+    async (path: string) => {
+      if (!submissionId) return;
 
-    setStatus("generating");
-    setError(null);
+      setStatus("generating");
+      setError(null);
 
-    try {
-      const res = await fetch("/api/ppi/outputs/regenerate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ submissionId }),
-      });
+      try {
+        const res = await fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ submissionId }),
+        });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Generation failed");
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error ?? "Generation failed");
+        }
+
+        setStatus("complete");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Generation failed");
+        setStatus("error");
       }
+    },
+    [submissionId],
+  );
 
-      setStatus("complete");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Generation failed");
-      setStatus("error");
-    }
-  }, [submissionId]);
+  const generate = useCallback(
+    () => request("/api/ppi/outputs/retry"),
+    [request],
+  );
 
-  return { status, error, generate };
+  const regenerate = useCallback(
+    () => request("/api/ppi/outputs/regenerate"),
+    [request],
+  );
+
+  return { status, error, generate, regenerate };
 }

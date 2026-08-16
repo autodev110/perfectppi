@@ -9,7 +9,7 @@ struct TechnicianQueueView: View {
                     if items.isEmpty {
                         EmptyStateCard(
                             title: "No assignments yet",
-                            message: "When a consumer requests you for an inspection, it'll show up here.",
+                            message: "Inspections assigned to you — whether requested by a consumer or sent from a connected dealership — show up here.",
                             systemImage: "list.clipboard"
                         )
                         .padding()
@@ -46,10 +46,15 @@ private struct QueueRow: View {
                 StatusBadge(text: request.status.rawValue.replacingOccurrences(of: "_", with: " "),
                             color: badgeColor(for: request.status))
             }
-            if let updated = request.updatedAt {
-                Text(updated, style: .relative)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                if let sourceLabel = request.sourceLabel {
+                    StatusBadge(text: sourceLabel, color: Theme.Palette.primary)
+                }
+                if let updated = request.updatedAt {
+                    Text(updated, style: .relative)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.vertical, 4)

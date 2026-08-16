@@ -23,5 +23,8 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "supabase"]
+  // `tests/` runs under Node's built-in test runner and type stripping, which
+  // requires explicit .ts import specifiers that this bundler-resolution config
+  // rejects. The tests are typechecked by tsconfig.tests.json instead.
+  "exclude": ["node_modules", "supabase", "tests", "mobile-app"]
 }

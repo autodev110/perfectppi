@@ -36,8 +36,10 @@ export const navConfig = {
     { label: "Dashboard", href: "/org", icon: "LayoutDashboard" },
     { label: "Technicians", href: "/org/technicians", icon: "Users" },
     { label: "Inspections", href: "/org/inspections", icon: "ClipboardCheck" },
+    { label: "DealerSpace", href: "/org/inspections/dealerspace", icon: "Plug" },
     { label: "Profile", href: "/org/profile", icon: "Building2" },
     { label: "Messages", href: "/org/messages", icon: "MessageSquare" },
+    { label: "Settings", href: "/org/settings", icon: "Settings" },
   ],
   admin: [
     { label: "Overview", href: "/admin", icon: "LayoutDashboard" },

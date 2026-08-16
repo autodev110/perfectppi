@@ -1,5 +1,11 @@
 import { getMyOrg, getOrgTechnicians } from "@/features/organizations/queries";
 import { requireRole } from "@/features/auth/guards";
+import {
+  getConnectionUserLinks,
+  getOrgInstallationCodes,
+  getOrgPartnerConnections,
+} from "@/features/partner/queries";
+import { DealerSpaceConnectionPanel } from "./dealerspace-connection-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,8 +22,13 @@ export default async function OrgSettingsPage() {
   if (!org) redirect("/login");
 
   const technicians = await getOrgTechnicians(org.id);
-  const managerCount = technicians.filter(() => false).length; // managers tracked via org_memberships
   const techCount = technicians.length;
+
+  const [connections, codes] = await Promise.all([
+    getOrgPartnerConnections(org.id),
+    getOrgInstallationCodes(org.id),
+  ]);
+  const userLinks = await getConnectionUserLinks(connections.map((c) => c.id));
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -119,6 +130,12 @@ export default async function OrgSettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <DealerSpaceConnectionPanel
+        connections={connections}
+        codes={codes}
+        userLinks={userLinks}
+      />
     </div>
   );
 }

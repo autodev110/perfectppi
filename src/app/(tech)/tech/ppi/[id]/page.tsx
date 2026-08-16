@@ -8,6 +8,8 @@ import { PpiBadge } from "@/components/shared/ppi-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Car, User, Calendar, ChevronLeft, AlertCircle } from "lucide-react";
+import { DealerSpaceInspectionPanel } from "@/components/shared/dealerspace-inspection-panel";
+import { SourceBadge } from "@/components/shared/source-badge";
 import Link from "next/link";
 
 interface RequestDetail {
@@ -17,6 +19,7 @@ interface RequestDetail {
   whose_car: string;
   requester_role: string;
   created_at: string;
+  source_system?: string | null;
   vehicle: {
     year: number | null;
     make: string | null;
@@ -106,6 +109,7 @@ export default function TechInspectionDetailPage() {
           <div className="flex items-center gap-2">
             <h1 className="font-heading text-xl font-bold">{vehicleName}</h1>
             <PpiBadge type={request.ppi_type as "personal" | "general_tech" | "certified_tech"} />
+            <SourceBadge sourceSystem={request.source_system} />
           </div>
           <PpiStatusBadge status={request.status as "draft" | "pending_assignment" | "assigned" | "accepted" | "in_progress" | "submitted" | "needs_revision" | "completed" | "archived"} />
         </div>
@@ -155,7 +159,8 @@ export default function TechInspectionDetailPage() {
         </CardHeader>
         <CardContent className="text-sm">
           <p className="font-medium">
-            {request.requester?.display_name ?? "Consumer"}
+            {request.requester?.display_name ??
+              (request.source_system === "dealerspace" ? "Dealership" : "Consumer")}
           </p>
           <p className="text-muted-foreground flex items-center gap-1 mt-1">
             <Calendar className="h-3.5 w-3.5" />
@@ -168,6 +173,8 @@ export default function TechInspectionDetailPage() {
           </p>
         </CardContent>
       </Card>
+
+      <DealerSpaceInspectionPanel requestId={id} />
 
       {/* Actions */}
       {canAccept && (
