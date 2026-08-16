@@ -29,20 +29,29 @@ export const dynamic = "force-dynamic";
 // overwrite.
 // ============================================================================
 
-const vehicleSchema = z.object({
-  vin: z.string().trim().min(11).max(17),
-  stockNumber: z.string().trim().max(64).optional().nullable(),
-  year: z.number().int().min(1900).max(2100).optional().nullable(),
-  make: z.string().trim().max(64).optional().nullable(),
-  model: z.string().trim().max(64).optional().nullable(),
-  trim: z.string().trim().max(64).optional().nullable(),
-  mileage: z.number().int().min(0).max(3_000_000).optional().nullable(),
-  exteriorColor: z.string().trim().max(64).optional().nullable(),
-  interiorColor: z.string().trim().max(64).optional().nullable(),
-  engine: z.string().trim().max(128).optional().nullable(),
-  transmission: z.string().trim().max(64).optional().nullable(),
-  drivetrain: z.string().trim().max(32).optional().nullable(),
-});
+const vehicleSchema = z
+  .object({
+    vin: z.string().trim().min(11).max(17),
+    stockNumber: z.string().trim().max(64).optional().nullable(),
+    year: z.number().int().min(1900).max(2100).optional().nullable(),
+    make: z.string().trim().max(64).optional().nullable(),
+    model: z.string().trim().max(64).optional().nullable(),
+    trim: z.string().trim().max(64).optional().nullable(),
+    mileage: z.number().int().min(0).max(3_000_000).optional().nullable(),
+    exteriorColor: z.string().trim().max(64).optional().nullable(),
+    interiorColor: z.string().trim().max(64).optional().nullable(),
+    engine: z.string().trim().max(128).optional().nullable(),
+    transmission: z.string().trim().max(64).optional().nullable(),
+    drivetrain: z.string().trim().max(32).optional().nullable(),
+  })
+  .strict();
+
+const sourceSchema = z
+  .object({
+    system: z.literal("dealerspace"),
+    label: z.string().trim().max(120).optional(),
+  })
+  .strict();
 
 const bodySchema = z
   .object({
@@ -51,12 +60,7 @@ const bodySchema = z
     externalVehicleId: z.string().trim().max(128).optional().nullable(),
     externalInspectionPhaseId: z.string().trim().max(128).optional().nullable(),
     externalActorId: z.string().trim().min(1).max(128),
-    source: z
-      .object({
-        system: z.literal("dealerspace"),
-        label: z.string().trim().max(120).optional(),
-      })
-      .optional(),
+    source: sourceSchema.optional(),
     vehicle: vehicleSchema,
   })
   // Bounded by construction: no passthrough, so customer, lead, deal, pricing

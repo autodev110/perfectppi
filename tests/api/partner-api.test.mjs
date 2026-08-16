@@ -612,6 +612,30 @@ describe("inspection creation", () => {
     assert.equal(status, 400, "customer or finance data must not be accepted");
   });
 
+  test("rejects unexpected fields nested inside accepted objects", async () => {
+    const vehicleResult = await apiRequest(baseUrl, "/api/v1/partner/inspections", {
+      method: "POST",
+      token: alphaConn.token,
+      idempotencyKey: "extra-nested-vehicle-field",
+      body: {
+        ...payload,
+        vehicle: { ...payload.vehicle, customerSsn: "000-00-0000" },
+      },
+    });
+    assert.equal(vehicleResult.status, 400);
+
+    const sourceResult = await apiRequest(baseUrl, "/api/v1/partner/inspections", {
+      method: "POST",
+      token: alphaConn.token,
+      idempotencyKey: "extra-nested-source-field",
+      body: {
+        ...payload,
+        source: { ...payload.source, customerId: "customer-123" },
+      },
+    });
+    assert.equal(sourceResult.status, 400);
+  });
+
   test("creates the inspection assigned to the linked technician", async () => {
     const { status, body } = await apiRequest(baseUrl, "/api/v1/partner/inspections", {
       method: "POST",
@@ -950,6 +974,21 @@ describe("signed outbound webhooks", () => {
     assert.equal(payload.deliveryVersion, 1);
     assert.ok(!("artifacts" in payload), "artifacts are pulled, not pushed");
     assert.ok(delivered.rawBody.length < 1024, "the notification stays small");
+
+    // The terminal lifecycle event is queued only after the deliverables event
+    // succeeds, so one more tick delivers it without recursively queueing more.
+    const terminalTick = await apiRequest(baseUrl, "/api/internal/workers/deliveries", {
+      method: "POST",
+      headers: { "x-worker-secret": WORKER_SECRET },
+    });
+    assert.equal(terminalTick.status, 200);
+
+    const terminal = await webhook.waitForEvent("inspection.delivered");
+    assert.ok(terminal, "a successful delivery emits inspection.delivered");
+    const terminalPayload = JSON.parse(terminal.rawBody);
+    assert.equal(terminalPayload.inspectionId, state.inspectionId);
+    assert.equal(terminalPayload.deliveryVersion, 1);
+    assert.equal(terminalPayload.deliverablesEventId, payload.eventId);
 
     // A signature computed with the wrong secret must not verify.
     const forged = createHmac("sha256", "whsec_wrong")

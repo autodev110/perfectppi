@@ -19,7 +19,7 @@ export function isGeminiConfigured(): boolean {
   return Boolean(process.env.GEMINI_PERFECTPPI ?? process.env.GEMINI_API_KEY);
 }
 
-export function getGeminiModel(modelName = "gemini-2.0-flash") {
+export function getGeminiModel(modelName = "gemini-2.5-flash") {
   if (!genAI) {
     genAI = new GoogleGenerativeAI(getGeminiApiKey());
   }

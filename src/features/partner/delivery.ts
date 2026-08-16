@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptSecret, signWebhookPayload } from "./crypto";
+import { enqueuePartnerEvent } from "./events";
 import { checkUrlIsSafeDestination } from "./url-safety";
 import {
   WEBHOOK_LEASE_SECONDS,
@@ -349,6 +350,44 @@ async function finalize(
       .from("external_inspection_refs")
       .update(refUpdate)
       .eq("id", event.external_inspection_ref_id);
+
+    if (outcome.state !== "retrying") {
+      const payload =
+        typeof event.payload === "object" && event.payload !== null && !Array.isArray(event.payload)
+          ? event.payload
+          : {};
+      const requestId =
+        typeof payload.inspectionId === "string" ? payload.inspectionId : null;
+      const deliveryVersion =
+        typeof payload.deliveryVersion === "number" ? payload.deliveryVersion : undefined;
+      const deliverablesEventId =
+        typeof payload.eventId === "string" ? payload.eventId : event.id;
+
+      if (requestId) {
+        const terminalType =
+          outcome.state === "delivered"
+            ? "inspection.delivered"
+            : "inspection.delivery_failed";
+
+        await enqueuePartnerEvent({
+          connectionId: event.partner_connection_id,
+          refId: event.external_inspection_ref_id,
+          requestId,
+          type: terminalType,
+          data: {
+            deliveryVersion,
+            deliverablesEventId,
+            ...(outcome.state === "failed"
+              ? {
+                  errorCategory: errorCategory ?? "unknown",
+                  responseStatus,
+                }
+              : {}),
+          },
+          dedupeKey: `${terminalType}:${event.id}`,
+        });
+      }
+    }
   }
 
   return outcome;

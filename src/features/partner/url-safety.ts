@@ -132,21 +132,70 @@ function isPublicIpv4(address: string): boolean {
 
 function isPublicIpv6(address: string): boolean {
   const normalized = address.toLowerCase();
+  const words = parseIpv6Words(normalized);
 
-  if (normalized === "::" || normalized === "::1") return false;
+  if (!words) return false;
 
-  // IPv4-mapped (::ffff:a.b.c.d) and IPv4-compatible forms are judged by the
-  // embedded v4 address, otherwise ::ffff:169.254.169.254 slips through.
-  const mapped = /^::(?:ffff:)?(\d+\.\d+\.\d+\.\d+)$/.exec(normalized);
-  if (mapped) return isPublicIpv4(mapped[1]);
+  const [a, b, c, d, e, f] = words;
 
-  const head = normalized.split(":")[0] ?? "";
-  const leading = parseInt(head.padStart(4, "0").slice(0, 4), 16);
-  if (Number.isNaN(leading)) return false;
+  // Reject all mapped/compatible literals, including hexadecimal forms such as
+  // ::ffff:a9fe:a9fe. Allowing public mapped addresses is not worth leaving a
+  // second syntax through which private IPv4 destinations can be disguised.
+  if (a === 0 && b === 0 && c === 0 && d === 0 && e === 0) {
+    if (f === 0 || f === 0xffff) return false;
+  }
 
-  if ((leading & 0xfe00) === 0xfc00) return false; // fc00::/7 unique local
-  if ((leading & 0xffc0) === 0xfe80) return false; // fe80::/10 link-local
-  if ((leading & 0xff00) === 0xff00) return false; // ff00::/8 multicast
+  if ((a & 0xfe00) === 0xfc00) return false; // fc00::/7 unique local
+  if ((a & 0xffc0) === 0xfe80) return false; // fe80::/10 link-local
+  if ((a & 0xff00) === 0xff00) return false; // ff00::/8 multicast
+
+  // Special-use prefixes that can tunnel an IPv4 target or are not globally
+  // routable callback destinations.
+  if (a === 0x0064 && b === 0xff9b && c === 0 && d === 0 && e === 0 && f === 0) {
+    return false; // 64:ff9b::/96 NAT64
+  }
+  if (a === 0x0064 && b === 0xff9b && c === 1) return false; // 64:ff9b:1::/48
+  if (a === 0x0100 && b === 0 && c === 0 && d === 0) return false; // 100::/64 discard
+  if (a === 0x2001 && (b & 0xfe00) === 0) return false; // 2001::/23 protocols
+  if (a === 0x2001 && b === 0x0db8) return false; // documentation
+  if (a === 0x2002) return false; // 6to4 can encapsulate private IPv4
+  if (a === 0x3fff && (b & 0xf000) === 0) return false; // documentation
 
   return true;
+}
+
+function parseIpv6Words(address: string): number[] | null {
+  if (address.includes("%")) return null;
+
+  let value = address;
+  if (value.includes(".")) {
+    const separator = value.lastIndexOf(":");
+    if (separator < 0) return null;
+    const ipv4 = value.slice(separator + 1).split(".").map(Number);
+    if (
+      ipv4.length !== 4 ||
+      ipv4.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+    ) {
+      return null;
+    }
+    value = `${value.slice(0, separator)}:${((ipv4[0] << 8) | ipv4[1]).toString(16)}:${((ipv4[2] << 8) | ipv4[3]).toString(16)}`;
+  }
+
+  const halves = value.split("::");
+  if (halves.length > 2) return null;
+
+  const left = halves[0] ? halves[0].split(":") : [];
+  const right = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - left.length - right.length;
+
+  if ((halves.length === 1 && missing !== 0) || (halves.length === 2 && missing < 1)) {
+    return null;
+  }
+
+  const rawWords = [...left, ...Array(missing).fill("0"), ...right];
+  if (rawWords.length !== 8 || rawWords.some((word) => !/^[0-9a-f]{1,4}$/i.test(word))) {
+    return null;
+  }
+
+  return rawWords.map((word) => parseInt(word, 16));
 }

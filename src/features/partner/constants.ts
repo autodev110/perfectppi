@@ -100,7 +100,9 @@ export const RATE_LIMITS = {
 
 // --- Retry/backoff -----------------------------------------------------------
 
-export const OUTPUT_JOB_LEASE_SECONDS = 300;
+// Longer than the 300-second worker runtime so another worker cannot reclaim a
+// job while the original invocation is still uploading its final artifacts.
+export const OUTPUT_JOB_LEASE_SECONDS = 600;
 export const OUTPUT_JOB_MAX_ATTEMPTS = 5;
 export const WEBHOOK_LEASE_SECONDS = 120;
 export const WEBHOOK_MAX_ATTEMPTS = 8;

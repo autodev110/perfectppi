@@ -89,11 +89,16 @@ describe("address classification", () => {
     }
   });
 
-  test("judges IPv4-mapped IPv6 by the embedded address", () => {
-    // The classic bypass: metadata service wearing an IPv6 costume.
-    assert.equal(isPublicAddress("::ffff:169.254.169.254"), false);
-    assert.equal(isPublicAddress("::ffff:127.0.0.1"), false);
-    assert.equal(isPublicAddress("::ffff:8.8.8.8"), true);
+  test("rejects every IPv4-mapped IPv6 form", () => {
+    for (const address of [
+      "::ffff:169.254.169.254",
+      "::ffff:127.0.0.1",
+      "::ffff:a9fe:a9fe",
+      "::ffff:7f00:1",
+      "::ffff:8.8.8.8",
+    ]) {
+      assert.equal(isPublicAddress(address), false, `${address} must not be public`);
+    }
   });
 
   test("accepts routable IPv6", () => {
@@ -110,6 +115,14 @@ describe("address classification", () => {
 describe("full destination check", () => {
   test("rejects a literal private address in the URL", async () => {
     const result = await checkUrlIsSafeDestination("https://169.254.169.254/latest/meta-data/");
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "private_address");
+  });
+
+  test("rejects hexadecimal IPv4-mapped metadata addresses", async () => {
+    const result = await checkUrlIsSafeDestination(
+      "https://[::ffff:a9fe:a9fe]/latest/meta-data/",
+    );
     assert.equal(result.ok, false);
     assert.equal(result.reason, "private_address");
   });

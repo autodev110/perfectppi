@@ -2333,6 +2333,19 @@ export type Database = {
           was_created: boolean
         }[]
       }
+      partner_exchange_user_link: {
+        Args: {
+          p_authorization_code_hash: string
+          p_connection_id: string
+          p_transaction_id: string
+        }
+        Returns: {
+          external_user_id: string
+          linked_at: string
+          profile_id: string
+          status: string
+        }[]
+      }
       partner_rate_limit_hit: {
         Args: { p_bucket_key: string; p_window_start: string }
         Returns: number
@@ -2708,4 +2721,3 @@ export const Constants = {
     },
   },
 } as const
-

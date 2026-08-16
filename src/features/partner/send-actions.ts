@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -143,9 +144,13 @@ export async function sendInspectionToDealerSpace(
     dedupeKey: `delivery_requested:${ref.id}:v${outputVersion}`,
   });
 
-  void runDeliveryWorkerTick({ limit: 5 }).catch((tickError) =>
-    console.error("partner: inline delivery tick failed", tickError),
-  );
+  after(async () => {
+    try {
+      await runDeliveryWorkerTick({ limit: 5 });
+    } catch (tickError) {
+      console.error("partner: inline delivery tick failed", tickError);
+    }
+  });
 
   revalidatePath(`/tech/ppi/${requestId}`);
   revalidatePath("/org/inspections");

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { authenticatePartnerRequest } from "@/features/partner/auth";
+import { secureCompareHex, sha256Hex } from "@/features/partner/crypto";
 import { partnerError } from "@/features/partner/errors";
 import { isUuid } from "@/features/partner/inspections";
 import { ARTIFACT_FILENAMES, type ArtifactType } from "@/features/partner/constants";
@@ -65,6 +66,15 @@ export async function GET(
   } catch (error) {
     console.error("partner: artifact fetch failed", artifact.storage_key, error);
     return partnerError("storage_unavailable", "Artifact bytes could not be read.");
+  }
+
+  const downloadedSha256 = sha256Hex(bytes);
+  if (!secureCompareHex(downloadedSha256, artifact.sha256)) {
+    console.error("partner: artifact checksum mismatch", artifact.id);
+    return partnerError(
+      "storage_unavailable",
+      "Artifact integrity verification failed.",
+    );
   }
 
   const filename =

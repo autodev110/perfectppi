@@ -390,8 +390,12 @@ export async function runOutputGenerationJob(params: {
     }
 
     const bytes = buildBody[artifactType]();
+    const checksum = sha256OfBytes(bytes);
     const extension = artifactType.endsWith("_pdf") ? "pdf" : "json";
-    const storageKey = `integration_artifacts/${ownerScope}/${submissionId}/v${outputVersion}/${artifactType}.${extension}`;
+    // The digest in the key makes concurrent writes non-destructive: workers
+    // that somehow produce different bytes cannot overwrite each other before
+    // the unique artifact row decides which immutable version wins.
+    const storageKey = `integration_artifacts/${ownerScope}/${submissionId}/v${outputVersion}/${artifactType}-${checksum}.${extension}`;
 
     try {
       await uploadObject({
@@ -415,7 +419,7 @@ export async function runOutputGenerationJob(params: {
         artifact_type: artifactType,
         content_type: ARTIFACT_CONTENT_TYPES[artifactType],
         size_bytes: bytes.byteLength,
-        sha256: sha256OfBytes(bytes),
+        sha256: checksum,
         storage_key: storageKey,
         generated_at: generatedAt,
       })

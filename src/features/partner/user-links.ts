@@ -2,7 +2,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { siteConfig } from "@/config/site";
 import {
   generateOpaqueHandle,
-  secureCompareHex,
   sha256Hex,
 } from "./crypto";
 import {
@@ -319,101 +318,52 @@ export async function exchangeUserLinkCode(
 
   const { data: transaction } = await admin
     .from("partner_user_link_transactions")
-    .select("*")
+    .select("id")
     .eq("state", state)
     // Scoped to the calling connection: a code issued for one dealership can
     // never be redeemed with another dealership's token.
     .eq("partner_connection_id", connection.id)
     .maybeSingle();
 
-  if (
-    !transaction ||
-    transaction.status !== "authorized" ||
-    !transaction.authorization_code_hash ||
-    !transaction.authorized_profile_id
-  ) {
+  if (!transaction) {
     return { error: "invalid_authorization_code" };
   }
 
-  if (!secureCompareHex(sha256Hex(code), transaction.authorization_code_hash)) {
-    return { error: "invalid_authorization_code" };
-  }
+  const { data, error } = await admin.rpc("partner_exchange_user_link", {
+    p_connection_id: connection.id,
+    p_transaction_id: transaction.id,
+    p_authorization_code_hash: sha256Hex(code),
+  });
 
-  if (
-    transaction.code_expires_at &&
-    new Date(transaction.code_expires_at).getTime() < Date.now()
-  ) {
-    return { error: "authorization_expired" };
-  }
-
-  // Re-verified at redemption, not just at consent: membership may have been
-  // withdrawn in the seconds since the technician clicked Authorize.
-  const eligibility = await checkLinkEligibility(
-    transaction.authorized_profile_id,
-    connection.organization_id,
-  );
-  if (!eligibility.eligible || !eligibility.profile) {
-    return { error: "invalid_user_link" };
-  }
-
-  // Single-use: consuming is conditional on the row still being 'authorized',
-  // so a replayed exchange finds nothing to claim.
-  const { data: consumed } = await admin
-    .from("partner_user_link_transactions")
-    .update({ status: "consumed", consumed_at: new Date().toISOString() })
-    .eq("id", transaction.id)
-    .eq("status", "authorized")
-    .select("id")
-    .maybeSingle();
-
-  if (!consumed) return { error: "invalid_authorization_code" };
-
-  const now = new Date().toISOString();
-
-  // Relinking supersedes the previous mapping rather than accumulating rows the
-  // unique indexes would reject — both for this staff member and for this
-  // profile, since either side may be the one being re-pointed.
-  //
-  // Two explicit statements rather than one `.or()` filter: external_user_id is
-  // free text supplied by DealerSpace, and interpolating it into a PostgREST
-  // filter expression would let a comma or a dot rewrite the predicate.
-  await admin
-    .from("partner_user_links")
-    .update({ status: "revoked", revoked_at: now })
-    .eq("partner_connection_id", connection.id)
-    .eq("status", "active")
-    .eq("external_user_id", transaction.external_user_id);
-
-  await admin
-    .from("partner_user_links")
-    .update({ status: "revoked", revoked_at: now })
-    .eq("partner_connection_id", connection.id)
-    .eq("status", "active")
-    .eq("profile_id", transaction.authorized_profile_id);
-
-  const { data: link, error: linkError } = await admin
-    .from("partner_user_links")
-    .insert({
-      partner_connection_id: connection.id,
-      external_user_id: transaction.external_user_id,
-      profile_id: transaction.authorized_profile_id,
-      linked_at: now,
-      last_verified_at: now,
-    })
-    .select("linked_at, status")
-    .single();
-
-  if (linkError || !link) {
-    console.error("partner: user link insert failed", linkError?.message);
+  if (error) {
+    if (error.message.includes("authorization_expired")) {
+      return { error: "authorization_expired" };
+    }
+    if (error.message.includes("invalid_user_link")) {
+      return { error: "invalid_user_link" };
+    }
+    if (error.message.includes("invalid_authorization_code")) {
+      return { error: "invalid_authorization_code" };
+    }
+    console.error("partner: atomic user link exchange failed", error.message);
     return { error: "internal_error" };
   }
 
+  const link = data?.[0];
+  if (!link) return { error: "internal_error" };
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("display_name, username")
+    .eq("id", link.profile_id)
+    .maybeSingle();
+
   return {
     data: {
-      externalUserId: transaction.external_user_id,
-      perfectppiProfileId: eligibility.profile.id,
-      displayName: eligibility.profile.displayName,
-      username: eligibility.profile.username,
+      externalUserId: link.external_user_id,
+      perfectppiProfileId: link.profile_id,
+      displayName: profile?.display_name ?? null,
+      username: profile?.username ?? null,
       status: link.status,
       linkedAt: link.linked_at,
     },

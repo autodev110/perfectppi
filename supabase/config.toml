@@ -1,5 +1,4 @@
-[project]
-id = "perfectppi"
+project_id = "perfectppi"
 
 [api]
 enabled = true

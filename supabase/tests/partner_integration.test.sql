@@ -739,7 +739,141 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
--- 13. Existing consumer flows are untouched (acceptance test 11)
+-- 13. User-link exchange is atomic
+-- ---------------------------------------------------------------------------
+
+DO $$
+BEGIN
+  PERFORM pg_temp.act_as('11110000-0000-4000-8000-000000000001');
+  BEGIN
+    PERFORM *
+    FROM public.partner_exchange_user_link(
+      'c0000000-0000-4000-8000-00000000000a',
+      'd0000000-0000-4000-8000-000000000099',
+      'not-a-real-hash'
+    );
+    RAISE EXCEPTION 'FAIL - authenticated could execute the internal exchange RPC';
+  EXCEPTION WHEN insufficient_privilege THEN
+    PERFORM pg_temp.act_as_service();
+    PERFORM pg_temp.ok(true, 'the exchange RPC is not executable by authenticated');
+  END;
+END $$;
+
+DO $$
+DECLARE
+  tech_a uuid := (SELECT id FROM public.profiles WHERE display_name = 'tech-a@example.com');
+  exchanged record;
+  transaction_status text;
+  old_link_status text;
+BEGIN
+  INSERT INTO public.partner_user_link_transactions (
+    id, partner_connection_id, external_user_id, state, redirect_uri, status,
+    authorized_profile_id, authorization_code_hash, code_expires_at, expires_at,
+    authorized_at
+  ) VALUES (
+    'd0000000-0000-4000-8000-000000000001',
+    'c0000000-0000-4000-8000-00000000000a',
+    'alpha-staff-atomic', 'state-atomic-success',
+    'https://alpha.example.com/callback', 'authorized', tech_a,
+    'hash-atomic-success', now() + interval '5 minutes',
+    now() + interval '10 minutes', now()
+  );
+
+  SELECT * INTO exchanged
+  FROM public.partner_exchange_user_link(
+    'c0000000-0000-4000-8000-00000000000a',
+    'd0000000-0000-4000-8000-000000000001',
+    'hash-atomic-success'
+  );
+
+  PERFORM pg_temp.eq(
+    exchanged.external_user_id,
+    'alpha-staff-atomic'::text,
+    'atomic exchange returns the new external user id'
+  );
+
+  SELECT status INTO transaction_status
+  FROM public.partner_user_link_transactions
+  WHERE id = 'd0000000-0000-4000-8000-000000000001';
+  PERFORM pg_temp.eq(transaction_status, 'consumed'::text, 'successful exchange consumes its code');
+
+  SELECT status INTO old_link_status
+  FROM public.partner_user_links
+  WHERE partner_connection_id = 'c0000000-0000-4000-8000-00000000000a'
+    AND external_user_id = 'alpha-staff-1';
+  PERFORM pg_temp.eq(old_link_status, 'revoked'::text, 'successful relink revokes the old mapping');
+END $$;
+
+CREATE OR REPLACE FUNCTION pg_temp.reject_atomic_link_insert()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.external_user_id = 'alpha-staff-failing' THEN
+    RAISE EXCEPTION 'forced_link_insert_failure';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER reject_atomic_link_insert
+  BEFORE INSERT ON public.partner_user_links
+  FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_atomic_link_insert();
+
+DO $$
+DECLARE
+  tech_a uuid := (SELECT id FROM public.profiles WHERE display_name = 'tech-a@example.com');
+  transaction_status text;
+  active_link_count integer;
+BEGIN
+  INSERT INTO public.partner_user_link_transactions (
+    id, partner_connection_id, external_user_id, state, redirect_uri, status,
+    authorized_profile_id, authorization_code_hash, code_expires_at, expires_at,
+    authorized_at
+  ) VALUES (
+    'd0000000-0000-4000-8000-000000000002',
+    'c0000000-0000-4000-8000-00000000000a',
+    'alpha-staff-failing', 'state-atomic-failure',
+    'https://alpha.example.com/callback', 'authorized', tech_a,
+    'hash-atomic-failure', now() + interval '5 minutes',
+    now() + interval '10 minutes', now()
+  );
+
+  BEGIN
+    PERFORM *
+    FROM public.partner_exchange_user_link(
+      'c0000000-0000-4000-8000-00000000000a',
+      'd0000000-0000-4000-8000-000000000002',
+      'hash-atomic-failure'
+    );
+    RAISE EXCEPTION 'FAIL - forced link insertion failure was not raised';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'FAIL - forced link insertion failure was not raised' THEN
+      RAISE;
+    END IF;
+    PERFORM pg_temp.eq(SQLERRM, 'forced_link_insert_failure'::text, 'forced insert failure is observed');
+  END;
+
+  SELECT status INTO transaction_status
+  FROM public.partner_user_link_transactions
+  WHERE id = 'd0000000-0000-4000-8000-000000000002';
+  PERFORM pg_temp.eq(
+    transaction_status,
+    'authorized'::text,
+    'failed exchange leaves the authorization code usable'
+  );
+
+  SELECT count(*) INTO active_link_count
+  FROM public.partner_user_links
+  WHERE partner_connection_id = 'c0000000-0000-4000-8000-00000000000a'
+    AND external_user_id = 'alpha-staff-atomic'
+    AND profile_id = tech_a
+    AND status = 'active';
+  PERFORM pg_temp.eq(active_link_count, 1, 'failed exchange preserves the prior active link');
+END $$;
+
+DROP TRIGGER reject_atomic_link_insert ON public.partner_user_links;
+
+-- ---------------------------------------------------------------------------
+-- 14. Existing consumer flows are untouched (acceptance test 11)
 -- ---------------------------------------------------------------------------
 
 DO $$
