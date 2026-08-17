@@ -6,6 +6,8 @@ import { z } from "zod";
 import {
   SECTION_ORDER,
   SECTION_QUESTION_TEMPLATES,
+  VEHICLE_BASICS_ODOMETER_PROMPT,
+  VEHICLE_BASICS_VIN_PROMPT,
   isValidTransition,
 } from "./constants";
 import type { PpiRequestStatus, SectionType } from "@/types/enums";
@@ -264,6 +266,8 @@ export async function createSubmission(
 
     if (ansError) return { error: ansError.message };
   }
+
+  await prefillKnownVehicleData(requestId, submission.id);
 
   return { submissionId: submission.id };
 }
@@ -855,4 +859,86 @@ export async function updateRequestStatus(
   revalidatePath("/tech/ppi");
 
   return { success: true };
+}
+
+
+// ============================================================================
+// prefillKnownVehicleData
+//
+// A partner inspection arrives with the VIN and odometer already recorded in
+// the immutable snapshot DealerSpace sent, so asking the technician to key them
+// in again is redundant work that can only introduce a disagreement with the
+// record DealerSpace will later import.
+//
+// Deliberately narrow:
+//
+//   * Only the DealerSpace snapshot is used as a source. The OBD scan is NOT,
+//     for two different reasons — see below.
+//   * Values are prefilled, never locked. A genuine correction (the snapshot is
+//     stale, the odometer was misread) is still one edit away.
+//   * The odometer photo requirement is untouched: the number is a convenience,
+//     the photo is the evidence.
+//   * Only empty answers are written, so this can never clobber work in
+//     progress on a resubmission.
+//
+// Why not prefill from OBD:
+//
+//   VIN — a VIN read from the ECU that disagrees with the paperwork is a
+//   finding (wrong car, cloned plate, swapped ECU), not a better value. Writing
+//   it into the answer would erase the very discrepancy the report is meant to
+//   surface. The OBD VIN stays in obd_snapshots, and the report generator is
+//   already instructed to flag a mismatch as a major identity finding.
+//
+//   Odometer — OBD-II has no reliable standard odometer PID. The distance
+//   values that do exist (0x21 distance with MIL on, 0x31 distance since codes
+//   cleared) are not the odometer and are frequently near zero on a car whose
+//   codes were recently cleared. Prefilling from them would look authoritative
+//   and be wrong.
+// ============================================================================
+
+async function prefillKnownVehicleData(requestId: string, submissionId: string) {
+  try {
+    const supabase = await createClient();
+
+    // Readable by the assigned technician under the external_inspection_refs
+    // policy, so this needs no elevated client.
+    const { data: ref } = await supabase
+      .from("external_inspection_refs")
+      .select("vehicle_snapshot")
+      .eq("ppi_request_id", requestId)
+      .maybeSingle();
+
+    if (!ref?.vehicle_snapshot) return;
+
+    const snapshot = ref.vehicle_snapshot as { vin?: string | null; mileage?: number | null };
+
+    const prefills: { prompt: string; value: string }[] = [];
+    if (snapshot.vin) prefills.push({ prompt: VEHICLE_BASICS_VIN_PROMPT, value: snapshot.vin });
+    if (typeof snapshot.mileage === "number") {
+      prefills.push({ prompt: VEHICLE_BASICS_ODOMETER_PROMPT, value: String(snapshot.mileage) });
+    }
+    if (prefills.length === 0) return;
+
+    const { data: sections } = await supabase
+      .from("ppi_sections")
+      .select("id")
+      .eq("ppi_submission_id", submissionId)
+      .eq("section_type", "vehicle_basics");
+
+    const sectionId = sections?.[0]?.id;
+    if (!sectionId) return;
+
+    for (const prefill of prefills) {
+      await supabase
+        .from("ppi_answers")
+        .update({ answer_value: prefill.value })
+        .eq("ppi_section_id", sectionId)
+        .eq("prompt", prefill.prompt)
+        .is("answer_value", null);
+    }
+  } catch (error) {
+    // Convenience only. A prefill failure must never stop an inspection from
+    // being created — the technician can still enter both values by hand.
+    console.error("ppi: vehicle data prefill failed", error);
+  }
 }

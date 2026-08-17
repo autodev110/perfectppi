@@ -43,15 +43,23 @@ export interface QuestionTemplate {
   photoPrompt?: string;
 }
 
+/**
+ * Prompts used as join keys when prefilling known vehicle data. Referenced here
+ * rather than typed twice, so editing the wording cannot silently break the
+ * prefill.
+ */
+export const VEHICLE_BASICS_VIN_PROMPT = "Confirm the VIN on the vehicle";
+export const VEHICLE_BASICS_ODOMETER_PROMPT = "Current odometer reading (miles)";
+
 export const SECTION_QUESTION_TEMPLATES: Record<SectionType, QuestionTemplate[]> = {
   vehicle_basics: [
     {
-      prompt: "Confirm the VIN on the vehicle",
+      prompt: VEHICLE_BASICS_VIN_PROMPT,
       answerType: "text",
       isRequired: true,
     },
     {
-      prompt: "Current odometer reading (miles)",
+      prompt: VEHICLE_BASICS_ODOMETER_PROMPT,
       answerType: "number",
       isRequired: true,
       requiresPhoto: true,
