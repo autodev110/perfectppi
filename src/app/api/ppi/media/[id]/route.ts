@@ -85,7 +85,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireApiRole(["consumer", "technician", "admin"]);
+  const auth = await requireApiRole(["consumer", "technician", "admin", "org_manager"]);
   if ("response" in auth) return auth.response;
 
   const { id } = await params;

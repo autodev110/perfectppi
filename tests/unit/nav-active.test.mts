@@ -15,7 +15,8 @@ function activeHref(items: string[], pathname: string): string | null {
 
 const org = [
   "/org", "/org/technicians", "/org/inspections",
-  "/org/inspections/dealerspace", "/org/profile", "/org/messages", "/org/settings",
+  "/org/inspections/dealerspace", "/tech/ppi", "/org/profile",
+  "/org/messages", "/org/settings",
 ];
 
 describe("sidebar active item", () => {
@@ -47,5 +48,13 @@ describe("sidebar active item", () => {
 
   test("an unknown path highlights nothing", () => {
     assert.equal(activeHref(org, "/dashboard"), null);
+  });
+
+  test("a cross-portal entry matches on its own path", () => {
+    // Managers get a "My Inspections" entry pointing into the technician
+    // portal; it must not disturb the /org entries around it.
+    assert.equal(activeHref(org, "/tech/ppi"), "/tech/ppi");
+    assert.equal(activeHref(org, "/tech/ppi/abc-123"), "/tech/ppi");
+    assert.equal(activeHref(org, "/org/inspections"), "/org/inspections");
   });
 });

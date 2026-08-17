@@ -11,11 +11,12 @@ export default async function TechLayout({
 }) {
   // Managers inspect too at smaller dealerships, and the deep link Perfect PPI
   // hands DealerSpace points here. Page data stays RLS-scoped to the caller.
-  await requireRole(["technician", "org_manager"]);
+  const profile = await requireRole(["technician", "org_manager"]);
+  const isManager = profile.role === "org_manager";
 
   return (
     <PortalLayout
-      sidebar={<TechSidebar />}
+      sidebar={<TechSidebar showOrgReturn={isManager} />}
       settingsHref="/tech/profile"
       profileHref="/tech/profile"
       messagesBase="/tech/messages"

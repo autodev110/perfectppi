@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, FileJson, FileText } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileJson, FileText } from "lucide-react";
 import { requireRole } from "@/features/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getManagerContext, getReadySubmissionVersions } from "@/features/partner/queries";
@@ -11,6 +11,7 @@ import {
 } from "@/components/shared/source-badge";
 import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
 import { SendToDealerSpaceButton } from "@/components/shared/send-to-dealerspace-button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { formatDateTime } from "@/lib/utils/formatting";
@@ -122,11 +123,23 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
           </div>
         </div>
 
-        <SendToDealerSpaceButton
-          requestId={request.id}
-          deliveryStatus={ref.delivery_status}
-          deliverablesReady={readyVersion !== undefined}
-        />
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          {/* This page reports on the inspection; the work itself happens in the
+              technician workflow. Without this link a manager can see every
+              detail here and have no way to open it. */}
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/tech/ppi/${request.id}`}>
+              Open inspection
+              <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+
+          <SendToDealerSpaceButton
+            requestId={request.id}
+            deliveryStatus={ref.delivery_status}
+            deliverablesReady={readyVersion !== undefined}
+          />
+        </div>
       </div>
 
       <Card>

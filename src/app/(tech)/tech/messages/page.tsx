@@ -3,7 +3,7 @@ import { getConversations, getMessageRecipientsDirectory } from "@/features/mess
 import { MessagesCenter } from "@/components/shared/messages-center";
 
 export default async function TechMessagesPage() {
-  const profile = await requireRole(["technician"]);
+  const profile = await requireRole(["technician", "org_manager"]);
 
   const [conversations, recipients] = await Promise.all([
     getConversations(),

@@ -11,7 +11,7 @@ export default async function TechConversationPage({
   params: Promise<{ conversationId: string }>;
   searchParams: Promise<{ m?: string }>;
 }) {
-  const profile = await requireRole(["technician"]);
+  const profile = await requireRole(["technician", "org_manager"]);
   const { conversationId } = await params;
   const { m: highlightMessageId } = await searchParams;
 

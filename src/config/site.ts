@@ -37,6 +37,9 @@ export const navConfig = {
     { label: "Technicians", href: "/org/technicians", icon: "Users" },
     { label: "Inspections", href: "/org/inspections", icon: "ClipboardCheck" },
     { label: "DealerSpace", href: "/org/inspections/dealerspace", icon: "Plug" },
+    // Managers can be assigned inspections themselves; this is their own queue,
+    // not the organization-wide list above.
+    { label: "My Inspections", href: "/tech/ppi", icon: "Wrench" },
     { label: "Profile", href: "/org/profile", icon: "Building2" },
     { label: "Messages", href: "/org/messages", icon: "MessageSquare" },
     { label: "Settings", href: "/org/settings", icon: "Settings" },

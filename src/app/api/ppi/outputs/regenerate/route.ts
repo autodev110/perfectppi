@@ -8,7 +8,7 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const auth = await requireApiRole(["consumer", "technician", "admin"]);
+  const auth = await requireApiRole(["consumer", "technician", "admin", "org_manager"]);
   if ("response" in auth) return auth.response;
 
   const body = await request.json();

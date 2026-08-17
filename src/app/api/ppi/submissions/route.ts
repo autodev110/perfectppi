@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireApiRole(["consumer", "technician"]);
+  const auth = await requireApiRole(["consumer", "technician", "org_manager"]);
   if ("response" in auth) return auth.response;
 
   const body = await request.json();
