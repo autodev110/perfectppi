@@ -122,6 +122,28 @@ struct OBDDataExportView: View {
                     ? "None"
                     : session.snapshot.pendingDTCs.joined(separator: ", ")
             )
+            // Mode 0A. These survive a battery disconnect, so a permanent code
+            // with no stored code means the history was cleared, not repaired.
+            ResultRow(
+                label: "Permanent DTCs",
+                value: session.snapshot.permanentDTCs.isEmpty
+                    ? "None"
+                    : session.snapshot.permanentDTCs.joined(separator: ", ")
+            )
+            // Emissions readiness. Clearing codes resets these, so several
+            // incomplete monitors is the same signal from the other direction.
+            ResultRow(
+                label: "Readiness Monitors",
+                value: session.snapshot.readinessMonitors.isEmpty
+                    ? "—"
+                    : "\(session.snapshot.incompleteMonitors.count) of \(session.snapshot.readinessMonitors.filter(\.supported).count) not complete"
+            )
+            if session.snapshot.readinessIncomplete {
+                ResultRow(
+                    label: "Not Ready",
+                    value: session.snapshot.incompleteMonitors.map(\.name).joined(separator: ", ")
+                )
+            }
             ResultRow(
                 label: "Supported PIDs",
                 value: session.snapshot.supportedPids.isEmpty

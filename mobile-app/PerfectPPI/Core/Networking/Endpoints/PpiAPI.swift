@@ -115,6 +115,30 @@ enum PpiAPI {
         )
     }
 
+    /// Partner context for an inspection. The endpoint answers `data: null` for
+    /// consumer inspections, so the optional here is meaningful rather than an
+    /// error case.
+    static func dealerSpaceContext(requestId: String) async throws -> PerfectPpiPartnerContext? {
+        struct Envelope: Decodable { let data: PerfectPpiPartnerContext? }
+        let envelope: Envelope = try await APIClient.shared.get(
+            "/api/ppi/requests/\(requestId)/dealerspace"
+        )
+        return envelope.data
+    }
+
+    /// Queues delivery of the finished reports. The server enforces the
+    /// four-artifact gate and collapses repeat presses onto one delivery.
+    static func sendToDealerSpace(requestId: String) async throws -> PerfectPpiSendResult {
+        struct Envelope: Decodable { let data: PerfectPpiSendResult }
+        let envelope: Envelope = try await APIClient.shared.postCamel(
+            "/api/ppi/requests/\(requestId)/dealerspace/send",
+            body: EmptyBody()
+        )
+        return envelope.data
+    }
+
+    private struct EmptyBody: Encodable {}
+
     static func attachMedia(
         submissionId: String,
         payload: AttachMediaRequest

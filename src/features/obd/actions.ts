@@ -30,12 +30,23 @@ const liveReadingSchema = z.object({
   rawResponse: z.string().max(4000),
 });
 
+const readinessMonitorSchema = z.object({
+  name: z.string().trim().min(1).max(64),
+  isContinuous: z.boolean(),
+  supported: z.boolean(),
+  complete: z.boolean(),
+});
+
 const snapshotSchema = z.object({
   vin: z.string().trim().min(1).max(32).nullable().optional(),
   supportedPids: z.array(z.number().int().min(0).max(255)).default([]),
   monitorStatus: monitorStatusSchema.nullable().optional(),
   storedDTCs: z.array(z.string().trim().min(1).max(12)).default([]),
   pendingDTCs: z.array(z.string().trim().min(1).max(12)).default([]),
+  // Mode 0A — survives a battery disconnect, unlike stored and pending codes.
+  permanentDTCs: z.array(z.string().trim().min(1).max(12)).default([]),
+  // Decoded emissions monitors from the Mode 01 PID 01 status bytes.
+  readinessMonitors: z.array(readinessMonitorSchema).max(32).default([]),
   liveReadings: z.array(liveReadingSchema).default([]),
   adapterName: z.string().trim().max(120).nullable().optional(),
   startedAt: z.string().datetime().nullable().optional(),
@@ -45,6 +56,7 @@ const snapshotSchema = z.object({
   rawVinResponse: z.string().max(12000).nullable().optional(),
   rawStoredDtcsResponse: z.string().max(12000).nullable().optional(),
   rawPendingDtcsResponse: z.string().max(12000).nullable().optional(),
+  rawPermanentDtcsResponse: z.string().max(12000).nullable().optional(),
 });
 
 const exchangeSchema = z.object({
@@ -249,6 +261,14 @@ export async function saveObdSnapshot(
       stored_dtc_count: monitor?.storedDTCCount ?? null,
       stored_dtcs: snapshot.storedDTCs,
       pending_dtcs: snapshot.pendingDTCs,
+      permanent_dtcs: snapshot.permanentDTCs,
+      readiness_monitors: jsonValue(snapshot.readinessMonitors),
+      // Counted once on write so a report or queue can flag "not test-ready"
+      // without unpacking the jsonb.
+      incomplete_monitor_count: snapshot.readinessMonitors.filter(
+        (monitor) => monitor.supported && !monitor.complete,
+      ).length,
+      raw_permanent_dtcs_response: snapshot.rawPermanentDtcsResponse ?? null,
       supported_pids: snapshot.supportedPids.map(pidToHex),
       monitor_status: monitor ? jsonValue(monitor) : null,
       live_readings: jsonValue(snapshot.liveReadings),

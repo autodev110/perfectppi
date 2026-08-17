@@ -26,6 +26,9 @@ interface InspectionInput {
     stored_dtc_count: number | null;
     stored_dtcs: string[];
     pending_dtcs: string[];
+    permanent_dtcs?: string[] | null;
+    readiness_monitors?: unknown;
+    incomplete_monitor_count?: number | null;
     supported_pids: string[];
     live_readings: unknown;
     started_at: string | null;
@@ -59,6 +62,9 @@ export function buildStandardizedPrompt(input: InspectionInput): string {
 - ECU Stored DTC Count: ${input.obdSnapshot.stored_dtc_count ?? "Unknown"}
 - Stored DTCs: ${input.obdSnapshot.stored_dtcs.length ? input.obdSnapshot.stored_dtcs.join(", ") : "None reported"}
 - Pending DTCs: ${input.obdSnapshot.pending_dtcs.length ? input.obdSnapshot.pending_dtcs.join(", ") : "None reported"}
+- Permanent DTCs (Mode 0A, cannot be cleared by disconnecting the battery): ${(input.obdSnapshot.permanent_dtcs ?? []).length ? (input.obdSnapshot.permanent_dtcs ?? []).join(", ") : "None reported"}
+- Emissions readiness monitors not complete: ${input.obdSnapshot.incomplete_monitor_count ?? 0}
+- Readiness monitor detail: ${JSON.stringify(input.obdSnapshot.readiness_monitors ?? [])}
 - Supported PIDs: ${input.obdSnapshot.supported_pids.length ? input.obdSnapshot.supported_pids.join(", ") : "None recorded"}
 - Live Readings JSON: ${JSON.stringify(liveReadings)}`
     : `## OBD-II DIAGNOSTIC SNAPSHOT
@@ -129,6 +135,9 @@ Analyze the raw inspection data and return a JSON object with this exact structu
     "stored_dtc_count": number | null,
     "stored_dtcs": ["Array of stored diagnostic trouble codes"],
     "pending_dtcs": ["Array of pending diagnostic trouble codes"],
+    "permanent_dtcs": ["Array of permanent (Mode 0A) diagnostic trouble codes"],
+    "readiness_monitors": [{ "name": "Monitor name", "is_continuous": true, "supported": true, "complete": true }],
+    "incomplete_monitor_count": 0,
     "live_readings": [
       { "pid": "0x0C", "name": "Engine RPM", "value": 720, "unit": "rpm" }
     ],
@@ -151,5 +160,7 @@ Analyze the raw inspection data and return a JSON object with this exact structu
 - Treat MIL/check-engine state, stored DTCs, pending DTCs, and relevant live readings as objective diagnostic evidence.
 - Reflect OBD findings in dashboard_warnings, engine_bay, electrical_controls, overall_summary, and notable_findings when relevant.
 - If OBD reported VIN conflicts with entered VIN, flag it as a major vehicle identity finding.
+- Permanent DTCs are the strongest evidence available. They survive a battery disconnect and clear only after the ECU confirms the repair over several drive cycles. Permanent codes present with no stored codes means the fault history was cleared rather than repaired — call that out explicitly as a major finding.
+- Incomplete readiness monitors carry the same meaning from the other direction: clearing codes resets them. Two or more incomplete monitors on a vehicle with no stored codes should be reported as "not test-ready, history likely recently cleared", not as a clean result. Say plainly that an emissions result cannot be trusted until the monitors complete.
 - Return ONLY the JSON object, no markdown or explanation`;
 }

@@ -28,6 +28,10 @@ struct PpiDetailView: View {
                                 value: (request.requesterRole?.rawValue ?? "-").capitalized,
                                 icon: "person.text.rectangle.fill")
 
+                        // Renders only for inspections that came from a
+                        // partner system; a no-op for consumer requests.
+                        DealerSpaceInspectionCard(requestId: requestId)
+
                         Spacer().frame(height: Theme.spacing)
 
                         if let submission {

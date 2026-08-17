@@ -31,6 +31,16 @@ const diagnosticsSchema = z.object({
   stored_dtc_count: z.number().int().nullable(),
   stored_dtcs: z.array(z.string()),
   pending_dtcs: z.array(z.string()),
+  permanent_dtcs: z.array(z.string()),
+  readiness_monitors: z.array(
+    z.object({
+      name: z.string(),
+      is_continuous: z.boolean(),
+      supported: z.boolean(),
+      complete: z.boolean(),
+    }),
+  ),
+  incomplete_monitor_count: z.number().int().min(0),
   live_readings: z.array(
     z.object({
       pid: z.string(),
@@ -100,6 +110,9 @@ interface GeneratorInput {
     stored_dtc_count: number | null;
     stored_dtcs: string[];
     pending_dtcs: string[];
+    permanent_dtcs?: string[] | null;
+    readiness_monitors?: unknown;
+    incomplete_monitor_count?: number | null;
     supported_pids: string[];
     live_readings: unknown;
     started_at: string | null;

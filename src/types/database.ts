@@ -667,14 +667,18 @@ export type Database = {
           completed_at: string | null
           created_at: string
           id: string
+          incomplete_monitor_count: number
           is_current: boolean
           live_readings: Json
           mil_on: boolean | null
           monitor_status: Json | null
           pending_dtcs: string[]
+          permanent_dtcs: string[]
           ppi_submission_id: string
           raw_payload: Json
+          raw_permanent_dtcs_response: string | null
           raw_transcript: Json
+          readiness_monitors: Json
           started_at: string | null
           stored_dtc_count: number | null
           stored_dtcs: string[]
@@ -687,14 +691,18 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           id?: string
+          incomplete_monitor_count?: number
           is_current?: boolean
           live_readings?: Json
           mil_on?: boolean | null
           monitor_status?: Json | null
           pending_dtcs?: string[]
+          permanent_dtcs?: string[]
           ppi_submission_id: string
           raw_payload: Json
+          raw_permanent_dtcs_response?: string | null
           raw_transcript?: Json
+          readiness_monitors?: Json
           started_at?: string | null
           stored_dtc_count?: number | null
           stored_dtcs?: string[]
@@ -707,14 +715,18 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           id?: string
+          incomplete_monitor_count?: number
           is_current?: boolean
           live_readings?: Json
           mil_on?: boolean | null
           monitor_status?: Json | null
           pending_dtcs?: string[]
+          permanent_dtcs?: string[]
           ppi_submission_id?: string
           raw_payload?: Json
+          raw_permanent_dtcs_response?: string | null
           raw_transcript?: Json
+          readiness_monitors?: Json
           started_at?: string | null
           stored_dtc_count?: number | null
           stored_dtcs?: string[]

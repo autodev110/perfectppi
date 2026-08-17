@@ -56,6 +56,10 @@ final class OBDSession: ObservableObject {
             guard isCurrent(generation) else { return }
             collected.monitorStatus = OBDParser.parseMonitorStatus(from: monitorStatusResponse)
             collected.rawMonitorStatusResponse = monitorStatusResponse
+            // Same four status bytes, decoded into named emissions monitors.
+            collected.readinessMonitors = OBDParser.parseReadinessMonitors(
+                rawStatusBytes: collected.monitorStatus?.rawStatusBytes ?? []
+            )
 
             phase = .reading(stepLabel: "Reading VIN")
             let vinResponse = try await bluetooth.send("0902", timeout: 8)
@@ -74,6 +78,17 @@ final class OBDSession: ObservableObject {
             guard isCurrent(generation) else { return }
             collected.pendingDTCs = OBDParser.parseDTCs(from: pendingResponse, expectedModeByte: 0x47)
             collected.rawPendingDtcsResponse = pendingResponse
+
+            // Mode 0A survives a battery disconnect, so it is the one DTC set a
+            // seller cannot clear before an inspection. Best-effort: it is a
+            // newer mode and some ECUs answer NO DATA or nothing at all, which
+            // must not cost us the rest of the snapshot.
+            phase = .reading(stepLabel: "Reading permanent DTCs")
+            if let permanentResponse = try? await bluetooth.send("0A", timeout: 6) {
+                guard isCurrent(generation) else { return }
+                collected.permanentDTCs = OBDParser.parseDTCs(from: permanentResponse, expectedModeByte: 0x4A)
+                collected.rawPermanentDtcsResponse = permanentResponse
+            }
 
             // Live sensor data is read last and best-effort: the essential
             // VIN/DTC/readiness snapshot above is already captured, so a flaky
@@ -181,6 +196,11 @@ struct OBDDiagnosticSnapshot: Codable, Hashable {
     var monitorStatus: OBDMonitorStatus?
     var storedDTCs: [String]
     var pendingDTCs: [String]
+    /// Mode 0A. Cannot be cleared by disconnecting the battery, so these
+    /// survive a pre-inspection code wipe.
+    var permanentDTCs: [String]
+    /// Decoded from the Mode 01 PID 01 status bytes.
+    var readinessMonitors: [OBDReadinessMonitor]
     var liveReadings: [OBDLiveReading]
     var adapterName: String?
     var startedAt: Date?
@@ -193,6 +213,7 @@ struct OBDDiagnosticSnapshot: Codable, Hashable {
     var rawVinResponse: String?
     var rawStoredDtcsResponse: String?
     var rawPendingDtcsResponse: String?
+    var rawPermanentDtcsResponse: String?
 
     static let empty = OBDDiagnosticSnapshot(
         vin: nil,
@@ -200,6 +221,8 @@ struct OBDDiagnosticSnapshot: Codable, Hashable {
         monitorStatus: nil,
         storedDTCs: [],
         pendingDTCs: [],
+        permanentDTCs: [],
+        readinessMonitors: [],
         liveReadings: [],
         adapterName: nil,
         startedAt: nil,
@@ -208,8 +231,20 @@ struct OBDDiagnosticSnapshot: Codable, Hashable {
         rawMonitorStatusResponse: nil,
         rawVinResponse: nil,
         rawStoredDtcsResponse: nil,
-        rawPendingDtcsResponse: nil
+        rawPendingDtcsResponse: nil,
+        rawPermanentDtcsResponse: nil
     )
+
+    /// Supported monitors the ECU has not finished running. More than one or two
+    /// usually means the codes were cleared recently, and most state programmes
+    /// reject the inspection on that basis alone.
+    var incompleteMonitors: [OBDReadinessMonitor] {
+        readinessMonitors.filter { $0.supported && !$0.complete }
+    }
+
+    /// True when the car is not in a state where an emissions result is
+    /// meaningful, regardless of whether any DTCs are present.
+    var readinessIncomplete: Bool { !incompleteMonitors.isEmpty }
 
     var hasAnyData: Bool {
         vin != nil
@@ -217,6 +252,8 @@ struct OBDDiagnosticSnapshot: Codable, Hashable {
             || monitorStatus != nil
             || !storedDTCs.isEmpty
             || !pendingDTCs.isEmpty
+            || !permanentDTCs.isEmpty
+            || !readinessMonitors.isEmpty
             || !liveReadings.isEmpty
     }
 }
@@ -225,6 +262,19 @@ struct OBDMonitorStatus: Codable, Hashable {
     var milOn: Bool
     var storedDTCCount: Int
     var rawStatusBytes: [UInt8]
+}
+
+/// One emissions readiness monitor decoded from Mode 01 PID 01.
+///
+/// `complete == false` on a supported monitor is the tell that the ECU has been
+/// reset recently — the reason an inspection can fail even with no stored codes.
+struct OBDReadinessMonitor: Codable, Hashable, Identifiable {
+    var name: String
+    var isContinuous: Bool
+    var supported: Bool
+    var complete: Bool
+
+    var id: String { name }
 }
 
 /// One decoded Mode 01 live-data reading captured during a scan (e.g. engine

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Car, User, Calendar, ChevronLeft, AlertCircle } from "lucide-react";
 import { DealerSpaceInspectionPanel } from "@/components/shared/dealerspace-inspection-panel";
+import { InspectionResultsPanel } from "@/components/shared/inspection-results-panel";
 import { SourceBadge } from "@/components/shared/source-badge";
 import Link from "next/link";
 
@@ -203,6 +204,9 @@ export default function TechInspectionDetailPage() {
           <p className="text-emerald-700 text-sm mt-1">The requester has been notified.</p>
         </div>
       )}
+
+      {/* Review the generated deliverables here before sending them anywhere. */}
+      {isSubmitted && <InspectionResultsPanel requestId={id} />}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // MARK: - Profile
 
@@ -658,4 +659,77 @@ struct AttachMediaRequest: Codable {
     let url: String
     let mediaType: String
     let capturedAt: Date
+}
+
+
+// MARK: - DealerSpace partner context
+
+/// Partner context for one inspection, from GET /api/ppi/requests/:id/dealerspace.
+/// Nil for ordinary consumer inspections — the endpoint returns `data: null`.
+struct PerfectPpiPartnerContext: Codable, Hashable {
+    let refId: String
+    let sourceLabel: String?
+    let partnerName: String
+    let connectionActive: Bool
+    let integrationStatus: String
+    let deliveryStatus: String
+    let deliverablesReady: Bool
+    let vehicleSnapshot: PartnerVehicleSnapshot?
+    let externalReconCaseId: String?
+    let canSend: Bool
+
+    struct PartnerVehicleSnapshot: Codable, Hashable {
+        let vin: String?
+        let stockNumber: String?
+        let exteriorColor: String?
+        let engine: String?
+    }
+
+    /// True while a delivery is queued or in flight, so the button can rest.
+    var deliveryInFlight: Bool {
+        deliveryStatus == "queued" || deliveryStatus == "delivering"
+    }
+
+    var integrationStatusLabel: String {
+        switch integrationStatus {
+        case "created": return "Received"
+        case "assigned": return "Assigned"
+        case "accepted": return "Accepted"
+        case "in_progress": return "In progress"
+        case "submitted": return "Submitted"
+        case "outputs_generating": return "Generating reports"
+        case "deliverables_ready": return "Reports ready"
+        case "outputs_failed": return "Report generation failed"
+        case "needs_revision": return "Needs revision"
+        case "cancelled": return "Cancelled"
+        default: return integrationStatus
+        }
+    }
+
+    var deliveryStatusLabel: String {
+        switch deliveryStatus {
+        case "not_requested": return "Not sent"
+        case "queued": return "Queued"
+        case "delivering": return "Sending"
+        case "delivered": return "Delivered"
+        case "failed": return "Delivery failed"
+        default: return deliveryStatus
+        }
+    }
+
+    var deliveryTint: Color {
+        switch deliveryStatus {
+        case "delivered": return Theme.Palette.success
+        case "failed": return Theme.Palette.danger
+        case "queued", "delivering": return Theme.Palette.warning
+        default: return .gray
+        }
+    }
+}
+
+struct PerfectPpiSendResult: Codable, Hashable {
+    let eventId: String
+    let deliveryStatus: String
+    let outputVersion: Int
+    let alreadyQueued: Bool
 }

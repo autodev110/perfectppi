@@ -203,6 +203,8 @@ enum OBDParser {
         OBDLivePID(pid: 0x05, name: "Coolant Temp",                 unit: "°C")    { d in d.count >= 1 ? Double(Int(d[0]) - 40) : nil },
         OBDLivePID(pid: 0x06, name: "Short-Term Fuel Trim B1",      unit: "%")     { d in d.count >= 1 ? (Double(d[0]) - 128) * 100 / 128 : nil },
         OBDLivePID(pid: 0x07, name: "Long-Term Fuel Trim B1",       unit: "%")     { d in d.count >= 1 ? (Double(d[0]) - 128) * 100 / 128 : nil },
+        OBDLivePID(pid: 0x08, name: "Short-Term Fuel Trim B2",      unit: "%")     { d in d.count >= 1 ? (Double(d[0]) - 128) * 100 / 128 : nil },
+        OBDLivePID(pid: 0x09, name: "Long-Term Fuel Trim B2",       unit: "%")     { d in d.count >= 1 ? (Double(d[0]) - 128) * 100 / 128 : nil },
         OBDLivePID(pid: 0x0A, name: "Fuel Pressure",                unit: "kPa")   { d in d.count >= 1 ? Double(Int(d[0]) * 3) : nil },
         OBDLivePID(pid: 0x0B, name: "Intake Manifold Pressure",     unit: "kPa")   { d in d.count >= 1 ? Double(d[0]) : nil },
         OBDLivePID(pid: 0x0C, name: "Engine RPM",                   unit: "rpm")   { d in d.count >= 2 ? (Double(d[0]) * 256 + Double(d[1])) / 4 : nil },
@@ -241,5 +243,78 @@ enum OBDParser {
             storedDTCCount: Int(a & 0x7F),
             rawStatusBytes: [a, b, c, d]
         )
+    }
+    // ========================================================================
+    // Readiness monitors (Mode 01, PID 01, bytes B/C/D)
+    //
+    // The inspection-critical signal. Clearing codes before an inspection turns
+    // the dashboard light off but resets these monitors to "not complete", so a
+    // car with no DTCs *and* several incomplete monitors has most likely just
+    // had its history wiped rather than being genuinely healthy.
+    //
+    // Byte B carries the three continuous monitors: bits 0-2 say whether each is
+    // supported, bits 4-6 say whether it is INCOMPLETE. Bit 3 selects the engine
+    // type, which changes what bytes C and D mean.
+    //
+    // Bytes C and D carry the non-continuous monitors: C is the supported mask,
+    // D the incomplete mask, sharing bit positions.
+    // ========================================================================
+
+    static func parseReadinessMonitors(rawStatusBytes: [UInt8]) -> [OBDReadinessMonitor] {
+        guard rawStatusBytes.count >= 4 else { return [] }
+        let b = rawStatusBytes[1]
+        let c = rawStatusBytes[2]
+        let d = rawStatusBytes[3]
+
+        // Bit 3 of byte B: set for compression ignition (diesel).
+        let compressionIgnition = (b & 0x08) != 0
+
+        var monitors: [OBDReadinessMonitor] = []
+
+        let continuous: [(name: String, bit: UInt8)] = [
+            ("Misfire", 0),
+            ("Fuel System", 1),
+            ("Comprehensive Components", 2),
+        ]
+        for entry in continuous {
+            let supported = (b & (1 << entry.bit)) != 0
+            let incomplete = (b & (1 << (entry.bit + 4))) != 0
+            monitors.append(
+                OBDReadinessMonitor(
+                    name: entry.name,
+                    isContinuous: true,
+                    supported: supported,
+                    complete: supported ? !incomplete : true
+                )
+            )
+        }
+
+        let sparkNonContinuous = [
+            "Catalyst", "Heated Catalyst", "Evaporative System",
+            "Secondary Air System", "A/C Refrigerant", "Oxygen Sensor",
+            "Oxygen Sensor Heater", "EGR System",
+        ]
+        let dieselNonContinuous = [
+            "NMHC Catalyst", "NOx/SCR Aftertreatment", "Reserved",
+            "Boost Pressure", "Reserved", "Exhaust Gas Sensor",
+            "PM Filter", "EGR/VVT System",
+        ]
+        let names = compressionIgnition ? dieselNonContinuous : sparkNonContinuous
+
+        for (index, name) in names.enumerated() where name != "Reserved" {
+            let mask: UInt8 = 1 << UInt8(index)
+            let supported = (c & mask) != 0
+            let incomplete = (d & mask) != 0
+            monitors.append(
+                OBDReadinessMonitor(
+                    name: name,
+                    isContinuous: false,
+                    supported: supported,
+                    complete: supported ? !incomplete : true
+                )
+            )
+        }
+
+        return monitors
     }
 }

@@ -325,6 +325,13 @@ export interface StandardizedContent {
   notable_findings: string[];
 }
 
+export interface StandardizedReadinessMonitor {
+  name: string;
+  is_continuous: boolean;
+  supported: boolean;
+  complete: boolean;
+}
+
 export interface StandardizedDiagnostics {
   obd_snapshot_present: boolean;
   vin: string | null;
@@ -333,6 +340,11 @@ export interface StandardizedDiagnostics {
   stored_dtc_count: number | null;
   stored_dtcs: string[];
   pending_dtcs: string[];
+  /** Mode 0A — cannot be cleared by disconnecting the battery. */
+  permanent_dtcs: string[];
+  readiness_monitors: StandardizedReadinessMonitor[];
+  /** Supported monitors the ECU has not finished running. */
+  incomplete_monitor_count: number;
   live_readings: Array<{
     pid: string;
     name: string;

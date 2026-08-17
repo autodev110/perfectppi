@@ -64,6 +64,31 @@ export function generateStandardizedReportPdf(content: StandardizedContent) {
       "Pending DTCs",
       diagnostics.pending_dtcs.length ? diagnostics.pending_dtcs.join(", ") : "None reported",
     );
+    addLabelValue(
+      lines,
+      "Permanent DTCs (not clearable)",
+      diagnostics.permanent_dtcs?.length
+        ? diagnostics.permanent_dtcs.join(", ")
+        : "None reported",
+    );
+    addLabelValue(
+      lines,
+      "Emissions monitors not complete",
+      diagnostics.incomplete_monitor_count ?? 0,
+    );
+    if ((diagnostics.incomplete_monitor_count ?? 0) > 0) {
+      const notReady = (diagnostics.readiness_monitors ?? [])
+        .filter((monitor) => monitor.supported && !monitor.complete)
+        .map((monitor) => monitor.name);
+      addLabelValue(lines, "Monitors not ready", notReady.join(", "));
+      lines.push({
+        text:
+          "Incomplete readiness monitors mean the ECU has not finished its self-checks. " +
+          "This commonly follows a recent code clear, and an emissions result cannot be " +
+          "relied upon until the monitors complete.",
+        fontSize: 9,
+      });
+    }
     lines.push({ text: diagnostics.summary, fontSize: 10, gapAfter: 10 });
   }
 

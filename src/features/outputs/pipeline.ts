@@ -175,7 +175,7 @@ export async function runOutputGenerationJob(params: {
   const { data: obdSnapshot } = await admin
     .from("obd_snapshots")
     .select(
-      "vin, adapter_name, mil_on, stored_dtc_count, stored_dtcs, pending_dtcs, supported_pids, live_readings, started_at, completed_at",
+      "vin, adapter_name, mil_on, stored_dtc_count, stored_dtcs, pending_dtcs, permanent_dtcs, readiness_monitors, incomplete_monitor_count, supported_pids, live_readings, started_at, completed_at",
     )
     .eq("ppi_submission_id", submissionId)
     .eq("is_current", true)
