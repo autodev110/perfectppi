@@ -411,6 +411,121 @@ describe("technician account linking", () => {
     assert.equal(count, 0, "initiating must not create a mapping");
   });
 
+  test("an organization manager can be linked and assigned inspections", async () => {
+    // Small dealerships run with one person who both manages the connection and
+    // inspects the cars. Managers already hold a technician_profiles row with an
+    // organization_id, and every RLS policy on the performer path keys on
+    // profile id rather than role, so this widens who may link without widening
+    // what a linked account can reach.
+    const db = admin();
+    const { data: manager } = await db.auth.admin.createUser({
+      email: "ppi-apitest-manager@example.com",
+      password: "test-password-not-used",
+      email_confirm: true,
+    });
+    const { data: managerProfile } = await db
+      .from("profiles")
+      .update({ role: "org_manager", display_name: "ppi-apitest-manager" })
+      .eq("auth_user_id", manager.user.id)
+      .select("id")
+      .single();
+    await db.from("technician_profiles").insert({
+      profile_id: managerProfile.id,
+      organization_id: alpha.org.id,
+      certification_level: "none",
+    });
+
+    const state = randomBytes(24).toString("base64url");
+    const code = randomBytes(32).toString("base64url");
+    await db.from("partner_user_link_transactions").insert({
+      partner_connection_id: alphaConn.id,
+      external_user_id: "alpha-manager-1",
+      state,
+      redirect_uri: webhook.url,
+      status: "authorized",
+      authorized_profile_id: managerProfile.id,
+      authorization_code_hash: sha256Hex(code),
+      code_expires_at: new Date(Date.now() + 120_000).toISOString(),
+      expires_at: new Date(Date.now() + 600_000).toISOString(),
+    });
+
+    const linked = await apiRequest(baseUrl, "/api/v1/partner/user-links/exchange", {
+      method: "POST",
+      token: alphaConn.token,
+      body: { code, state },
+    });
+
+    assert.equal(
+      linked.status,
+      201,
+      `a manager in the connected org can link (got ${linked.status} ${JSON.stringify(linked.body)})`,
+    );
+    assert.equal(linked.body.perfectppiProfileId, managerProfile.id);
+
+    // And the link actually resolves on inspection creation.
+    const created = await apiRequest(baseUrl, "/api/v1/partner/inspections", {
+      method: "POST",
+      token: alphaConn.token,
+      idempotencyKey: "dms-alpha:manager-case:manager-phase",
+      body: {
+        externalOrganizationId: "dms-alpha",
+        externalActorId: "alpha-manager-1",
+        vehicle: { vin: VALID_VIN },
+      },
+    });
+
+    assert.equal(created.status, 201);
+    assert.equal(created.body.assignedTechnician.profileId, managerProfile.id);
+
+    // Clean up so later assertions still see exactly one Alpha inspection.
+    await db.from("ppi_requests").delete().eq("id", created.body.inspectionId);
+    await db
+      .from("partner_user_links")
+      .delete()
+      .eq("partner_connection_id", alphaConn.id)
+      .eq("external_user_id", "alpha-manager-1");
+    await db.auth.admin.deleteUser(manager.user.id);
+  });
+
+  test("a consumer account still cannot be linked", async () => {
+    const db = admin();
+    const { data: consumer } = await db.auth.admin.createUser({
+      email: "ppi-apitest-consumer@example.com",
+      password: "test-password-not-used",
+      email_confirm: true,
+    });
+    const { data: consumerProfile } = await db
+      .from("profiles")
+      .select("id")
+      .eq("auth_user_id", consumer.user.id)
+      .single();
+
+    const state = randomBytes(24).toString("base64url");
+    const code = randomBytes(32).toString("base64url");
+    await db.from("partner_user_link_transactions").insert({
+      partner_connection_id: alphaConn.id,
+      external_user_id: "alpha-consumer-1",
+      state,
+      redirect_uri: webhook.url,
+      status: "authorized",
+      authorized_profile_id: consumerProfile.id,
+      authorization_code_hash: sha256Hex(code),
+      code_expires_at: new Date(Date.now() + 120_000).toISOString(),
+      expires_at: new Date(Date.now() + 600_000).toISOString(),
+    });
+
+    const { status, body } = await apiRequest(baseUrl, "/api/v1/partner/user-links/exchange", {
+      method: "POST",
+      token: alphaConn.token,
+      body: { code, state },
+    });
+
+    assert.equal(status, 409);
+    assert.equal(body.error, "invalid_user_link");
+
+    await db.auth.admin.deleteUser(consumer.user.id);
+  });
+
   test("refuses to redeem a code for an account outside the connected organization", async () => {
     // Consent is simulated at the database layer; what is under test is the
     // re-verification the exchange performs before it trusts that consent.

@@ -9,7 +9,9 @@ export default async function TechLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireRole(["technician"]);
+  // Managers inspect too at smaller dealerships, and the deep link Perfect PPI
+  // hands DealerSpace points here. Page data stays RLS-scoped to the caller.
+  await requireRole(["technician", "org_manager"]);
 
   return (
     <PortalLayout

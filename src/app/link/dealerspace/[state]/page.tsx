@@ -47,10 +47,10 @@ const FAILURE_COPY: Record<string, { title: string; detail: string }> = {
     title: "This DealerSpace connection is no longer active",
     detail: "Ask your organization manager to reconnect DealerSpace in Perfect PPI.",
   },
-  not_technician: {
-    title: "This account is not a technician account",
+  no_inspection_access: {
+    title: "This account cannot be assigned inspections",
     detail:
-      "DealerSpace inspections are assigned to technicians. Sign in with your technician account, or ask your manager to update your role.",
+      "DealerSpace inspections are assigned to technicians and organization managers. Sign in with an account that has one of those roles in this organization.",
   },
   not_org_member: {
     title: "This account is not part of the connected organization",

@@ -24,8 +24,19 @@ import type { PartnerConnection } from "./auth";
 
 export type LinkEligibilityFailure =
   | "profile_missing"
-  | "not_technician"
+  | "no_inspection_access"
   | "not_org_member";
+
+/**
+ * Roles that can be assigned an inspection and carry it through to submission.
+ *
+ * Managers are included deliberately: at a small dealership the person who
+ * connected DealerSpace is often the person who inspects the car. They already
+ * hold a technician_profiles row with an organization_id — that is how org
+ * membership is modelled — and every RLS policy on the performer path keys on
+ * profile id rather than role, so nothing had to be loosened to allow it.
+ */
+export const INSPECTION_CAPABLE_ROLES = ["technician", "org_manager"] as const;
 
 export interface LinkEligibility {
   eligible: boolean;
@@ -40,9 +51,9 @@ export interface LinkEligibility {
 
 /**
  * The three conditions from the integration contract, checked together:
- * a valid profile, technician access, and *active membership of the very
- * organization this connection is bound to*. The third is what stops a
- * technician at another dealership from linking themselves in.
+ * a valid profile, the ability to perform inspections, and *active membership
+ * of the very organization this connection is bound to*. The third is what
+ * stops someone at another dealership from linking themselves in.
  */
 export async function checkLinkEligibility(
   profileId: string,
@@ -65,8 +76,8 @@ export async function checkLinkEligibility(
     role: profile.role as string,
   };
 
-  if (profile.role !== "technician") {
-    return { eligible: false, reason: "not_technician", profile: view };
+  if (!INSPECTION_CAPABLE_ROLES.includes(profile.role as (typeof INSPECTION_CAPABLE_ROLES)[number])) {
+    return { eligible: false, reason: "no_inspection_access", profile: view };
   }
 
   const { data: techProfile } = await admin
@@ -419,7 +430,7 @@ export async function resolveLinkedTechnician(
   if (
     !techProfile ||
     !profile ||
-    profile.role !== "technician" ||
+    !INSPECTION_CAPABLE_ROLES.includes(profile.role as (typeof INSPECTION_CAPABLE_ROLES)[number]) ||
     techProfile.organization_id !== connection.organization_id
   ) {
     return { error: "invalid_user_link" };

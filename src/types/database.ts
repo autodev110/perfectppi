@@ -306,8 +306,8 @@ export type Database = {
         Row: {
           created_at: string
           current_submission_id: string | null
-          delivered_submission_id: string | null
           delivered_output_version: number | null
+          delivered_submission_id: string | null
           delivery_status: string
           delivery_version: number
           external_actor_id: string | null
@@ -332,8 +332,8 @@ export type Database = {
         Insert: {
           created_at?: string
           current_submission_id?: string | null
-          delivered_submission_id?: string | null
           delivered_output_version?: number | null
+          delivered_submission_id?: string | null
           delivery_status?: string
           delivery_version?: number
           external_actor_id?: string | null
@@ -358,8 +358,8 @@ export type Database = {
         Update: {
           created_at?: string
           current_submission_id?: string | null
-          delivered_submission_id?: string | null
           delivered_output_version?: number | null
+          delivered_submission_id?: string | null
           delivery_status?: string
           delivery_version?: number
           external_actor_id?: string | null
@@ -2360,41 +2360,76 @@ export type Database = {
         Args: { p_bucket_key: string; p_window_start: string }
         Returns: number
       }
-      partner_request_delivery: {
-        Args: {
-          p_event_id: string
-          p_occurred_at: string
-          p_output_version: number
-          p_ref_id: string
-          p_submission_id: string
-        }
-        Returns: {
-          attempt_count: number
-          created_at: string
-          dedupe_key: string
-          delivered_at: string | null
-          event_type: string
-          external_inspection_ref_id: string | null
-          id: string
-          last_error: Json | null
-          last_response_status: number | null
-          lock_expires_at: string | null
-          locked_at: string | null
-          locked_by: string | null
-          max_attempts: number
-          next_attempt_at: string
-          partner_connection_id: string
-          payload: Json
-          status: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "outbound_events"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      partner_request_delivery:
+        | {
+            Args: {
+              p_event_id: string
+              p_occurred_at: string
+              p_output_version: number
+              p_ref_id: string
+            }
+            Returns: {
+              attempt_count: number
+              created_at: string
+              dedupe_key: string
+              delivered_at: string | null
+              event_type: string
+              external_inspection_ref_id: string | null
+              id: string
+              last_error: Json | null
+              last_response_status: number | null
+              lock_expires_at: string | null
+              locked_at: string | null
+              locked_by: string | null
+              max_attempts: number
+              next_attempt_at: string
+              partner_connection_id: string
+              payload: Json
+              status: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "outbound_events"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_event_id: string
+              p_occurred_at: string
+              p_output_version: number
+              p_ref_id: string
+              p_submission_id: string
+            }
+            Returns: {
+              attempt_count: number
+              created_at: string
+              dedupe_key: string
+              delivered_at: string | null
+              event_type: string
+              external_inspection_ref_id: string | null
+              id: string
+              last_error: Json | null
+              last_response_status: number | null
+              lock_expires_at: string | null
+              locked_at: string | null
+              locked_by: string | null
+              max_attempts: number
+              next_attempt_at: string
+              partner_connection_id: string
+              payload: Json
+              status: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "outbound_events"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       partner_update_inspection_vehicle: {
         Args: {
           p_make?: string
@@ -2410,6 +2445,7 @@ export type Database = {
           created_at: string
           current_submission_id: string | null
           delivered_output_version: number | null
+          delivered_submission_id: string | null
           delivery_status: string
           delivery_version: number
           external_actor_id: string | null
@@ -2732,3 +2768,4 @@ export const Constants = {
     },
   },
 } as const
+

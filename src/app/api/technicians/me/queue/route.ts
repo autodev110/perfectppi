@@ -4,7 +4,7 @@ import { getTechQueue } from "@/features/ppi/queries";
 import type { PpiRequestStatus } from "@/types/enums";
 
 export async function GET(request: Request) {
-  const auth = await requireApiRole(["technician"]);
+  const auth = await requireApiRole(["technician", "org_manager"]);
   if ("response" in auth) return auth.response;
 
   const { searchParams } = new URL(request.url);
