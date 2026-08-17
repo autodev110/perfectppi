@@ -190,7 +190,7 @@ describe("organization connection", () => {
     await admin().from("partner_installation_codes").delete().eq("id", id);
   });
 
-  test("exchanges a valid code exactly once", async () => {
+  test("exchanges a valid code and recovers an exact replay within its TTL", async () => {
     const { code, codeHash, codePrefix } = makeInstallationCode();
     await insertInstallationCode({
       organizationId: alpha.org.id,
@@ -219,6 +219,7 @@ describe("organization connection", () => {
     alphaConn.id = first.body.connectionId;
     alphaConn.token = first.body.token;
     alphaConn.webhookSecret = first.body.webhookSecret;
+    const originalToken = first.body.token;
 
     // Only a hash is persisted.
     const { data: stored } = await admin()
@@ -233,7 +234,34 @@ describe("organization connection", () => {
       "the signing secret is not stored in plaintext",
     );
 
-    // Second use of the same code.
+    // Simulate DealerSpace losing the response or failing its local credential
+    // write. An exact replay recovers the same connection with fresh secrets.
+    const recovered = await apiRequest(baseUrl, "/api/v1/partner/connections/exchange", {
+      method: "POST",
+      body: {
+        code,
+        externalOrganizationId: "dms-alpha",
+        displayName: "Alpha DealerSpace",
+        webhookUrl: webhook.url,
+        userLinkRedirectUri: webhook.url,
+      },
+    });
+
+    assert.equal(recovered.status, 200);
+    assert.equal(recovered.body.connectionId, alphaConn.id);
+    assert.equal(recovered.body.recovered, true);
+    assert.notEqual(recovered.body.token, originalToken);
+    alphaConn.token = recovered.body.token;
+    alphaConn.webhookSecret = recovered.body.webhookSecret;
+
+    const staleCredential = await apiRequest(
+      baseUrl,
+      "/api/v1/partner/connections/self",
+      { token: originalToken },
+    );
+    assert.equal(staleCredential.status, 401);
+
+    // A materially different replay remains forbidden.
     const second = await apiRequest(baseUrl, "/api/v1/partner/connections/exchange", {
       method: "POST",
       body: {
@@ -304,6 +332,11 @@ describe("bearer authentication and scopes", () => {
       "inspections:read",
     ].filter(Boolean).sort());
     assert.equal(body.status, "active");
+    assert.match(body.webhookSecretProof.signature, /^v1=[0-9a-f]{64}$/);
+    const proofExpected = createHmac("sha256", alphaConn.webhookSecret)
+      .update(`${body.webhookSecretProof.timestamp}.${body.webhookSecretProof.payload}`)
+      .digest("hex");
+    assert.equal(body.webhookSecretProof.signature, `v1=${proofExpected}`);
     assert.ok(!JSON.stringify(body).includes(alphaConn.token), "the token is not echoed back");
   });
 
@@ -719,15 +752,15 @@ describe("inspection creation", () => {
     assert.equal(body.error, "inspection_not_found", "existence must not be disclosed");
   });
 
-  test("deliverables are not offered before every artifact exists", async () => {
+  test("the deliverables endpoint requires an exact requested output identity", async () => {
     const { status, body } = await apiRequest(
       baseUrl,
       `/api/v1/partner/inspections/${created.inspectionId}/deliverables`,
       { token: alphaConn.token },
     );
 
-    assert.equal(status, 409);
-    assert.equal(body.error, "deliverables_not_ready");
+    assert.equal(status, 400);
+    assert.equal(body.error, "invalid_request");
   });
 
   test("exports the inspection id for the delivery tests", () => {
@@ -738,6 +771,10 @@ describe("inspection creation", () => {
 
 describe("deliverables and artifacts", () => {
   const state = {};
+  const manifestPath = () =>
+    `/api/v1/partner/inspections/${state.inspectionId}/deliverables` +
+    `?submissionId=${encodeURIComponent(state.submissionId)}` +
+    "&outputVersion=1";
 
   before(async () => {
     const db = admin();
@@ -762,6 +799,7 @@ describe("deliverables and artifacts", () => {
       .select("id")
       .single();
     state.submissionId = submission.id;
+    process.env.PPI_TEST_SUBMISSION_ID = submission.id;
 
     await db
       .from("external_inspection_refs")
@@ -793,15 +831,15 @@ describe("deliverables and artifacts", () => {
 
     const { status, body } = await apiRequest(
       baseUrl,
-      `/api/v1/partner/inspections/${state.inspectionId}/deliverables`,
+      manifestPath(),
       { token: alphaConn.token },
     );
 
     assert.equal(status, 409);
-    assert.equal(body.error, "deliverables_not_ready");
+    assert.equal(body.error, "delivery_not_requested");
   });
 
-  test("the manifest appears once all four artifacts exist", async () => {
+  test("the manifest appears only after all four artifacts are explicitly sent", async () => {
     const db = admin();
     const remaining = [
       ["inspection_report_pdf", "application/pdf", "pdf"],
@@ -822,9 +860,24 @@ describe("deliverables and artifacts", () => {
       });
     }
 
+    const beforeSend = await apiRequest(baseUrl, manifestPath(), {
+      token: alphaConn.token,
+    });
+    assert.equal(beforeSend.status, 409);
+    assert.equal(beforeSend.body.error, "delivery_not_requested");
+
+    const { error: deliveryError } = await db.rpc("partner_request_delivery", {
+      p_ref_id: state.refId,
+      p_submission_id: state.submissionId,
+      p_output_version: 1,
+      p_event_id: crypto.randomUUID(),
+      p_occurred_at: new Date().toISOString(),
+    });
+    assert.equal(deliveryError, null);
+
     const { status, body } = await apiRequest(
       baseUrl,
-      `/api/v1/partner/inspections/${state.inspectionId}/deliverables`,
+      manifestPath(),
       { token: alphaConn.token },
     );
 
@@ -856,12 +909,14 @@ describe("deliverables and artifacts", () => {
 
     assert.equal(body.deliverablesReady, true);
     assert.equal(body.readyOutputVersion, 1);
+    assert.equal(body.deliverySubmissionId, state.submissionId);
+    assert.equal(body.deliveryOutputVersion, 1);
   });
 
   test("another dealership cannot read the manifest or the artifact", async () => {
     const manifest = await apiRequest(
       baseUrl,
-      `/api/v1/partner/inspections/${state.inspectionId}/deliverables`,
+      manifestPath(),
       { token: betaConn.token },
     );
     assert.equal(manifest.status, 404);
@@ -932,6 +987,7 @@ describe("signed outbound webhooks", () => {
     // Queue the notification the way "Send to DealerSpace" does.
     const { error } = await db.rpc("partner_request_delivery", {
       p_ref_id: state.refId,
+      p_submission_id: process.env.PPI_TEST_SUBMISSION_ID,
       p_output_version: 1,
       p_event_id: crypto.randomUUID(),
       p_occurred_at: new Date().toISOString(),
@@ -972,6 +1028,8 @@ describe("signed outbound webhooks", () => {
     assert.equal(payload.type, "inspection.deliverables_ready");
     assert.equal(payload.inspectionId, state.inspectionId);
     assert.equal(payload.deliveryVersion, 1);
+    assert.equal(payload.submissionId, process.env.PPI_TEST_SUBMISSION_ID);
+    assert.equal(payload.outputVersion, 1);
     assert.ok(!("artifacts" in payload), "artifacts are pulled, not pushed");
     assert.ok(delivered.rawBody.length < 1024, "the notification stays small");
 

@@ -45,7 +45,8 @@ delivery.
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | User-scoped clients; RLS enforcement |
 | `SUPABASE_SERVICE_ROLE_KEY` | Partner API routes and workers. **Server only** — never expose it |
 | `GEMINI_PERFECTPPI` or `GEMINI_API_KEY` | Report and VSC generation. A missing key fails the job permanently with a clear error rather than crashing the module |
-| `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL` | Artifact storage. Required — the pipeline refuses to run without it |
+| `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PRIVATE_BUCKET_NAME` | Private inspection/VSC artifact storage. The private bucket must have no public domain. The output pipeline refuses to run without it |
+| `R2_BUCKET_NAME`, `R2_PUBLIC_URL` | Existing public-media storage. It is never used for partner inspection or VSC deliverables |
 | `NEXT_PUBLIC_SITE_URL` | Builds the deep link returned to DealerSpace and the account-linking authorization URL |
 
 ### Development only
@@ -66,6 +67,7 @@ delivery.
 | `040_partner_integration_rls.sql` | RLS for every new table, explicit grants, and a guard that fails the migration if any table is left unprotected |
 | `041_partner_rpcs.sql` | Transactional inspection creation, job enqueueing, snapshot correction, delivery requests |
 | `042_output_job_reconciliation.sql` | Recovery sweep for submissions whose enqueue never landed |
+| `20260817091852_harden_partner_delivery_contract.sql` | Compound submission/output delivery identity and exact signed delivery target |
 
 After applying them, regenerate the database types:
 
@@ -92,7 +94,7 @@ the installation code *is* the credential.
 | POST | `/inspections` | `inspections:create` | Create an inspection (requires `Idempotency-Key`) |
 | GET | `/inspections/:id` | `inspections:read` | Current status and readiness |
 | PATCH | `/inspections/:id/vehicle` | `inspections:create` | Explicit snapshot correction, pre-submission only |
-| GET | `/inspections/:id/deliverables` | `artifacts:read` | Manifest for the newest complete output version |
+| GET | `/inspections/:id/deliverables?submissionId=:submissionId&outputVersion=:version` | `artifacts:read` | Manifest for the exact output explicitly sent to DealerSpace |
 | GET | `/artifacts/:artifactId` | `artifacts:read` | Stream authenticated bytes |
 
 ### Error codes
@@ -106,7 +108,7 @@ DealerSpace should branch on the `error` field, not on the message.
 `authorization_expired`, `invalid_installation_code`,
 `installation_code_expired`, `installation_code_already_used`,
 `connection_already_exists`, `invalid_callback_url`, `inspection_not_found`,
-`artifact_not_found`, `deliverables_not_ready`, `idempotency_conflict`,
+`artifact_not_found`, `deliverables_not_ready`, `delivery_not_requested`, `idempotency_conflict`,
 `snapshot_locked`, `rate_limited`, `storage_unavailable`, `internal_error`.
 
 An inspection belonging to another dealership returns `inspection_not_found`,
@@ -141,9 +143,16 @@ Content-Type: application/json
 }
 ```
 
-Response (`201`) contains `token` and `webhookSecret` **exactly once**. Store
-both encrypted at rest. There is no way to read them back; a lost credential is
-rotated by the Perfect PPI manager, which invalidates the old one immediately.
+The initial response (`201`) contains `token` and `webhookSecret`; neither value
+can be read back later. Store both encrypted at rest. If DealerSpace loses the response or its local write
+fails, an exact replay during the code's original TTL returns fresh credentials
+for the same connection (`200`, `recovered: true`). A replay with different
+organization or callback data remains forbidden.
+
+Credential rotation invalidates the old values immediately. Copy both one-time
+replacement values into DealerSpace's Perfect PPI settings. DealerSpace calls
+`GET /connections/self` with the new token and verifies its returned HMAC proof
+with the new webhook secret before replacing either encrypted credential.
 
 Both URLs are validated at registration and re-validated before every outbound
 request: HTTPS only, no embedded credentials, and the hostname must not resolve
@@ -248,7 +257,14 @@ vsc_determination_pdf      immutable human-readable record
 
 The manifest only ever describes an output version that has **all four**. A
 version missing one is never offered, so DealerSpace cannot import a partial set
-and close its Recon phase on it.
+and close its Recon phase on it. The immutable identity is
+`(submissionId, outputVersion)`: output versions restart on a revised
+submission. Polling readiness does not authorize an import.
+
+```http
+GET /api/v1/partner/inspections/:id/deliverables?submissionId=:submissionId&outputVersion=:version
+Authorization: Bearer <connection-token>
+```
 
 ```json
 {
@@ -271,7 +287,10 @@ and close its Recon phase on it.
 
 Each `sha256` is computed over exactly the bytes stored, so DealerSpace can
 verify a download before accepting it. The artifact route also echoes
-`X-PerfectPPI-Artifact-Sha256` and `X-PerfectPPI-Output-Version`.
+`X-PerfectPPI-Artifact-Sha256`, `X-PerfectPPI-Submission-Id`, and
+`X-PerfectPPI-Output-Version`. Manifest and artifact routes return no data until
+the technician has explicitly pressed **Send to DealerSpace** for that exact
+submission/output pair.
 
 Artifact records are append-only — a checksum a partner has recorded can never
 be rewritten. Manual regeneration creates a **new** output version and leaves
@@ -290,7 +309,9 @@ webhook.
   "type": "inspection.deliverables_ready",
   "occurredAt": "2026-08-14T12:00:00Z",
   "inspectionId": "ppi-request-id",
-  "deliveryVersion": 1
+  "deliveryVersion": 1,
+  "submissionId": "submission-id",
+  "outputVersion": 1
 }
 ```
 
@@ -475,7 +496,8 @@ re-asserts the integration tables' lockdown on top.
 6. Verify webhook signatures over the **raw** body, reject stale timestamps, and
    deduplicate on `eventId`. Never trust an organization id from the payload as
    authorization — resolve it from the stored connection.
-7. On `inspection.deliverables_ready`, fetch the manifest, download all four
+7. On `inspection.deliverables_ready`, fetch the exact
+   `(submissionId, outputVersion)` manifest, download all four
    artifacts, verify each SHA-256 and content type, copy them into DealerSpace's
    own R2, and create canonical external-artifact records.
 8. Complete the Recon Inspection phase **only** after every required artifact is
@@ -494,9 +516,9 @@ re-asserts the integration tables' lockdown on top.
   revokes every user link it authorized, and fails pending deliveries. Handle
   `401 connection_revoked` by prompting for reconnection.
 - Rotating credentials has **no overlap window**. The old token stops working
-  the moment the new one is issued.
+  immediately; paste both replacement values into DealerSpace, which verifies
+  the token and webhook-secret proof before replacing its encrypted credentials.
 - `deliverablesReady` on the status endpoint is the cheap way to decide whether
   fetching the manifest is worthwhile.
-- A resubmission produces a new submission and a new output version. Treat a
-  higher manifest `version` as a new immutable artifact set rather than an
-  update to the one already imported.
+- A resubmission produces a new submission whose output version may restart at
+  `1`. Use `(submissionId, outputVersion)` as the immutable artifact-set key.

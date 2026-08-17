@@ -306,6 +306,7 @@ export type Database = {
         Row: {
           created_at: string
           current_submission_id: string | null
+          delivered_submission_id: string | null
           delivered_output_version: number | null
           delivery_status: string
           delivery_version: number
@@ -331,6 +332,7 @@ export type Database = {
         Insert: {
           created_at?: string
           current_submission_id?: string | null
+          delivered_submission_id?: string | null
           delivered_output_version?: number | null
           delivery_status?: string
           delivery_version?: number
@@ -356,6 +358,7 @@ export type Database = {
         Update: {
           created_at?: string
           current_submission_id?: string | null
+          delivered_submission_id?: string | null
           delivered_output_version?: number | null
           delivery_status?: string
           delivery_version?: number
@@ -382,6 +385,13 @@ export type Database = {
           {
             foreignKeyName: "external_inspection_refs_current_submission_id_fkey"
             columns: ["current_submission_id"]
+            isOneToOne: false
+            referencedRelation: "ppi_submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_inspection_refs_delivered_submission_id_fkey"
+            columns: ["delivered_submission_id"]
             isOneToOne: false
             referencedRelation: "ppi_submissions"
             referencedColumns: ["id"]
@@ -2356,6 +2366,7 @@ export type Database = {
           p_occurred_at: string
           p_output_version: number
           p_ref_id: string
+          p_submission_id: string
         }
         Returns: {
           attempt_count: number

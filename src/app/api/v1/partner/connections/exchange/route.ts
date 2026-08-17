@@ -23,8 +23,10 @@ export const dynamic = "force-dynamic";
 // The one unauthenticated partner endpoint: the installation code *is* the
 // credential. It is single-use, short-lived, and only ever compared as a hash.
 //
-// Returns the connection token and webhook signing secret exactly once. Neither
-// can be retrieved again — a lost credential is rotated, not recovered.
+// Returns a connection token and webhook signing secret only in the exchange
+// response. An exact replay during the original code TTL rotates the same
+// connection and returns fresh credentials, allowing recovery from a lost HTTP
+// response without making stored secrets readable.
 // ============================================================================
 
 const bodySchema = z.object({
@@ -91,24 +93,12 @@ export async function POST(request: Request) {
 
   const { data: codeRow } = await admin
     .from("partner_installation_codes")
-    .select("id, organization_id, scopes, status, expires_at")
+    .select("id, organization_id, scopes, status, expires_at, consumed_connection_id")
     .eq("code_hash", sha256Hex(normalizedCode))
     .maybeSingle();
 
   if (!codeRow) {
     return partnerError("invalid_installation_code");
-  }
-
-  if (codeRow.status === "consumed") {
-    return partnerError("installation_code_already_used");
-  }
-
-  if (codeRow.status !== "pending") {
-    return partnerError("invalid_installation_code");
-  }
-
-  if (new Date(codeRow.expires_at).getTime() < Date.now()) {
-    return partnerError("installation_code_expired");
   }
 
   const { data: organization } = await admin
@@ -119,6 +109,82 @@ export async function POST(request: Request) {
 
   if (!organization) {
     return partnerError("internal_error", "The organization for this code no longer exists.");
+  }
+
+  // A DealerSpace write or HTTP response can fail after the first exchange.
+  // During the code's original TTL, an exact replay recovers by rotating the
+  // already-created connection and returning fresh one-time credentials. This
+  // prevents a consumed code from stranding an active remote connection.
+  if (codeRow.status === "consumed") {
+    if (
+      new Date(codeRow.expires_at).getTime() < Date.now()
+      || !codeRow.consumed_connection_id
+    ) {
+      return partnerError("installation_code_already_used");
+    }
+
+    const { data: existing } = await admin
+      .from("partner_connections")
+      .select(
+        "id, status, scopes, connected_at, external_organization_id, webhook_url, user_link_redirect_uri",
+      )
+      .eq("id", codeRow.consumed_connection_id)
+      .eq("organization_id", codeRow.organization_id)
+      .maybeSingle();
+
+    if (
+      !existing
+      || existing.status !== "active"
+      || existing.external_organization_id !== externalOrganizationId
+      || existing.webhook_url !== webhookUrl
+      || existing.user_link_redirect_uri !== userLinkRedirectUri
+    ) {
+      return partnerError("installation_code_already_used");
+    }
+
+    const recoveredCredentials = generateConnectionToken();
+    const recoveredWebhookSecret = generateWebhookSecret();
+    const { data: recovered, error: recoveryError } = await admin
+      .from("partner_connections")
+      .update({
+        token_prefix: recoveredCredentials.tokenPrefix,
+        token_hash: recoveredCredentials.tokenHash,
+        token_last_four: recoveredCredentials.tokenLastFour,
+        webhook_secret_ciphertext: encryptSecret(recoveredWebhookSecret),
+        credentials_rotated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id)
+      .eq("status", "active")
+      .select("id, scopes, connected_at")
+      .maybeSingle();
+
+    if (recoveryError || !recovered) {
+      console.error("partner: connection recovery failed", recoveryError?.message);
+      return partnerError("internal_error");
+    }
+
+    return NextResponse.json(
+      {
+        connectionId: recovered.id,
+        organization: { id: organization.id, name: organization.name },
+        scopes: recovered.scopes,
+        connectedAt: recovered.connected_at,
+        token: recoveredCredentials.token,
+        webhookSecret: recoveredWebhookSecret,
+        webhookUrl,
+        userLinkRedirectUri,
+        recovered: true,
+      },
+      { status: 200, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  if (codeRow.status !== "pending") {
+    return partnerError("invalid_installation_code");
+  }
+
+  if (new Date(codeRow.expires_at).getTime() < Date.now()) {
+    return partnerError("installation_code_expired");
   }
 
   const credentials = generateConnectionToken();

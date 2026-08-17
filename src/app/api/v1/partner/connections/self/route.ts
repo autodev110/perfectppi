@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { authenticatePartnerRequest } from "@/features/partner/auth";
+import { decryptSecret, signWebhookPayload } from "@/features/partner/crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +30,26 @@ export async function GET(request: Request) {
     .single();
 
   const verifiedAt = new Date().toISOString();
+  const proofTimestamp = Math.floor(Date.now() / 1000).toString();
+  const proofPayload = `connection:${auth.connection.id}:${verifiedAt}`;
+  let webhookSecretProof: {
+    timestamp: string;
+    payload: string;
+    signature: string;
+  } | null = null;
+  try {
+    webhookSecretProof = {
+      timestamp: proofTimestamp,
+      payload: proofPayload,
+      signature: signWebhookPayload({
+        secret: decryptSecret(auth.connection.webhook_secret_ciphertext),
+        timestamp: proofTimestamp,
+        rawBody: proofPayload,
+      }),
+    };
+  } catch (error) {
+    console.error("partner: webhook secret proof failed", error);
+  }
   await admin
     .from("partner_connections")
     .update({ last_verified_at: verifiedAt })
@@ -48,6 +69,7 @@ export async function GET(request: Request) {
       userLinkRedirectUri: auth.connection.user_link_redirect_uri,
       connectedAt: auth.connection.connected_at,
       verifiedAt,
+      webhookSecretProof,
     },
     { headers: { "Cache-Control": "no-store" } },
   );

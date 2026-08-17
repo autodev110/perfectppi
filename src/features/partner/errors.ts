@@ -41,6 +41,7 @@ export const PARTNER_ERRORS = {
   inspection_not_found: 404,
   artifact_not_found: 404,
   deliverables_not_ready: 409,
+  delivery_not_requested: 409,
   idempotency_conflict: 409,
   snapshot_locked: 409,
 
@@ -90,6 +91,8 @@ function defaultMessage(code: PartnerErrorCode): string {
       return "This Idempotency-Key was already used with a different payload.";
     case "deliverables_not_ready":
       return "The inspection does not yet have every required artifact.";
+    case "delivery_not_requested":
+      return "This report version has not been sent to DealerSpace.";
     case "inspection_not_found":
       return "No such inspection for this connection.";
     case "artifact_not_found":

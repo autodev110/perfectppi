@@ -99,7 +99,7 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
         return;
       }
       setFreshCredentials(result.data);
-      toast.success("New credentials issued. The previous ones stopped working.");
+      toast.success("New credentials issued. Copy both values into DealerSpace now.");
       router.refresh();
     });
 
@@ -208,9 +208,9 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Rotating issues a new token and signing secret immediately; the previous
-              ones stop working at once, so coordinate it with your DealerSpace
-              administrator.
+              Rotation replaces both credentials immediately. Copy the one-time values,
+              then open DealerSpace → Settings → Perfect PPI and use “Verify and save
+              credentials.” DealerSpace verifies both values before storing them.
             </p>
           </div>
         ) : (

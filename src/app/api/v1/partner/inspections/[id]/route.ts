@@ -46,6 +46,8 @@ export async function GET(
       integrationStatus: inspection.integrationStatus,
       deliveryStatus: inspection.deliveryStatus,
       deliveryVersion: inspection.deliveryVersion,
+      deliverySubmissionId: inspection.deliverySubmissionId,
+      deliveryOutputVersion: inspection.deliveryOutputVersion,
       submissionId: inspection.submissionId,
       submissionVersion: inspection.submissionVersion,
       submittedAt: inspection.submittedAt,

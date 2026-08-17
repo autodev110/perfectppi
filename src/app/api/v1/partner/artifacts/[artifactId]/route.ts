@@ -3,9 +3,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { authenticatePartnerRequest } from "@/features/partner/auth";
 import { secureCompareHex, sha256Hex } from "@/features/partner/crypto";
 import { partnerError } from "@/features/partner/errors";
-import { isUuid } from "@/features/partner/inspections";
+import { isUuid, wasDeliverableRequested } from "@/features/partner/inspections";
 import { ARTIFACT_FILENAMES, type ArtifactType } from "@/features/partner/constants";
-import { getObjectByKey, isR2Configured } from "@/lib/storage/r2";
+import {
+  getPrivateObjectByKey,
+  isPrivateR2Configured,
+} from "@/lib/storage/r2";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,15 +57,23 @@ export async function GET(
     return partnerError("artifact_not_found");
   }
 
+  const requested = await wasDeliverableRequested({
+    connectionId: auth.connection.id,
+    refId: ref.id,
+    submissionId: artifact.ppi_submission_id,
+    outputVersion: artifact.output_version,
+  });
+  if (!requested) return partnerError("artifact_not_found");
+
   // Checked only after ownership: an unauthorized caller must not be able to
   // tell a missing artifact apart from a storage outage.
-  if (!isR2Configured()) {
+  if (!isPrivateR2Configured()) {
     return partnerError("storage_unavailable", "Artifact storage is not configured.");
   }
 
   let bytes: Uint8Array;
   try {
-    ({ bytes } = await getObjectByKey(artifact.storage_key));
+    ({ bytes } = await getPrivateObjectByKey(artifact.storage_key));
   } catch (error) {
     console.error("partner: artifact fetch failed", artifact.storage_key, error);
     return partnerError("storage_unavailable", "Artifact bytes could not be read.");
@@ -89,6 +100,7 @@ export async function GET(
       // so there is nothing to inject into the header.
       "Content-Disposition": `attachment; filename="${filename}"`,
       "X-PerfectPPI-Artifact-Sha256": artifact.sha256,
+      "X-PerfectPPI-Submission-Id": artifact.ppi_submission_id,
       "X-PerfectPPI-Output-Version": String(artifact.output_version),
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",

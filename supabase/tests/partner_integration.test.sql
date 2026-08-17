@@ -579,22 +579,26 @@ END $$;
 DO $$
 DECLARE
   submission uuid := 'd0000000-0000-4000-8000-000000000001';
+  ref_id uuid := (
+    SELECT id FROM public.external_inspection_refs
+    WHERE idempotency_key = 'dms-alpha:case-1:phase-1'
+  );
   ready integer;
 BEGIN
   INSERT INTO public.integration_artifacts
-    (ppi_submission_id, output_version, artifact_type, content_type, size_bytes, sha256, storage_key)
+    (external_inspection_ref_id, ppi_submission_id, output_version, artifact_type, content_type, size_bytes, sha256, storage_key)
   VALUES
-    (submission, 1, 'inspection_report_json', 'application/json', 10, repeat('a', 64), 'k/1.json'),
-    (submission, 1, 'inspection_report_pdf',  'application/pdf',  10, repeat('b', 64), 'k/1.pdf'),
-    (submission, 1, 'vsc_determination_json', 'application/json', 10, repeat('c', 64), 'k/2.json');
+    (ref_id, submission, 1, 'inspection_report_json', 'application/json', 10, repeat('a', 64), 'k/1.json'),
+    (ref_id, submission, 1, 'inspection_report_pdf',  'application/pdf',  10, repeat('b', 64), 'k/1.pdf'),
+    (ref_id, submission, 1, 'vsc_determination_json', 'application/json', 10, repeat('c', 64), 'k/2.json');
 
   ready := public.ready_output_version(submission);
   PERFORM pg_temp.eq(ready, NULL::integer, 'three of four artifacts is not deliverable');
 
   INSERT INTO public.integration_artifacts
-    (ppi_submission_id, output_version, artifact_type, content_type, size_bytes, sha256, storage_key)
+    (external_inspection_ref_id, ppi_submission_id, output_version, artifact_type, content_type, size_bytes, sha256, storage_key)
   VALUES
-    (submission, 1, 'vsc_determination_pdf', 'application/pdf', 10, repeat('d', 64), 'k/2.pdf');
+    (ref_id, submission, 1, 'vsc_determination_pdf', 'application/pdf', 10, repeat('d', 64), 'k/2.pdf');
 
   ready := public.ready_output_version(submission);
   PERFORM pg_temp.eq(ready, 1, 'all four artifacts makes the version deliverable');
@@ -639,10 +643,22 @@ BEGIN
   WHERE id = ref_id;
 
   SELECT id INTO first_event
-  FROM public.partner_request_delivery(ref_id, 1, gen_random_uuid(), now());
+  FROM public.partner_request_delivery(
+    ref_id,
+    'd0000000-0000-4000-8000-000000000001',
+    1,
+    gen_random_uuid(),
+    now()
+  );
 
   SELECT id INTO second_event
-  FROM public.partner_request_delivery(ref_id, 1, gen_random_uuid(), now());
+  FROM public.partner_request_delivery(
+    ref_id,
+    'd0000000-0000-4000-8000-000000000001',
+    1,
+    gen_random_uuid(),
+    now()
+  );
 
   PERFORM pg_temp.eq(second_event, first_event, 'clicking Send twice joins the same delivery');
 
@@ -659,11 +675,93 @@ BEGIN
   -- An exhausted delivery is re-armed by an explicit retry, same logical event.
   UPDATE public.outbound_events SET status = 'failed', attempt_count = 8 WHERE id = first_event;
   SELECT id INTO second_event
-  FROM public.partner_request_delivery(ref_id, 1, gen_random_uuid(), now());
+  FROM public.partner_request_delivery(
+    ref_id,
+    'd0000000-0000-4000-8000-000000000001',
+    1,
+    gen_random_uuid(),
+    now()
+  );
 
   PERFORM pg_temp.eq(second_event, first_event, 'retrying re-arms the same event rather than duplicating it');
   SELECT e.status INTO observed_status FROM public.outbound_events e WHERE e.id = first_event;
   PERFORM pg_temp.eq(observed_status, 'pending', 'the re-armed event is pending again');
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- 10b. A revised submission may also have output version 1 without colliding
+-- ---------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  ref_id uuid := (
+    SELECT id FROM public.external_inspection_refs
+    WHERE idempotency_key = 'dms-alpha:case-1:phase-1'
+  );
+  request_id uuid := (
+    SELECT ppi_request_id FROM public.external_inspection_refs
+    WHERE idempotency_key = 'dms-alpha:case-1:phase-1'
+  );
+  tech_a uuid := (SELECT id FROM public.profiles WHERE display_name = 'tech-a@example.com');
+  revised_submission uuid := 'd0000000-0000-4000-8000-000000000010';
+  revised_event record;
+  event_count integer;
+BEGIN
+  INSERT INTO public.ppi_submissions (
+    id, ppi_request_id, performer_id, version, status, submitted_at
+  ) VALUES (
+    revised_submission, request_id, tech_a, 2, 'submitted', now()
+  );
+
+  INSERT INTO public.integration_artifacts (
+    external_inspection_ref_id, ppi_submission_id, output_version,
+    artifact_type, content_type, size_bytes, sha256, storage_key
+  ) VALUES
+    (ref_id, revised_submission, 1, 'inspection_report_json', 'application/json', 10, repeat('1', 64), 'revision/1.json'),
+    (ref_id, revised_submission, 1, 'inspection_report_pdf',  'application/pdf',  10, repeat('2', 64), 'revision/1.pdf'),
+    (ref_id, revised_submission, 1, 'vsc_determination_json', 'application/json', 10, repeat('3', 64), 'revision/2.json'),
+    (ref_id, revised_submission, 1, 'vsc_determination_pdf',  'application/pdf',  10, repeat('4', 64), 'revision/2.pdf');
+
+  UPDATE public.external_inspection_refs
+  SET current_submission_id = revised_submission
+  WHERE id = ref_id;
+
+  SELECT * INTO revised_event
+  FROM public.partner_request_delivery(
+    ref_id,
+    revised_submission,
+    1,
+    gen_random_uuid(),
+    now()
+  );
+
+  PERFORM pg_temp.eq(
+    revised_event.payload ->> 'submissionId',
+    revised_submission::text,
+    'the revision webhook identifies the exact submission'
+  );
+  PERFORM pg_temp.eq(
+    (revised_event.payload ->> 'outputVersion')::integer,
+    1,
+    'the revision may safely restart output versioning at one'
+  );
+  PERFORM pg_temp.eq(
+    (revised_event.payload ->> 'deliveryVersion')::integer,
+    2,
+    'the inspection-wide delivery version still advances'
+  );
+
+  SELECT count(*) INTO event_count
+  FROM public.outbound_events
+  WHERE external_inspection_ref_id = ref_id
+    AND event_type = 'inspection.deliverables_ready';
+  PERFORM pg_temp.eq(event_count, 2, 'original and revised report sets have distinct events');
+
+  PERFORM pg_temp.eq(
+    (SELECT delivered_submission_id FROM public.external_inspection_refs WHERE id = ref_id),
+    revised_submission,
+    'the ref records the exact revised submission selected for delivery'
+  );
 END $$;
 
 -- ---------------------------------------------------------------------------

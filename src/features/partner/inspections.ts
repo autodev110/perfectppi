@@ -17,6 +17,8 @@ export interface PartnerInspectionView {
   integrationStatus: string;
   deliveryStatus: string;
   deliveryVersion: number;
+  deliverySubmissionId: string | null;
+  deliveryOutputVersion: number | null;
   submissionId: string | null;
   submissionVersion: number | null;
   submittedAt: string | null;
@@ -44,7 +46,8 @@ export async function loadPartnerInspection(
     .select(
       `
       id, ppi_request_id, current_submission_id, integration_status, delivery_status,
-      delivery_version, external_recon_case_id, external_vehicle_id,
+      delivery_version, delivered_submission_id, delivered_output_version,
+      external_recon_case_id, external_vehicle_id,
       external_inspection_phase_id, external_actor_id, vehicle_snapshot,
       created_at, updated_at,
       request:ppi_requests!external_inspection_refs_ppi_request_id_fkey(
@@ -87,6 +90,8 @@ export async function loadPartnerInspection(
     integrationStatus: data.integration_status,
     deliveryStatus: data.delivery_status,
     deliveryVersion: data.delivery_version,
+    deliverySubmissionId: data.delivered_submission_id,
+    deliveryOutputVersion: data.delivered_output_version,
     submissionId: data.current_submission_id,
     submissionVersion,
     submittedAt,
@@ -126,6 +131,7 @@ export interface DeliverableManifest {
  */
 export async function loadDeliverableManifest(
   submissionId: string,
+  outputVersion?: number,
 ): Promise<DeliverableManifest | null> {
   const admin = createAdminClient();
 
@@ -133,6 +139,7 @@ export async function loadDeliverableManifest(
     .from("integration_artifacts")
     .select("id, output_version, artifact_type, content_type, size_bytes, sha256, storage_key, generated_at")
     .eq("ppi_submission_id", submissionId)
+    .match(outputVersion === undefined ? {} : { output_version: outputVersion })
     .order("output_version", { ascending: false });
 
   if (!data || data.length === 0) return null;
@@ -170,6 +177,35 @@ export async function loadDeliverableManifest(
   }
 
   return null;
+}
+
+/**
+ * A partner may pull bytes only after a technician explicitly requested this
+ * exact submission/output pair. The transactional delivery event is the
+ * durable authorization record, so an older requested revision remains
+ * retryable even after a newer revision becomes current.
+ */
+export async function wasDeliverableRequested(params: {
+  connectionId: string;
+  refId: string;
+  submissionId: string;
+  outputVersion: number;
+}): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("outbound_events")
+    .select("id")
+    .eq("partner_connection_id", params.connectionId)
+    .eq("external_inspection_ref_id", params.refId)
+    .eq("event_type", "inspection.deliverables_ready")
+    .contains("payload", {
+      submissionId: params.submissionId,
+      outputVersion: params.outputVersion,
+    })
+    .limit(1)
+    .maybeSingle();
+
+  return Boolean(data);
 }
 
 export function isUuid(value: string): boolean {

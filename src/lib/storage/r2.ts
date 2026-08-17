@@ -6,20 +6,31 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 // Key path: {entity}/{ownerId}/{recordId}/{timestamp}.{ext}
 
 let s3Client: S3Client | null = null;
+const PRIVATE_STORAGE_PREFIX = "r2-private:///";
 
-export function isR2Configured() {
+function isR2ClientConfigured() {
   return Boolean(
     process.env.R2_ENDPOINT &&
       process.env.R2_ACCESS_KEY_ID &&
-      process.env.R2_SECRET_ACCESS_KEY &&
+      process.env.R2_SECRET_ACCESS_KEY,
+  );
+}
+
+export function isR2Configured() {
+  return Boolean(
+    isR2ClientConfigured() &&
       process.env.R2_BUCKET_NAME &&
       process.env.R2_PUBLIC_URL,
   );
 }
 
+export function isPrivateR2Configured() {
+  return Boolean(isR2ClientConfigured() && process.env.R2_PRIVATE_BUCKET_NAME);
+}
+
 function getS3Client() {
-  if (!isR2Configured()) {
-    throw new Error("R2 is not configured");
+  if (!isR2ClientConfigured()) {
+    throw new Error("R2 client credentials are not configured");
   }
 
   if (!s3Client) {
@@ -78,6 +89,34 @@ export async function uploadObject(params: {
   return { publicUrl: `${process.env.R2_PUBLIC_URL!.replace(/\/$/, "")}/${params.key}` };
 }
 
+/** Uploads partner deliverables to a bucket with no public domain. */
+export async function uploadPrivateObject(params: {
+  key: string;
+  body: Uint8Array | Buffer;
+  contentType: string;
+}): Promise<{ storageReference: string }> {
+  if (!isPrivateR2Configured()) {
+    throw new Error("Private R2 artifact storage is not configured");
+  }
+  const client = getS3Client();
+  const key = params.key.replace(/^\/+/, "");
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: process.env.R2_PRIVATE_BUCKET_NAME!,
+      Key: key,
+      Body: params.body,
+      ContentType: params.contentType,
+    }),
+  );
+
+  return { storageReference: privateStorageReference(key) };
+}
+
+export function privateStorageReference(key: string): string {
+  return `${PRIVATE_STORAGE_PREFIX}${key.replace(/^\/+/, "")}`;
+}
+
 /**
  * Extract the storage key from a URL we previously generated.
  * Falls back to the URL pathname if R2_PUBLIC_URL doesn't match (e.g. it changed).
@@ -109,8 +148,7 @@ export async function generatePresignedGetUrl(
   expiresIn = 3600,
 ): Promise<string> {
   const client = getS3Client();
-  const bucket = process.env.R2_BUCKET_NAME!;
-  const key = extractKeyFromStoredUrl(storedPublicUrl);
+  const { bucket, key } = resolveStoredObject(storedPublicUrl);
 
   const command = new GetObjectCommand({ Bucket: bucket, Key: key });
   return getSignedUrl(client, command, { expiresIn });
@@ -131,8 +169,7 @@ export async function getObjectFromStoredUrl(storedPublicUrl: string): Promise<{
   etag?: string;
 }> {
   const client = getS3Client();
-  const bucket = process.env.R2_BUCKET_NAME!;
-  const key = extractKeyFromStoredUrl(storedPublicUrl);
+  const { bucket, key } = resolveStoredObject(storedPublicUrl);
 
   const response = await client.send(
     new GetObjectCommand({ Bucket: bucket, Key: key })
@@ -176,12 +213,15 @@ export async function getObjectFromStoredUrl(storedPublicUrl: string): Promise<{
  * streamed back through an authenticated route, so the bucket never needs to be
  * public and no expiring link becomes a permanent record on the partner's side.
  */
-export async function getObjectByKey(key: string): Promise<{
+export async function getPrivateObjectByKey(key: string): Promise<{
   bytes: Uint8Array;
   contentType: string;
 }> {
+  if (!isPrivateR2Configured()) {
+    throw new Error("Private R2 artifact storage is not configured");
+  }
   const client = getS3Client();
-  const bucket = process.env.R2_BUCKET_NAME!;
+  const bucket = process.env.R2_PRIVATE_BUCKET_NAME!;
 
   const response = await client.send(
     new GetObjectCommand({ Bucket: bucket, Key: key.replace(/^\/+/, "") }),
@@ -212,6 +252,34 @@ export async function getObjectByKey(key: string): Promise<{
   return {
     bytes,
     contentType: response.ContentType ?? "application/octet-stream",
+  };
+}
+
+export function isStoredObjectConfigured(storedValue: string): boolean {
+  return isPrivateStorageReference(storedValue)
+    ? isPrivateR2Configured()
+    : isR2Configured();
+}
+
+export function isPrivateStorageReference(storedValue: string): boolean {
+  return storedValue.startsWith(PRIVATE_STORAGE_PREFIX);
+}
+
+function resolveStoredObject(storedValue: string): { bucket: string; key: string } {
+  if (storedValue.startsWith(PRIVATE_STORAGE_PREFIX)) {
+    if (!isPrivateR2Configured()) {
+      throw new Error("Private R2 artifact storage is not configured");
+    }
+    return {
+      bucket: process.env.R2_PRIVATE_BUCKET_NAME!,
+      key: storedValue.slice(PRIVATE_STORAGE_PREFIX.length).replace(/^\/+/, ""),
+    };
+  }
+
+  if (!isR2Configured()) throw new Error("R2 is not configured");
+  return {
+    bucket: process.env.R2_BUCKET_NAME!,
+    key: extractKeyFromStoredUrl(storedValue),
   };
 }
 

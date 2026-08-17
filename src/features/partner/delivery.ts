@@ -360,6 +360,10 @@ async function finalize(
         typeof payload.inspectionId === "string" ? payload.inspectionId : null;
       const deliveryVersion =
         typeof payload.deliveryVersion === "number" ? payload.deliveryVersion : undefined;
+      const submissionId =
+        typeof payload.submissionId === "string" ? payload.submissionId : undefined;
+      const outputVersion =
+        typeof payload.outputVersion === "number" ? payload.outputVersion : undefined;
       const deliverablesEventId =
         typeof payload.eventId === "string" ? payload.eventId : event.id;
 
@@ -376,6 +380,8 @@ async function finalize(
           type: terminalType,
           data: {
             deliveryVersion,
+            submissionId,
+            outputVersion,
             deliverablesEventId,
             ...(outcome.state === "failed"
               ? {

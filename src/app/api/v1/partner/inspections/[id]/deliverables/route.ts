@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { authenticatePartnerRequest } from "@/features/partner/auth";
 import { partnerError } from "@/features/partner/errors";
 import {
+  isUuid,
   loadDeliverableManifest,
   loadPartnerInspection,
+  wasDeliverableRequested,
 } from "@/features/partner/inspections";
 
 export const runtime = "nodejs";
@@ -34,14 +36,30 @@ export async function GET(
   const inspection = await loadPartnerInspection(auth.connection, id);
   if (!inspection) return partnerError("inspection_not_found");
 
-  if (!inspection.submissionId) {
+  const url = new URL(request.url);
+  const submissionId = url.searchParams.get("submissionId") ?? "";
+  const outputVersion = Number(url.searchParams.get("outputVersion"));
+  if (!isUuid(submissionId) || !Number.isInteger(outputVersion) || outputVersion < 1) {
     return partnerError(
-      "deliverables_not_ready",
-      "This inspection has not been submitted yet.",
+      "invalid_request",
+      "submissionId and a positive integer outputVersion are required.",
     );
   }
 
-  const manifest = await loadDeliverableManifest(inspection.submissionId);
+  const requested = await wasDeliverableRequested({
+    connectionId: auth.connection.id,
+    refId: inspection.refId,
+    submissionId,
+    outputVersion,
+  });
+  if (!requested) {
+    return partnerError(
+      "delivery_not_requested",
+      "This report version has not been sent to DealerSpace.",
+    );
+  }
+
+  const manifest = await loadDeliverableManifest(submissionId, outputVersion);
   if (!manifest) {
     return partnerError(
       "deliverables_not_ready",

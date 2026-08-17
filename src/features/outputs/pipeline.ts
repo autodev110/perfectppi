@@ -5,7 +5,11 @@ import { generateStandardizedOutput } from "@/lib/ai/standardized-generator";
 import { generateVscCoverage } from "@/lib/ai/vsc-generator";
 import { generateStandardizedReportPdf } from "@/lib/pdf/standardized-report-pdf";
 import { generateVscDeterminationPdf } from "@/lib/pdf/vsc-determination-pdf";
-import { isR2Configured, uploadObject } from "@/lib/storage/r2";
+import {
+  isPrivateR2Configured,
+  privateStorageReference,
+  uploadPrivateObject,
+} from "@/lib/storage/r2";
 import {
   ARTIFACT_CONTENT_TYPES,
   REQUIRED_ARTIFACT_TYPES,
@@ -74,10 +78,10 @@ export async function runOutputGenerationJob(params: {
   const { submissionId, outputVersion } = params;
   const admin = createAdminClient();
 
-  if (!isR2Configured()) {
+  if (!isPrivateR2Configured()) {
     throw new OutputJobError(
       "configuration",
-      "R2 is not configured; artifacts cannot be stored.",
+      "Private R2 artifact storage is not configured.",
       true,
     );
   }
@@ -398,7 +402,7 @@ export async function runOutputGenerationJob(params: {
     const storageKey = `integration_artifacts/${ownerScope}/${submissionId}/v${outputVersion}/${artifactType}-${checksum}.${extension}`;
 
     try {
-      await uploadObject({
+      await uploadPrivateObject({
         key: storageKey,
         body: bytes,
         contentType: ARTIFACT_CONTENT_TYPES[artifactType],
@@ -450,19 +454,22 @@ export async function runOutputGenerationJob(params: {
     storageKeys[artifactType] = storageKey;
   }
 
-  // Keep the existing viewer routes working: they resolve a public URL and
-  // presign it. The canonical bytes remain the key-addressed artifacts above.
-  const publicBase = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
-  if (publicBase) {
+  // Viewer routes understand this opaque private storage reference and mint a
+  // short-lived signed GET URL only after their own authorization checks.
+  if (storageKeys.inspection_report_pdf && storageKeys.vsc_determination_pdf) {
     await admin
       .from("standardized_outputs")
-      .update({ document_url: `${publicBase}/${storageKeys.inspection_report_pdf}` })
+      .update({
+        document_url: privateStorageReference(storageKeys.inspection_report_pdf),
+      })
       .eq("id", standardizedOutputId)
       .is("document_url", null);
 
     await admin
       .from("vsc_outputs")
-      .update({ document_url: `${publicBase}/${storageKeys.vsc_determination_pdf}` })
+      .update({
+        document_url: privateStorageReference(storageKeys.vsc_determination_pdf),
+      })
       .eq("id", vscOutputId)
       .is("document_url", null);
   }

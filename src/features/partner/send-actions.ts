@@ -122,6 +122,7 @@ export async function sendInspectionToDealerSpace(
 
   const { data, error } = await admin.rpc("partner_request_delivery", {
     p_ref_id: ref.id,
+    p_submission_id: ref.current_submission_id,
     p_output_version: outputVersion,
     p_event_id: randomUUID(),
     p_occurred_at: new Date().toISOString(),
@@ -140,8 +141,8 @@ export async function sendInspectionToDealerSpace(
     refId: ref.id,
     requestId,
     type: "inspection.delivery_requested",
-    data: { outputVersion },
-    dedupeKey: `delivery_requested:${ref.id}:v${outputVersion}`,
+    data: { submissionId: ref.current_submission_id, outputVersion },
+    dedupeKey: `delivery_requested:${ref.id}:${ref.current_submission_id}:v${outputVersion}`,
   });
 
   after(async () => {

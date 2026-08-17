@@ -1,7 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireApiRole } from "@/features/auth/api";
-import { isR2Configured, generatePresignedGetUrl } from "@/lib/storage/r2";
+import {
+  generatePresignedGetUrl,
+  isPrivateStorageReference,
+  isStoredObjectConfigured,
+} from "@/lib/storage/r2";
 
 export async function GET(
   _req: NextRequest,
@@ -28,7 +32,10 @@ export async function GET(
     return new NextResponse("Document not found", { status: 404 });
   }
 
-  if (!isR2Configured()) {
+  if (!isStoredObjectConfigured(output.document_url)) {
+    if (isPrivateStorageReference(output.document_url)) {
+      return new NextResponse("Private document storage is not configured", { status: 503 });
+    }
     // R2 not set up — redirect to the stored URL directly as fallback
     return NextResponse.redirect(output.document_url);
   }
