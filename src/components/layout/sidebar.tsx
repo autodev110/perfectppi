@@ -65,6 +65,26 @@ export function Sidebar({ items, title }: SidebarProps) {
   const pathname = usePathname();
   const signOut = useSignOut();
 
+  // Exactly one item highlights: the most specific href that covers the current
+  // path. A bare prefix test lit up both "Inspections" (/org/inspections) and
+  // "DealerSpace" (/org/inspections/dealerspace) at once.
+  //
+  // Two rules do the work:
+  //   * matching is on a segment boundary, so /org/inspections-archive is not
+  //     treated as living under /org/inspections
+  //   * a portal root (/org, /tech, /admin, /dashboard — any single-segment
+  //     href) matches only itself, so "Dashboard" does not stay lit across the
+  //     whole portal
+  const activeHref = items.reduce<string | null>((best, item) => {
+    const isPortalRoot = item.href.split("/").filter(Boolean).length === 1;
+    const matches = isPortalRoot
+      ? pathname === item.href
+      : pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+    if (!matches) return best;
+    return best === null || item.href.length > best.length ? item.href : best;
+  }, null);
+
   return (
     <aside className="flex h-full w-64 flex-col bg-slate-100 py-6">
       <div className="px-4 mb-8">
@@ -82,13 +102,7 @@ export function Sidebar({ items, title }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto space-y-1 px-2">
         {items.map((item) => {
           const Icon = iconMap[item.icon] ?? LayoutDashboard;
-          const isActive =
-            pathname === item.href ||
-            (item.href !== "/dashboard" &&
-              item.href !== "/tech" &&
-              item.href !== "/org" &&
-              item.href !== "/admin" &&
-              pathname.startsWith(item.href));
+          const isActive = item.href === activeHref;
 
           return (
             <Link

@@ -1,29 +1,35 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, ChevronRight, Inbox } from "lucide-react";
+import { ChevronRight, Inbox } from "lucide-react";
 import { requireRole } from "@/features/auth/guards";
 import {
+  getConnectionUserLinks,
   getIncomingPartnerInspections,
   getManagerContext,
+  getOrgInstallationCodes,
   getOrgPartnerConnections,
 } from "@/features/partner/queries";
+import { DealerSpaceConnectionPanel } from "./connection-panel";
 import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
 import {
   DeliveryStatusBadge,
   IntegrationStatusBadge,
   SourceBadge,
 } from "@/components/shared/source-badge";
-import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils/formatting";
 
 export const dynamic = "force-dynamic";
 
 // ============================================================================
-// Incoming DealerSpace queue.
+// The DealerSpace integration home: connection management on top, incoming
+// queue below.
 //
-// Driven by the integration records rather than by submissions, so an
-// inspection that has been received and assigned but not yet started still
-// appears — those are exactly the ones a manager needs to see.
+// Everything a manager does with DealerSpace lives here, so the nav item is a
+// destination rather than a signpost pointing at Settings.
+//
+// The queue is driven by the integration records rather than by submissions, so
+// an inspection that has been received and assigned but not yet started still
+// appears — those are exactly the ones a manager needs to chase.
 // ============================================================================
 
 export default async function IncomingDealerSpaceInspectionsPage() {
@@ -32,38 +38,37 @@ export default async function IncomingDealerSpaceInspectionsPage() {
   const context = await getManagerContext();
   if (!context) redirect("/login");
 
-  const [inspections, connections] = await Promise.all([
+  const [inspections, connections, codes] = await Promise.all([
     getIncomingPartnerInspections(context.organizationId),
     getOrgPartnerConnections(context.organizationId),
+    getOrgInstallationCodes(context.organizationId),
   ]);
+  const userLinks = await getConnectionUserLinks(connections.map((c) => c.id));
 
   const activeConnection = connections.find((c) => c.status === "active");
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Incoming DealerSpace Inspections</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Vehicles sent to your organization from a connected dealership management system.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/org/settings">Connection settings</Link>
-        </Button>
+      <div>
+        <h1 className="font-heading text-2xl font-bold">DealerSpace</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Connect a dealership management system and track the vehicles it sends
+          for inspection.
+        </p>
       </div>
 
-      {!activeConnection && (
-        <div className="rounded-xl border border-dashed p-6 text-center">
-          <Building2 className="mx-auto h-8 w-8 text-muted-foreground" />
-          <h3 className="mt-3 font-semibold">No DealerSpace connection</h3>
-          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Generate an installation code in organization settings and give it to your
-            DealerSpace administrator to start receiving inspections.
+      <DealerSpaceConnectionPanel
+        connections={connections}
+        codes={codes}
+        userLinks={userLinks}
+      />
+
+      {activeConnection && (
+        <div>
+          <h2 className="font-heading text-lg font-bold">Incoming inspections</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Vehicles sent to your organization from the connected dealership.
           </p>
-          <Button className="mt-4" size="sm" asChild>
-            <Link href="/org/settings">Generate installation code</Link>
-          </Button>
         </div>
       )}
 
