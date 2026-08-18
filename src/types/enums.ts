@@ -3,7 +3,41 @@
 // ============================================================================
 
 // Domain A: Identity
-export type UserRole = "consumer" | "technician" | "org_manager" | "admin";
+export type UserRole =
+  | "consumer"
+  | "technician"
+  | "org_manager"
+  | "admin"
+  | "developer";
+
+/**
+ * Roles a developer account can switch itself into, in the order they are
+ * offered in settings. "developer" is included so there is a way back to the
+ * switcher's own portal after landing in another role.
+ */
+export const SWITCHABLE_ROLES = [
+  "developer",
+  "consumer",
+  "technician",
+  "org_manager",
+  "admin",
+] as const satisfies readonly UserRole[];
+
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  consumer: "Consumer",
+  technician: "Technician",
+  org_manager: "Organization Manager",
+  admin: "Admin",
+  developer: "Developer",
+};
+
+export const USER_ROLE_DESCRIPTIONS: Record<UserRole, string> = {
+  consumer: "Vehicles, listings, inspection requests, warranties.",
+  technician: "Assigned inspection queue, submissions, reviews.",
+  org_manager: "Organization roster, inspections, DealerSpace.",
+  admin: "Platform-wide moderation, outputs, contracts, audit log.",
+  developer: "This switcher. No portal data of its own.",
+};
 
 // Domain B: Vehicles
 export type VehicleVisibility = "public" | "private";

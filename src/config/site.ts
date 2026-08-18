@@ -68,5 +68,7 @@ export const navConfig = {
       icon: "MessageSquare",
     },
     { label: "Audit Log", href: "/admin/audit", icon: "ScrollText" },
+    { label: "Settings", href: "/admin/settings", icon: "Settings" },
   ],
+  dev: [{ label: "Role Switcher", href: "/dev", icon: "Code2" }],
 } as const;

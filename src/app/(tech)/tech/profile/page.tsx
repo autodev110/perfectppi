@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { updateProfile, switchToConsumer } from "@/features/profiles/actions";
 import { updateTechProfile } from "@/features/technicians/actions";
 import { createClient } from "@/lib/supabase/client";
+import { RoleSwitcher } from "@/components/dev/role-switcher";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -133,6 +134,13 @@ export default function TechProfilePage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <h1 className="font-heading text-2xl font-bold">Technician Profile</h1>
+
+      {profile && (
+        <RoleSwitcher
+          currentRole={profile.role}
+          isDeveloper={profile.is_developer}
+        />
+      )}
 
       <Card>
         <CardHeader>

@@ -7,6 +7,11 @@ enum UserRole: String, Codable, CaseIterable {
     case technician
     case orgManager = "org_manager"
     case admin
+    // Web-only role: an account parked on the settings role switcher. It has no
+    // portal of its own here, but it must decode — Profile.role is a
+    // RawRepresentable, so an unrecognized string fails the whole profile
+    // decode and locks the account out of the app entirely.
+    case developer
 }
 
 enum MediaType: String, Codable { case image, video }

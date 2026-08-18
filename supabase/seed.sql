@@ -8,20 +8,33 @@
 -- profiles rows.
 
 -- ============================================================================
--- Admin provisioning helper
--- After creating a user via Supabase Auth UI or signup flow, run:
---   SELECT public.provision_admin('<auth-user-uuid>');
--- This promotes their profile row to role = 'admin'.
+-- Admin provisioning
+-- After creating a user via Supabase Auth UI or the signup flow, run:
+--
+--   UPDATE public.profiles SET role = 'admin'
+--   WHERE auth_user_id = '<auth-user-uuid>';
+--
+-- This used to be a SECURITY DEFINER helper, which was a privilege-escalation
+-- hole: definer functions run as their owner regardless of caller, and
+-- PostgREST exposes everything in the public schema, so any authenticated user
+-- could call rpc('provision_admin') on themselves. Migration
+-- 20260818130000_harden_profile_role_changes drops it. Do not reintroduce it —
+-- run the statement above as postgres from the SQL editor or psql instead.
 -- ============================================================================
-CREATE OR REPLACE FUNCTION public.provision_admin(p_auth_user_id uuid)
-RETURNS void AS $$
-BEGIN
-  INSERT INTO public.profiles (auth_user_id, display_name, role, is_public)
-  VALUES (p_auth_user_id, 'Admin', 'admin', false)
-  ON CONFLICT (auth_user_id) DO UPDATE
-    SET role = 'admin';
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================================
+-- Developer provisioning
+-- Grants an account the developer role plus the persistent is_developer grant
+-- that lets it switch roles from settings. Deliberately NOT wrapped in a
+-- SECURITY DEFINER helper: profiles_guard_developer_grant only lets postgres,
+-- supabase_admin, service_role or an existing admin set is_developer, and a
+-- definer function would hand that bypass to any authenticated caller over
+-- PostgREST. Run it from the SQL editor or psql instead:
+--
+--   UPDATE public.profiles
+--   SET is_developer = true, role = 'developer'
+--   WHERE auth_user_id = '<auth-user-uuid>';
+-- ============================================================================
 
 -- Sample organization
 INSERT INTO public.organizations (id, name, slug, description)

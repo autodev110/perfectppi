@@ -3,8 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { slugify } from "@/lib/utils/formatting";
 import { getRoleHomePath } from "@/features/auth/routing";
+import { getUniqueOrganizationSlug } from "@/features/organizations/slug";
 
 const updateProfileSchema = z.object({
   display_name: z.string().min(1).max(100).optional(),
@@ -70,28 +70,6 @@ async function getCurrentProfile() {
   }
 
   return { supabase, profile };
-}
-
-async function getUniqueOrganizationSlug(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  organizationName: string
-) {
-  const baseSlug = slugify(organizationName) || "organization";
-
-  for (let suffix = 0; suffix < 100; suffix += 1) {
-    const candidate = suffix === 0 ? baseSlug : `${baseSlug}-${suffix + 1}`;
-    const { data } = await supabase
-      .from("organizations")
-      .select("id")
-      .eq("slug", candidate)
-      .maybeSingle();
-
-    if (!data) {
-      return candidate;
-    }
-  }
-
-  return `${baseSlug}-${Date.now()}`;
 }
 
 export async function updateProfile(formData: FormData) {
@@ -184,10 +162,11 @@ export async function enableTechnicianAccess(formData: FormData) {
     return { error: techProfileError.message };
   }
 
-  const { error: profileError } = await supabase
-    .from("profiles")
-    .update({ role: "technician" })
-    .eq("id", profile.id);
+  // profiles.role is immutable from the client; set_own_role re-checks that the
+  // technician profile above actually exists before granting the role.
+  const { error: profileError } = await supabase.rpc("set_own_role", {
+    p_role: "technician",
+  });
 
   if (profileError) {
     return { error: profileError.message };
@@ -219,10 +198,7 @@ export async function switchToConsumer() {
     return { error: "Admin role cannot be changed here." };
   }
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({ role: "consumer" })
-    .eq("id", profile.id);
+  const { error } = await supabase.rpc("set_own_role", { p_role: "consumer" });
 
   if (error) {
     return { error: error.message };
@@ -334,10 +310,11 @@ export async function createOrganizationWorkspace(formData: FormData) {
     }
   }
 
-  const { error: profileError } = await supabase
-    .from("profiles")
-    .update({ role: "org_manager" })
-    .eq("id", profile.id);
+  // set_own_role re-checks the technician profile, its organization link and the
+  // manager membership created above before granting the role.
+  const { error: profileError } = await supabase.rpc("set_own_role", {
+    p_role: "org_manager",
+  });
 
   if (profileError) {
     return { error: profileError.message };

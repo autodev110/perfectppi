@@ -24,6 +24,7 @@ import {
   Newspaper,
   Star,
   Plug,
+  Code2,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useSignOut } from "@/features/auth/hooks";
@@ -48,6 +49,7 @@ const iconMap: Record<string, ComponentType<{ className?: string }>> = {
   Newspaper,
   Star,
   Plug,
+  Code2,
 };
 
 interface SidebarItem {

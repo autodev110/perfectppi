@@ -1645,6 +1645,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          is_developer: boolean
           is_public: boolean
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
@@ -1657,6 +1658,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_developer?: boolean
           is_public?: boolean
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
@@ -1669,6 +1671,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_developer?: boolean
           is_public?: boolean
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
@@ -2308,6 +2311,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      dev_switch_role: {
+        Args: { p_role: Database["public"]["Enums"]["user_role"] }
+        Returns: Database["public"]["Enums"]["user_role"]
+      }
+      set_own_role: {
+        Args: { p_role: Database["public"]["Enums"]["user_role"] }
+        Returns: Database["public"]["Enums"]["user_role"]
+      }
+      get_my_is_developer: { Args: never; Returns: boolean }
       get_my_org_id: { Args: never; Returns: string }
       get_my_profile_id: { Args: never; Returns: string }
       get_my_role: {
@@ -2558,7 +2570,12 @@ export type Database = {
         | "inspection_result"
         | "standardized_output"
       submission_status: "draft" | "in_progress" | "submitted" | "completed"
-      user_role: "consumer" | "technician" | "org_manager" | "admin"
+      user_role:
+        | "consumer"
+        | "technician"
+        | "org_manager"
+        | "admin"
+        | "developer"
       vehicle_visibility: "public" | "private"
       warranty_status:
         | "not_offered"
@@ -2762,7 +2779,13 @@ export const Constants = {
         "standardized_output",
       ],
       submission_status: ["draft", "in_progress", "submitted", "completed"],
-      user_role: ["consumer", "technician", "org_manager", "admin"],
+      user_role: [
+        "consumer",
+        "technician",
+        "org_manager",
+        "admin",
+        "developer",
+      ],
       vehicle_visibility: ["public", "private"],
       warranty_status: [
         "not_offered",

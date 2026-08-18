@@ -9,6 +9,7 @@ import {
 } from "@/features/profiles/actions";
 import { getRoleHomePath } from "@/features/auth/routing";
 import { createClient } from "@/lib/supabase/client";
+import { RoleSwitcher } from "@/components/dev/role-switcher";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -141,6 +142,13 @@ export default function AccountSettingsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <h1 className="font-heading text-2xl font-bold">Account Settings</h1>
+
+      {profile && (
+        <RoleSwitcher
+          currentRole={profile.role}
+          isDeveloper={profile.is_developer}
+        />
+      )}
 
       <Card>
         <CardHeader>

@@ -1,6 +1,7 @@
 import { getMyOrg, getOrgTechnicians } from "@/features/organizations/queries";
 import { requireRole } from "@/features/auth/guards";
 import { getOrgPartnerConnections } from "@/features/partner/queries";
+import { RoleSwitcher } from "@/components/dev/role-switcher";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export default async function OrgSettingsPage() {
-  await requireRole(["org_manager"]);
+  const profile = await requireRole(["org_manager"]);
 
   const org = await getMyOrg();
   if (!org) redirect("/login");
@@ -28,6 +29,11 @@ export default async function OrgSettingsPage() {
         <h1 className="font-heading text-2xl font-bold">Organization Settings</h1>
         <p className="text-muted-foreground">Manage your organization configuration.</p>
       </div>
+
+      <RoleSwitcher
+        currentRole={profile.role}
+        isDeveloper={profile.is_developer}
+      />
 
       {/* Identity */}
       <Card>

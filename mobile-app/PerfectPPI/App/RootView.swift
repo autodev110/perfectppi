@@ -37,6 +37,8 @@ private struct SignedInContainer: View {
                 OrganizationTabs(profile: profile)
             case .admin:
                 AdminTabs(profile: profile)
+            case .developer:
+                DeveloperRoleView()
             case .none:
                 MissingRoleView()
             }
@@ -46,6 +48,36 @@ private struct SignedInContainer: View {
             // once and the result is sent to /api/notifications/devices.
             await PushService.shared.requestAuthorizationAndRegister()
         }
+    }
+}
+
+/// The developer role is a parking spot on the web role switcher, not a portal.
+/// There is nothing to show until the account picks a real role, which happens
+/// in web settings — so say that rather than dropping the user on a blank tab
+/// bar or an error that reads like a failure.
+private struct DeveloperRoleView: View {
+    @EnvironmentObject private var auth: AuthStore
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "hammer")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text("This account is on the developer role.")
+                .font(.headline)
+                .multilineTextAlignment(.center)
+            Text("Switch to a consumer, technician, organization or admin role in web settings, then reopen the app.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Sign out") {
+                Task { await auth.signOut() }
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .frame(maxWidth: 220)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

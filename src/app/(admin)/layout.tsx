@@ -14,7 +14,7 @@ export default async function AdminLayout({
   return (
     <PortalLayout
       sidebar={<AdminSidebar />}
-      settingsHref="/admin"
+      settingsHref="/admin/settings"
       profileHref="/admin"
       messagesBase="/admin/messages"
     >
