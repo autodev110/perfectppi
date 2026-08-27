@@ -68,6 +68,22 @@ struct ProfileView: View {
                 }
             }
 
+            // Mirrors the web switcher, which appears in every portal's
+            // settings page. Hidden entirely for ordinary accounts.
+            if currentProfile.canSwitchRoles {
+                Section {
+                    NavigationLink {
+                        RoleSwitcherView()
+                    } label: {
+                        Label("Switch Role", systemImage: "hammer.fill")
+                    }
+                } header: {
+                    Text("Developer")
+                } footer: {
+                    Text("Switch this account into any role to see the app as that role.")
+                }
+            }
+
             Section {
                 Button(role: .destructive) {
                     Task {

@@ -141,6 +141,13 @@ final class AuthStore: ObservableObject {
         state = .signedOut
     }
 
+    /// Adopts a profile the caller already has in hand — used after a developer
+    /// role switch, where the API returns the updated row. Republishing `state`
+    /// is what swaps the tab bar over to the new role's screens.
+    func applyProfile(_ profile: Profile) {
+        state = .signedIn(profile)
+    }
+
     /// Returns the freshest access token, refreshing if necessary.
     func currentAccessToken() async -> String? {
         do {

@@ -7,11 +7,47 @@ enum UserRole: String, Codable, CaseIterable {
     case technician
     case orgManager = "org_manager"
     case admin
-    // Web-only role: an account parked on the settings role switcher. It has no
-    // portal of its own here, but it must decode — Profile.role is a
-    // RawRepresentable, so an unrecognized string fails the whole profile
-    // decode and locks the account out of the app entirely.
+    // A developer account parks here between roles. It has no tab bar of its
+    // own — the switcher stands in for one. It must decode regardless:
+    // Profile.role is a RawRepresentable, so an unrecognized string fails the
+    // whole profile decode and locks the account out of the app entirely.
     case developer
+
+    /// Roles a developer can switch into, in the order the switcher lists them.
+    /// Mirrors SWITCHABLE_ROLES in src/types/enums.ts.
+    static let switchable: [UserRole] = [
+        .developer, .consumer, .technician, .orgManager, .admin,
+    ]
+
+    var label: String {
+        switch self {
+        case .consumer: return "Consumer"
+        case .technician: return "Technician"
+        case .orgManager: return "Organization Manager"
+        case .admin: return "Admin"
+        case .developer: return "Developer"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .consumer: return "Vehicles, listings, inspection requests, warranties."
+        case .technician: return "Assigned inspection queue, submissions, reviews."
+        case .orgManager: return "Organization roster, inspections, DealerSpace."
+        case .admin: return "Platform-wide moderation, outputs, audit log."
+        case .developer: return "This switcher. No portal data of its own."
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .consumer: return "car.fill"
+        case .technician: return "wrench.and.screwdriver.fill"
+        case .orgManager: return "building.2.fill"
+        case .admin: return "shield.lefthalf.filled"
+        case .developer: return "hammer.fill"
+        }
+    }
 }
 
 enum MediaType: String, Codable { case image, video }

@@ -11,6 +11,10 @@ struct Profile: Codable, Identifiable, Hashable {
     /// a subset of columns and omit `role`. The top-level `/api/profiles/me`
     /// response always includes it.
     let role: UserRole?
+    /// Persistent developer grant. Independent of `role`, which changes as the
+    /// account switches. Absent on the joined subsets described above, so a
+    /// nil is read as "not a developer" rather than unknown.
+    let isDeveloper: Bool?
     let email: String?
     let displayName: String?
     let username: String?
@@ -21,6 +25,8 @@ struct Profile: Codable, Identifiable, Hashable {
     let createdAt: Date?
 
     var fullName: String? { displayName }
+
+    var canSwitchRoles: Bool { isDeveloper == true }
 }
 
 // MARK: - Vehicle
