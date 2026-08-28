@@ -12,10 +12,25 @@ struct InspectionWorkflowView: View {
         case withoutScanner
     }
 
+    private enum FullScreenDestination: String, Identifiable {
+        case inspectionPhoto
+        case vinScanner
+
+        var id: String { rawValue }
+    }
+
+    @Environment(\.dismiss) private var dismiss
+
     let submissionId: String
+    let onSubmitted: () -> Void
+
+    init(submissionId: String, onSubmitted: @escaping () -> Void = {}) {
+        self.submissionId = submissionId
+        self.onSubmitted = onSubmitted
+    }
 
     @StateObject private var model = InspectionWorkflowModel()
-    @State private var showCamera = false
+    @State private var fullScreenDestination: FullScreenDestination?
     @State private var showOBDScanner = false
     @State private var submitting = false
     @State private var showSubmittedAlert = false
@@ -49,15 +64,25 @@ struct InspectionWorkflowView: View {
         .navigationTitle("Inspection")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load(submissionId: submissionId) }
-        .fullScreenCover(isPresented: $showCamera) {
-            CameraCaptureView(
-                prompt: model.currentPrompt,
-                onCapture: { data in
-                    showCamera = false
-                    Task { await capture(data) }
-                },
-                onCancel: { showCamera = false }
-            )
+        .fullScreenCover(item: $fullScreenDestination) { destination in
+            switch destination {
+            case .inspectionPhoto:
+                CameraCaptureView(
+                    prompt: model.currentPrompt,
+                    onCapture: { data in
+                        fullScreenDestination = nil
+                        Task { await capture(data) }
+                    },
+                    onCancel: { fullScreenDestination = nil }
+                )
+            case .vinScanner:
+                VINScannerView { decoded in
+                    guard let answer = model.currentAnswer else { return }
+                    Task {
+                        await model.upsertAnswer(.init(answerId: answer.id, value: decoded.vin))
+                    }
+                }
+            }
         }
         .sheet(isPresented: $showOBDScanner) {
             NavigationStack {
@@ -89,7 +114,7 @@ struct InspectionWorkflowView: View {
             Text("This removes the photo from the inspection. It cannot be undone.")
         }
         .alert("Inspection submitted", isPresented: $showSubmittedAlert) {
-            Button("OK", role: .cancel) {}
+            Button("Done") { dismiss() }
         }
         .alert("Error", isPresented: .constant(errorMessage != nil),
                actions: { Button("OK") { errorMessage = nil } },
@@ -121,10 +146,30 @@ struct InspectionWorkflowView: View {
                         }
                     }
 
+                    if model.currentWasSkipped {
+                        Label("Skipped earlier", systemImage: "clock.arrow.circlepath")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.Palette.warning)
+                    }
+
                     AnswerEditor(answer: answer) { updated in
                         Task { await model.upsertAnswer(updated) }
                     }
                     .id(answer.id)
+
+                    if answer.prompt == "Confirm the VIN on the vehicle" {
+                        Button {
+                            fullScreenDestination = .vinScanner
+                        } label: {
+                            Label(
+                                (answer.answerValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    ? "Scan VIN"
+                                    : "Rescan VIN",
+                                systemImage: "camera.viewfinder"
+                            )
+                        }
+                        .buttonStyle(OutlineButtonStyle())
+                    }
 
                     photosGrid
 
@@ -135,7 +180,7 @@ struct InspectionWorkflowView: View {
                     }
 
                     Button {
-                        showCamera = true
+                        fullScreenDestination = .inspectionPhoto
                     } label: {
                         Label("Capture Photo", systemImage: "camera")
                     }
@@ -340,6 +385,13 @@ struct InspectionWorkflowView: View {
 
             Spacer()
 
+            if model.canSkipCurrent {
+                Button("Skip for now") {
+                    Task { await model.skipCurrent() }
+                }
+                .foregroundStyle(.secondary)
+            }
+
             if model.atLast {
                 Button {
                     Task { await submit() }
@@ -439,6 +491,7 @@ struct InspectionWorkflowView: View {
                 return
             }
             _ = try await PpiAPI.submit(submissionId: submissionId)
+            onSubmitted()
             showSubmittedAlert = true
         } catch {
             errorMessage = error.localizedDescription

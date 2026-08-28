@@ -1375,6 +1375,7 @@ export type Database = {
           answer_type: Database["public"]["Enums"]["answer_type"]
           answer_value: string | null
           created_at: string
+          deferred_at: string | null
           id: string
           is_required: boolean
           options: Json | null
@@ -1387,6 +1388,7 @@ export type Database = {
           answer_type?: Database["public"]["Enums"]["answer_type"]
           answer_value?: string | null
           created_at?: string
+          deferred_at?: string | null
           id?: string
           is_required?: boolean
           options?: Json | null
@@ -1399,6 +1401,7 @@ export type Database = {
           answer_type?: Database["public"]["Enums"]["answer_type"]
           answer_value?: string | null
           created_at?: string
+          deferred_at?: string | null
           id?: string
           is_required?: boolean
           options?: Json | null
@@ -2803,4 +2806,3 @@ export const Constants = {
     },
   },
 } as const
-

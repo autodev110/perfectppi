@@ -16,8 +16,8 @@ interface InspectionStepCardProps {
   onBack?: () => void;
   onSkip?: () => void;
   canGoNext: boolean;
-  isLastQuestion: boolean;
-  isLastSection: boolean;
+  isFinalQuestion: boolean;
+  isDeferred?: boolean;
   saving: "idle" | "saving" | "saved" | "error";
 }
 
@@ -32,8 +32,8 @@ export function InspectionStepCard({
   onBack,
   onSkip,
   canGoNext,
-  isLastQuestion,
-  isLastSection,
+  isFinalQuestion,
+  isDeferred = false,
   saving,
 }: InspectionStepCardProps) {
   return (
@@ -80,6 +80,11 @@ export function InspectionStepCard({
           <h2 className="text-xl font-bold text-foreground leading-snug mb-2">
             {prompt}
           </h2>
+          {isDeferred && (
+            <span className="mr-2 inline-block rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+              Skipped earlier
+            </span>
+          )}
           {isRequired ? (
             <span className="inline-block text-xs text-destructive font-medium">Required</span>
           ) : (
@@ -94,14 +99,14 @@ export function InspectionStepCard({
       {/* Bottom action bar */}
       <div className="sticky bottom-0 border-t bg-background/95 backdrop-blur px-6 py-4">
         <div className="max-w-2xl mx-auto flex items-center gap-3">
-          {!isRequired && onSkip && (
+          {onSkip && (
             <Button
               variant="ghost"
               onClick={onSkip}
               className="flex-none text-muted-foreground"
             >
               <SkipForward className="h-4 w-4 mr-1" />
-              Skip
+              Skip for now
             </Button>
           )}
           <Button
@@ -112,12 +117,8 @@ export function InspectionStepCard({
               !canGoNext && "opacity-50"
             )}
           >
-            {isLastQuestion && isLastSection ? (
+            {isFinalQuestion ? (
               "Review & Submit"
-            ) : isLastQuestion ? (
-              <>
-                Next Section <ChevronRight className="h-5 w-5 ml-1" />
-              </>
             ) : (
               <>
                 Continue <ChevronRight className="h-5 w-5 ml-1" />

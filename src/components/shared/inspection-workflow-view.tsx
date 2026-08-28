@@ -6,10 +6,15 @@ import { InspectionStepCard } from "@/components/shared/inspection-step-card";
 import { AnswerInput } from "@/components/shared/answer-input";
 import { ProgressTracker } from "@/components/shared/progress-tracker";
 import { CameraCapture } from "@/components/shared/camera-capture";
+import { VinScanButton } from "@/components/shared/vin-scan-button";
 import { useInspectionWorkflow } from "@/features/ppi/hooks";
 import { deletePpiMedia, startInspection } from "@/features/ppi/actions";
 import { DeletePhotoButton } from "@/components/shared/delete-photo-button";
-import { SECTION_QUESTION_TEMPLATES, SECTION_LABELS } from "@/features/ppi/constants";
+import {
+  SECTION_QUESTION_TEMPLATES,
+  SECTION_LABELS,
+  VEHICLE_BASICS_VIN_PROMPT,
+} from "@/features/ppi/constants";
 import type { SectionType, AnswerType } from "@/types/enums";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -231,9 +236,8 @@ export function InspectionWorkflowView({
               const requestId = await workflow.submitInspection();
               if (requestId) {
                 setViewMode("submitted");
-                setTimeout(() => {
-                  router.push(returnPath);
-                }, 2000);
+                router.replace(returnPath);
+                router.refresh();
               }
             }}
             disabled={workflow.submitting}
@@ -315,23 +319,21 @@ export function InspectionWorkflowView({
         isRequired={currentQuestion.is_required}
         saving={workflow.saving}
         canGoNext={canGoNext}
-        isLastQuestion={workflow.isLastQuestion}
-        isLastSection={workflow.isLastSection}
+        isFinalQuestion={workflow.isLastStep}
+        isDeferred={workflow.isCurrentDeferred}
         onBack={
-          workflow.currentSectionIdx > 0 || workflow.currentQuestionIdx > 0
-            ? () => workflow.prevQuestion()
-            : undefined
+          workflow.canGoBack ? () => workflow.prevQuestion() : undefined
         }
         onNext={() => {
-          if (workflow.isLastQuestion && workflow.isLastSection) {
+          if (workflow.isLastStep) {
             setViewMode("review");
           } else {
             workflow.nextQuestion();
           }
         }}
         onSkip={
-          !currentQuestion.is_required
-            ? () => workflow.nextQuestion()
+          workflow.canSkipCurrent
+            ? () => workflow.skipCurrentQuestion()
             : undefined
         }
       >
@@ -348,6 +350,13 @@ export function InspectionWorkflowView({
             required={currentQuestion.is_required}
             hasError={hasError}
           />
+
+          {currentQuestion.prompt === VEHICLE_BASICS_VIN_PROMPT && (
+            <VinScanButton
+              label={currentValue.trim() ? "Rescan VIN" : "Scan VIN"}
+              onDecoded={(vehicle) => workflow.setAnswer(currentQuestion.id, vehicle.vin)}
+            />
+          )}
 
           <div className="rounded-xl border bg-card p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">

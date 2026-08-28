@@ -8,6 +8,7 @@ struct PDFViewer: View {
     let path: String
 
     @State private var data: Data?
+    @State private var fileURL: URL?
     @State private var error: Error?
 
     var body: some View {
@@ -26,6 +27,15 @@ struct PDFViewer: View {
         .task { await load() }
         .navigationTitle("Report")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let fileURL {
+                ToolbarItem(placement: .primaryAction) {
+                    ShareLink(item: fileURL) {
+                        Label("Share PDF", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
+        }
     }
 
     private func load() async {
@@ -33,6 +43,14 @@ struct PDFViewer: View {
             let (bytes, _) = try await APIClient.shared.bytes(path)
             self.data = bytes
             self.error = nil
+
+            let outputId = path.split(separator: "/").dropLast().last.map(String.init)
+                ?? UUID().uuidString
+            let destination = FileManager.default.temporaryDirectory
+                .appendingPathComponent("PerfectPPI-Inspection-\(outputId).pdf")
+            if (try? bytes.write(to: destination, options: .atomic)) != nil {
+                self.fileURL = destination
+            }
         } catch {
             self.error = error
         }

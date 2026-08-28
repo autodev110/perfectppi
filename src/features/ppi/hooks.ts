@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useReducer, useCallback, useRef } from "react";
 import { SECTION_QUESTION_TEMPLATES } from "@/features/ppi/constants";
+import { buildQuestionOrder, deferQuestion } from "@/features/ppi/workflow-order";
 import type {
   PpiRequestResponse,
   PpiSubmissionResponse,
@@ -82,9 +83,12 @@ export function usePpiWizard() {
     }
   }
 
-  function update<K extends keyof WizardFormState>(key: K, value: WizardFormState[K]) {
+  const update = useCallback(<K extends keyof WizardFormState>(
+    key: K,
+    value: WizardFormState[K]
+  ) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-  }
+  }, []);
 
   async function submit(): Promise<{ requestId: string; submissionId: string | null } | null> {
     setSubmitting(true);
@@ -148,6 +152,7 @@ interface WorkflowState {
   sections: PpiSectionItem[];
   currentSectionIdx: number;
   currentQuestionIdx: number;
+  deferredAnswerIds: string[];
   answers: Map<string, string>;
   dirtyAnswerIds: Set<string>;
   dirtySectionIds: Set<string>;
@@ -166,6 +171,7 @@ type WorkflowAction =
   | { type: "REMOVE_MEDIA"; sectionId: string; mediaId: string }
   | { type: "NEXT_QUESTION" }
   | { type: "PREV_QUESTION" }
+  | { type: "SKIP_CURRENT" }
   | { type: "NEXT_SECTION" }
   | { type: "PREV_SECTION" }
   | { type: "JUMP_TO_SECTION"; sectionIdx: number }
@@ -199,6 +205,33 @@ function hasRequiredPhoto(section: PpiSectionItem, answerId: string) {
   );
 }
 
+function answerLocations(sections: PpiSectionItem[]) {
+  return sections.flatMap((section, sectionIdx) =>
+    section.answers.map((answer, questionIdx) => ({
+      answerId: answer.id,
+      sectionIdx,
+      questionIdx,
+    }))
+  );
+}
+
+function navigationAnswerIds(sections: PpiSectionItem[], deferredAnswerIds: string[]) {
+  const allIds = answerLocations(sections).map((location) => location.answerId);
+  return buildQuestionOrder(allIds, deferredAnswerIds);
+}
+
+function navigateToAnswer(state: WorkflowState, answerId: string): WorkflowState {
+  const location = answerLocations(state.sections).find(
+    (candidate) => candidate.answerId === answerId
+  );
+  if (!location) return state;
+  return {
+    ...state,
+    currentSectionIdx: location.sectionIdx,
+    currentQuestionIdx: location.questionIdx,
+  };
+}
+
 function isSectionComplete(section: PpiSectionItem, answers: Map<string, string>) {
   const templates = SECTION_QUESTION_TEMPLATES[section.section_type as SectionType] ?? [];
 
@@ -226,6 +259,13 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
   switch (action.type) {
     case "INIT": {
       const answers = new Map<string, string>();
+      const deferredAnswerIds = action.sections
+        .flatMap((section) => section.answers)
+        .filter((answer) => Boolean(answer.deferred_at))
+        .sort((a, b) =>
+          (a.deferred_at ?? "").localeCompare(b.deferred_at ?? "")
+        )
+        .map((answer) => answer.id);
       for (const section of action.sections) {
         for (const answer of section.answers) {
           answers.set(answer.id, answer.answer_value ?? "");
@@ -254,6 +294,7 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
         missingAnswerIds: new Set(),
         currentSectionIdx: 0,
         currentQuestionIdx: 0,
+        deferredAnswerIds,
       };
     }
 
@@ -283,6 +324,10 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
         dirtySectionIds,
         missingAnswerIds: newMissing,
         saving: "idle",
+        deferredAnswerIds:
+          action.value.trim() === ""
+            ? state.deferredAnswerIds
+            : state.deferredAnswerIds.filter((id) => id !== action.answerId),
       };
     }
 
@@ -358,30 +403,40 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
     }
 
     case "NEXT_QUESTION": {
-      const section = state.sections[state.currentSectionIdx];
-      if (!section) return state;
-      const nextQ = state.currentQuestionIdx + 1;
-      if (nextQ < section.answers.length) {
-        return { ...state, currentQuestionIdx: nextQ };
-      }
-      // Move to next section if at last question
-      return workflowReducer(state, { type: "NEXT_SECTION" });
+      const currentId = state.sections[state.currentSectionIdx]
+        ?.answers[state.currentQuestionIdx]?.id;
+      if (!currentId) return state;
+      const order = navigationAnswerIds(state.sections, state.deferredAnswerIds);
+      const nextId = order[order.indexOf(currentId) + 1];
+      return nextId ? navigateToAnswer(state, nextId) : state;
     }
 
     case "PREV_QUESTION": {
-      if (state.currentQuestionIdx > 0) {
-        return { ...state, currentQuestionIdx: state.currentQuestionIdx - 1 };
-      }
-      // Move to previous section, last question
-      if (state.currentSectionIdx > 0) {
-        const prevSection = state.sections[state.currentSectionIdx - 1];
-        return {
-          ...state,
-          currentSectionIdx: state.currentSectionIdx - 1,
-          currentQuestionIdx: Math.max(0, prevSection.answers.length - 1),
-        };
-      }
-      return state;
+      const currentId = state.sections[state.currentSectionIdx]
+        ?.answers[state.currentQuestionIdx]?.id;
+      if (!currentId) return state;
+      const order = navigationAnswerIds(state.sections, state.deferredAnswerIds);
+      const previousId = order[order.indexOf(currentId) - 1];
+      return previousId ? navigateToAnswer(state, previousId) : state;
+    }
+
+    case "SKIP_CURRENT": {
+      const currentId = state.sections[state.currentSectionIdx]
+        ?.answers[state.currentQuestionIdx]?.id;
+      if (!currentId) return state;
+
+      const allIds = answerLocations(state.sections).map((location) => location.answerId);
+      const { deferredQuestionIds, nextQuestionId } = deferQuestion(
+        allIds,
+        state.deferredAnswerIds,
+        currentId
+      );
+      if (!nextQuestionId) return state;
+
+      return navigateToAnswer(
+        { ...state, deferredAnswerIds: deferredQuestionIds },
+        nextQuestionId
+      );
     }
 
     case "NEXT_SECTION": {
@@ -442,6 +497,7 @@ const initialWorkflowState: WorkflowState = {
   sections: [],
   currentSectionIdx: 0,
   currentQuestionIdx: 0,
+  deferredAnswerIds: [],
   answers: new Map(),
   dirtyAnswerIds: new Set(),
   dirtySectionIds: new Set(),
@@ -456,6 +512,7 @@ export function useInspectionWorkflow(submissionId: string) {
   const [state, dispatch] = useReducer(workflowReducer, initialWorkflowState);
   const [loading, setLoading] = useState(true);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deferInFlight = useRef(false);
 
   // Load submission on mount
   useEffect(() => {
@@ -589,6 +646,43 @@ export function useInspectionWorkflow(submissionId: string) {
     dispatch({ type: "PREV_QUESTION" });
   }
 
+  async function skipCurrentQuestion() {
+    if (
+      !currentQuestion ||
+      state.deferredAnswerIds.includes(currentQuestion.id) ||
+      deferInFlight.current
+    ) return;
+    const answerValue = state.answers.get(currentQuestion.id) ?? "";
+    deferInFlight.current = true;
+    try {
+      const flushSucceeded = await immediateFlush();
+      if (!flushSucceeded) return;
+      const response = await fetch(
+        `/api/ppi/submissions/${submissionId}/answers`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            answers: [
+              {
+                answerId: currentQuestion.id,
+                value: answerValue,
+                deferred: true,
+              },
+            ],
+          }),
+        }
+      );
+      if (response.ok) {
+        dispatch({ type: "SKIP_CURRENT" });
+      } else {
+        dispatch({ type: "SAVE_ERROR" });
+      }
+    } finally {
+      deferInFlight.current = false;
+    }
+  }
+
   function nextSection() {
     void immediateFlush();
     dispatch({ type: "NEXT_SECTION" });
@@ -655,12 +749,25 @@ export function useInspectionWorkflow(submissionId: string) {
   const currentSection = state.sections[state.currentSectionIdx] ?? null;
   const currentQuestion: PpiAnswerItem | null =
     currentSection?.answers[state.currentQuestionIdx] ?? null;
+  const currentValue = currentQuestion
+    ? (state.answers.get(currentQuestion.id) ?? "")
+    : "";
 
-  const isLastQuestion =
-    currentSection
-      ? state.currentQuestionIdx >= currentSection.answers.length - 1
-      : false;
-  const isLastSection = state.currentSectionIdx >= state.sections.length - 1;
+  const navigationOrder = navigationAnswerIds(state.sections, state.deferredAnswerIds);
+  const currentNavigationIndex = currentQuestion
+    ? navigationOrder.indexOf(currentQuestion.id)
+    : -1;
+  const isLastStep =
+    currentNavigationIndex >= 0 && currentNavigationIndex === navigationOrder.length - 1;
+  const canGoBack = currentNavigationIndex > 0;
+  const isCurrentDeferred = currentQuestion
+    ? state.deferredAnswerIds.includes(currentQuestion.id)
+    : false;
+  const canSkipCurrent =
+    currentNavigationIndex >= 0 &&
+    currentNavigationIndex < navigationOrder.length - 1 &&
+    currentValue.trim() === "" &&
+    !isCurrentDeferred;
 
   const sectionProgress = state.sections.map((s) => {
     const total = s.answers.length;
@@ -686,10 +793,6 @@ export function useInspectionWorkflow(submissionId: string) {
 
   const allComplete = sectionProgress.every((s) => s.completed);
 
-  const currentValue = currentQuestion
-    ? (state.answers.get(currentQuestion.id) ?? "")
-    : "";
-
   const canGoNext =
     !currentQuestion?.is_required || (currentQuestion.is_required && currentValue !== "");
 
@@ -701,8 +804,11 @@ export function useInspectionWorkflow(submissionId: string) {
     currentValue,
     currentSectionIdx: state.currentSectionIdx,
     currentQuestionIdx: state.currentQuestionIdx,
-    isLastQuestion,
-    isLastSection,
+    isLastStep,
+    canGoBack,
+    canSkipCurrent,
+    isCurrentDeferred,
+    deferredCount: state.deferredAnswerIds.length,
     canGoNext,
     sectionProgress,
     overallProgress,
@@ -717,6 +823,7 @@ export function useInspectionWorkflow(submissionId: string) {
     removeMedia,
     nextQuestion,
     prevQuestion,
+    skipCurrentQuestion,
     nextSection,
     prevSection,
     jumpToSection,

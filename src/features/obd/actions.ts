@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { decodeVinDetails } from "@/lib/vehicles/vin-decoder";
 import { formatVin } from "@/lib/utils/vin";
+import { buildObdAnswerPrefills } from "@/features/obd/answer-prefills";
 import type { Database, Json } from "@/types/database";
 import type {
   ObdDiagnosticSnapshotPayload,
@@ -190,6 +191,44 @@ async function syncVehicleDetailsFromSnapshot(
   }
 }
 
+async function prefillInspectionAnswersFromSnapshot(
+  submissionId: string,
+  snapshot: z.infer<typeof snapshotSchema>
+): Promise<void> {
+  const prefills = buildObdAnswerPrefills(snapshot);
+  if (prefills.size === 0) return;
+
+  const admin = createAdminClient();
+  const { data: sections, error } = await admin
+    .from("ppi_sections")
+    .select("answers:ppi_answers(id, prompt, answer_value)")
+    .eq("ppi_submission_id", submissionId);
+
+  if (error) {
+    console.error("[obd] Failed to load inspection answers for prefill", error);
+    return;
+  }
+
+  const updates = (sections ?? [])
+    .flatMap((section) => section.answers ?? [])
+    .filter((answer) => !answer.answer_value?.trim() && prefills.has(answer.prompt))
+    .map((answer) =>
+      admin
+        .from("ppi_answers")
+        .update({
+          answer_value: prefills.get(answer.prompt),
+          deferred_at: null,
+        })
+        .eq("id", answer.id)
+    );
+
+  const results = await Promise.all(updates);
+  const failed = results.find((result) => result.error)?.error;
+  if (failed) {
+    console.error("[obd] Failed to prefill inspection answers", failed);
+  }
+}
+
 export async function listObdSnapshots(
   submissionId: string,
   options: { currentOnly?: boolean } = {},
@@ -286,6 +325,7 @@ export async function saveObdSnapshot(
   }
 
   await syncVehicleDetailsFromSnapshot(submission.ppi_request_id, snapshot.vin);
+  await prefillInspectionAnswersFromSnapshot(submissionId, snapshot);
 
   revalidatePath(`/dashboard/ppi/${submission.ppi_request_id}`);
   revalidatePath(`/tech/ppi/${submission.ppi_request_id}`);

@@ -35,6 +35,7 @@ struct PpiRequestWizard: View {
     @State private var loadError: String?
     @State private var techLoadError: String?
     @State private var presentNewVehicle = false
+    @State private var showVINScanner = false
 
     var body: some View {
         NavigationStack {
@@ -136,12 +137,22 @@ struct PpiRequestWizard: View {
                     }
                     .buttonStyle(.plain)
                 }
+                Button {
+                    presentNewVehicle = true
+                } label: {
+                    Label("New Vehicle", systemImage: "plus")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(OutlineButtonStyle())
             }
         }
         .sheet(isPresented: $presentNewVehicle) {
-            NewVehicleView {
-                // Re-fetch the vehicle list once a new one is saved.
-                Task { await loadInitial() }
+            NewVehicleView { created in
+                vehicles.removeAll { $0.id == created.id }
+                vehicles.insert(created, at: 0)
+                selectedVehicleId = created.id
+                vin = created.vin ?? ""
+                mileage = created.mileage.map(String.init) ?? ""
             }
         }
     }
@@ -161,10 +172,26 @@ struct PpiRequestWizard: View {
                 .onChange(of: vin) { _, value in
                     vin = String(value.uppercased().prefix(17))
                 }
+            Button {
+                showVINScanner = true
+            } label: {
+                Label(
+                    vin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? "Scan VIN"
+                        : "Rescan VIN",
+                    systemImage: "camera.viewfinder"
+                )
+            }
+            .buttonStyle(OutlineButtonStyle())
 
             TextField("Mileage", text: $mileage)
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
+        }
+        .fullScreenCover(isPresented: $showVINScanner) {
+            VINScannerView { decoded in
+                vin = decoded.vin
+            }
         }
     }
 

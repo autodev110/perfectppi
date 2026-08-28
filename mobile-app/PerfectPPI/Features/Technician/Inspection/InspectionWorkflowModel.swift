@@ -14,6 +14,7 @@ final class InspectionWorkflowModel: ObservableObject {
     @Published private(set) var loading: Bool = true
     @Published private(set) var loadError: Error?
     @Published private(set) var localPhotoAnswerIds: Set<String> = []
+    @Published private(set) var skippedAnswerIds: Set<String> = []
 
     private var submissionId: String?
     private let photoRequiredPrompts: Set<String> = [
@@ -21,7 +22,6 @@ final class InspectionWorkflowModel: ObservableObject {
         "Are any warning lights currently on?",
         "Overall paint condition",
         "Overall interior condition",
-        "Are there any visible oil or fluid leaks?",
         "Front left tire tread depth (in 32nds of an inch)",
         "Engine oil condition",
         "Frame rust level",
@@ -51,6 +51,14 @@ final class InspectionWorkflowModel: ObservableObject {
     var progressTotal: Int { answers.count }
     var atFirst: Bool { currentIndex == 0 }
     var atLast: Bool { currentIndex >= answers.count - 1 }
+    var currentWasSkipped: Bool {
+        guard let answer = currentAnswer else { return false }
+        return skippedAnswerIds.contains(answer.id)
+    }
+    var canSkipCurrent: Bool {
+        guard let answer = currentAnswer else { return false }
+        return !atLast && !hasAnswerValue(answer) && !skippedAnswerIds.contains(answer.id)
+    }
     var currentRequiresPhoto: Bool {
         guard let answer = currentAnswer else { return false }
         return requiresPhoto(answer)
@@ -108,6 +116,38 @@ final class InspectionWorkflowModel: ObservableObject {
     func setOBDSnapshot(_ snapshot: OBDSnapshotRecord) {
         obdSnapshots.removeAll { $0.id == snapshot.id || $0.isCurrent == true }
         obdSnapshots.insert(snapshot, at: 0)
+
+        var prefills: [String: String] = [:]
+        if let vin = snapshot.vin?.trimmingCharacters(in: .whitespacesAndNewlines),
+           vin.count == 17 {
+            prefills["Confirm the VIN on the vehicle"] = vin.uppercased()
+        }
+        if let milOn = snapshot.milOn {
+            prefills["Is the check engine light on?"] = milOn ? "yes" : "no"
+            if milOn {
+                prefills["Are any warning lights currently on?"] = "yes"
+                prefills["List all active warning lights (if any)"] = "Check engine light (MIL)"
+            }
+        }
+
+        let codes = Array(Set(
+            (snapshot.storedDtcs + snapshot.pendingDtcs + snapshot.rawPayload.permanentDTCs)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+                .filter { !$0.isEmpty }
+        )).sorted()
+        let dtcScanCompleted = !codes.isEmpty || (
+            hasPositiveModeResponse(snapshot.rawPayload.rawStoredDtcsResponse, mode: "43") &&
+            hasPositiveModeResponse(snapshot.rawPayload.rawPendingDtcsResponse, mode: "47")
+        )
+        if dtcScanCompleted {
+            prefills["Were DTC codes scanned? List codes if yes."] = codes.isEmpty
+                ? "Scanned - no DTC codes found"
+                : "Scanned - \(codes.joined(separator: ", "))"
+        }
+
+        for (prompt, value) in prefills {
+            prefillBlankAnswer(prompt: prompt, value: value)
+        }
     }
 
     // MARK: - Loading
@@ -121,11 +161,29 @@ final class InspectionWorkflowModel: ObservableObject {
             async let answers = PpiAPI.answers(submissionId: submissionId)
             async let media = PpiAPI.media(submissionId: submissionId)
             async let obd = PpiAPI.obdSnapshots(submissionId: submissionId)
-            self.sections = try await sections.sorted { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) }
-            self.answers = try await answers.sorted { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) }
+            let orderedSections = try await sections.sorted {
+                ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0)
+            }
+            let loadedAnswers = try await answers
+            self.sections = orderedSections
+            // `sort_order` restarts at 1 inside every section. Sorting the
+            // entire answer collection by that value interleaves unrelated
+            // sections (all question 1s, then all question 2s). Group by the
+            // already ordered sections first, then sort within each group.
+            let canonicalAnswers = orderedSections.flatMap { section in
+                loadedAnswers
+                    .filter { $0.ppiSectionId == section.id }
+                    .sorted { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) }
+            }
+            let deferredAnswers = canonicalAnswers
+                .filter { $0.deferredAt != nil }
+                .sorted { ($0.deferredAt ?? .distantPast) < ($1.deferredAt ?? .distantPast) }
+            let deferredIds = Set(deferredAnswers.map(\.id))
+            self.answers = canonicalAnswers.filter { !deferredIds.contains($0.id) } + deferredAnswers
             self.allMedia = try await media
             self.obdSnapshots = try await obd
             self.currentIndex = 0
+            self.skippedAnswerIds = deferredIds
         } catch {
             self.loadError = error
         }
@@ -142,6 +200,32 @@ final class InspectionWorkflowModel: ObservableObject {
         if currentIndex > 0 {
             currentIndex -= 1
         }
+    }
+
+    func skipCurrent() async {
+        guard canSkipCurrent, let submissionId else { return }
+        let current = answers[currentIndex]
+        let payload = PpiAPI.SaveAnswerPayload(
+            answerId: current.id,
+            value: current.answerValue ?? "",
+            deferred: true
+        )
+        if OfflineQueue.shared.isOnline {
+            do {
+                _ = try await PpiAPI.saveAnswer(submissionId: submissionId, payload: payload)
+            } catch {
+                OfflineQueue.shared.enqueueAnswer(submissionId: submissionId, payload: payload)
+            }
+        } else {
+            OfflineQueue.shared.enqueueAnswer(submissionId: submissionId, payload: payload)
+        }
+
+        let skipped = answerCopy(current, answerValue: current.answerValue, deferredAt: Date())
+        answers.remove(at: currentIndex)
+        answers.append(skipped)
+        skippedAnswerIds.insert(skipped.id)
+        // Keep the cursor in place: removing the current item shifts the next
+        // normal question into this slot while the skipped one moves to the end.
     }
 
     func addMedia(_ media: PpiMedia) {
@@ -171,16 +255,15 @@ final class InspectionWorkflowModel: ObservableObject {
         guard let submissionId else { return }
         // Optimistic local update.
         if let idx = answers.firstIndex(where: { $0.id == payload.answerId }) {
-            answers[idx] = PpiAnswer(
-                id: answers[idx].id,
-                ppiSectionId: answers[idx].ppiSectionId,
-                prompt: answers[idx].prompt,
-                answerType: answers[idx].answerType,
+            let clearsDeferral = !payload.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            answers[idx] = answerCopy(
+                answers[idx],
                 answerValue: payload.value,
-                options: answers[idx].options,
-                isRequired: answers[idx].isRequired,
-                sortOrder: answers[idx].sortOrder
+                deferredAt: clearsDeferral ? nil : answers[idx].deferredAt
             )
+            if clearsDeferral {
+                skippedAnswerIds.remove(payload.answerId)
+            }
         }
 
         if OfflineQueue.shared.isOnline {
@@ -218,6 +301,43 @@ final class InspectionWorkflowModel: ObservableObject {
         case .text:
             return true
         }
+    }
+
+    private func prefillBlankAnswer(prompt: String, value: String) {
+        guard let index = answers.firstIndex(where: {
+            $0.prompt == prompt &&
+            ($0.answerValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }) else { return }
+
+        let answer = answers[index]
+        answers[index] = answerCopy(answer, answerValue: value, deferredAt: nil)
+        skippedAnswerIds.remove(answer.id)
+    }
+
+    private func answerCopy(
+        _ answer: PpiAnswer,
+        answerValue: String?,
+        deferredAt: Date?
+    ) -> PpiAnswer {
+        PpiAnswer(
+            id: answer.id,
+            ppiSectionId: answer.ppiSectionId,
+            prompt: answer.prompt,
+            answerType: answer.answerType,
+            answerValue: answerValue,
+            deferredAt: deferredAt,
+            options: answer.options,
+            isRequired: answer.isRequired,
+            sortOrder: answer.sortOrder
+        )
+    }
+
+    private func hasPositiveModeResponse(_ rawResponse: String?, mode: String) -> Bool {
+        guard let rawResponse else { return false }
+        let bytes = rawResponse.uppercased().matches(of: /[0-9A-F]{2}/).map {
+            String($0.output)
+        }
+        return bytes.contains(mode)
     }
 
     private func requiresPhoto(_ answer: PpiAnswer) -> Bool {

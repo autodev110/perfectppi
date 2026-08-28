@@ -2,16 +2,16 @@ import type { SectionType, AnswerType, PpiRequestStatus } from "@/types/enums";
 
 export const SECTION_ORDER: SectionType[] = [
   "vehicle_basics",
-  "dashboard_warnings",
   "exterior",
   "interior",
+  "road_test",
+  "dashboard_warnings",
   "engine_bay",
+  "fluids",
   "tires_brakes",
   "suspension_steering",
-  "fluids",
-  "electrical_controls",
   "underbody",
-  "road_test",
+  "electrical_controls",
   "modifications",
 ];
 
@@ -50,6 +50,15 @@ export interface QuestionTemplate {
  */
 export const VEHICLE_BASICS_VIN_PROMPT = "Confirm the VIN on the vehicle";
 export const VEHICLE_BASICS_ODOMETER_PROMPT = "Current odometer reading (miles)";
+
+const LEGACY_PROMPT_REPLACEMENTS: Record<string, string> = {
+  "Do all door locks and windows work from the driver switch?":
+    "Do all door locks work from the driver switch?",
+};
+
+export function canonicalInspectionPrompt(prompt: string) {
+  return LEGACY_PROMPT_REPLACEMENTS[prompt] ?? prompt;
+}
 
 export const SECTION_QUESTION_TEMPLATES: Record<SectionType, QuestionTemplate[]> = {
   vehicle_basics: [
@@ -203,8 +212,6 @@ export const SECTION_QUESTION_TEMPLATES: Record<SectionType, QuestionTemplate[]>
       prompt: "Are there any visible oil or fluid leaks?",
       answerType: "yes_no",
       isRequired: true,
-      requiresPhoto: true,
-      photoPrompt: "Capture a top-down overview of the engine bay",
     },
     {
       prompt: "Serpentine/drive belt condition",
@@ -367,7 +374,7 @@ export const SECTION_QUESTION_TEMPLATES: Record<SectionType, QuestionTemplate[]>
       isRequired: false,
     },
     {
-      prompt: "Do all door locks and windows work from the driver switch?",
+      prompt: "Do all door locks work from the driver switch?",
       answerType: "yes_no",
       isRequired: true,
     },

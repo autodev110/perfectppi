@@ -68,10 +68,18 @@ enum PpiAPI {
     struct SaveAnswerPayload: Codable {
         let answerId: String
         let value: String
+        let deferred: Bool?
+
+        init(answerId: String, value: String, deferred: Bool? = nil) {
+            self.answerId = answerId
+            self.value = value
+            self.deferred = deferred
+        }
 
         enum CodingKeys: String, CodingKey {
             case answerId
             case value
+            case deferred
         }
     }
 

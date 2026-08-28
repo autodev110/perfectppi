@@ -43,7 +43,7 @@ struct VehiclesListView: View {
                     }
                 }
                 .sheet(isPresented: $presentNew) {
-                    NewVehicleView {
+                    NewVehicleView { _ in
                         reloadToken = UUID()
                     }
                 }
@@ -195,9 +195,9 @@ struct VehicleDetailView: View {
 
 struct NewVehicleView: View {
     @Environment(\.dismiss) private var dismiss
-    private let onSave: () -> Void
+    private let onSave: (Vehicle) -> Void
 
-    init(onSave: @escaping () -> Void = {}) {
+    init(onSave: @escaping (Vehicle) -> Void = { _ in }) {
         self.onSave = onSave
     }
 
@@ -206,8 +206,10 @@ struct NewVehicleView: View {
     @State private var model = ""
     @State private var year = ""
     @State private var mileage = ""
+    @State private var trim = ""
     @State private var saving = false
     @State private var error: String?
+    @State private var showVINScanner = false
 
     var body: some View {
         NavigationStack {
@@ -218,8 +220,14 @@ struct NewVehicleView: View {
                         .onChange(of: vin) { _, value in
                             vin = String(value.uppercased().prefix(17))
                         }
+                    Button {
+                        showVINScanner = true
+                    } label: {
+                        Label("Scan VIN", systemImage: "camera.viewfinder")
+                    }
                     TextField("Make", text: $make)
                     TextField("Model", text: $model)
+                    TextField("Trim", text: $trim)
                     TextField("Year", text: $year).keyboardType(.numberPad)
                     TextField("Mileage", text: $mileage).keyboardType(.numberPad)
                 }
@@ -238,6 +246,15 @@ struct NewVehicleView: View {
                         Task { await save() }
                     }
                     .disabled(saving || !canSave)
+                }
+            }
+            .fullScreenCover(isPresented: $showVINScanner) {
+                VINScannerView { decoded in
+                    vin = decoded.vin
+                    if let decodedYear = decoded.year { year = String(decodedYear) }
+                    if let decodedMake = decoded.make { make = decodedMake }
+                    if let decodedModel = decoded.model { model = decodedModel }
+                    if let decodedTrim = decoded.trim { trim = decodedTrim }
                 }
             }
         }
@@ -263,23 +280,24 @@ struct NewVehicleView: View {
         let trimmedVin = vin.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let trimmedMake = make.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTrim = trim.trimmingCharacters(in: .whitespacesAndNewlines)
         let parsedYear = Int(year.trimmingCharacters(in: .whitespacesAndNewlines))
         let parsedMileage = Int(mileage.trimmingCharacters(in: .whitespacesAndNewlines))
 
         saving = true
         defer { saving = false }
         do {
-            _ = try await VehiclesAPI.create(
+            let created = try await VehiclesAPI.create(
                 .init(
                     vin: trimmedVin.isEmpty ? nil : trimmedVin,
                     year: parsedYear,
                     make: trimmedMake,
                     model: trimmedModel,
-                    trim: nil,
+                    trim: trimmedTrim.isEmpty ? nil : trimmedTrim,
                     mileage: parsedMileage
                 )
             )
-            onSave()
+            onSave(created)
             dismiss()
         } catch {
             self.error = error.localizedDescription

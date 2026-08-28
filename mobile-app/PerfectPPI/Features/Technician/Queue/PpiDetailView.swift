@@ -36,7 +36,9 @@ struct PpiDetailView: View {
 
                         if let submission {
                             NavigationLink {
-                                InspectionWorkflowView(submissionId: submission.id)
+                                InspectionWorkflowView(submissionId: submission.id) {
+                                    Task { await load() }
+                                }
                             } label: {
                                 Text(submission.status == .draft || submission.status == .inProgress
                                      ? "Continue Inspection"
@@ -61,7 +63,7 @@ struct PpiDetailView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle("Request")
+        .navigationTitle(request?.inspectionTitle ?? "Inspection")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }
@@ -98,4 +100,3 @@ struct PpiDetailView: View {
         }
     }
 }
-

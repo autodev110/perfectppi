@@ -311,6 +311,25 @@ struct PpiRequest: Codable, Identifiable, Hashable {
         default: return sourceSystem?.capitalized
         }
     }
+
+    var inspectionTitle: String {
+        var vehicleParts: [String] = []
+        if let year = vehicle?.year {
+            vehicleParts.append(String(year))
+        }
+        if let make = vehicle?.make?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !make.isEmpty {
+            vehicleParts.append(make)
+        }
+        if let model = vehicle?.model?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !model.isEmpty {
+            vehicleParts.append(model)
+        }
+        let typeLabel = ppiType?.rawValue
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized ?? "Inspection"
+        return (vehicleParts + [typeLabel]).joined(separator: " ")
+    }
 }
 
 // MARK: - PPI Submission
@@ -367,6 +386,7 @@ struct PpiAnswer: Codable, Identifiable, Hashable {
     let prompt: String
     let answerType: AnswerType
     let answerValue: String?
+    let deferredAt: Date?
     let options: [String]?
     let isRequired: Bool?
     let sortOrder: Int?

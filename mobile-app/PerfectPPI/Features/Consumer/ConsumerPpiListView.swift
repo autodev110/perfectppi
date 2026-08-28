@@ -22,8 +22,7 @@ struct ConsumerPpiListView: View {
                                 ConsumerPpiDetailView(requestId: req.id)
                             } label: {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(req.ppiType?.rawValue.replacingOccurrences(of: "_", with: " ").capitalized
-                                         ?? "PPI")
+                                    Text(req.inspectionTitle)
                                         .font(.headline)
                                     Text(req.status.rawValue.replacingOccurrences(of: "_", with: " "))
                                         .font(.caption)

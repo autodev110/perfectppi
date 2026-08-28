@@ -1,18 +1,25 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createVehicle } from "@/features/vehicles/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { VinScanButton } from "@/components/shared/vin-scan-button";
 
 export default function NewVehiclePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const submittingRef = useRef(false);
+  const [vin, setVin] = useState("");
+  const [year, setYear] = useState("");
+  const [make, setMake] = useState("");
+  const [model, setModel] = useState("");
+  const [trim, setTrim] = useState("");
 
   async function handleSubmit(formData: FormData) {
     if (submittingRef.current) return;
@@ -26,7 +33,14 @@ export default function NewVehiclePage() {
       setLoading(false);
       submittingRef.current = false;
     } else if (result?.data) {
-      router.push(`/dashboard/vehicles/${result.data.id}`);
+      const returnTo = searchParams.get("returnTo");
+      if (returnTo?.startsWith("/dashboard/ppi/new")) {
+        const destination = new URL(returnTo, window.location.origin);
+        destination.searchParams.set("vehicle", result.data.id);
+        router.push(`${destination.pathname}${destination.search}`);
+      } else {
+        router.push(`/dashboard/vehicles/${result.data.id}`);
+      }
     }
   }
 
@@ -50,6 +64,8 @@ export default function NewVehiclePage() {
                   placeholder="2024"
                   min={1900}
                   max={2100}
+                  value={year}
+                  onChange={(event) => setYear(event.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -59,6 +75,8 @@ export default function NewVehiclePage() {
                   name="make"
                   placeholder="Toyota"
                   required
+                  value={make}
+                  onChange={(event) => setMake(event.target.value)}
                 />
               </div>
             </div>
@@ -70,11 +88,19 @@ export default function NewVehiclePage() {
                   name="model"
                   placeholder="Camry"
                   required
+                  value={model}
+                  onChange={(event) => setModel(event.target.value)}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="trim">Trim</Label>
-                <Input id="trim" name="trim" placeholder="SE" />
+                <Input
+                  id="trim"
+                  name="trim"
+                  placeholder="SE"
+                  value={trim}
+                  onChange={(event) => setTrim(event.target.value)}
+                />
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -86,6 +112,17 @@ export default function NewVehiclePage() {
                   placeholder="17-character VIN"
                   maxLength={17}
                   className="font-mono uppercase"
+                  value={vin}
+                  onChange={(event) => setVin(event.target.value.toUpperCase())}
+                />
+                <VinScanButton
+                  onDecoded={(vehicle) => {
+                    setVin(vehicle.vin);
+                    if (vehicle.year) setYear(String(vehicle.year));
+                    if (vehicle.make) setMake(vehicle.make);
+                    if (vehicle.model) setModel(vehicle.model);
+                    if (vehicle.trim) setTrim(vehicle.trim);
+                  }}
                 />
               </div>
               <div className="space-y-2">

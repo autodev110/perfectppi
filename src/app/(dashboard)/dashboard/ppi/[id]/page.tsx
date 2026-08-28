@@ -17,6 +17,7 @@ import { GetCoverageButton } from "./get-coverage-button";
 import { MarkCompleteButton } from "./mark-complete-button";
 import type { SectionType } from "@/types/enums";
 import type { StandardizedContent, VscCoverageData } from "@/types/api";
+import { inspectionDisplayName } from "@/features/ppi/presentation";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -52,9 +53,7 @@ export default async function InspectionDetailPage({ params }: PageProps) {
     mileage: number | null;
   } | null;
 
-  const vehicleName = vehicle
-    ? [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(" ")
-    : "Unknown Vehicle";
+  const inspectionName = inspectionDisplayName(vehicle, request.ppi_type);
 
   const canContinue = ["draft", "in_progress"].includes(request.status);
   const canEdit =
@@ -75,8 +74,7 @@ export default async function InspectionDetailPage({ params }: PageProps) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <h1 className="font-heading text-2xl font-bold">{vehicleName}</h1>
-            <PpiBadge type={request.ppi_type} />
+            <h1 className="font-heading text-2xl font-bold">{inspectionName}</h1>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <PpiStatusBadge status={request.status} />
@@ -189,7 +187,7 @@ export default async function InspectionDetailPage({ params }: PageProps) {
               <StandardizedOutputView
                 content={outputs.standardized.structured_content as unknown as StandardizedContent}
                 generatedAt={outputs.standardized.generated_at}
-                documentUrl={outputs.standardized.document_url ? `/api/outputs/${outputs.standardized.id}/pdf` : null}
+                documentUrl={`/api/outputs/${outputs.standardized.id}/pdf`}
               />
             </div>
           ) : (

@@ -26,7 +26,9 @@ struct ConsumerPpiDetailView: View {
                            let submission,
                            submission.status == .draft || submission.status == .inProgress {
                             NavigationLink {
-                                InspectionWorkflowView(submissionId: submission.id)
+                                InspectionWorkflowView(submissionId: submission.id) {
+                                    Task { await load() }
+                                }
                             } label: {
                                 Label("Continue Inspection", systemImage: "checkmark.seal")
                             }
@@ -60,7 +62,7 @@ struct ConsumerPpiDetailView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle("Inspection")
+        .navigationTitle(request?.inspectionTitle ?? "Inspection")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .sheet(isPresented: $showingReview) {
@@ -401,21 +403,13 @@ private struct NativeReportView: View {
     @ViewBuilder
     private var footerActions: some View {
         VStack(spacing: 8) {
-            if let url = output.documentUrl, !url.isEmpty {
-                Button {
-                    showingPDF = true
-                } label: {
-                    Label("View PDF", systemImage: "doc.text")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(PrimaryButtonStyle())
-            } else {
-                Label("PDF not yet available — content above is the full report.",
-                      systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal)
+            Button {
+                showingPDF = true
+            } label: {
+                Label("View or Download PDF", systemImage: "doc.text")
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(PrimaryButtonStyle())
             HStack {
                 Button("Refresh") { onRefresh() }
                     .buttonStyle(.bordered)

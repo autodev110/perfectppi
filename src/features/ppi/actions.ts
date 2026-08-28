@@ -8,10 +8,11 @@ import {
   SECTION_QUESTION_TEMPLATES,
   VEHICLE_BASICS_ODOMETER_PROMPT,
   VEHICLE_BASICS_VIN_PROMPT,
+  canonicalInspectionPrompt,
   isValidTransition,
 } from "./constants";
 import type { PpiRequestStatus, SectionType } from "@/types/enums";
-import type { Json } from "@/types/database";
+import type { Database, Json } from "@/types/database";
 import { syncPartnerLifecycle } from "@/features/partner/events";
 
 // ============================================================================
@@ -423,13 +424,14 @@ const saveAnswersSchema = z.object({
     z.object({
       answerId: z.string().uuid(),
       value: z.string(),
+      deferred: z.boolean().optional(),
     })
   ),
 });
 
 export async function saveAnswers(
   submissionId: string,
-  answers: { answerId: string; value: string }[]
+  answers: { answerId: string; value: string; deferred?: boolean }[]
 ) {
   const parsed = saveAnswersSchema.safeParse({ submissionId, answers });
   if (!parsed.success) return { error: parsed.error.errors[0].message };
@@ -437,12 +439,17 @@ export async function saveAnswers(
   const supabase = await createClient();
 
   // Update each answer individually (no batch upsert without conflict target on id)
-  const updates = answers.map(({ answerId, value }) =>
-    supabase
-      .from("ppi_answers")
-      .update({ answer_value: value })
-      .eq("id", answerId)
-  );
+  const updates = parsed.data.answers.map(({ answerId, value, deferred }) => {
+    const update: Database["public"]["Tables"]["ppi_answers"]["Update"] = {
+      answer_value: value,
+    };
+    if (deferred === true) {
+      update.deferred_at = new Date().toISOString();
+    } else if (deferred === false || value.trim() !== "") {
+      update.deferred_at = null;
+    }
+    return supabase.from("ppi_answers").update(update).eq("id", answerId);
+  });
 
   const results = await Promise.all(updates);
   const failed = results.find((r) => r.error);
@@ -587,7 +594,7 @@ export async function resubmitPpi(requestId: string) {
       id, version, performer_id,
       sections:ppi_sections(
         id, section_type, notes, sort_order,
-        answers:ppi_answers(id, prompt, answer_type, answer_value, options, is_required, sort_order),
+        answers:ppi_answers(id, prompt, answer_type, answer_value, options, is_required, sort_order, deferred_at),
         media:ppi_media(id, url, media_type, caption, captured_at, metadata)
       )
     `
@@ -631,6 +638,7 @@ export async function resubmitPpi(requestId: string) {
 
   // Deep-copy sections, answers, and media
   for (const section of currentSub.sections ?? []) {
+    const canonicalSectionIndex = SECTION_ORDER.indexOf(section.section_type as SectionType);
     const { data: newSection } = await supabase
       .from("ppi_sections")
       .insert({
@@ -638,7 +646,8 @@ export async function resubmitPpi(requestId: string) {
         section_type: section.section_type,
         completion_state: "not_started",
         notes: section.notes,
-        sort_order: section.sort_order,
+        sort_order:
+          canonicalSectionIndex >= 0 ? canonicalSectionIndex + 1 : section.sort_order,
       })
       .select()
       .single();
@@ -652,14 +661,16 @@ export async function resubmitPpi(requestId: string) {
           prompt: string;
           answer_type: "text" | "yes_no" | "select" | "number";
           answer_value: string | null;
+          deferred_at: string | null;
           options: Json | null;
           is_required: boolean;
           sort_order: number;
         }) => ({
           ppi_section_id: newSection.id,
-          prompt: a.prompt,
+          prompt: canonicalInspectionPrompt(a.prompt),
           answer_type: a.answer_type,
           answer_value: a.answer_value,
+          deferred_at: a.deferred_at,
           options: a.options as Json,
           is_required: a.is_required,
           sort_order: a.sort_order,
@@ -900,22 +911,36 @@ async function prefillKnownVehicleData(requestId: string, submissionId: string) 
   try {
     const supabase = await createClient();
 
-    // Readable by the assigned technician under the external_inspection_refs
-    // policy, so this needs no elevated client.
-    const { data: ref } = await supabase
-      .from("external_inspection_refs")
-      .select("vehicle_snapshot")
-      .eq("ppi_request_id", requestId)
-      .maybeSingle();
+    const [{ data: ref }, { data: request }] = await Promise.all([
+      // DealerSpace's immutable intake snapshot remains authoritative for
+      // partner-created inspections.
+      supabase
+        .from("external_inspection_refs")
+        .select("vehicle_snapshot")
+        .eq("ppi_request_id", requestId)
+        .maybeSingle(),
+      // Consumer and technician inspections use the vehicle selected during
+      // intake, which already contains the confirmed VIN and mileage.
+      supabase
+        .from("ppi_requests")
+        .select("vehicle:vehicles!ppi_requests_vehicle_id_fkey(vin, mileage)")
+        .eq("id", requestId)
+        .maybeSingle(),
+    ]);
 
-    if (!ref?.vehicle_snapshot) return;
-
-    const snapshot = ref.vehicle_snapshot as { vin?: string | null; mileage?: number | null };
+    const snapshot = ref?.vehicle_snapshot as
+      | { vin?: string | null; mileage?: number | null }
+      | null;
+    const selectedVehicle = request?.vehicle as
+      | { vin: string | null; mileage: number | null }
+      | null;
+    const vin = snapshot?.vin ?? selectedVehicle?.vin;
+    const mileage = snapshot?.mileage ?? selectedVehicle?.mileage;
 
     const prefills: { prompt: string; value: string }[] = [];
-    if (snapshot.vin) prefills.push({ prompt: VEHICLE_BASICS_VIN_PROMPT, value: snapshot.vin });
-    if (typeof snapshot.mileage === "number") {
-      prefills.push({ prompt: VEHICLE_BASICS_ODOMETER_PROMPT, value: String(snapshot.mileage) });
+    if (vin) prefills.push({ prompt: VEHICLE_BASICS_VIN_PROMPT, value: vin });
+    if (typeof mileage === "number") {
+      prefills.push({ prompt: VEHICLE_BASICS_ODOMETER_PROMPT, value: String(mileage) });
     }
     if (prefills.length === 0) return;
 
@@ -931,7 +956,7 @@ async function prefillKnownVehicleData(requestId: string, submissionId: string) 
     for (const prefill of prefills) {
       await supabase
         .from("ppi_answers")
-        .update({ answer_value: prefill.value })
+        .update({ answer_value: prefill.value, deferred_at: null })
         .eq("ppi_section_id", sectionId)
         .eq("prompt", prefill.prompt)
         .is("answer_value", null);

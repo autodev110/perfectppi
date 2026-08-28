@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronRight, ClipboardCheck } from "lucide-react";
 import { SourceBadge } from "@/components/shared/source-badge";
 import type { PpiRequestStatus } from "@/types/enums";
+import { inspectionDisplayName } from "@/features/ppi/presentation";
 
 const QUEUE_TABS: { label: string; value: PpiRequestStatus | "active" }[] = [
   { label: "Active", value: "active" },
@@ -68,9 +69,7 @@ export default async function InspectionQueuePage({ searchParams }: PageProps) {
               make: string | null;
               model: string | null;
             } | null;
-            const vehicleName = vehicle
-              ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")
-              : "Unknown Vehicle";
+            const inspectionName = inspectionDisplayName(vehicle, req.ppi_type);
 
             const requester = req.requester as { display_name: string | null } | null;
             // Organization-requested inspections have no consumer requester.
@@ -92,7 +91,7 @@ export default async function InspectionQueuePage({ searchParams }: PageProps) {
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-semibold truncate">{vehicleName}</p>
+                    <p className="font-semibold truncate">{inspectionName}</p>
                     <SourceBadge sourceSystem={req.source_system} />
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">

@@ -40,7 +40,7 @@ private struct QueueRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(request.ppiType?.rawValue.replacingOccurrences(of: "_", with: " ").capitalized ?? "PPI")
+                Text(request.inspectionTitle)
                     .font(.headline)
                 Spacer()
                 StatusBadge(text: request.status.rawValue.replacingOccurrences(of: "_", with: " "),

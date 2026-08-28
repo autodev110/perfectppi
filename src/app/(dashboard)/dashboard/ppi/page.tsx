@@ -1,10 +1,10 @@
 import { getMyPpiRequests } from "@/features/ppi/queries";
 import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
-import { PpiBadge } from "@/components/shared/ppi-badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus, ClipboardCheck, ChevronRight } from "lucide-react";
 import type { PpiRequestStatus } from "@/types/enums";
+import { inspectionDisplayName } from "@/features/ppi/presentation";
 
 const STATUS_TABS: { label: string; value: PpiRequestStatus | "all" }[] = [
   { label: "All", value: "all" },
@@ -89,11 +89,7 @@ export default async function MyInspectionsPage({ searchParams }: PageProps) {
               model: string | null;
               trim: string | null;
             } | null;
-            const vehicleName = vehicle
-              ? [vehicle.year, vehicle.make, vehicle.model, vehicle.trim]
-                  .filter(Boolean)
-                  .join(" ")
-              : "Unknown Vehicle";
+            const inspectionName = inspectionDisplayName(vehicle, req.ppi_type);
 
             return (
               <Link
@@ -103,8 +99,7 @@ export default async function MyInspectionsPage({ searchParams }: PageProps) {
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="font-semibold truncate">{vehicleName}</span>
-                    <PpiBadge type={req.ppi_type} />
+                    <span className="font-semibold truncate">{inspectionName}</span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <PpiStatusBadge status={req.status} />

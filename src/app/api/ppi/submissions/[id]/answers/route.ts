@@ -15,7 +15,8 @@ export async function GET(
   const { data: sections } = await supabase
     .from("ppi_sections")
     .select("id")
-    .eq("ppi_submission_id", id);
+    .eq("ppi_submission_id", id)
+    .order("sort_order");
 
   if (!sections || sections.length === 0) {
     return NextResponse.json({ data: [] });
@@ -28,7 +29,15 @@ export async function GET(
     .in("ppi_section_id", sectionIds)
     .order("sort_order");
 
-  return NextResponse.json({ data: answers ?? [] });
+  const sectionOrder = new Map(sectionIds.map((sectionId, index) => [sectionId, index]));
+  const groupedAnswers = [...(answers ?? [])].sort((a, b) => {
+    const sectionDifference =
+      (sectionOrder.get(a.ppi_section_id) ?? Number.MAX_SAFE_INTEGER) -
+      (sectionOrder.get(b.ppi_section_id) ?? Number.MAX_SAFE_INTEGER);
+    return sectionDifference || a.sort_order - b.sort_order;
+  });
+
+  return NextResponse.json({ data: groupedAnswers });
 }
 
 export async function POST(

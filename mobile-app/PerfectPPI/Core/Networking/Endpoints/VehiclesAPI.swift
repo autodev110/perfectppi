@@ -1,6 +1,25 @@
 import Foundation
 
 enum VehiclesAPI {
+    struct DecodedVinVehicle: Codable {
+        let vin: String
+        let year: Int?
+        let make: String?
+        let model: String?
+        let trim: String?
+    }
+
+    private struct DecodeVinPayload: Encodable {
+        let vin: String
+    }
+
+    static func decodeVIN(_ vin: String) async throws -> DecodedVinVehicle {
+        try await APIClient.shared.postCamel(
+            "/api/vehicles/decode-vin",
+            body: DecodeVinPayload(vin: vin)
+        )
+    }
+
     static func list() async throws -> [Vehicle] {
         try await APIClient.shared.get("/api/vehicles")
     }

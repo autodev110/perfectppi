@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { usePpiWizard } from "@/features/ppi/hooks";
 import { TechSelector } from "@/components/shared/tech-selector";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { VinScanButton } from "@/components/shared/vin-scan-button";
 
 interface Vehicle {
   id: string;
@@ -86,7 +87,10 @@ function OptionCard({
 
 export default function NewInspectionPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedVehicleId = searchParams.get("vehicle");
   const wizard = usePpiWizard();
+  const updateWizard = wizard.update;
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(true);
 
@@ -112,10 +116,21 @@ export default function NewInspectionPage() {
         .order("created_at", { ascending: false });
 
       setVehicles(data ?? []);
+      const requestedVehicle = (data ?? []).find(
+        (vehicle) => vehicle.id === requestedVehicleId
+      );
+      if (requestedVehicle) {
+        updateWizard("vehicle_id", requestedVehicle.id);
+        updateWizard("vin", requestedVehicle.vin ?? "");
+        updateWizard(
+          "mileage",
+          requestedVehicle.mileage != null ? String(requestedVehicle.mileage) : ""
+        );
+      }
       setLoadingVehicles(false);
     }
     loadVehicles();
-  }, []);
+  }, [requestedVehicleId, updateWizard]);
 
   const stepLabels = STEP_LABELS.filter(
     (label) => label !== "Select Tech" || wizard.form.performer_type === "technician"
@@ -181,9 +196,9 @@ export default function NewInspectionPage() {
             <div className="text-center py-8 space-y-4">
               <p className="text-muted-foreground text-sm">No vehicles yet.</p>
               <Button asChild variant="outline">
-                <Link href="/dashboard/vehicles/new">
+                <Link href="/dashboard/vehicles/new?returnTo=%2Fdashboard%2Fppi%2Fnew">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add a Vehicle First
+                  New Vehicle
                 </Link>
               </Button>
             </div>
@@ -210,9 +225,9 @@ export default function NewInspectionPage() {
                 );
               })}
               <Button variant="outline" asChild className="w-full">
-                <Link href="/dashboard/vehicles/new">
+                <Link href="/dashboard/vehicles/new?returnTo=%2Fdashboard%2Fppi%2Fnew">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add New Vehicle
+                  New Vehicle
                 </Link>
               </Button>
             </div>
@@ -247,6 +262,10 @@ export default function NewInspectionPage() {
                 placeholder="17-character VIN"
                 maxLength={17}
                 className="font-mono uppercase"
+              />
+              <VinScanButton
+                label={wizard.form.vin.trim() ? "Rescan VIN" : "Scan VIN"}
+                onDecoded={(vehicle) => wizard.update("vin", vehicle.vin)}
               />
             </div>
 

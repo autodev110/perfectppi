@@ -153,6 +153,7 @@ export interface PpiAnswerItem {
   prompt: string;
   answer_type: AnswerType;
   answer_value: string | null;
+  deferred_at: string | null;
   options: string[] | null;
   is_required: boolean;
   sort_order: number;
@@ -263,6 +264,7 @@ export interface ObdDiagnosticSnapshotPayload {
   monitorStatus?: ObdMonitorStatus | null;
   storedDTCs: string[];
   pendingDTCs: string[];
+  permanentDTCs?: string[];
   liveReadings: ObdLiveReading[];
   adapterName?: string | null;
   startedAt?: string | null;
@@ -272,6 +274,7 @@ export interface ObdDiagnosticSnapshotPayload {
   rawVinResponse?: string | null;
   rawStoredDtcsResponse?: string | null;
   rawPendingDtcsResponse?: string | null;
+  rawPermanentDtcsResponse?: string | null;
 }
 
 export interface ObdSnapshotResponse {

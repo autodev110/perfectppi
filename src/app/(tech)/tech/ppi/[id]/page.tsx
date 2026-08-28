@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { acceptRequest } from "@/features/ppi/actions";
 import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
-import { PpiBadge } from "@/components/shared/ppi-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Car, User, Calendar, ChevronLeft, AlertCircle } from "lucide-react";
@@ -12,6 +11,7 @@ import { DealerSpaceInspectionPanel } from "@/components/shared/dealerspace-insp
 import { InspectionResultsPanel } from "@/components/shared/inspection-results-panel";
 import { SourceBadge } from "@/components/shared/source-badge";
 import Link from "next/link";
+import { inspectionDisplayName } from "@/features/ppi/presentation";
 
 interface RequestDetail {
   id: string;
@@ -87,11 +87,7 @@ export default function TechInspectionDetailPage() {
     );
   }
 
-  const vehicleName = request.vehicle
-    ? [request.vehicle.year, request.vehicle.make, request.vehicle.model, request.vehicle.trim]
-        .filter(Boolean)
-        .join(" ")
-    : "Unknown Vehicle";
+  const inspectionName = inspectionDisplayName(request.vehicle, request.ppi_type);
 
   const canAccept = request.status === "assigned";
   const canInspect = ["accepted", "in_progress"].includes(request.status);
@@ -108,8 +104,7 @@ export default function TechInspectionDetailPage() {
         </Button>
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="font-heading text-xl font-bold">{vehicleName}</h1>
-            <PpiBadge type={request.ppi_type as "personal" | "general_tech" | "certified_tech"} />
+            <h1 className="font-heading text-xl font-bold">{inspectionName}</h1>
             <SourceBadge sourceSystem={request.source_system} />
           </div>
           <PpiStatusBadge status={request.status as "draft" | "pending_assignment" | "assigned" | "accepted" | "in_progress" | "submitted" | "needs_revision" | "completed" | "archived"} />
