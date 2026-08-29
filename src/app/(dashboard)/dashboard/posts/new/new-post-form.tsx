@@ -28,6 +28,7 @@ export function NewPostForm({ vehicles, listings }: NewPostFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [media, setMedia] = useState<File[]>([]);
+  const [progress, setProgress] = useState<number[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // A failed media upload leaves the post already created — retrying the form
   // must attach to that post rather than publish a second one.
@@ -54,10 +55,17 @@ export function NewPostForm({ vehicles, listings }: NewPostFormProps) {
 
     if (postId && media.length > 0) {
       const targetPostId = postId;
+      setProgress(media.map(() => 0));
       try {
         const uploaded = await Promise.all(
           media.map(async (file, sortOrder) => ({
-            url: await uploadFile(file, "community_post", targetPostId),
+            url: await uploadFile(file, "community_post", targetPostId, (fraction) =>
+              setProgress((current) => {
+                const next = [...current];
+                next[sortOrder] = fraction;
+                return next;
+              }),
+            ),
             mediaType: file.type.startsWith("video/") ? "video" : "image",
             contentType: file.type,
             sortOrder,
@@ -74,6 +82,7 @@ export function NewPostForm({ vehicles, listings }: NewPostFormProps) {
         }
       } catch (uploadError) {
         setError(uploadError instanceof Error ? uploadError.message : "Could not upload media");
+        setProgress([]);
         setLoading(false);
         return;
       }
@@ -95,6 +104,11 @@ export function NewPostForm({ vehicles, listings }: NewPostFormProps) {
     setMedia((current) => [...current, ...selected.slice(0, available)]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
+
+  const uploading = loading && progress.length > 0;
+  const overallProgress = progress.length
+    ? progress.reduce((total, value) => total + value, 0) / progress.length
+    : 0;
 
   return (
     <form action={handleSubmit} className="space-y-5">
@@ -127,10 +141,22 @@ export function NewPostForm({ vehicles, listings }: NewPostFormProps) {
           className="sr-only"
           onChange={(event) => addMedia(event.target.files)}
         />
-        <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={media.length >= MAX_MEDIA}>
-          <ImagePlus className="mr-2 h-4 w-4" />
-          Add Media
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading || media.length >= MAX_MEDIA}
+          >
+            <ImagePlus className="mr-2 h-4 w-4" />
+            Add Media
+          </Button>
+          {uploading ? (
+            <span className="text-xs font-medium text-muted-foreground">
+              Uploading media… {Math.round(overallProgress * 100)}%
+            </span>
+          ) : null}
+        </div>
         {media.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {media.map((file, index) => (
@@ -138,6 +164,7 @@ export function NewPostForm({ vehicles, listings }: NewPostFormProps) {
                 key={`${file.name}-${file.lastModified}-${index}`}
                 file={file}
                 index={index}
+                progress={uploading ? progress[index] ?? 0 : null}
                 onRemove={() => setMedia((current) => current.filter((_, itemIndex) => itemIndex !== index))}
               />
             ))}
@@ -211,7 +238,17 @@ export function NewPostForm({ vehicles, listings }: NewPostFormProps) {
   );
 }
 
-function MediaPreview({ file, index, onRemove }: { file: File; index: number; onRemove: () => void }) {
+function MediaPreview({
+  file,
+  index,
+  progress,
+  onRemove,
+}: {
+  file: File;
+  index: number;
+  progress: number | null;
+  onRemove: () => void;
+}) {
   const [url, setUrl] = useState("");
   useEffect(() => {
     const objectUrl = URL.createObjectURL(file);
@@ -234,9 +271,23 @@ function MediaPreview({ file, index, onRemove }: { file: File; index: number; on
       <span className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-bold text-white">
         {file.type.startsWith("video/") ? <Video className="h-3 w-3" /> : index + 1}
       </span>
-      <Button type="button" size="icon" variant="destructive" className="absolute right-2 top-2 h-8 w-8 rounded-full" onClick={onRemove} aria-label={`Remove media ${index + 1}`}>
-        <Trash2 className="h-3.5 w-3.5" />
-      </Button>
+      {progress === null ? (
+        <Button type="button" size="icon" variant="destructive" className="absolute right-2 top-2 h-8 w-8 rounded-full" onClick={onRemove} aria-label={`Remove media ${index + 1}`}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      ) : (
+        <div className="absolute inset-x-0 bottom-0 h-1.5 bg-black/40">
+          <div
+            className="h-full bg-primary transition-[width] duration-150"
+            style={{ width: `${Math.round(progress * 100)}%` }}
+            role="progressbar"
+            aria-label={`Upload progress for media ${index + 1}`}
+            aria-valuenow={Math.round(progress * 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          />
+        </div>
+      )}
     </div>
   );
 }

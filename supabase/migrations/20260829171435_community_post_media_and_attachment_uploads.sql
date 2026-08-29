@@ -83,8 +83,9 @@ CREATE POLICY community_post_media_admin
   USING (public.get_my_role() = 'admin')
   WITH CHECK (public.get_my_role() = 'admin');
 
+-- Scoped to the table this migration creates. `community_posts`,
+-- `conversation_participants`, and `profiles` are already reachable by these
+-- roles (Supabase's default privileges cover them, which is why no earlier
+-- migration grants them) — re-granting here would widen unrelated tables.
 GRANT SELECT ON public.community_post_media TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.community_post_media TO authenticated;
-GRANT SELECT ON public.community_posts TO anon, authenticated;
-GRANT SELECT ON public.conversation_participants TO authenticated;
-GRANT SELECT ON public.profiles TO authenticated;

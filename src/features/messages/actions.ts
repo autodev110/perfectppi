@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { uploadedUrlSchema } from "@/features/uploads/url";
 
 const createConversationSchema = z.object({
   participantId: z.string().uuid(),
@@ -15,7 +16,7 @@ const createConversationSchema = z.object({
 const sendMessageSchema = z.object({
   conversationId: z.string().uuid(),
   content: z.string().trim().max(4000),
-  attachmentUrl: z.string().url().optional(),
+  attachmentUrl: uploadedUrlSchema.optional(),
   attachmentType: z.string().trim().min(1).max(255).optional(),
 }).superRefine((value, context) => {
   if (!value.content && !value.attachmentUrl) {

@@ -382,21 +382,25 @@ private struct EditListingView: View {
                     Button(saving ? "Saving..." : "Save") {
                         Task { await save() }
                     }
-                    .disabled(saving || Double(askingPrice) == nil)
+                    .disabled(saving || Double(askingPrice) == nil || trimmedTitle.isEmpty)
                 }
             }
         }
     }
 
+    private var trimmedTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func save() async {
-        guard !saving, let price = Double(askingPrice), price > 0 else { return }
+        guard !saving, !trimmedTitle.isEmpty, let price = Double(askingPrice), price > 0 else { return }
         saving = true
         defer { saving = false }
         do {
             _ = try await MarketplaceAPI.update(
                 id: listing.id,
                 payload: .init(
-                    title: title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                    title: trimmedTitle,
                     description: description.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
                     askingPrice: price,
                     location: location.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty

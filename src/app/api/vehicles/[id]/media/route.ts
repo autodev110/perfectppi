@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { uploadedUrlSchema } from "@/features/uploads/url";
 
 const mediaSchema = z.object({
-  url: z.string().url(),
+  url: uploadedUrlSchema,
   media_type: z.enum(["image", "video"]).default("image"),
   is_primary: z.boolean().default(false),
   sort_order: z.number().default(0),

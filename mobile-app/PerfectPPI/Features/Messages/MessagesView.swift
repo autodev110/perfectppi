@@ -134,6 +134,7 @@ struct MessageThreadView: View {
     @State private var showingFilePicker = false
     @State private var composerError: String?
     @State private var photoAccessBlocked = false
+    @StateObject private var uploadProgress = UploadProgressModel()
 
     var body: some View {
         Group {
@@ -162,19 +163,29 @@ struct MessageThreadView: View {
                     Divider()
                     VStack(spacing: 8) {
                         if let attachment {
-                            HStack {
-                                Image(systemName: attachment.kind == .video ? "video.fill" : attachment.kind == .image ? "photo.fill" : "doc.fill")
-                                    .foregroundStyle(Theme.Palette.primary)
-                                Text(attachment.filename)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                Spacer()
-                                Button {
-                                    self.attachment = nil
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Image(systemName: attachment.kind == .video ? "video.fill" : attachment.kind == .image ? "photo.fill" : "doc.fill")
+                                        .foregroundStyle(Theme.Palette.primary)
+                                    Text(attachment.filename)
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    if !uploadProgress.isUploading {
+                                        Button {
+                                            self.attachment = nil
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
                                 }
-                                .buttonStyle(.plain)
+                                if let label = uploadProgress.label {
+                                    ProgressView(value: uploadProgress.fraction ?? 0) {
+                                        Text(label).font(.caption2)
+                                    }
+                                    .tint(Theme.Palette.primary)
+                                }
                             }
                             .padding(8)
                             .background(Theme.Palette.subtle)
@@ -298,12 +309,15 @@ struct MessageThreadView: View {
         do {
             var attachmentUrl: String?
             if let selectedAttachment {
+                uploadProgress.begin(total: 1)
+                defer { uploadProgress.reset() }
                 attachmentUrl = try await R2Uploader.upload(
                     data: selectedAttachment.data,
                     filename: selectedAttachment.filename,
                     contentType: selectedAttachment.contentType,
                     entity: "message_attachment",
-                    recordId: conversationId
+                    recordId: conversationId,
+                    onProgress: uploadProgress.handler()
                 )
             }
             _ = try await MessagesAPI.sendMessage(

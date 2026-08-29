@@ -91,6 +91,7 @@ export function ConversationThread({
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
   const [liveConnected, setLiveConnected] = useState(false);
   const [flashedMessageId, setFlashedMessageId] = useState<string | null>(null);
@@ -263,11 +264,20 @@ export function ConversationThread({
       let attachmentUrl: string | undefined;
       try {
         if (selectedAttachment) {
-          attachmentUrl = await uploadFile(selectedAttachment, "message_attachment", conversationId);
+          setUploadProgress(0);
+          attachmentUrl = await uploadFile(
+            selectedAttachment,
+            "message_attachment",
+            conversationId,
+            setUploadProgress,
+          );
         }
       } catch (uploadError) {
         setError(uploadError instanceof Error ? uploadError.message : "Failed to upload attachment");
+        setUploadProgress(null);
         return;
+      } finally {
+        setUploadProgress(null);
       }
 
       const tempId = `temp-${Date.now()}`;
@@ -481,14 +491,35 @@ export function ConversationThread({
               <p className="mb-2 text-xs font-medium text-destructive">{error}</p>
             ) : null}
             {attachment ? (
-              <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-outline-variant/20 bg-surface-container-low px-3 py-2">
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold">{attachment.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{Math.ceil(attachment.size / 1024)} KB</p>
+              <div className="mb-2 rounded-xl border border-outline-variant/20 bg-surface-container-low px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold">{attachment.name}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {uploadProgress === null
+                        ? `${Math.ceil(attachment.size / 1024)} KB`
+                        : `Uploading… ${Math.round(uploadProgress * 100)}%`}
+                    </p>
+                  </div>
+                  {uploadProgress === null ? (
+                    <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setAttachment(null)} aria-label="Remove attachment">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  ) : null}
                 </div>
-                <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setAttachment(null)} aria-label="Remove attachment">
-                  <X className="h-4 w-4" />
-                </Button>
+                {uploadProgress === null ? null : (
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-outline-variant/30">
+                    <div
+                      className="h-full bg-primary transition-[width] duration-150"
+                      style={{ width: `${Math.round(uploadProgress * 100)}%` }}
+                      role="progressbar"
+                      aria-label="Attachment upload progress"
+                      aria-valuenow={Math.round(uploadProgress * 100)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    />
+                  </div>
+                )}
               </div>
             ) : null}
             <input

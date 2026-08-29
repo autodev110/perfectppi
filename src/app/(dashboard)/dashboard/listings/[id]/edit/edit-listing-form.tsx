@@ -31,8 +31,8 @@ export function EditListingForm({ listing }: { listing: MarketplaceListing }) {
   return (
     <form action={submit} className="space-y-5">
       <div className="space-y-2">
-        <Label htmlFor="title">Listing title</Label>
-        <Input id="title" name="title" defaultValue={listing.title} maxLength={120} />
+        <Label htmlFor="title">Listing title *</Label>
+        <Input id="title" name="title" defaultValue={listing.title} maxLength={120} required />
       </div>
       <div className="space-y-2">
         <Label htmlFor="asking_price">Asking price *</Label>

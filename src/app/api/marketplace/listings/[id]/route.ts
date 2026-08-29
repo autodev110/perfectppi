@@ -12,7 +12,7 @@ const statusSchema = z.object({
 });
 
 const detailsSchema = z.object({
-  title: z.string().trim().max(120).optional().or(z.literal("")),
+  title: z.string().trim().min(1).max(120),
   description: z.string().trim().max(1200).optional().or(z.literal("")),
   asking_price: z.coerce.number().positive().max(10_000_000),
   location: z.string().trim().max(120).optional().or(z.literal("")),
@@ -47,7 +47,9 @@ export async function PATCH(
     ? await updateMarketplaceListingStatus(id, parsedStatus.data.status)
     : parsedDetails.success
       ? await updateMarketplaceListingFromInput(id, parsedDetails.data)
-      : { error: "Invalid listing update" };
+      // Surface the field-level reason (e.g. a blanked title) rather than a
+      // generic message — a body that isn't a status change is a details edit.
+      : { error: parsedDetails.error.errors[0]?.message ?? "Invalid listing update" };
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }

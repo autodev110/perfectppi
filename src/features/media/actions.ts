@@ -4,10 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { Database } from "@/types/database";
+import { uploadedUrlSchema } from "@/features/uploads/url";
 
 const packageItemSchema = z.object({
   type: z.enum(["image", "video", "file"]),
-  url: z.string().url(),
+  url: uploadedUrlSchema,
   name: z.string().trim().min(1).max(255).optional(),
 });
 

@@ -48,6 +48,10 @@ enum CommunityAPI {
         )
     }
 
+    static func removeMedia(postId: String, mediaId: String) async throws -> Empty {
+        try await APIClient.shared.delete("/api/community/posts/\(postId)/media/\(mediaId)")
+    }
+
     struct StatusPayload: Encodable {
         let status: CommunityContentStatus
     }

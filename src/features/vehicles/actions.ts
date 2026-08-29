@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { uploadedUrlSchema } from "@/features/uploads/url";
 
 const createVehicleSchema = z.object({
   vin: z.string().max(17).optional().or(z.literal("")),
@@ -19,7 +20,7 @@ const updateVehicleSchema = createVehicleSchema.partial();
 
 const vehiclePhotoSchema = z.object({
   vehicleId: z.string().uuid(),
-  url: z.string().url(),
+  url: uploadedUrlSchema,
   mediaType: z.enum(["image", "video"]),
 });
 

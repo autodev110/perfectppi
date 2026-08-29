@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
 import { sendMessage } from "@/features/messages/actions";
 import { z } from "zod";
+import { uploadedUrlSchema } from "@/features/uploads/url";
 
 const sendMessageSchema = z.object({
   content: z.string().trim().max(4000),
-  attachmentUrl: z.string().url().optional(),
+  attachmentUrl: uploadedUrlSchema.optional(),
   attachmentType: z.string().trim().min(1).max(255).optional(),
 }).refine((value) => Boolean(value.content || value.attachmentUrl), {
   message: "Add a message or attachment",

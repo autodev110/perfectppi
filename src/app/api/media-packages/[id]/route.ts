@@ -3,10 +3,11 @@ import { requireApiRole } from "@/features/auth/api";
 import { getMediaPackage } from "@/features/media/queries";
 import { updateMediaPackage, deleteMediaPackage } from "@/features/media/actions";
 import { z } from "zod";
+import { uploadedUrlSchema } from "@/features/uploads/url";
 
 const itemSchema = z.object({
   type: z.enum(["image", "video", "file"]),
-  url: z.string().url(),
+  url: uploadedUrlSchema,
   name: z.string().optional(),
 });
 

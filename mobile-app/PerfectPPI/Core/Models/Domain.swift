@@ -127,6 +127,23 @@ struct CommunityPostMedia: Codable, Identifiable, Hashable {
     let createdAt: Date?
 }
 
+extension CommunityPostMedia {
+    /// The server compacts `sort_order` after a delete; this mirrors that
+    /// locally so the list keeps matching what the feed renders.
+    func withSortOrder(_ value: Int) -> CommunityPostMedia {
+        CommunityPostMedia(
+            id: id,
+            postId: postId,
+            uploaderId: uploaderId,
+            url: url,
+            mediaType: mediaType,
+            contentType: contentType,
+            sortOrder: value,
+            createdAt: createdAt
+        )
+    }
+}
+
 struct CommunityComment: Codable, Identifiable, Hashable {
     let id: String
     let postId: String

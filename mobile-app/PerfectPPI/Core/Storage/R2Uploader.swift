@@ -5,12 +5,19 @@ import Foundation
 /// route (`/api/upload/direct`) if the presigned PUT fails (e.g. R2 CORS
 /// misconfig).
 enum R2Uploader {
+    /// Called with 0...1 as bytes go out, so a composer can show a real bar
+    /// instead of looking frozen behind a 50MB video. Delivered on
+    /// `URLSession`'s delegate queue — hop to the main actor before touching UI
+    /// state (`UploadProgressModel` already does).
+    typealias ProgressHandler = @Sendable (Double) -> Void
+
     static func upload(
         data: Data,
         filename: String,
         contentType: String,
         entity: String,
-        recordId: String
+        recordId: String,
+        onProgress: ProgressHandler? = nil
     ) async throws -> String {
         // 1) Try presigned URL.
         do {
@@ -26,27 +33,36 @@ enum R2Uploader {
             try await putToR2(
                 urlString: presigned.uploadUrl,
                 data: data,
-                contentType: contentType
+                contentType: contentType,
+                onProgress: onProgress
             )
+            onProgress?(1)
             return presigned.publicUrl
         } catch {
             // Fall through to direct upload.
         }
 
+        // The retry starts from zero bytes — don't leave a stale bar behind.
+        onProgress?(0)
+
         // 2) Fallback: server proxies the upload.
-        return try await directUpload(
+        let url = try await directUpload(
             data: data,
             filename: filename,
             contentType: contentType,
             entity: entity,
-            recordId: recordId
+            recordId: recordId,
+            onProgress: onProgress
         )
+        onProgress?(1)
+        return url
     }
 
     private static func putToR2(
         urlString: String,
         data: Data,
-        contentType: String
+        contentType: String,
+        onProgress: ProgressHandler?
     ) async throws {
         guard let url = URL(string: urlString) else {
             throw APIError.unknown(NSError(domain: "R2Uploader", code: 0))
@@ -55,9 +71,12 @@ enum R2Uploader {
         var req = URLRequest(url: url)
         req.httpMethod = "PUT"
         req.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        req.httpBody = data
 
-        let (_, response) = try await URLSession.shared.data(for: req)
+        let (_, response) = try await URLSession.shared.upload(
+            for: req,
+            from: data,
+            delegate: onProgress.map(UploadProgressDelegate.init)
+        )
         guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
             throw APIError.server(
                 status: (response as? HTTPURLResponse)?.statusCode ?? 0,
@@ -72,7 +91,8 @@ enum R2Uploader {
         filename: String,
         contentType: String,
         entity: String,
-        recordId: String
+        recordId: String,
+        onProgress: ProgressHandler?
     ) async throws -> String {
         let url = AppConfig.apiBaseURL.appendingPathComponent("api/upload/direct")
         let boundary = "Boundary-\(UUID().uuidString)"
@@ -102,9 +122,11 @@ enum R2Uploader {
         body.append("\r\n".utf8)
         body.append("--\(boundary)--\r\n".utf8)
 
-        req.httpBody = body
-
-        let (respData, response) = try await URLSession.shared.data(for: req)
+        let (respData, response) = try await URLSession.shared.upload(
+            for: req,
+            from: body,
+            delegate: onProgress.map(UploadProgressDelegate.init)
+        )
         guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
             let parsed = try? JSONDecoder().decode(ServerErrorBody.self, from: respData)
             throw APIError.server(
@@ -115,6 +137,26 @@ enum R2Uploader {
 
         let decoded = try JSONDecoder().decode(UploadAPI.DirectResponse.self, from: respData)
         return decoded.publicUrl
+    }
+}
+
+/// `URLSession`'s async upload only reports progress through a task delegate.
+private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let onProgress: R2Uploader.ProgressHandler
+
+    init(onProgress: @escaping R2Uploader.ProgressHandler) {
+        self.onProgress = onProgress
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didSendBodyData bytesSent: Int64,
+        totalBytesSent: Int64,
+        totalBytesExpectedToSend: Int64
+    ) {
+        guard totalBytesExpectedToSend > 0 else { return }
+        onProgress(Double(totalBytesSent) / Double(totalBytesExpectedToSend))
     }
 }
 

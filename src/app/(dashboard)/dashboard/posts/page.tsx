@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils/formatting";
 import { AlertTriangle, Archive, ExternalLink, MessageSquare, Plus, RotateCcw, Trash2, Users } from "lucide-react";
-import { PostMediaCarousel } from "@/components/shared/post-media-carousel";
+import { PostMediaManager } from "@/components/shared/post-media-manager";
 
 type PageProps = {
   searchParams: Promise<{ tab?: string }>;
@@ -129,9 +129,7 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
                         )}
                       </div>
                       <p className="max-w-3xl whitespace-pre-wrap text-sm text-muted-foreground">{post.content}</p>
-                      <div className="max-w-xl overflow-hidden rounded-xl">
-                        <PostMediaCarousel media={post.media} />
-                      </div>
+                      <PostMediaManager postId={post.id} media={post.media} />
                       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                         <span>Created {formatDate(post.created_at)}</span>
                         {tab === "archived" && (

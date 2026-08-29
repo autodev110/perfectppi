@@ -19,7 +19,11 @@ const createListingSchema = z.object({
   location: z.string().trim().max(120).optional().or(z.literal("")),
 });
 
-const updateListingSchema = createListingSchema.omit({ vehicle_id: true });
+// Create falls back to a generic title when the seller leaves it blank; an
+// update must not, or clearing the field silently renames a live listing.
+const updateListingSchema = createListingSchema.omit({ vehicle_id: true }).extend({
+  title: z.string().trim().min(1, "Listing title is required").max(120),
+});
 
 const listingStatusSchema = z.enum(["active", "sold", "archived"]);
 const contactSellerSchema = z.object({
@@ -161,7 +165,7 @@ export async function updateMarketplaceListingFromInput(listingId: string, input
   const { data, error } = await admin
     .from("marketplace_listings")
     .update({
-      title: parsed.data.title || "Vehicle for sale",
+      title: parsed.data.title,
       description: parsed.data.description || null,
       asking_price_cents: Math.round(parsed.data.asking_price * 100),
       location: parsed.data.location || null,

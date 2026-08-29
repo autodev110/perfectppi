@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { uploadedUrlSchema } from "@/features/uploads/url";
 
 const postSchema = z.object({
   content: z.string().trim().min(1, "Write something before posting").max(1200),
@@ -17,11 +18,16 @@ const MAX_POST_MEDIA = 10;
 const postMediaSchema = z.object({
   postId: z.string().uuid(),
   items: z.array(z.object({
-    url: z.string().url(),
+    url: uploadedUrlSchema,
     mediaType: z.enum(["image", "video"]),
     contentType: z.string().regex(/^(image|video)\//),
     sortOrder: z.number().int().min(0).max(MAX_POST_MEDIA - 1),
   })).min(1).max(MAX_POST_MEDIA),
+});
+
+const removePostMediaSchema = z.object({
+  postId: z.string().uuid(),
+  mediaId: z.string().uuid(),
 });
 
 const commentSchema = z.object({
@@ -171,6 +177,59 @@ export async function addCommunityPostMedia(input: unknown) {
   revalidatePath("/dashboard/posts");
   revalidatePath("/admin/community");
   return { data: data ?? [] };
+}
+
+export async function removeCommunityPostMedia(input: unknown) {
+  const parsed = removePostMediaSchema.safeParse(input);
+  if (!parsed.success) return { error: "Invalid media" };
+
+  const profile = await getCurrentProfileId();
+  if ("error" in profile) return { error: profile.error };
+
+  const admin = createAdminClient();
+  const { data: post } = await admin
+    .from("community_posts")
+    .select("id, author_id")
+    .eq("id", parsed.data.postId)
+    .maybeSingle();
+
+  if (!post || post.author_id !== profile.profileId) {
+    return { error: "Post not found" };
+  }
+
+  const { data: deleted, error } = await admin
+    .from("community_post_media")
+    .delete()
+    .eq("id", parsed.data.mediaId)
+    .eq("post_id", post.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  if (!deleted) return { error: "Media not found" };
+
+  // `sort_order` has to stay contiguous 0..n-1: it is unique per post and
+  // capped at 9, so a gap would eventually push a later insert past the check
+  // constraint. Compacting in ascending order can never collide — each row
+  // only moves down into a slot an earlier step already vacated.
+  const { data: remaining } = await admin
+    .from("community_post_media")
+    .select("id, sort_order")
+    .eq("post_id", post.id)
+    .order("sort_order", { ascending: true });
+
+  for (const [index, item] of (remaining ?? []).entries()) {
+    if (item.sort_order === index) continue;
+    await admin
+      .from("community_post_media")
+      .update({ sort_order: index })
+      .eq("id", item.id);
+  }
+
+  revalidatePath("/community");
+  revalidatePath("/dashboard/posts");
+  revalidatePath("/admin/community");
+  return { data: { id: deleted.id } };
 }
 
 export async function createCommunityComment(formData: FormData) {

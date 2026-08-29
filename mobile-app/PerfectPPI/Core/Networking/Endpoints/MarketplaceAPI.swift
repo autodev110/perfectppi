@@ -57,7 +57,8 @@ enum MarketplaceAPI {
     }
 
     struct UpdatePayload: Encodable {
-        let title: String?
+        /// Required: the server refuses an update that would blank the title.
+        let title: String
         let description: String?
         let askingPrice: Double
         let location: String?

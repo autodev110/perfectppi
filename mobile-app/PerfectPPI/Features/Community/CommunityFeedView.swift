@@ -126,14 +126,24 @@ private struct CommunityPostDetailView: View {
 
     @EnvironmentObject private var auth: AuthStore
     @State private var comments: [CommunityComment]
+    @State private var media: [CommunityPostMedia]
     @State private var comment = ""
     @State private var submitting = false
     @State private var error: String?
+    @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var showingPhotoPicker = false
+    @State private var removingMediaId: String?
+    @StateObject private var uploadProgress = UploadProgressModel()
 
     init(post: CommunityPost, onChanged: @escaping () -> Void) {
         self.post = post
         self.onChanged = onChanged
         _comments = State(initialValue: post.comments ?? [])
+        _media = State(initialValue: (post.media ?? []).sorted { $0.sortOrder < $1.sortOrder })
+    }
+
+    private var isMyPost: Bool {
+        auth.profile?.id == post.authorId
     }
 
     var body: some View {
@@ -144,7 +154,7 @@ private struct CommunityPostDetailView: View {
                         .font(.headline)
                     Text(post.content)
                         .font(.body)
-                    if let media = post.media, !media.isEmpty {
+                    if !media.isEmpty {
                         CommunityMediaCarousel(media: media)
                             .frame(height: 320)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -157,6 +167,40 @@ private struct CommunityPostDetailView: View {
                     }
                 }
                 .padding(.vertical, 6)
+            }
+
+            if isMyPost {
+                Section("Photos and videos (\(media.count)/10)") {
+                    ForEach(media) { item in
+                        HStack {
+                            Image(systemName: item.mediaType == "video" ? "video.fill" : "photo.fill")
+                                .foregroundStyle(Theme.Palette.primary)
+                            Text("Item \(item.sortOrder + 1)")
+                                .font(.subheadline)
+                            Spacer()
+                            Button(role: .destructive) {
+                                Task { await removeMedia(item) }
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .disabled(removingMediaId != nil || uploadProgress.isUploading)
+                        }
+                    }
+
+                    Button {
+                        Task { await openPhotoLibrary() }
+                    } label: {
+                        Label(media.isEmpty ? "Add Photos or Videos" : "Add More", systemImage: "photo.on.rectangle.angled")
+                    }
+                    .disabled(media.count >= 10 || uploadProgress.isUploading || removingMediaId != nil)
+
+                    if let label = uploadProgress.label {
+                        ProgressView(value: uploadProgress.fraction ?? 0) {
+                            Text(label).font(.caption)
+                        }
+                        .tint(Theme.Palette.primary)
+                    }
+                }
             }
 
             Section(comments.isEmpty ? "Comments" : "Comments (\(comments.count))") {
@@ -188,10 +232,83 @@ private struct CommunityPostDetailView: View {
         }
         .navigationTitle("Post")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Couldn't post comment",
+        .photosPicker(
+            isPresented: $showingPhotoPicker,
+            selection: $pickerItems,
+            maxSelectionCount: max(1, 10 - media.count),
+            matching: .any(of: [.images, .videos])
+        )
+        .onChange(of: pickerItems) { _, items in
+            Task { await addMedia(items) }
+        }
+        .alert("Something went wrong",
                isPresented: .constant(error != nil),
                actions: { Button("OK") { error = nil } },
                message: { Text(error ?? "") })
+    }
+
+    private func openPhotoLibrary() async {
+        let status = await AttachmentPickerSupport.requestPhotoAccess()
+        if status == .authorized || status == .limited {
+            showingPhotoPicker = true
+        } else {
+            error = "Photo access is off. Allow full or limited access in Settings to add photos."
+        }
+    }
+
+    private func addMedia(_ items: [PhotosPickerItem]) async {
+        defer { pickerItems = [] }
+        let room = max(0, 10 - media.count)
+        let selected = Array(items.prefix(room))
+        guard !selected.isEmpty else { return }
+
+        uploadProgress.begin(total: selected.count)
+        defer { uploadProgress.reset() }
+
+        do {
+            var payload: [CommunityAPI.MediaItemPayload] = []
+            for (index, item) in selected.enumerated() {
+                let picked = try await AttachmentPickerSupport.load(item)
+                let url = try await R2Uploader.upload(
+                    data: picked.data,
+                    filename: picked.filename,
+                    contentType: picked.contentType,
+                    entity: "community_post",
+                    recordId: post.id,
+                    onProgress: uploadProgress.handler()
+                )
+                uploadProgress.finishItem()
+                payload.append(.init(
+                    url: url,
+                    mediaType: picked.kind == .video ? "video" : "image",
+                    contentType: picked.contentType,
+                    sortOrder: index
+                ))
+            }
+            let created = try await CommunityAPI.addMedia(postId: post.id, items: payload)
+            media = (media + created).sorted { $0.sortOrder < $1.sortOrder }
+            onChanged()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func removeMedia(_ item: CommunityPostMedia) async {
+        guard removingMediaId == nil else { return }
+        removingMediaId = item.id
+        defer { removingMediaId = nil }
+        do {
+            _ = try await CommunityAPI.removeMedia(postId: post.id, mediaId: item.id)
+            // The server compacts sort_order after a delete — mirror that so the
+            // remaining rows keep matching what the feed will render.
+            media = media
+                .filter { $0.id != item.id }
+                .enumerated()
+                .map { index, remaining in remaining.withSortOrder(index) }
+            onChanged()
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     private func submitComment() async {
@@ -245,6 +362,7 @@ private struct NewCommunityPostView: View {
     @State private var showingPhotoPicker = false
     @State private var showingCamera = false
     @State private var photoAccessBlocked = false
+    @StateObject private var uploadProgress = UploadProgressModel()
     /// A failed media upload leaves the post already created — a retry has to
     /// attach to that post instead of publishing a second one.
     @State private var createdPostId: String?
@@ -304,6 +422,13 @@ private struct NewCommunityPostView: View {
                                     }
                                 }
                             }
+                        }
+
+                        if let label = uploadProgress.label {
+                            ProgressView(value: uploadProgress.fraction ?? 0) {
+                                Text(label).font(.caption)
+                            }
+                            .tint(Theme.Palette.primary)
                         }
 
                         if let error {
@@ -404,6 +529,8 @@ private struct NewCommunityPostView: View {
                 createdPostId = postId
             }
             if !media.isEmpty {
+                uploadProgress.begin(total: media.count)
+                defer { uploadProgress.reset() }
                 var uploaded: [CommunityAPI.MediaItemPayload] = []
                 for (index, item) in media.enumerated() {
                     let url = try await R2Uploader.upload(
@@ -411,8 +538,10 @@ private struct NewCommunityPostView: View {
                         filename: item.filename,
                         contentType: item.contentType,
                         entity: "community_post",
-                        recordId: postId
+                        recordId: postId,
+                        onProgress: uploadProgress.handler()
                     )
+                    uploadProgress.finishItem()
                     uploaded.append(.init(
                         url: url,
                         mediaType: item.kind == .video ? "video" : "image",

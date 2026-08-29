@@ -14,6 +14,7 @@ import {
 import type { PpiRequestStatus, SectionType } from "@/types/enums";
 import type { Database, Json } from "@/types/database";
 import { syncPartnerLifecycle } from "@/features/partner/events";
+import { uploadedUrlSchema } from "@/features/uploads/url";
 
 // ============================================================================
 // Helpers
@@ -769,7 +770,7 @@ export async function resubmitPpi(requestId: string) {
 const attachMediaSchema = z.object({
   ppi_section_id: z.string().uuid(),
   ppi_answer_id: z.string().uuid().optional(),
-  url: z.string().url(),
+  url: uploadedUrlSchema,
   media_type: z.enum(["image", "video"]),
   caption: z.string().optional(),
   captured_at: z.string().optional(),
