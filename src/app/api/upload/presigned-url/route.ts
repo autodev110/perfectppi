@@ -8,7 +8,13 @@ import { canUploadToTarget } from "@/features/uploads/access";
 const presignSchema = z.object({
   filename: z.string().min(1),
   contentType: z.string().min(1),
-  entity: z.enum(["ppi_media", "vehicle_media", "media_package"]),
+  entity: z.enum([
+    "ppi_media",
+    "vehicle_media",
+    "media_package",
+    "community_post",
+    "message_attachment",
+  ]),
   recordId: z.string().uuid(),
 });
 
@@ -45,7 +51,9 @@ export async function POST(request: Request) {
   const allowedTypes = [
     ...UPLOAD_LIMITS.allowedImageTypes,
     ...UPLOAD_LIMITS.allowedVideoTypes,
-    ...(parsed.data.entity === "media_package" ? UPLOAD_LIMITS.allowedFileTypes : []),
+    ...(parsed.data.entity === "media_package" || parsed.data.entity === "message_attachment"
+      ? UPLOAD_LIMITS.allowedFileTypes
+      : []),
   ];
   if (!(allowedTypes as string[]).includes(parsed.data.contentType)) {
     return NextResponse.json(

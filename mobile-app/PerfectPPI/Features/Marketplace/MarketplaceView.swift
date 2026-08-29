@@ -234,6 +234,7 @@ private struct MyListingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var reloadToken = UUID()
     @State private var showingCreate = false
+    @State private var editingListing: MarketplaceListing?
 
     var body: some View {
         AsyncContent(
@@ -250,7 +251,14 @@ private struct MyListingsView: View {
                     } else {
                         List(listings) { listing in
                             VStack(alignment: .leading, spacing: 8) {
-                                MarketplaceListingRow(listing: listing)
+                                NavigationLink {
+                                    MarketplaceListingDetailView(
+                                        listing: listing,
+                                        currentProfileId: listing.sellerId
+                                    )
+                                } label: {
+                                    MarketplaceListingRow(listing: listing)
+                                }
                                 HStack {
                                     StatusBadge(
                                         text: listing.status.rawValue.capitalized,
@@ -258,6 +266,9 @@ private struct MyListingsView: View {
                                     )
                                     Spacer()
                                     Menu {
+                                        Button("Edit", systemImage: "pencil") {
+                                            editingListing = listing
+                                        }
                                         Button("Mark Active") {
                                             Task { await update(listing, status: .active) }
                                         }
@@ -293,6 +304,11 @@ private struct MyListingsView: View {
                         reloadToken = UUID()
                     }
                 }
+                .sheet(item: $editingListing) { listing in
+                    EditListingView(listing: listing) {
+                        reloadToken = UUID()
+                    }
+                }
             },
             failure: { error, retry in
                 ErrorView(message: error.localizedDescription, retry: retry)
@@ -316,6 +332,80 @@ private struct MyListingsView: View {
         case .active: return Theme.Palette.success
         case .sold: return Theme.Palette.primary
         case .archived: return .secondary
+        }
+    }
+}
+
+private struct EditListingView: View {
+    @Environment(\.dismiss) private var dismiss
+    let listing: MarketplaceListing
+    let onSaved: () -> Void
+
+    @State private var title: String
+    @State private var description: String
+    @State private var askingPrice: String
+    @State private var location: String
+    @State private var saving = false
+    @State private var error: String?
+
+    init(listing: MarketplaceListing, onSaved: @escaping () -> Void) {
+        self.listing = listing
+        self.onSaved = onSaved
+        _title = State(initialValue: listing.title)
+        _description = State(initialValue: listing.description ?? "")
+        _askingPrice = State(initialValue: String(format: "%.0f", Double(listing.askingPriceCents) / 100))
+        _location = State(initialValue: listing.location ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Listing") {
+                    TextField("Title", text: $title)
+                    TextField("Asking price", text: $askingPrice)
+                        .keyboardType(.decimalPad)
+                    TextField("Location", text: $location)
+                    TextField("Description", text: $description, axis: .vertical)
+                        .lineLimit(3...8)
+                }
+                if let error {
+                    Text(error).foregroundStyle(Theme.Palette.danger)
+                }
+            }
+            .navigationTitle("Edit Listing")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "Saving..." : "Save") {
+                        Task { await save() }
+                    }
+                    .disabled(saving || Double(askingPrice) == nil)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        guard !saving, let price = Double(askingPrice), price > 0 else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            _ = try await MarketplaceAPI.update(
+                id: listing.id,
+                payload: .init(
+                    title: title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                    description: description.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                    askingPrice: price,
+                    location: location.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                )
+            )
+            onSaved()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

@@ -1,4 +1,8 @@
 import SwiftUI
+import AVKit
+import Photos
+import PhotosUI
+import UniformTypeIdentifiers
 
 struct MessagesView: View {
     let currentProfileId: String?
@@ -87,6 +91,10 @@ private struct ConversationRow: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+            } else if conversation.lastMessage?.hasAttachment == true {
+                Label("Sent an attachment", systemImage: "paperclip")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             } else {
                 Text("No messages yet")
                     .font(.caption)
@@ -119,6 +127,13 @@ struct MessageThreadView: View {
     @State private var error: Error?
     @State private var draft = ""
     @State private var sending = false
+    @State private var attachment: PickedAttachment?
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var showingPhotoPicker = false
+    @State private var showingCamera = false
+    @State private var showingFilePicker = false
+    @State private var composerError: String?
+    @State private var photoAccessBlocked = false
 
     var body: some View {
         Group {
@@ -145,16 +160,69 @@ struct MessageThreadView: View {
                     }
 
                     Divider()
-                    HStack(spacing: 10) {
-                        TextField("Message", text: $draft, axis: .vertical)
-                            .textFieldStyle(.roundedBorder)
-                            .lineLimit(1...4)
-                        Button {
-                            Task { await send() }
-                        } label: {
-                            Image(systemName: sending ? "hourglass" : "paperplane.fill")
+                    VStack(spacing: 8) {
+                        if let attachment {
+                            HStack {
+                                Image(systemName: attachment.kind == .video ? "video.fill" : attachment.kind == .image ? "photo.fill" : "doc.fill")
+                                    .foregroundStyle(Theme.Palette.primary)
+                                Text(attachment.filename)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                Spacer()
+                                Button {
+                                    self.attachment = nil
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(8)
+                            .background(Theme.Palette.subtle)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
-                        .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                        HStack(spacing: 10) {
+                            Menu {
+                                Button("Take Photo", systemImage: "camera") {
+                                    showingCamera = true
+                                }
+                                Button("Photo or Video", systemImage: "photo.on.rectangle") {
+                                    Task { await openPhotoLibrary() }
+                                }
+                                Button("Choose File", systemImage: "doc") {
+                                    showingFilePicker = true
+                                }
+                            } label: {
+                                Image(systemName: "paperclip")
+                                    .frame(width: 32, height: 32)
+                            }
+                            .disabled(sending)
+
+                            TextField("Message", text: $draft, axis: .vertical)
+                                .textFieldStyle(.roundedBorder)
+                                .lineLimit(1...4)
+                            Button {
+                                Task { await send() }
+                            } label: {
+                                Image(systemName: sending ? "hourglass" : "paperplane.fill")
+                            }
+                            .disabled(sending || (draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachment == nil))
+                        }
+
+                        if let composerError {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(composerError)
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.Palette.danger)
+                                if photoAccessBlocked {
+                                    Button("Open Settings") {
+                                        AttachmentPickerSupport.openSystemSettings()
+                                    }
+                                    .font(.caption.weight(.semibold))
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                     .padding()
                 }
@@ -168,6 +236,39 @@ struct MessageThreadView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
+        .photosPicker(
+            isPresented: $showingPhotoPicker,
+            selection: $pickerItem,
+            matching: .any(of: [.images, .videos])
+        )
+        .onChange(of: pickerItem) { _, item in
+            Task { await loadPickerItem(item) }
+        }
+        .fileImporter(
+            isPresented: $showingFilePicker,
+            allowedContentTypes: AttachmentPickerSupport.supportedFileTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            do {
+                guard let url = try result.get().first else { return }
+                attachment = try AttachmentPickerSupport.loadFile(url)
+                composerError = nil
+                photoAccessBlocked = false
+            } catch {
+                composerError = "That file could not be attached."
+                photoAccessBlocked = false
+            }
+        }
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraCaptureView(
+                prompt: "Attach a photo",
+                onCapture: { data in
+                    attachment = .cameraPhoto(data)
+                    showingCamera = false
+                },
+                onCancel: { showingCamera = false }
+            )
+        }
     }
 
     private var threadTitle: String {
@@ -190,15 +291,59 @@ struct MessageThreadView: View {
 
     private func send() async {
         let content = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty, !sending else { return }
+        let selectedAttachment = attachment
+        guard (!content.isEmpty || selectedAttachment != nil), !sending else { return }
         sending = true
         defer { sending = false }
         do {
-            _ = try await MessagesAPI.sendMessage(conversationId: conversationId, content: content)
+            var attachmentUrl: String?
+            if let selectedAttachment {
+                attachmentUrl = try await R2Uploader.upload(
+                    data: selectedAttachment.data,
+                    filename: selectedAttachment.filename,
+                    contentType: selectedAttachment.contentType,
+                    entity: "message_attachment",
+                    recordId: conversationId
+                )
+            }
+            _ = try await MessagesAPI.sendMessage(
+                conversationId: conversationId,
+                content: content,
+                attachmentUrl: attachmentUrl,
+                attachmentType: selectedAttachment?.contentType
+            )
             draft = ""
+            attachment = nil
+            composerError = nil
+            photoAccessBlocked = false
             await load()
         } catch {
-            self.error = error
+            composerError = error.localizedDescription
+            photoAccessBlocked = false
+        }
+    }
+
+    private func openPhotoLibrary() async {
+        let status = await AttachmentPickerSupport.requestPhotoAccess()
+        if status == .authorized || status == .limited {
+            photoAccessBlocked = false
+            showingPhotoPicker = true
+        } else {
+            composerError = "Photo access is off. Allow full or limited access to attach photos."
+            photoAccessBlocked = true
+        }
+    }
+
+    private func loadPickerItem(_ item: PhotosPickerItem?) async {
+        defer { pickerItem = nil }
+        guard let item else { return }
+        do {
+            attachment = try await AttachmentPickerSupport.load(item)
+            composerError = nil
+            photoAccessBlocked = false
+        } catch {
+            composerError = "That photo or video could not be attached."
+            photoAccessBlocked = false
         }
     }
 }
@@ -211,8 +356,14 @@ private struct MessageBubble: View {
         HStack {
             if isMine { Spacer(minLength: 44) }
             VStack(alignment: .leading, spacing: 4) {
-                Text(message.content)
-                    .font(.subheadline)
+                if !message.content.isEmpty {
+                    Text(message.content)
+                        .font(.subheadline)
+                }
+                if let urlString = message.attachmentUrl,
+                   let url = URL(string: urlString) {
+                    MessageAttachmentView(url: url, contentType: message.attachmentType)
+                }
                 if let created = message.createdAt {
                     Text(created, style: .time)
                         .font(.caption2)
@@ -224,6 +375,36 @@ private struct MessageBubble: View {
             .background(isMine ? Theme.Palette.primary : Theme.Palette.subtle)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             if !isMine { Spacer(minLength: 44) }
+        }
+    }
+}
+
+private struct MessageAttachmentView: View {
+    let url: URL
+    let contentType: String?
+
+    var body: some View {
+        Group {
+            if contentType?.hasPrefix("image/") == true {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image): image.resizable().scaledToFit()
+                    case .failure: Label("Image unavailable", systemImage: "photo")
+                    default: ProgressView()
+                    }
+                }
+                .frame(maxWidth: 260, maxHeight: 280)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else if contentType?.hasPrefix("video/") == true {
+                RemoteVideoPlayer(url: url)
+                    .frame(width: 250, height: 180)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                Link(destination: url) {
+                    Label("Open attachment", systemImage: "doc.fill")
+                        .font(.caption.weight(.semibold))
+                }
+            }
         }
     }
 }

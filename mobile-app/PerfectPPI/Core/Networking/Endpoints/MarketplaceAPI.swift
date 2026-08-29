@@ -56,6 +56,20 @@ enum MarketplaceAPI {
         )
     }
 
+    struct UpdatePayload: Encodable {
+        let title: String?
+        let description: String?
+        let askingPrice: Double
+        let location: String?
+    }
+
+    static func update(id: String, payload: UpdatePayload) async throws -> Empty {
+        try await APIClient.shared.patch(
+            "/api/marketplace/listings/\(id)",
+            body: payload
+        )
+    }
+
     static func contactSeller(listingId: String) async throws -> CreateConversationResult {
         try await APIClient.shared.post(
             "/api/marketplace/listings/\(listingId)/contact",

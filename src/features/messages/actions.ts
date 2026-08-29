@@ -14,9 +14,16 @@ const createConversationSchema = z.object({
 
 const sendMessageSchema = z.object({
   conversationId: z.string().uuid(),
-  content: z.string().trim().min(1).max(4000),
+  content: z.string().trim().max(4000),
   attachmentUrl: z.string().url().optional(),
   attachmentType: z.string().trim().min(1).max(255).optional(),
+}).superRefine((value, context) => {
+  if (!value.content && !value.attachmentUrl) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Add a message or attachment" });
+  }
+  if (value.attachmentUrl && !value.attachmentType) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Attachment type is required" });
+  }
 });
 
 async function getAuthProfile() {
@@ -241,9 +248,10 @@ export async function sendMessage(input: {
 
   if (recipients && recipients.length > 0) {
     const senderName = profile.display_name || "New message";
-    const preview = parsed.data.content.length > 100
-      ? `${parsed.data.content.slice(0, 100)}...`
-      : parsed.data.content;
+    const notificationText = parsed.data.content || "Sent an attachment";
+    const preview = notificationText.length > 100
+      ? `${notificationText.slice(0, 100)}...`
+      : notificationText;
 
     await admin.from("notifications").insert(
       recipients.map((r) => ({

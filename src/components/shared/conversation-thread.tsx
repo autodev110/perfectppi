@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { markConversationRead, sendMessage } from "@/features/messages/actions";
+import { uploadFile } from "@/features/uploads/client";
 import {
   conversationPeopleLabel,
   listingCarLabel,
@@ -16,7 +17,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime, formatRelativeTime, getInitials } from "@/lib/utils/formatting";
-import { ArrowLeft, Car, Radio, SendHorizontal, CheckCheck, Check } from "lucide-react";
+import { ArrowLeft, Car, Radio, SendHorizontal, CheckCheck, Check, FileText, Paperclip, X } from "lucide-react";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 
@@ -89,10 +90,12 @@ export function ConversationThread({
   const [messages, setMessages] = useState<MessageRow[]>(initialMessages);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [attachment, setAttachment] = useState<File | null>(null);
   const [isPending, startTransition] = useTransition();
   const [liveConnected, setLiveConnected] = useState(false);
   const [flashedMessageId, setFlashedMessageId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const threadScrollRef = useRef<HTMLDivElement | null>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const hasScrolledToHighlight = useRef(false);
@@ -251,36 +254,51 @@ export function ConversationThread({
 
   function handleSend() {
     const content = draft.trim();
-    if (!content || isPending) return;
+    if ((!content && !attachment) || isPending) return;
 
     setError(null);
-
-    const tempId = `temp-${Date.now()}`;
-    const optimistic: MessageRow = {
-      id: tempId,
-      conversation_id: conversationId,
-      sender_id: myProfileId,
-      content,
-      has_attachment: false,
-      attachment_url: null,
-      attachment_type: null,
-      status: "unread",
-      created_at: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, optimistic]);
-    setDraft("");
-    textareaRef.current?.focus();
+    const selectedAttachment = attachment;
 
     startTransition(async () => {
+      let attachmentUrl: string | undefined;
+      try {
+        if (selectedAttachment) {
+          attachmentUrl = await uploadFile(selectedAttachment, "message_attachment", conversationId);
+        }
+      } catch (uploadError) {
+        setError(uploadError instanceof Error ? uploadError.message : "Failed to upload attachment");
+        return;
+      }
+
+      const tempId = `temp-${Date.now()}`;
+      const optimistic: MessageRow = {
+        id: tempId,
+        conversation_id: conversationId,
+        sender_id: myProfileId,
+        content,
+        has_attachment: Boolean(attachmentUrl),
+        attachment_url: attachmentUrl ?? null,
+        attachment_type: selectedAttachment?.type ?? null,
+        status: "unread",
+        created_at: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, optimistic]);
+      setDraft("");
+      setAttachment(null);
+      textareaRef.current?.focus();
+
       const result = await sendMessage({
         conversationId,
         content,
+        attachmentUrl,
+        attachmentType: selectedAttachment?.type,
       });
 
       if ("error" in result) {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         setDraft(content);
+        setAttachment(selectedAttachment);
         setError(result.error ?? "Failed to send message");
         return;
       }
@@ -414,16 +432,21 @@ export function ConversationThread({
                                     : "bg-surface-container-lowest text-foreground ring-1 ring-outline-variant/20"
                                 } ${isTemp ? "opacity-70" : ""}`}
                               >
-                                <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                                {message.content ? <p className="whitespace-pre-wrap break-words">{message.content}</p> : null}
                                 {message.has_attachment && message.attachment_url ? (
-                                  <a
-                                    href={message.attachment_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="mt-1.5 inline-block text-[11px] font-semibold underline underline-offset-2"
-                                  >
-                                    View attachment
-                                  </a>
+                                  message.attachment_type?.startsWith("image/") ? (
+                                    <a href={message.attachment_url} target="_blank" rel="noopener noreferrer" className="mt-2 block overflow-hidden rounded-lg">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={message.attachment_url} alt="Message attachment" className="max-h-72 w-full object-cover" />
+                                    </a>
+                                  ) : message.attachment_type?.startsWith("video/") ? (
+                                    <video src={message.attachment_url} controls playsInline preload="metadata" className="mt-2 max-h-72 w-full rounded-lg" />
+                                  ) : (
+                                    <a href={message.attachment_url} target="_blank" rel="noopener noreferrer" className="mt-2 flex items-center gap-2 rounded-lg bg-black/10 px-3 py-2 text-[11px] font-semibold underline underline-offset-2">
+                                      <FileText className="h-4 w-4" />
+                                      Open attachment
+                                    </a>
+                                  )
                                 ) : null}
                               </div>
                               {lastOfRun ? (
@@ -457,7 +480,34 @@ export function ConversationThread({
             {error ? (
               <p className="mb-2 text-xs font-medium text-destructive">{error}</p>
             ) : null}
+            {attachment ? (
+              <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-outline-variant/20 bg-surface-container-low px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold">{attachment.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{Math.ceil(attachment.size / 1024)} KB</p>
+                </div>
+                <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setAttachment(null)} aria-label="Remove attachment">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : null}
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              className="sr-only"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={(event) => {
+                const picked = event.target.files?.[0];
+                // An empty selection means the picker was dismissed — keep
+                // whatever was already staged instead of clearing it.
+                if (picked) setAttachment(picked);
+                event.currentTarget.value = "";
+              }}
+            />
             <div className="flex items-end gap-2">
+              <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 rounded-xl" onClick={() => attachmentInputRef.current?.click()} disabled={isPending} aria-label="Add attachment">
+                <Paperclip className="h-4 w-4" />
+              </Button>
               <Textarea
                 ref={textareaRef}
                 value={draft}
@@ -469,7 +519,7 @@ export function ConversationThread({
               />
               <Button
                 onClick={handleSend}
-                disabled={isPending || !draft.trim()}
+                disabled={isPending || (!draft.trim() && !attachment)}
                 size="icon"
                 className="h-11 w-11 shrink-0 rounded-xl"
                 aria-label="Send message"

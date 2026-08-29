@@ -19,6 +19,8 @@ const createListingSchema = z.object({
   location: z.string().trim().max(120).optional().or(z.literal("")),
 });
 
+const updateListingSchema = createListingSchema.omit({ vehicle_id: true });
+
 const listingStatusSchema = z.enum(["active", "sold", "archived"]);
 const contactSellerSchema = z.object({
   listingId: z.string().uuid(),
@@ -139,6 +141,44 @@ export async function updateMarketplaceListingStatus(
   if (data?.vehicle_id) revalidatePath(`/vehicle/${data.vehicle_id}`);
 
   return { success: true };
+}
+
+export async function updateMarketplaceListing(formData: FormData) {
+  const listingId = String(formData.get("listing_id") ?? "");
+  return updateMarketplaceListingFromInput(listingId, Object.fromEntries(formData.entries()));
+}
+
+export async function updateMarketplaceListingFromInput(listingId: string, input: unknown) {
+  const parsedId = z.string().uuid().safeParse(listingId);
+  const parsed = updateListingSchema.safeParse(input);
+  if (!parsedId.success) return { error: "Invalid listing" };
+  if (!parsed.success) return { error: parsed.error.errors[0].message };
+
+  const profile = await getCurrentProfileId();
+  if ("error" in profile) return { error: profile.error };
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("marketplace_listings")
+    .update({
+      title: parsed.data.title || "Vehicle for sale",
+      description: parsed.data.description || null,
+      asking_price_cents: Math.round(parsed.data.asking_price * 100),
+      location: parsed.data.location || null,
+    })
+    .eq("id", parsedId.data)
+    .eq("seller_id", profile.profileId)
+    .select("id, vehicle_id")
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  if (!data) return { error: "Listing not found" };
+
+  revalidatePath("/marketplace");
+  revalidatePath("/dashboard/listings");
+  revalidatePath(`/dashboard/listings/${data.id}/edit`);
+  revalidatePath(`/vehicle/${data.vehicle_id}`);
+  return { data };
 }
 
 async function updateListingStatusFromForm(

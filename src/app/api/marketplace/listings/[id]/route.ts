@@ -2,10 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiRole } from "@/features/auth/api";
 import { getMarketplaceListing } from "@/features/marketplace/queries";
-import { updateMarketplaceListingStatus } from "@/features/marketplace/actions";
+import {
+  updateMarketplaceListingFromInput,
+  updateMarketplaceListingStatus,
+} from "@/features/marketplace/actions";
 
 const statusSchema = z.object({
   status: z.enum(["active", "sold", "archived"]),
+});
+
+const detailsSchema = z.object({
+  title: z.string().trim().max(120).optional().or(z.literal("")),
+  description: z.string().trim().max(1200).optional().or(z.literal("")),
+  asking_price: z.coerce.number().positive().max(10_000_000),
+  location: z.string().trim().max(120).optional().or(z.literal("")),
 });
 
 export async function GET(
@@ -31,13 +41,13 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json().catch(() => null);
-  const parsed = statusSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid listing status" }, { status: 400 });
-  }
-
-  const result = await updateMarketplaceListingStatus(id, parsed.data.status);
+  const parsedStatus = statusSchema.safeParse(body);
+  const parsedDetails = detailsSchema.safeParse(body);
+  const result = parsedStatus.success
+    ? await updateMarketplaceListingStatus(id, parsedStatus.data.status)
+    : parsedDetails.success
+      ? await updateMarketplaceListingFromInput(id, parsedDetails.data)
+      : { error: "Invalid listing update" };
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }

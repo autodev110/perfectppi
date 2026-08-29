@@ -51,9 +51,9 @@ targets:
         # UIBackgroundModes:
         #   - remote-notification
         NSBluetoothAlwaysUsageDescription: PerfectPPI uses Bluetooth to connect to the OBDLink CX adapter and pull diagnostic data from the vehicle.
-        NSCameraUsageDescription: PerfectPPI uses the camera so technicians can attach photos to inspection questions.
-        NSPhotoLibraryUsageDescription: PerfectPPI lets you pick existing photos to attach to inspection questions.
-        NSPhotoLibraryAddUsageDescription: PerfectPPI saves inspection photos you capture to your photo library.
+        NSCameraUsageDescription: PerfectPPI uses the camera to scan VINs and attach photos to inspections, posts, and messages.
+        NSPhotoLibraryUsageDescription: PerfectPPI lets you choose photos and videos for inspections, posts, and message attachments.
+        NSPhotoLibraryAddUsageDescription: PerfectPPI can save photos you capture to your photo library.
         NSFaceIDUsageDescription: Face ID unlocks PerfectPPI without re-entering your password.
         ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:

@@ -154,6 +154,54 @@ export type Database = {
           },
         ]
       }
+      community_post_media: {
+        Row: {
+          content_type: string
+          created_at: string
+          id: string
+          media_type: Database["public"]["Enums"]["community_media_type"]
+          post_id: string
+          sort_order: number
+          uploader_id: string
+          url: string
+        }
+        Insert: {
+          content_type: string
+          created_at?: string
+          id?: string
+          media_type: Database["public"]["Enums"]["community_media_type"]
+          post_id: string
+          sort_order: number
+          uploader_id: string
+          url: string
+        }
+        Update: {
+          content_type?: string
+          created_at?: string
+          id?: string
+          media_type?: Database["public"]["Enums"]["community_media_type"]
+          post_id?: string
+          sort_order?: number
+          uploader_id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_post_media_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_post_media_uploader_id_fkey"
+            columns: ["uploader_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contracts: {
         Row: {
           created_at: string
@@ -2524,6 +2572,7 @@ export type Database = {
         | "submission_resubmitted"
       certification_level: "none" | "ase" | "master" | "oem_qualified"
       community_content_status: "active" | "hidden" | "archived"
+      community_media_type: "image" | "video"
       completion_state: "not_started" | "in_progress" | "completed"
       device_env: "prod" | "sandbox"
       device_platform: "ios" | "android"
@@ -2729,6 +2778,7 @@ export const Constants = {
       ],
       certification_level: ["none", "ase", "master", "oem_qualified"],
       community_content_status: ["active", "hidden", "archived"],
+      community_media_type: ["image", "video"],
       completion_state: ["not_started", "in_progress", "completed"],
       device_env: ["prod", "sandbox"],
       device_platform: ["ios", "android"],

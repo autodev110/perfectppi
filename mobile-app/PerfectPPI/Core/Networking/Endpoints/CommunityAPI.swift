@@ -22,8 +22,30 @@ enum CommunityAPI {
         let listingId: String?
     }
 
-    static func createPost(_ payload: CreatePostPayload) async throws -> Empty {
+    struct CreatePostResponse: Decodable {
+        let id: String
+    }
+
+    static func createPost(_ payload: CreatePostPayload) async throws -> CreatePostResponse {
         try await APIClient.shared.postCamel("/api/community/posts", body: payload)
+    }
+
+    struct MediaItemPayload: Encodable {
+        let url: String
+        let mediaType: String
+        let contentType: String
+        let sortOrder: Int
+    }
+
+    struct AddMediaPayload: Encodable {
+        let items: [MediaItemPayload]
+    }
+
+    static func addMedia(postId: String, items: [MediaItemPayload]) async throws -> [CommunityPostMedia] {
+        try await APIClient.shared.postCamel(
+            "/api/community/posts/\(postId)/media",
+            body: AddMediaPayload(items: items)
+        )
     }
 
     struct StatusPayload: Encodable {

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate, formatMileage, getInitials } from "@/lib/utils/formatting";
 import { Car, MessageSquare, Plus, Tag, Users } from "lucide-react";
+import { PostMediaCarousel } from "@/components/shared/post-media-carousel";
 
 export const metadata = {
   title: "Community — PerfectPPI",
@@ -94,6 +95,8 @@ export default async function CommunityPage() {
                       {post.content}
                     </p>
                   </div>
+
+                  <PostMediaCarousel media={post.media} />
 
                   {post.vehicle && (
                     <Link

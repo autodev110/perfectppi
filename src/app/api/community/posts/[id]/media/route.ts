@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
-import { createCommunityPostFromInput } from "@/features/community/actions";
-import { getCommunityPosts } from "@/features/community/queries";
+import { addCommunityPostMedia } from "@/features/community/actions";
 
-export async function GET() {
-  const data = await getCommunityPosts();
-  return NextResponse.json({ data });
-}
-
-export async function POST(req: NextRequest) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const auth = await requireApiRole(["consumer", "technician", "org_manager", "admin"]);
   if ("response" in auth) return auth.response;
 
+  const { id } = await params;
   const body = await req.json().catch(() => null);
-  const result = await createCommunityPostFromInput(body);
+  const result = await addCommunityPostMedia({
+    postId: id,
+    items: body?.items,
+  });
 
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: 400 });

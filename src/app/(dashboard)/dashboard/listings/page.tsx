@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency, formatDate, formatMileage } from "@/lib/utils/formatting";
-import { Car, ExternalLink, Gauge, Plus, Tag } from "lucide-react";
+import { Car, ExternalLink, Gauge, Pencil, Plus, Tag } from "lucide-react";
 
 const STATUS_BADGE: Record<string, string> = {
   active: "bg-teal/10 text-teal border-teal/20",
@@ -56,6 +56,14 @@ export default async function DashboardListingsPage() {
             const vehicle = listing.vehicle;
             const primaryMedia = vehicle?.vehicle_media?.find((media) => media.is_primary) ?? vehicle?.vehicle_media?.[0];
             const vehicleName = [vehicle?.year, vehicle?.make, vehicle?.model].filter(Boolean).join(" ") || listing.title;
+            // The public vehicle page 404s on private vehicles and only renders
+            // the marketplace tab for the active listing — send the row to the
+            // editor instead of a dead end when neither holds.
+            const publicHref =
+              listing.status === "active" && vehicle?.visibility === "public"
+                ? `/vehicle/${listing.vehicle_id}?tab=marketplace`
+                : null;
+            const editHref = `/dashboard/listings/${listing.id}/edit`;
 
             return (
               <Card key={listing.id} className="overflow-hidden">
@@ -63,7 +71,15 @@ export default async function DashboardListingsPage() {
                   <div className="flex flex-col sm:flex-row">
                     {/* Fixed box + absolutely positioned image: a tall source
                         photo must not be able to stretch the row. */}
-                    <div className="relative h-44 w-full shrink-0 overflow-hidden bg-muted sm:h-auto sm:min-h-44 sm:w-48">
+                    <Link
+                      href={publicHref ?? editHref}
+                      aria-label={
+                        publicHref
+                          ? `Open ${listing.title} marketplace listing`
+                          : `Edit ${listing.title}`
+                      }
+                      className="relative h-44 w-full shrink-0 overflow-hidden bg-muted sm:h-auto sm:min-h-44 sm:w-48"
+                    >
                       {primaryMedia ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -76,13 +92,18 @@ export default async function DashboardListingsPage() {
                           <Car className="h-10 w-10 text-muted-foreground/40" />
                         </div>
                       )}
-                    </div>
+                    </Link>
 
                     <div className="min-w-0 flex-1 p-5 space-y-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
                           <h2 className="font-heading text-lg font-bold tracking-tight break-words">
-                            {listing.title}
+                            <Link
+                              href={publicHref ?? editHref}
+                              className="hover:text-primary transition-colors"
+                            >
+                              {listing.title}
+                            </Link>
                           </h2>
                           <p className="text-sm text-muted-foreground break-words">{vehicleName}</p>
                         </div>
@@ -105,12 +126,20 @@ export default async function DashboardListingsPage() {
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" asChild>
-                          <Link href={`/vehicle/${listing.vehicle_id}?tab=marketplace`}>
-                            <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                            Public Page
+                        <Button size="sm" asChild>
+                          <Link href={editHref}>
+                            <Pencil className="mr-2 h-3.5 w-3.5" />
+                            Edit
                           </Link>
                         </Button>
+                        {publicHref && (
+                          <Button size="sm" variant="outline" asChild>
+                            <Link href={publicHref}>
+                              <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                              Public Page
+                            </Link>
+                          </Button>
+                        )}
                         {listing.status === "active" ? (
                           <>
                             <form action={markMarketplaceListingSold}>

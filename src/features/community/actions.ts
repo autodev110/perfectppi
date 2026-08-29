@@ -12,6 +12,18 @@ const postSchema = z.object({
   listingId: z.string().uuid().optional().nullable(),
 });
 
+const MAX_POST_MEDIA = 10;
+
+const postMediaSchema = z.object({
+  postId: z.string().uuid(),
+  items: z.array(z.object({
+    url: z.string().url(),
+    mediaType: z.enum(["image", "video"]),
+    contentType: z.string().regex(/^(image|video)\//),
+    sortOrder: z.number().int().min(0).max(MAX_POST_MEDIA - 1),
+  })).min(1).max(MAX_POST_MEDIA),
+});
+
 const commentSchema = z.object({
   postId: z.string().uuid(),
   content: z.string().trim().min(1, "Write a comment first").max(600),
@@ -88,21 +100,77 @@ export async function createCommunityPostFromInput(input: unknown) {
     }
   }
 
-  const { error } = await admin.from("community_posts").insert({
+  const { data, error } = await admin.from("community_posts").insert({
     author_id: profile.profileId,
     vehicle_id: vehicleId,
     marketplace_listing_id: listingId,
     content: parsed.data.content,
     status: "active",
-  });
+  }).select("id").single();
+
+  if (error || !data) return { error: error?.message ?? "Could not create post" };
+
+  revalidatePath("/community");
+  revalidatePath("/dashboard/posts");
+  revalidatePath("/admin/community");
+
+  return { data };
+}
+
+export async function addCommunityPostMedia(input: unknown) {
+  const parsed = postMediaSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.errors[0].message };
+
+  const profile = await getCurrentProfileId();
+  if ("error" in profile) return { error: profile.error };
+
+  const admin = createAdminClient();
+  const { data: post } = await admin
+    .from("community_posts")
+    .select("id, author_id")
+    .eq("id", parsed.data.postId)
+    .maybeSingle();
+
+  if (!post || post.author_id !== profile.profileId) {
+    return { error: "Post not found" };
+  }
+
+  // The 10-item cap is per post, not per request, and `sort_order` is unique
+  // per post — so derive the slot server-side instead of trusting the client's
+  // indexes, which would collide on a second call.
+  const { count } = await admin
+    .from("community_post_media")
+    .select("id", { count: "exact", head: true })
+    .eq("post_id", post.id);
+
+  const existing = count ?? 0;
+  if (existing + parsed.data.items.length > MAX_POST_MEDIA) {
+    return { error: `Posts can include up to ${MAX_POST_MEDIA} photos or videos` };
+  }
+
+  const rows = [...parsed.data.items]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((item, index) => ({
+      post_id: post.id,
+      uploader_id: profile.profileId,
+      url: item.url,
+      media_type: item.mediaType,
+      content_type: item.contentType,
+      sort_order: existing + index,
+    }));
+
+  const { data, error } = await admin
+    .from("community_post_media")
+    .insert(rows)
+    .select("*")
+    .order("sort_order", { ascending: true });
 
   if (error) return { error: error.message };
 
   revalidatePath("/community");
   revalidatePath("/dashboard/posts");
   revalidatePath("/admin/community");
-
-  return { success: true };
+  return { data: data ?? [] };
 }
 
 export async function createCommunityComment(formData: FormData) {

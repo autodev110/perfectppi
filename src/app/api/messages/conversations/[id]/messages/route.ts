@@ -4,9 +4,11 @@ import { sendMessage } from "@/features/messages/actions";
 import { z } from "zod";
 
 const sendMessageSchema = z.object({
-  content: z.string().trim().min(1).max(4000),
+  content: z.string().trim().max(4000),
   attachmentUrl: z.string().url().optional(),
   attachmentType: z.string().trim().min(1).max(255).optional(),
+}).refine((value) => Boolean(value.content || value.attachmentUrl), {
+  message: "Add a message or attachment",
 });
 
 // POST /api/messages/conversations/[id]/messages — send a message in a conversation

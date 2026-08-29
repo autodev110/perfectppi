@@ -13,6 +13,7 @@ type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"] & {
 };
 type Listing = Database["public"]["Tables"]["marketplace_listings"]["Row"];
 type CommunityPostRow = Database["public"]["Tables"]["community_posts"]["Row"];
+type CommunityPostMediaRow = Database["public"]["Tables"]["community_post_media"]["Row"];
 type CommunityCommentRow = Database["public"]["Tables"]["community_comments"]["Row"];
 
 export type CommunityComment = CommunityCommentRow & {
@@ -23,6 +24,7 @@ export type CommunityPost = CommunityPostRow & {
   author: Profile | null;
   vehicle: Vehicle | null;
   marketplace_listing: Listing | null;
+  media: CommunityPostMediaRow[];
   comments: CommunityComment[];
 };
 
@@ -43,6 +45,7 @@ const COMMUNITY_POST_SELECT = `
   author:profiles!community_posts_author_id_fkey(id, display_name, username, avatar_url, is_public),
   vehicle:vehicles!community_posts_vehicle_id_fkey(*, vehicle_media(*)),
   marketplace_listing:marketplace_listings!community_posts_marketplace_listing_id_fkey(*),
+  media:community_post_media!community_post_media_post_id_fkey(*),
   comments:community_comments!community_comments_post_id_fkey(
     *,
     author:profiles!community_comments_author_id_fkey(id, display_name, username, avatar_url, is_public)
@@ -61,6 +64,7 @@ function getProfileIdFromAuthUserId(authUserId: string) {
 function cleanPosts(posts: CommunityPost[]) {
   return posts.map((post) => ({
     ...post,
+    media: [...(post.media ?? [])].sort((a, b) => a.sort_order - b.sort_order),
     comments: (post.comments ?? []).filter((comment) => comment.status === "active"),
   }));
 }

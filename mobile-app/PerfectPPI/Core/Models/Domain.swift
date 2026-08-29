@@ -112,7 +112,19 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let author: Profile?
     let vehicle: Vehicle?
     let marketplaceListing: MarketplaceListing?
+    let media: [CommunityPostMedia]?
     let comments: [CommunityComment]?
+}
+
+struct CommunityPostMedia: Codable, Identifiable, Hashable {
+    let id: String
+    let postId: String
+    let uploaderId: String
+    let url: String
+    let mediaType: String
+    let contentType: String
+    let sortOrder: Int
+    let createdAt: Date?
 }
 
 struct CommunityComment: Codable, Identifiable, Hashable {

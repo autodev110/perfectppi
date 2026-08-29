@@ -171,6 +171,11 @@ export async function getMyMarketplaceListings() {
   return (data ?? []) as MarketplaceListing[];
 }
 
+export async function getMyMarketplaceListing(listingId: string) {
+  const listings = await getMyMarketplaceListings();
+  return listings.find((listing) => listing.id === listingId) ?? null;
+}
+
 export async function getAdminMarketplaceListings(page = 1, perPage = 50) {
   const supabase = createAdminClient();
   const from = (page - 1) * perPage;

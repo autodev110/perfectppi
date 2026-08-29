@@ -6,7 +6,13 @@ import { UPLOAD_LIMITS } from "@/config/constants";
 import { canUploadToTarget } from "@/features/uploads/access";
 
 const uploadSchema = z.object({
-  entity: z.enum(["ppi_media", "vehicle_media", "media_package"]),
+  entity: z.enum([
+    "ppi_media",
+    "vehicle_media",
+    "media_package",
+    "community_post",
+    "message_attachment",
+  ]),
   recordId: z.string().uuid(),
 });
 
@@ -54,7 +60,7 @@ export async function POST(request: Request) {
   const allowedImageTypes = [...UPLOAD_LIMITS.allowedImageTypes] as string[];
   const allowedVideoTypes = [...UPLOAD_LIMITS.allowedVideoTypes] as string[];
   const allowedFileTypes =
-    parsed.data.entity === "media_package"
+    parsed.data.entity === "media_package" || parsed.data.entity === "message_attachment"
       ? ([...UPLOAD_LIMITS.allowedFileTypes] as string[])
       : [];
   const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes, ...allowedFileTypes];

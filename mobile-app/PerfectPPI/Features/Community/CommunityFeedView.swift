@@ -1,4 +1,7 @@
 import SwiftUI
+import AVKit
+import Photos
+import PhotosUI
 
 struct CommunityFeedView: View {
     @State private var reloadToken = UUID()
@@ -75,6 +78,12 @@ private struct CommunityPostRow: View {
                 .foregroundStyle(.primary.opacity(0.9))
                 .lineLimit(4)
 
+            if let media = post.media, !media.isEmpty {
+                CommunityMediaCarousel(media: media)
+                    .frame(height: 230)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+
             if let listing = post.marketplaceListing {
                 Label(listing.title, systemImage: "tag.fill")
                     .font(.caption.weight(.medium))
@@ -135,6 +144,11 @@ private struct CommunityPostDetailView: View {
                         .font(.headline)
                     Text(post.content)
                         .font(.body)
+                    if let media = post.media, !media.isEmpty {
+                        CommunityMediaCarousel(media: media)
+                            .frame(height: 320)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
                     if let vehicle = post.vehicle {
                         VehicleMiniCard(vehicle: vehicle)
                     }
@@ -226,6 +240,14 @@ private struct NewCommunityPostView: View {
     @State private var selectedListingId = ""
     @State private var saving = false
     @State private var error: String?
+    @State private var media: [PickedAttachment] = []
+    @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var showingPhotoPicker = false
+    @State private var showingCamera = false
+    @State private var photoAccessBlocked = false
+    /// A failed media upload leaves the post already created — a retry has to
+    /// attach to that post instead of publishing a second one.
+    @State private var createdPostId: String?
 
     var body: some View {
         NavigationStack {
@@ -254,8 +276,46 @@ private struct NewCommunityPostView: View {
                             }
                         }
 
+                        Section("Photos and videos (\(media.count)/10)") {
+                            Button {
+                                Task { await openPhotoLibrary() }
+                            } label: {
+                                Label("Choose Photos or Videos", systemImage: "photo.on.rectangle.angled")
+                            }
+                            .disabled(media.count >= 10)
+
+                            Button {
+                                showingCamera = true
+                            } label: {
+                                Label("Take Photo", systemImage: "camera")
+                            }
+                            .disabled(media.count >= 10)
+
+                            ForEach(media) { item in
+                                HStack {
+                                    Image(systemName: item.kind == .video ? "video.fill" : "photo.fill")
+                                        .foregroundStyle(Theme.Palette.primary)
+                                    Text(item.filename).lineLimit(1)
+                                    Spacer()
+                                    Button(role: .destructive) {
+                                        media.removeAll { $0.id == item.id }
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                }
+                            }
+                        }
+
                         if let error {
-                            Text(error).foregroundStyle(Theme.Palette.danger)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(error).foregroundStyle(Theme.Palette.danger)
+                                if photoAccessBlocked {
+                                    Button("Open Settings") {
+                                        AttachmentPickerSupport.openSystemSettings()
+                                    }
+                                    .font(.caption.weight(.semibold))
+                                }
+                            }
                         }
                     }
                 },
@@ -276,6 +336,49 @@ private struct NewCommunityPostView: View {
                     .disabled(saving || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+            .photosPicker(
+                isPresented: $showingPhotoPicker,
+                selection: $pickerItems,
+                maxSelectionCount: max(1, 10 - media.count),
+                matching: .any(of: [.images, .videos])
+            )
+            .onChange(of: pickerItems) { _, items in
+                Task { await loadPickerItems(items) }
+            }
+            .fullScreenCover(isPresented: $showingCamera) {
+                CameraCaptureView(
+                    prompt: "Add a photo to your post",
+                    onCapture: { data in
+                        media.append(.cameraPhoto(data))
+                        showingCamera = false
+                    },
+                    onCancel: { showingCamera = false }
+                )
+            }
+        }
+    }
+
+    private func openPhotoLibrary() async {
+        let status = await AttachmentPickerSupport.requestPhotoAccess()
+        if status == .authorized || status == .limited {
+            photoAccessBlocked = false
+            showingPhotoPicker = true
+        } else {
+            error = "Photo access is off. Allow full or limited access to add photos."
+            photoAccessBlocked = true
+        }
+    }
+
+    private func loadPickerItems(_ items: [PhotosPickerItem]) async {
+        defer { pickerItems = [] }
+        for item in items.prefix(max(0, 10 - media.count)) {
+            do {
+                media.append(try await AttachmentPickerSupport.load(item))
+                photoAccessBlocked = false
+            } catch {
+                self.error = "One selected item could not be loaded."
+                photoAccessBlocked = false
+            }
         }
     }
 
@@ -287,17 +390,43 @@ private struct NewCommunityPostView: View {
         do {
             let listingId = selectedListingId.isEmpty ? nil : selectedListingId
             let vehicleId = selectedVehicleId.isEmpty ? nil : selectedVehicleId
-            _ = try await CommunityAPI.createPost(
-                .init(
-                    content: trimmed,
-                    vehicleId: listingId == nil ? vehicleId : nil,
-                    listingId: listingId
-                )
-            )
+            let postId: String
+            if let createdPostId {
+                postId = createdPostId
+            } else {
+                postId = try await CommunityAPI.createPost(
+                    .init(
+                        content: trimmed,
+                        vehicleId: listingId == nil ? vehicleId : nil,
+                        listingId: listingId
+                    )
+                ).id
+                createdPostId = postId
+            }
+            if !media.isEmpty {
+                var uploaded: [CommunityAPI.MediaItemPayload] = []
+                for (index, item) in media.enumerated() {
+                    let url = try await R2Uploader.upload(
+                        data: item.data,
+                        filename: item.filename,
+                        contentType: item.contentType,
+                        entity: "community_post",
+                        recordId: postId
+                    )
+                    uploaded.append(.init(
+                        url: url,
+                        mediaType: item.kind == .video ? "video" : "image",
+                        contentType: item.contentType,
+                        sortOrder: index
+                    ))
+                }
+                _ = try await CommunityAPI.addMedia(postId: postId, items: uploaded)
+            }
             onCreated()
             dismiss()
         } catch {
             self.error = error.localizedDescription
+            photoAccessBlocked = false
         }
     }
 
@@ -305,6 +434,33 @@ private struct NewCommunityPostView: View {
         let parts = [vehicle.year.map(String.init), vehicle.make, vehicle.model, vehicle.trim]
             .compactMap { $0 }
         return parts.isEmpty ? "Vehicle" : parts.joined(separator: " ")
+    }
+}
+
+private struct CommunityMediaCarousel: View {
+    let media: [CommunityPostMedia]
+
+    var body: some View {
+        TabView {
+            ForEach(media.sorted(by: { $0.sortOrder < $1.sortOrder })) { item in
+                ZStack(alignment: .topTrailing) {
+                    Color.black
+                    if item.mediaType == "video", let url = URL(string: item.url) {
+                        RemoteVideoPlayer(url: url)
+                    } else if let url = URL(string: item.url) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let image): image.resizable().scaledToFit()
+                            case .failure: Image(systemName: "photo").foregroundStyle(.white.opacity(0.6))
+                            default: ProgressView().tint(.white)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: media.count > 1 ? .always : .never))
+        .background(.black)
     }
 }
 
