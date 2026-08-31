@@ -1,6 +1,6 @@
 # Social Media User Image Upload Compliance Brainstorm
 
-**Status:** MVP implemented; production configuration and legal review pending
+**Status:** Hardened MVP implemented; production configuration, specialist illegal-content detection, and legal review pending
 
 This is the only active product plan currently tracked for PerfectPPI. The OBD
 tool, native iOS app, and PerfectPPI side of the DealerSpace integration are
@@ -12,7 +12,7 @@ Purpose: define a practical moderation system for PerfectPPI community posts, co
 
 This is a product and engineering brainstorming note, not legal advice. The final policy, enforcement wording, retention rules, and reporting obligations should be reviewed by counsel before launch.
 
-## Implementation Status (2026-08-31)
+## Implementation Status (2026-09-01)
 
 Phases 1 through 3 of the MVP are implemented in PerfectPPI:
 
@@ -23,8 +23,12 @@ Phases 1 through 3 of the MVP are implemented in PerfectPPI:
 - Administrators have a protected moderation queue with approve, reject, legal-hold, warning, temporary hold, and suspension actions.
 - Web and iOS clients show pending-review outcomes instead of presenting held content as published.
 - Direct authenticated database writes to community content are revoked so clients cannot bypass the server moderation flow.
+- Uploads are bound to server-side owner/post/type/size reservations, scan buffering is bounded, and storage cleanup is retryable.
+- Review decisions, appeals, reports, events, and enforcement updates use atomic database functions; legal-hold deletion is blocked by database triggers.
+- Legal-hold decisions require a separately designated reviewer, and suspected evidence retains a private storage reference.
+- Web and iOS expose enforcement notices and held/rejected posts; iOS users can submit appeals.
 
-Production rollout still requires applying the moderation migration, configuring `OPENAI_API_KEY` and private/public R2 storage, and completing counsel review of legal-hold, evidence retention, moderator access, enforcement language, and reporting obligations. Phase 4 model improvements remain future work.
+Production rollout still requires applying the moderation migration, configuring `OPENAI_API_KEY`, private/public R2 storage, cron secrets, and at least one designated legal-hold reviewer. Counsel must approve legal-hold retention, reviewer access, enforcement language, and reporting obligations. The general moderation model does not identify minors in images; sexually flagged images are conservatively locked for restricted review, but launch still requires a specialist illegal-content/hash-matching provider and counsel-approved reporting workflow. Phase 4 model improvements and full operational metrics remain future work.
 
 ## Current Project Surface
 
@@ -488,7 +492,7 @@ Tasks:
 5. Promote approved uploads to public/approved path.
 6. Show upload state: scanning, approved, rejected, pending review.
 
-### Phase 3: Better Review And Enforcement (Implemented)
+### Phase 3: Better Review And Enforcement (Core Implemented; Metrics Pending)
 
 Goal: reduce manual work without losing control.
 

@@ -25,6 +25,7 @@ enum R2Uploader {
                 PresignedUploadRequest(
                     filename: filename,
                     contentType: contentType,
+                    size: data.count,
                     entity: entity,
                     recordId: recordId
                 )

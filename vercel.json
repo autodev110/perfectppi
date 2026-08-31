@@ -8,6 +8,10 @@
     {
       "path": "/api/internal/workers/deliveries",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/internal/workers/storage-cleanup",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

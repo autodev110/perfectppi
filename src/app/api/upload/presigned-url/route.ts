@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   buildQuarantineKey,
   buildStorageKey,
@@ -13,6 +14,7 @@ import { canUploadToTarget } from "@/features/uploads/access";
 const presignSchema = z.object({
   filename: z.string().min(1),
   contentType: z.string().min(1),
+  size: z.number().int().positive(),
   entity: z.enum([
     "ppi_media",
     "vehicle_media",
@@ -67,6 +69,18 @@ export async function POST(request: Request) {
     );
   }
 
+  const isImage = (UPLOAD_LIMITS.allowedImageTypes as readonly string[]).includes(parsed.data.contentType);
+  const isVideo = (UPLOAD_LIMITS.allowedVideoTypes as readonly string[]).includes(parsed.data.contentType);
+  const maxBytes = isImage
+    ? UPLOAD_LIMITS.maxImageSize
+    : isVideo ? UPLOAD_LIMITS.maxVideoSize : UPLOAD_LIMITS.maxFileSize;
+  if (parsed.data.size > maxBytes) {
+    return NextResponse.json(
+      { error: `File too large. Max size is ${Math.floor(maxBytes / (1024 * 1024))}MB` },
+      { status: 400 },
+    );
+  }
+
   const canUpload = await canUploadToTarget(
     supabase,
     profile.id,
@@ -89,10 +103,31 @@ export async function POST(request: Request) {
 
   try {
     if (parsed.data.entity === "community_post") {
+      const admin = createAdminClient();
+      const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const [{ count: recentCount }, { count: openCount }] = await Promise.all([
+        admin.from("community_upload_reservations").select("id", { count: "exact", head: true })
+          .eq("profile_id", profile.id).gte("created_at", since),
+        admin.from("community_upload_reservations").select("id", { count: "exact", head: true })
+          .eq("profile_id", profile.id).eq("status", "issued").gt("expires_at", new Date().toISOString()),
+      ]);
+      if ((recentCount ?? 0) >= 50 || (openCount ?? 0) >= 20) {
+        return NextResponse.json({ error: "Too many pending uploads. Try again later." }, { status: 429 });
+      }
+
       const result = await generateQuarantinePresignedUrl({
         key: buildQuarantineKey(keyParams),
         contentType: parsed.data.contentType,
+        contentLength: parsed.data.size,
       });
+      const { error: reservationError } = await admin.from("community_upload_reservations").insert({
+        profile_id: profile.id,
+        post_id: parsed.data.recordId,
+        storage_reference: result.storageReference,
+        expected_size: parsed.data.size,
+        content_type: parsed.data.contentType,
+      });
+      if (reservationError) throw reservationError;
       // Keep the response shape compatible with existing web/iOS uploaders.
       return NextResponse.json({ uploadUrl: result.uploadUrl, publicUrl: result.storageReference });
     }
@@ -100,6 +135,7 @@ export async function POST(request: Request) {
     const result = await generatePresignedUrl({
       key: buildStorageKey(keyParams),
       contentType: parsed.data.contentType,
+      contentLength: parsed.data.size,
     });
     return NextResponse.json(result);
   } catch {

@@ -705,12 +705,14 @@ struct PresignedUploadResponse: Codable {
 struct PresignedUploadRequest: Codable {
     let filename: String
     let contentType: String
+    let size: Int
     let entity: String
     let recordId: String
 
     enum CodingKeys: String, CodingKey {
         case filename
         case contentType
+        case size
         case entity
         case recordId
     }

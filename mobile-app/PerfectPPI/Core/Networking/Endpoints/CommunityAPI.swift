@@ -5,10 +5,10 @@ enum CommunityAPI {
         try await APIClient.shared.get("/api/community/posts")
     }
 
-    static func mine(status: CommunityContentStatus = .active) async throws -> [CommunityPost] {
+    static func mine(status: String = "active") async throws -> [CommunityPost] {
         try await APIClient.shared.get(
             "/api/community/posts/me",
-            query: [URLQueryItem(name: "status", value: status.rawValue)]
+            query: [URLQueryItem(name: "status", value: status)]
         )
     }
 
@@ -97,5 +97,30 @@ enum CommunityAPI {
             "/api/community/reports",
             body: ReportPayload(entityType: entityType, entityId: entityId, reasonCode: reasonCode)
         )
+    }
+
+    struct AppealPayload: Encodable {
+        let entityId: String
+        let statement: String
+    }
+
+    static func appeal(entityId: String, statement: String) async throws -> Empty {
+        try await APIClient.shared.postCamel(
+            "/api/community/appeals",
+            body: AppealPayload(entityId: entityId, statement: statement)
+        )
+    }
+
+    struct EnforcementNotice: Decodable, Identifiable {
+        let id: String
+        let actionType: String
+        let reasonCode: String
+        let startsAt: Date
+        let endsAt: Date?
+        let createdAt: Date
+    }
+
+    static func notices() async throws -> [EnforcementNotice] {
+        try await APIClient.shared.get("/api/community/moderation/notices")
     }
 }

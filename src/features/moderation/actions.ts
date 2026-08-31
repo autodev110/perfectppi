@@ -5,7 +5,12 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { buildStorageKey, isPrivateStorageReference, promoteQuarantinedObject } from "@/lib/storage/r2";
+import {
+  buildStorageKey,
+  deleteStoredObject,
+  isPrivateStorageReference,
+  promoteQuarantinedObject,
+} from "@/lib/storage/r2";
 
 const reportSchema = z.object({
   entityType: z.enum(["community_post", "community_comment"]),
@@ -39,71 +44,24 @@ export async function reportCommunityContent(formData: FormData) {
     reasonCode: formData.get("reason_code"),
     details: String(formData.get("details") ?? "") || undefined,
   });
-  if (!parsed.success) return;
+  if (!parsed.success) return { error: parsed.error.errors[0].message };
 
   const admin = createAdminClient();
-  const table = parsed.data.entityType === "community_post" ? "community_posts" : "community_comments";
-  const { data: entity } = await admin
-    .from(table)
-    .select("id, author_id, content, moderation_status")
-    .eq("id", parsed.data.entityId)
-    .maybeSingle();
-  if (!entity || entity.author_id === profile.id) return;
-
-  const { error } = await admin.from("moderation_reports").insert({
-    reporter_id: profile.id,
-    entity_type: parsed.data.entityType,
-    entity_id: entity.id,
-    reason_code: parsed.data.reasonCode,
-    details: parsed.data.details ?? null,
+  const { error } = await admin.rpc("submit_moderation_report", {
+    p_reporter_id: profile.id,
+    p_entity_type: parsed.data.entityType,
+    p_entity_id: parsed.data.entityId,
+    p_reason_code: parsed.data.reasonCode,
+    p_details: parsed.data.details ?? null,
   });
-  if (error?.code === "23505") return;
-  if (error) throw new Error(error.message);
-
-  const { data: existing } = await admin
-    .from("moderation_items")
-    .select("id, status, report_count")
-    .eq("entity_type", parsed.data.entityType)
-    .eq("entity_id", entity.id)
-    .maybeSingle();
-
-  let itemId = existing?.id;
-  if (existing) {
-    await admin.from("moderation_items").update({
-      status: existing.status === "legal_hold" ? "legal_hold" : "pending_review",
-      decision: existing.status === "legal_hold" ? "legal_hold" : "review",
-      risk_level: existing.status === "legal_hold" ? "critical" : "medium",
-      report_count: existing.report_count + 1,
-    }).eq("id", existing.id);
-  } else {
-    const { data: created } = await admin.from("moderation_items").insert({
-      entity_type: parsed.data.entityType,
-      entity_id: entity.id,
-      author_id: entity.author_id,
-      status: "pending_review",
-      risk_level: "medium",
-      decision: "review",
-      reason_codes: [`user_report:${parsed.data.reasonCode}`],
-      content_preview: entity.content.slice(0, 500),
-      model_provider: "user_report",
-      model_version: "perfectppi-moderation-v1",
-      report_count: 1,
-    }).select("id").single();
-    itemId = created?.id;
-  }
-
-  if (itemId) {
-    await admin.from("moderation_events").insert({
-      moderation_item_id: itemId,
-      actor_type: "user",
-      actor_id: profile.id,
-      event_type: "reported",
-      previous_status: entity.moderation_status,
-      next_status: "pending_review",
-      metadata: { reasonCode: parsed.data.reasonCode },
-    });
-  }
+  if (error?.code === "23505") return { error: "You already reported this content" };
+  if (error) return { error: error.message };
   revalidatePath("/admin/moderation");
+  return { data: { submitted: true } };
+}
+
+export async function reportCommunityContentForm(formData: FormData): Promise<void> {
+  await reportCommunityContent(formData);
 }
 
 const reviewSchema = z.object({
@@ -139,145 +97,48 @@ export async function reviewModerationItem(formData: FormData) {
     ? "allow"
     : parsed.data.decision === "legal_hold" ? "legal_hold" : "block";
 
-  await applyEntityDecision(item.entity_type, item.entity_id, item.author_id, nextStatus);
-  await admin.from("moderation_items").update({
-    status: nextStatus,
-    decision: nextDecision,
-    risk_level: nextStatus === "legal_hold" ? "critical" : nextStatus === "rejected" ? "high" : "none",
-    decided_by: profile.id,
-    decided_at: new Date().toISOString(),
-  }).eq("id", item.id);
+  let sourceUrl: string | null = null;
+  let promotedUrl: string | null = null;
+  if (item.entity_type === "community_post_media" && nextStatus === "active") {
+    const { data: media, error: mediaError } = await admin
+      .from("community_post_media")
+      .select("url, post_id, content_type")
+      .eq("id", item.entity_id)
+      .single();
+    if (mediaError) throw new Error(mediaError.message);
+    if (isPrivateStorageReference(media.url)) {
+      if (!item.author_id) throw new Error("Moderated media has no retained owner");
+      sourceUrl = media.url;
+      const ext = media.content_type.split("/").pop()?.replace("jpeg", "jpg") ?? "bin";
+      const promoted = await promoteQuarantinedObject({
+        storageReference: media.url,
+        destinationKey: buildStorageKey({
+          entity: "community_post",
+          ownerId: item.author_id,
+          recordId: media.post_id,
+          filename: `${item.entity_id}.${ext}`,
+        }),
+      });
+      promotedUrl = promoted.publicUrl;
+    }
+  }
 
-  const eventType = nextStatus === "active"
-    ? "manual_approved"
-    : nextStatus === "legal_hold" ? "legal_hold_applied" : "manual_rejected";
-  await admin.from("moderation_events").insert({
-    moderation_item_id: item.id,
-    actor_type: "admin",
-    actor_id: profile.id,
-    event_type: eventType,
-    previous_status: item.status,
-    next_status: nextStatus,
-    notes: parsed.data.notes ?? null,
+  const { error: reviewError } = await admin.rpc("apply_moderation_review", {
+    p_item_id: item.id,
+    p_reviewer_id: profile.id,
+    p_next_status: nextStatus,
+    p_next_decision: nextDecision,
+    p_notes: parsed.data.notes ?? null,
+    p_enforcement: parsed.data.enforcement,
+    p_media_url: promotedUrl,
   });
-
-  const { data: pendingAppeals } = await admin
-    .from("moderation_appeals")
-    .update({
-      status: nextStatus === "active" ? "approved" : "denied",
-      reviewed_by: profile.id,
-      reviewed_at: new Date().toISOString(),
-      resolution_notes: parsed.data.notes ?? null,
-    })
-    .eq("moderation_item_id", item.id)
-    .eq("status", "pending")
-    .select("id");
-
-  if (pendingAppeals?.length) {
-    await admin.from("moderation_events").insert({
-      moderation_item_id: item.id,
-      actor_type: "admin",
-      actor_id: profile.id,
-      event_type: "appeal_resolved",
-      previous_status: item.status,
-      next_status: nextStatus,
-      notes: parsed.data.notes ?? null,
-    });
+  if (reviewError) {
+    if (promotedUrl) await deleteStoredObject(promotedUrl).catch(() => undefined);
+    throw new Error(reviewError.message);
   }
-
-  if (parsed.data.enforcement !== "none") {
-    await applyEnforcement({
-      profileId: item.author_id,
-      itemId: item.id,
-      adminId: profile.id,
-      enforcement: parsed.data.enforcement,
-      reasonCode: item.reason_codes[0] ?? "community_guidelines",
-    });
-  }
+  if (sourceUrl) await deleteOrQueue(sourceUrl, "approved_media_promoted");
 
   revalidateModerationPaths();
-}
-
-async function applyEntityDecision(entityType: string, entityId: string, authorId: string, status: string) {
-  const admin = createAdminClient();
-  const moderationUpdate = {
-    moderation_status: status,
-    moderation_checked_at: new Date().toISOString(),
-    moderation_version: "perfectppi-moderation-v1",
-  };
-
-  if (entityType === "community_post") {
-    await admin.from("community_posts").update({
-      ...moderationUpdate,
-      status: status === "active" ? "active" : "hidden",
-    }).eq("id", entityId);
-    return;
-  }
-  if (entityType === "community_comment") {
-    await admin.from("community_comments").update({
-      ...moderationUpdate,
-      status: status === "active" ? "active" : "hidden",
-    }).eq("id", entityId);
-    return;
-  }
-
-  const { data: media } = await admin
-    .from("community_post_media")
-    .select("url, post_id, content_type")
-    .eq("id", entityId)
-    .single();
-  if (!media) return;
-
-  let url = media.url;
-  if (status === "active" && isPrivateStorageReference(url)) {
-    const ext = media.content_type.split("/").pop()?.replace("jpeg", "jpg") ?? "bin";
-    const promoted = await promoteQuarantinedObject({
-      storageReference: url,
-      destinationKey: buildStorageKey({
-        entity: "community_post",
-        ownerId: authorId,
-        recordId: media.post_id,
-        filename: `${entityId}.${ext}`,
-      }),
-    });
-    url = promoted.publicUrl;
-  }
-  await admin.from("community_post_media").update({ ...moderationUpdate, url }).eq("id", entityId);
-  await admin.from("moderation_hashes").update({
-    scan_status: status === "active" ? "approved" : status === "legal_hold" ? "legal_hold" : "rejected",
-  }).eq("entity_id", entityId);
-}
-
-async function applyEnforcement(input: {
-  profileId: string;
-  itemId: string;
-  adminId: string;
-  enforcement: "warning" | "posting_hold" | "media_hold" | "suspension";
-  reasonCode: string;
-}) {
-  const admin = createAdminClient();
-  const actionType = input.enforcement === "posting_hold"
-    ? "temporary_posting_hold"
-    : input.enforcement === "media_hold" ? "media_upload_hold" : input.enforcement;
-  const endsAt = input.enforcement === "warning"
-    ? null
-    : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  await admin.from("user_enforcement_actions").insert({
-    profile_id: input.profileId,
-    action_type: actionType,
-    reason_code: input.reasonCode,
-    related_moderation_item_id: input.itemId,
-    ends_at: endsAt,
-    created_by: input.adminId,
-  });
-  await admin.from("moderation_events").insert({
-    moderation_item_id: input.itemId,
-    actor_type: "admin",
-    actor_id: input.adminId,
-    event_type: input.enforcement === "warning" ? "user_warned" : "posting_hold_applied",
-    next_status: "rejected",
-    metadata: { enforcement: input.enforcement, endsAt },
-  });
 }
 
 export async function appealModerationItem(formData: FormData) {
@@ -289,30 +150,35 @@ export async function appealModerationItem(formData: FormData) {
 
   const admin = createAdminClient();
   const { data: item } = await admin.from("moderation_items")
-    .select("id, author_id, status")
+    .select("id")
     .eq("entity_type", "community_post")
     .eq("entity_id", entityId)
     .eq("author_id", profile.id)
     .eq("status", "rejected")
     .maybeSingle();
   if (!item) return;
-
-  const { error } = await admin.from("moderation_appeals").insert({
-    moderation_item_id: item.id,
-    appellant_id: profile.id,
-    statement,
+  const { error } = await admin.rpc("open_moderation_appeal", {
+    p_item_id: item.id,
+    p_appellant_id: profile.id,
+    p_statement: statement,
   });
   if (error?.code === "23505") return;
   if (error) throw new Error(error.message);
-  await admin.from("moderation_events").insert({
-    moderation_item_id: item.id,
-    actor_type: "appeal",
-    actor_id: profile.id,
-    event_type: "appeal_opened",
-    previous_status: item.status,
-    next_status: "pending_review",
-  });
   revalidateModerationPaths();
+}
+
+async function deleteOrQueue(storageReference: string, reason: string) {
+  try {
+    await deleteStoredObject(storageReference);
+  } catch (error) {
+    await createAdminClient().from("storage_cleanup_jobs").upsert({
+      storage_reference: storageReference,
+      reason,
+      status: "pending",
+      last_error: error instanceof Error ? error.message.slice(0, 1000) : "Storage deletion failed",
+      next_attempt_at: new Date().toISOString(),
+    }, { onConflict: "storage_reference" });
+  }
 }
 
 function revalidateModerationPaths() {

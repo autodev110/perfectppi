@@ -12,6 +12,7 @@ export async function recordModeration(input: {
   entityId: string;
   authorId: string;
   contentPreview?: string | null;
+  evidenceReference?: string | null;
   result: ModerationResult;
 }) {
   const admin = createAdminClient();
@@ -28,6 +29,7 @@ export async function recordModeration(input: {
         decision: input.result.decision,
         reason_codes: input.result.reasonCodes,
         content_preview: input.contentPreview?.slice(0, 500) ?? null,
+        evidence_reference: input.evidenceReference ?? null,
         model_provider: input.result.provider,
         model_name: input.result.modelName,
         model_version: input.result.modelVersion,

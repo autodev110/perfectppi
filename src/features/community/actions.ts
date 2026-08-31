@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { UPLOAD_LIMITS } from "@/config/constants";
 import { communityUploadReferenceSchema } from "@/features/uploads/url";
 import {
   getActivePostingRestriction,
@@ -21,6 +22,7 @@ import {
 import type { ModerationResult } from "@/lib/moderation";
 import {
   buildStorageKey,
+  deleteStoredObject,
   getObjectFromStoredUrl,
   promoteQuarantinedObject,
 } from "@/lib/storage/r2";
@@ -214,6 +216,45 @@ export async function addCommunityPostMedia(input: unknown) {
     return { error: "Community upload does not belong to this post" };
   }
 
+  const references = parsed.data.items.map((item) => item.url);
+  const { data: reservations, error: reservationError } = await admin
+    .from("community_upload_reservations")
+    .select("id, storage_reference, expected_size, content_type")
+    .eq("profile_id", profile.profileId)
+    .eq("post_id", post.id)
+    .eq("status", "issued")
+    .gt("expires_at", new Date().toISOString())
+    .in("storage_reference", references);
+  if (reservationError) return { error: reservationError.message };
+  const reservationsByReference = new Map(
+    (reservations ?? []).map((reservation) => [reservation.storage_reference, reservation]),
+  );
+  if (reservationsByReference.size !== references.length || parsed.data.items.some((item) =>
+    reservationsByReference.get(item.url)?.content_type !== item.contentType
+  )) {
+    return { error: "One or more uploads are missing, expired, or do not match the selected media" };
+  }
+
+  const claimedReservationIds: string[] = [];
+  for (const reservation of reservations ?? []) {
+    const { data: claimed } = await admin
+      .from("community_upload_reservations")
+      .update({ status: "attached", attached_at: new Date().toISOString() })
+      .eq("id", reservation.id)
+      .eq("status", "issued")
+      .select("id")
+      .maybeSingle();
+    if (!claimed) {
+      if (claimedReservationIds.length) {
+        await admin.from("community_upload_reservations")
+          .update({ status: "issued", attached_at: null })
+          .in("id", claimedReservationIds);
+      }
+      return { error: "An upload was already attached. Please select the file again." };
+    }
+    claimedReservationIds.push(claimed.id);
+  }
+
   // The 10-item cap is per post, not per request, and `sort_order` is unique
   // per post — so derive the slot server-side instead of trusting the client's
   // indexes, which would collide on a second call.
@@ -245,7 +286,12 @@ export async function addCommunityPostMedia(input: unknown) {
     .select("*")
     .order("sort_order", { ascending: true });
 
-  if (error) return { error: error.message };
+  if (error) {
+    await admin.from("community_upload_reservations")
+      .update({ status: "issued", attached_at: null })
+      .in("id", claimedReservationIds);
+    return { error: error.message };
+  }
 
   const scanned = [];
   for (const media of data ?? []) {
@@ -254,7 +300,12 @@ export async function addCommunityPostMedia(input: unknown) {
     let sha256: string | null = null;
 
     try {
-      const object = await getObjectFromStoredUrl(media.url);
+      const reservation = reservationsByReference.get(media.url);
+      if (!reservation) throw new Error("Upload reservation not found");
+      const object = await getObjectFromStoredUrl(media.url, {
+        expectedBytes: reservation.expected_size,
+        maxBytes: UPLOAD_LIMITS.maxVideoSize,
+      });
       bytes = object.bytes;
       sha256 = createHash("sha256").update(bytes).digest("hex");
 
@@ -270,7 +321,9 @@ export async function addCommunityPostMedia(input: unknown) {
           .maybeSingle();
 
         result = duplicate
-          ? blockedMediaResult("blocked_duplicate")
+          ? duplicate.scan_status === "legal_hold"
+            ? blockedMediaResult("legal_hold_duplicate", "legal_hold")
+            : blockedMediaResult("blocked_duplicate")
           : media.media_type === "video"
             ? moderateVideo()
             : await moderateImage(bytes, media.content_type);
@@ -282,6 +335,7 @@ export async function addCommunityPostMedia(input: unknown) {
         authorId: profile.profileId,
         contentPreview: `${media.media_type} upload`,
         result,
+        evidenceReference: result.decision === "legal_hold" ? media.url : null,
       });
 
       let storedUrl = media.url;
@@ -300,7 +354,7 @@ export async function addCommunityPostMedia(input: unknown) {
       }
 
       const moderationStatus = statusForDecision(result.decision);
-      const { data: updated } = await admin
+      const { data: updated, error: updateError } = await admin
         .from("community_post_media")
         .update({
           url: storedUrl,
@@ -312,6 +366,11 @@ export async function addCommunityPostMedia(input: unknown) {
         .eq("id", media.id)
         .select("*")
         .single();
+      if (updateError) {
+        if (storedUrl !== media.url) await deleteOrQueue(storedUrl, "failed_media_promotion_commit");
+        throw new Error(updateError.message);
+      }
+      if (storedUrl !== media.url) await deleteOrQueue(media.url, "promoted_quarantine_source");
 
       if (sha256 && bytes) {
         await admin.from("moderation_hashes").upsert({
@@ -389,10 +448,13 @@ function extensionForContentType(contentType: string) {
   return extensions[contentType] ?? "bin";
 }
 
-function blockedMediaResult(reason: string, decision: "block" | "review" = "block"): ModerationResult {
+function blockedMediaResult(
+  reason: string,
+  decision: "block" | "review" | "legal_hold" = "block",
+): ModerationResult {
   return {
     decision,
-    riskLevel: decision === "block" ? "high" : "medium",
+    riskLevel: decision === "legal_hold" ? "critical" : decision === "block" ? "high" : "medium",
     reasonCodes: [reason],
     provider: "native_rules",
     modelName: null,
@@ -426,6 +488,22 @@ export async function removeCommunityPostMedia(input: unknown) {
     return { error: "Post not found" };
   }
 
+  const { data: media } = await admin
+    .from("community_post_media")
+    .select("id, url")
+    .eq("id", parsed.data.mediaId)
+    .eq("post_id", post.id)
+    .maybeSingle();
+  if (!media) return { error: "Media not found" };
+
+  const { data: held } = await admin.from("moderation_items")
+    .select("id")
+    .eq("entity_type", "community_post_media")
+    .eq("entity_id", media.id)
+    .eq("status", "legal_hold")
+    .maybeSingle();
+  if (held) return { error: "This media is preserved for legal review and cannot be deleted" };
+
   const { data: deleted, error } = await admin
     .from("community_post_media")
     .delete()
@@ -436,6 +514,7 @@ export async function removeCommunityPostMedia(input: unknown) {
 
   if (error) return { error: error.message };
   if (!deleted) return { error: "Media not found" };
+  await deleteOrQueue(media.url, "community_media_deleted");
 
   // `sort_order` has to stay contiguous 0..n-1: it is unique per post and
   // capped at 9, so a gap would eventually push a later insert past the check
@@ -612,13 +691,50 @@ export async function deleteCommunityPostById(postId: string) {
     return { error: "Not authorized" };
   }
 
+  const { data: media } = await admin.from("community_post_media")
+    .select("id, url")
+    .eq("post_id", postId);
+  const { data: heldPost } = await admin.from("moderation_items")
+    .select("id")
+    .eq("entity_type", "community_post")
+    .eq("entity_id", postId)
+    .eq("status", "legal_hold")
+    .maybeSingle();
+  const mediaIds = (media ?? []).map((item) => item.id);
+  const { data: heldMedia } = mediaIds.length
+    ? await admin.from("moderation_items").select("id")
+      .eq("entity_type", "community_post_media")
+      .in("entity_id", mediaIds)
+      .eq("status", "legal_hold")
+      .limit(1)
+      .maybeSingle()
+    : { data: null };
+  if (heldPost || heldMedia) {
+    return { error: "This post contains evidence preserved for legal review and cannot be deleted" };
+  }
+
   const { error } = await admin.from("community_posts").delete().eq("id", postId);
   if (error) return { error: error.message };
+  await Promise.all((media ?? []).map((item) => deleteOrQueue(item.url, "community_post_deleted")));
 
   revalidatePath("/community");
   revalidatePath("/dashboard/posts");
   revalidatePath("/admin/community");
   return { success: true };
+}
+
+async function deleteOrQueue(storageReference: string, reason: string) {
+  try {
+    await deleteStoredObject(storageReference);
+  } catch (error) {
+    await createAdminClient().from("storage_cleanup_jobs").upsert({
+      storage_reference: storageReference,
+      reason,
+      status: "pending",
+      last_error: error instanceof Error ? error.message.slice(0, 1000) : "Storage deletion failed",
+      next_attempt_at: new Date().toISOString(),
+    }, { onConflict: "storage_reference" });
+  }
 }
 
 export async function updateCommunityPostStatus(formData: FormData) {

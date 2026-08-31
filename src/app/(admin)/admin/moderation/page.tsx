@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/features/auth/guards";
 import { reviewModerationItem } from "@/features/moderation/actions";
-import { getModerationMetrics, getModerationQueue } from "@/features/moderation/queries";
+import { canReviewLegalHolds, getModerationMetrics, getModerationQueue } from "@/features/moderation/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,12 +13,16 @@ type PageProps = { searchParams: Promise<{ status?: string }> };
 const filters = ["pending_review", "rejected", "legal_hold", "all"] as const;
 
 export default async function ModerationPage({ searchParams }: PageProps) {
-  await requireRole(["admin"]);
+  const profile = await requireRole(["admin"]);
   const params = await searchParams;
   const status = filters.includes(params.status as (typeof filters)[number])
     ? params.status as (typeof filters)[number]
     : "pending_review";
-  const [items, metrics] = await Promise.all([getModerationQueue(status), getModerationMetrics()]);
+  const [items, metrics, legalHoldReviewer] = await Promise.all([
+    getModerationQueue(status),
+    getModerationMetrics(),
+    canReviewLegalHolds(profile.id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -72,6 +76,13 @@ export default async function ModerationPage({ searchParams }: PageProps) {
                       <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
                         Preview is locked for legal-hold content. Follow the approved escalation process.
                       </div>
+                    ) : item.media?.media_type === "video" ? (
+                      <video
+                        src={`/api/moderation/media/${item.entity_id}`}
+                        controls
+                        preload="metadata"
+                        className="max-h-80 w-full rounded-xl border bg-black object-contain"
+                      />
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={`/api/moderation/media/${item.entity_id}`} alt="Moderation preview" className="max-h-80 rounded-xl border object-contain" />
@@ -91,7 +102,24 @@ export default async function ModerationPage({ searchParams }: PageProps) {
                     </div>
                   ))}
 
-                  <form action={reviewModerationItem} className="space-y-3 rounded-xl border p-4">
+                  {item.reports.length > 0 ? (
+                    <div className="space-y-2 rounded-xl border p-4">
+                      <p className="text-sm font-semibold">User reports</p>
+                      {item.reports.map((report) => (
+                        <div key={report.id} className="rounded-lg bg-muted/50 p-3 text-sm">
+                          <p className="font-medium">{report.reason_code.replaceAll("_", " ")}</p>
+                          {report.details ? <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{report.details}</p> : null}
+                          <p className="mt-1 text-xs text-muted-foreground">{formatDate(report.created_at)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {item.status === "legal_hold" && !legalHoldReviewer ? (
+                    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                      This item can only be changed by a designated legal-hold reviewer.
+                    </div>
+                  ) : <form action={reviewModerationItem} className="space-y-3 rounded-xl border p-4">
                     <input type="hidden" name="item_id" value={item.id} />
                     <Textarea name="notes" rows={2} maxLength={1000} placeholder="Internal review notes" />
                     <select name="enforcement" defaultValue="none" className="h-10 rounded-md border bg-background px-3 text-sm">
@@ -104,9 +132,9 @@ export default async function ModerationPage({ searchParams }: PageProps) {
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" name="decision" value="approve">Approve</Button>
                       <Button size="sm" variant="destructive" name="decision" value="reject">Reject</Button>
-                      <Button size="sm" variant="outline" name="decision" value="legal_hold">Legal hold</Button>
+                      {legalHoldReviewer ? <Button size="sm" variant="outline" name="decision" value="legal_hold">Legal hold</Button> : null}
                     </div>
-                  </form>
+                  </form>}
                 </CardContent>
               </Card>
             );

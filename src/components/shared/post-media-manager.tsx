@@ -20,9 +20,11 @@ const ACCEPTED =
 export function PostMediaManager({
   postId,
   media,
+  locked = false,
 }: {
   postId: string;
   media: PostMedia[];
+  locked?: boolean;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -119,7 +121,7 @@ export function PostMediaManager({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={item.url} alt={`Post media ${index + 1}`} className="h-full w-full object-cover" />
               )}
-              <Button
+              {item.moderation_status === "legal_hold" || locked ? null : <Button
                 type="button"
                 size="icon"
                 variant="destructive"
@@ -129,7 +131,7 @@ export function PostMediaManager({
                 aria-label={`Remove media ${index + 1}`}
               >
                 <Trash2 className="h-3 w-3" />
-              </Button>
+              </Button>}
             </div>
           ))}
         </div>
@@ -144,7 +146,9 @@ export function PostMediaManager({
         onChange={(event) => addMedia(event.target.files)}
       />
 
-      <div className="flex flex-wrap items-center gap-3">
+      {locked ? (
+        <p className="text-xs text-muted-foreground">Media is preserved while this post is under legal review.</p>
+      ) : <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
           size="sm"
@@ -160,7 +164,7 @@ export function PostMediaManager({
             ? `${media.length}/${MAX_MEDIA}`
             : `Uploading… ${Math.round(progress * 100)}%`}
         </span>
-      </div>
+      </div>}
 
       {progress === null ? null : (
         <div className="h-1 overflow-hidden rounded-full bg-muted">

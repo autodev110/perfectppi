@@ -86,6 +86,7 @@ export async function uploadFile(
     body: JSON.stringify({
       filename: file.name,
       contentType: file.type,
+      size: file.size,
       entity,
       recordId,
     }),

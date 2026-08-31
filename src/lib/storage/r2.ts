@@ -6,6 +6,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { randomUUID } from "node:crypto";
 
 // Cloudflare R2 presigned URL generation
 // Client PUTs file directly to R2 using the signed URL
@@ -55,6 +56,7 @@ function getS3Client() {
 export async function generatePresignedUrl(params: {
   key: string;
   contentType: string;
+  contentLength?: number;
   expiresIn?: number;
 }): Promise<{ uploadUrl: string; publicUrl: string }> {
   const client = getS3Client();
@@ -64,6 +66,7 @@ export async function generatePresignedUrl(params: {
     Bucket: bucket,
     Key: params.key,
     ContentType: params.contentType,
+    ContentLength: params.contentLength,
   });
 
   const uploadUrl = await getSignedUrl(client, command, {
@@ -79,6 +82,7 @@ export async function generatePresignedUrl(params: {
 export async function generateQuarantinePresignedUrl(params: {
   key: string;
   contentType: string;
+  contentLength: number;
   expiresIn?: number;
 }): Promise<{ uploadUrl: string; storageReference: string }> {
   if (!isPrivateR2Configured()) {
@@ -89,6 +93,7 @@ export async function generateQuarantinePresignedUrl(params: {
     Bucket: process.env.R2_PRIVATE_BUCKET_NAME!,
     Key: key,
     ContentType: params.contentType,
+    ContentLength: params.contentLength,
   });
   const uploadUrl = await getSignedUrl(getS3Client(), command, {
     expiresIn: params.expiresIn ?? 600,
@@ -140,7 +145,7 @@ export async function uploadPrivateObject(params: {
   return { storageReference: privateStorageReference(key) };
 }
 
-/** Moves an approved quarantined object into the public media bucket. */
+/** Copies an approved object into the public bucket. The caller deletes the source after its DB commit. */
 export async function promoteQuarantinedObject(params: {
   storageReference: string;
   destinationKey: string;
@@ -166,14 +171,15 @@ export async function promoteQuarantinedObject(params: {
     CopySource: source,
     MetadataDirective: "COPY",
   }));
-  await getS3Client().send(new DeleteObjectCommand({
-    Bucket: process.env.R2_PRIVATE_BUCKET_NAME!,
-    Key: sourceKey,
-  }));
-
   return {
     publicUrl: `${process.env.R2_PUBLIC_URL!.replace(/\/$/, "")}/${destinationKey}`,
   };
+}
+
+/** Deletes a public URL or private storage reference created by this module. */
+export async function deleteStoredObject(storedValue: string): Promise<void> {
+  const { bucket, key } = resolveStoredObject(storedValue);
+  await getS3Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
 export function privateStorageReference(key: string): string {
@@ -226,7 +232,10 @@ export async function generatePresignedGetUrl(
  * runtime/SDK version, and image responses are small enough that streaming isn't worth
  * the version-compatibility risk.
  */
-export async function getObjectFromStoredUrl(storedPublicUrl: string): Promise<{
+export async function getObjectFromStoredUrl(
+  storedPublicUrl: string,
+  limits: { maxBytes?: number; expectedBytes?: number } = {},
+): Promise<{
   bytes: Uint8Array;
   contentType: string;
   etag?: string;
@@ -238,6 +247,14 @@ export async function getObjectFromStoredUrl(storedPublicUrl: string): Promise<{
     new GetObjectCommand({ Bucket: bucket, Key: key })
   );
 
+  const declaredSize = response.ContentLength;
+  if (declaredSize !== undefined && limits.maxBytes !== undefined && declaredSize > limits.maxBytes) {
+    throw new Error("Stored object exceeds the allowed size");
+  }
+  if (declaredSize !== undefined && limits.expectedBytes !== undefined && declaredSize !== limits.expectedBytes) {
+    throw new Error("Stored object size does not match its upload reservation");
+  }
+
   const body = response.Body;
   if (!body) {
     throw new Error("Empty response body from R2");
@@ -245,13 +262,22 @@ export async function getObjectFromStoredUrl(storedPublicUrl: string): Promise<{
 
   let bytes: Uint8Array;
   // AWS SDK v3: Body has transformToByteArray() in Node 18+.
-  if (typeof (body as { transformToByteArray?: unknown }).transformToByteArray === "function") {
+  if (
+    limits.maxBytes === undefined
+    && limits.expectedBytes === undefined
+    && typeof (body as { transformToByteArray?: unknown }).transformToByteArray === "function"
+  ) {
     bytes = await (body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray();
   } else {
     // Fallback: collect chunks from a Node Readable stream.
     const chunks: Uint8Array[] = [];
+    let buffered = 0;
     for await (const chunk of body as AsyncIterable<Uint8Array>) {
       chunks.push(chunk);
+      buffered += chunk.length;
+      if (limits.maxBytes !== undefined && buffered > limits.maxBytes) {
+        throw new Error("Stored object exceeds the allowed size");
+      }
     }
     const total = chunks.reduce((acc, c) => acc + c.length, 0);
     bytes = new Uint8Array(total);
@@ -260,6 +286,13 @@ export async function getObjectFromStoredUrl(storedPublicUrl: string): Promise<{
       bytes.set(c, offset);
       offset += c.length;
     }
+  }
+
+  if (limits.maxBytes !== undefined && bytes.byteLength > limits.maxBytes) {
+    throw new Error("Stored object exceeds the allowed size");
+  }
+  if (limits.expectedBytes !== undefined && bytes.byteLength !== limits.expectedBytes) {
+    throw new Error("Stored object size does not match its upload reservation");
   }
 
   return {
@@ -352,9 +385,9 @@ export function buildStorageKey(params: {
   recordId: string;
   filename: string;
 }): string {
-  const ext = params.filename.split(".").pop() || "bin";
-  const timestamp = Date.now();
-  return `${params.entity}/${params.ownerId}/${params.recordId}/${timestamp}.${ext}`;
+  const candidate = params.filename.split(".").pop()?.toLowerCase() ?? "";
+  const ext = /^[a-z0-9]{1,10}$/.test(candidate) ? candidate : "bin";
+  return `${params.entity}/${params.ownerId}/${params.recordId}/${Date.now()}-${randomUUID()}.${ext}`;
 }
 
 export function buildQuarantineKey(params: {

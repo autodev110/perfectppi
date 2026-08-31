@@ -6,6 +6,7 @@ import PhotosUI
 struct CommunityFeedView: View {
     @State private var reloadToken = UUID()
     @State private var showingComposer = false
+    @State private var showingMyPosts = false
 
     var body: some View {
         AsyncContent(
@@ -34,14 +35,28 @@ struct CommunityFeedView: View {
                 }
                 .navigationTitle("Community")
                 .toolbar {
-                    Button {
-                        showingComposer = true
+                    Menu {
+                        Button {
+                            showingComposer = true
+                        } label: {
+                            Label("New Post", systemImage: "plus.bubble")
+                        }
+                        Button {
+                            showingMyPosts = true
+                        } label: {
+                            Label("My Posts and Reviews", systemImage: "person.crop.rectangle.stack")
+                        }
                     } label: {
-                        Image(systemName: "plus.bubble")
+                        Image(systemName: "ellipsis.circle")
                     }
                 }
                 .sheet(isPresented: $showingComposer) {
                     NewCommunityPostView {
+                        reloadToken = UUID()
+                    }
+                }
+                .sheet(isPresented: $showingMyPosts) {
+                    ModeratedPostsView {
                         reloadToken = UUID()
                     }
                 }
@@ -51,6 +66,137 @@ struct CommunityFeedView: View {
             }
         )
         .id(reloadToken)
+    }
+}
+
+private struct ModeratedPostsView: View {
+    let onChanged: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var posts: [CommunityPost] = []
+    @State private var notices: [CommunityAPI.EnforcementNotice] = []
+    @State private var loading = true
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if !notices.isEmpty {
+                    Section("Account notices") {
+                        ForEach(notices) { notice in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(notice.actionType.replacingOccurrences(of: "_", with: " ").capitalized)
+                                    .font(.subheadline.weight(.semibold))
+                                Text(notice.reasonCode.replacingOccurrences(of: "_", with: " "))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                if let end = notice.endsAt {
+                                    Text("Ends \(end, style: .date)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Section("In review") {
+                    if loading {
+                        ProgressView("Loading...")
+                    } else if posts.isEmpty {
+                        Text("No posts are awaiting moderation.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(posts) { post in
+                            ModeratedPostRow(post: post) {
+                                await load()
+                                onChanged()
+                            }
+                        }
+                    }
+                }
+
+                if let error {
+                    Section {
+                        Text(error).foregroundStyle(Theme.Palette.danger)
+                    }
+                }
+            }
+            .navigationTitle("My Posts")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .refreshable { await load() }
+            .task { await load() }
+        }
+    }
+
+    @MainActor
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        do {
+            async let postRequest = CommunityAPI.mine(status: "review")
+            async let noticeRequest = CommunityAPI.notices()
+            (posts, notices) = try await (postRequest, noticeRequest)
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+private struct ModeratedPostRow: View {
+    let post: CommunityPost
+    let onAppealed: () async -> Void
+    @State private var statement = ""
+    @State private var submitting = false
+    @State private var message: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text((post.moderationStatus ?? "pending_review").replacingOccurrences(of: "_", with: " ").capitalized)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(post.moderationStatus == "rejected" ? Theme.Palette.danger : .secondary)
+                Spacer()
+                if let created = post.createdAt {
+                    Text(created, style: .date).font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            Text(post.content).font(.subheadline)
+            if post.moderationStatus == "rejected" {
+                TextField("Explain why this should be reviewed again", text: $statement, axis: .vertical)
+                    .lineLimit(2...5)
+                    .textFieldStyle(.roundedBorder)
+                Button(submitting ? "Submitting..." : "Submit Appeal") {
+                    Task { await submitAppeal() }
+                }
+                .disabled(submitting || statement.trimmingCharacters(in: .whitespacesAndNewlines).count < 10)
+            }
+            if let message {
+                Text(message).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    @MainActor
+    private func submitAppeal() async {
+        submitting = true
+        defer { submitting = false }
+        do {
+            _ = try await CommunityAPI.appeal(
+                entityId: post.id,
+                statement: statement.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            message = "Appeal submitted for review."
+            await onAppealed()
+        } catch {
+            message = error.localizedDescription
+        }
     }
 }
 

@@ -11,6 +11,10 @@ export async function POST(request: NextRequest) {
   formData.set("entity_id", String(body?.entityId ?? ""));
   formData.set("reason_code", String(body?.reasonCode ?? ""));
   if (body?.details) formData.set("details", String(body.details));
-  await reportCommunityContent(formData);
-  return NextResponse.json({ data: { submitted: true } }, { status: 201 });
+  const result = await reportCommunityContent(formData);
+  if (result?.error) {
+    const status = result.error.includes("already") ? 409 : result.error.includes("rate limit") ? 429 : 400;
+    return NextResponse.json({ error: result.error }, { status });
+  }
+  return NextResponse.json(result, { status: 201 });
 }

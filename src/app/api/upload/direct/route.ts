@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   buildQuarantineKey,
   buildStorageKey,
+  deleteStoredObject,
   uploadObject,
   uploadPrivateObject,
 } from "@/lib/storage/r2";
@@ -48,6 +50,9 @@ export async function POST(request: Request) {
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "file is required" }, { status: 400 });
+  }
+  if (file.size < 1) {
+    return NextResponse.json({ error: "File is empty" }, { status: 400 });
   }
 
   const parsed = uploadSchema.safeParse({
@@ -117,6 +122,30 @@ export async function POST(request: Request) {
         body: Buffer.from(arrayBuffer),
         contentType: file.type,
       });
+      const { error: reservationError } = await createAdminClient()
+        .from("community_upload_reservations")
+        .insert({
+          profile_id: profile.id,
+          post_id: parsed.data.recordId,
+          storage_reference: storageReference,
+          expected_size: file.size,
+          content_type: file.type,
+        });
+      if (reservationError) {
+        try {
+          await deleteStoredObject(storageReference);
+        } catch (cleanupError) {
+          await createAdminClient().from("storage_cleanup_jobs").upsert({
+            storage_reference: storageReference,
+            reason: "failed_direct_upload_reservation",
+            status: "pending",
+            last_error: cleanupError instanceof Error
+              ? cleanupError.message.slice(0, 1000)
+              : "Storage deletion failed",
+          }, { onConflict: "storage_reference" });
+        }
+        throw reservationError;
+      }
       return NextResponse.json({ publicUrl: storageReference }, { status: 201 });
     }
 

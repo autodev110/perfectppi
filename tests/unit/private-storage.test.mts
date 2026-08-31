@@ -16,6 +16,7 @@ const {
   isR2Configured,
   isStoredObjectConfigured,
   privateStorageReference,
+  buildStorageKey,
 } = await import("../../src/lib/storage/r2.ts");
 
 afterEach(() => {
@@ -54,6 +55,17 @@ describe("private partner artifact storage", () => {
     assert.equal(isPrivateStorageReference(reference), true);
     assert.equal(isStoredObjectConfigured(reference), true);
     assert.equal(reference.startsWith("http"), false);
+  });
+
+  test("uses collision-resistant keys for simultaneous uploads", () => {
+    const params = {
+      entity: "community_post",
+      ownerId: "owner",
+      recordId: "record",
+      filename: "photo.jpg",
+    };
+    const keys = new Set(Array.from({ length: 100 }, () => buildStorageKey(params)));
+    assert.equal(keys.size, 100);
   });
 });
 

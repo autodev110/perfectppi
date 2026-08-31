@@ -13,6 +13,8 @@ import { AlertTriangle, Archive, ExternalLink, MessageSquare, Plus, RotateCcw, T
 import { PostMediaManager } from "@/components/shared/post-media-manager";
 import { appealModerationItem } from "@/features/moderation/actions";
 import { Textarea } from "@/components/ui/textarea";
+import { requireRole } from "@/features/auth/guards";
+import { getEnforcementNotices } from "@/features/moderation/queries";
 
 type PageProps = {
   searchParams: Promise<{ tab?: string }>;
@@ -26,7 +28,11 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const tab = params.tab === "archived" ? "archived" : params.tab === "review" ? "review" : "active";
 
-  const posts = await getMyCommunityPosts(tab);
+  const profile = await requireRole(["consumer", "technician", "org_manager", "admin"]);
+  const [posts, notices] = await Promise.all([
+    getMyCommunityPosts(tab),
+    getEnforcementNotices(profile.id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -78,6 +84,14 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
           Archived
         </Link>
       </div>
+
+      {notices.map((notice) => (
+        <div key={notice.id} className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-warning">
+          <strong>{notice.action_type.replaceAll("_", " ")}:</strong>{" "}
+          {notice.reason_code.replaceAll("_", " ")}
+          {notice.ends_at ? ` (until ${formatDate(notice.ends_at)})` : ""}
+        </div>
+      ))}
 
       {tab === "archived" && (
         <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-warning">
@@ -152,7 +166,11 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
                         )}
                       </div>
                       <p className="max-w-3xl whitespace-pre-wrap text-sm text-muted-foreground">{post.content}</p>
-                      <PostMediaManager postId={post.id} media={post.media} />
+                      <PostMediaManager
+                        postId={post.id}
+                        media={post.media}
+                        locked={post.moderation_status === "legal_hold"}
+                      />
                       {tab === "review" && post.moderation_status === "rejected" ? (
                         <form action={appealModerationItem} className="max-w-xl space-y-2 rounded-xl border p-3">
                           <input type="hidden" name="entity_id" value={post.id} />
@@ -199,13 +217,13 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
                           </Button>
                         </form>
                       )}
-                      <form action={deleteCommunityPost}>
+                      {post.moderation_status === "legal_hold" ? null : <form action={deleteCommunityPost}>
                         <input type="hidden" name="post_id" value={post.id} />
                         <Button size="sm" variant="ghost" type="submit" className="text-destructive hover:text-destructive hover:bg-destructive/10">
                           <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                           Delete
                         </Button>
-                      </form>
+                      </form>}
                     </div>
                   </div>
                 </CardContent>

@@ -66,6 +66,7 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
       body: JSON.stringify({
         filename: selectedFile.name,
         contentType: selectedFile.type,
+        size: selectedFile.size,
         entity: "vehicle_media",
         recordId: vehicleId,
       }),

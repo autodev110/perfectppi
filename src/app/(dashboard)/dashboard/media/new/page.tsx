@@ -77,6 +77,7 @@ export default function CreateMediaPackagePage() {
       body: JSON.stringify({
         filename: file.name,
         contentType: file.type,
+        size: file.size,
         entity: "media_package",
         recordId: uploadRecordId,
       }),

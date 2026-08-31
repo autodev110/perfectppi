@@ -29,6 +29,15 @@ describe("moderation policy", () => {
     assert.equal(result.riskLevel, "critical");
   });
 
+  test("holds sexually flagged images for restricted age review", () => {
+    const result = classifyModerationProviderResult(providerResult(
+      { sexual: true },
+      { sexual: 0.93 },
+    ), "image");
+    assert.equal(result.decision, "legal_hold");
+    assert.deepEqual(result.reasonCodes, ["sexual_image_age_unknown"]);
+  });
+
   test("routes uncertain flags to review and severe high-confidence flags to block", () => {
     assert.equal(classifyModerationProviderResult(providerResult(
       { harassment: true }, { harassment: 0.5 },

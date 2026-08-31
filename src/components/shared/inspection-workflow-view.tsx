@@ -123,6 +123,7 @@ export function InspectionWorkflowView({
               body: JSON.stringify({
                 filename: file.name,
                 contentType: file.type,
+                size: file.size,
                 entity: "ppi_media",
                 recordId: submissionId,
               }),

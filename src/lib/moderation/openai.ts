@@ -15,7 +15,10 @@ type OpenAIModerationResponse = {
   results?: OpenAIModerationResult[];
 };
 
-export function classifyModerationProviderResult(result: OpenAIModerationResult): Pick<ModerationResult, "decision" | "riskLevel" | "reasonCodes"> {
+export function classifyModerationProviderResult(
+  result: OpenAIModerationResult,
+  inputKind: "text" | "image" = "text",
+): Pick<ModerationResult, "decision" | "riskLevel" | "reasonCodes"> {
   const flagged = Object.entries(result.categories)
     .filter(([, value]) => value)
     .map(([name]) => name);
@@ -25,6 +28,16 @@ export function classifyModerationProviderResult(result: OpenAIModerationResult)
   );
   if (critical.length > 0) {
     return { decision: "legal_hold", riskLevel: "critical", reasonCodes: critical };
+  }
+
+  // The provider's sexual/minors category is text-only. A sexually flagged
+  // image needs restricted specialist review rather than an inferred age.
+  if (inputKind === "image" && flagged.includes("sexual")) {
+    return {
+      decision: "legal_hold",
+      riskLevel: "critical",
+      reasonCodes: ["sexual_image_age_unknown"],
+    };
   }
 
   const severe = flagged.filter((name) =>
@@ -52,7 +65,7 @@ export function classifyModerationProviderResult(result: OpenAIModerationResult)
   return { decision: "allow", riskLevel: "none", reasonCodes: [] };
 }
 
-async function requestModeration(input: unknown): Promise<ModerationResult> {
+async function requestModeration(input: unknown, inputKind: "text" | "image"): Promise<ModerationResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return {
@@ -84,7 +97,7 @@ async function requestModeration(input: unknown): Promise<ModerationResult> {
   const result = payload.results?.[0];
   if (!result) throw new Error("Moderation provider returned no result");
 
-  const classified = classifyModerationProviderResult(result);
+  const classified = classifyModerationProviderResult(result, inputKind);
   return {
     ...classified,
     provider: "openai",
@@ -100,10 +113,10 @@ async function requestModeration(input: unknown): Promise<ModerationResult> {
 }
 
 export async function moderateTextWithProvider(text: string): Promise<ModerationResult> {
-  return requestModeration([{ type: "text", text }]);
+  return requestModeration([{ type: "text", text }], "text");
 }
 
 export async function moderateImageWithProvider(bytes: Uint8Array, contentType: string): Promise<ModerationResult> {
   const imageUrl = `data:${contentType};base64,${Buffer.from(bytes).toString("base64")}`;
-  return requestModeration([{ type: "image_url", image_url: { url: imageUrl } }]);
+  return requestModeration([{ type: "image_url", image_url: { url: imageUrl } }], "image");
 }

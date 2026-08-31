@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createCommunityComment } from "@/features/community/actions";
-import { reportCommunityContent } from "@/features/moderation/actions";
+import { reportCommunityContentForm } from "@/features/moderation/actions";
 import { getCommunityPosts } from "@/features/community/queries";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -198,7 +198,7 @@ function ReportControl({
       <summary className="cursor-pointer list-none rounded-full p-1.5 text-on-surface-variant hover:bg-surface-container-high" aria-label="Report content">
         <Flag className={compact ? "h-3 w-3" : "h-4 w-4"} />
       </summary>
-      <form action={reportCommunityContent} className="absolute right-0 z-20 mt-2 w-72 space-y-3 rounded-xl border bg-background p-4 shadow-xl">
+      <form action={reportCommunityContentForm} className="absolute right-0 z-20 mt-2 w-72 space-y-3 rounded-xl border bg-background p-4 shadow-xl">
         <input type="hidden" name="entity_type" value={entityType} />
         <input type="hidden" name="entity_id" value={entityId} />
         <p className="text-sm font-bold">Report content</p>

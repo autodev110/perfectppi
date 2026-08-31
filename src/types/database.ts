@@ -238,6 +238,60 @@ export type Database = {
           },
         ]
       }
+      community_upload_reservations: {
+        Row: {
+          attached_at: string | null
+          content_type: string
+          created_at: string
+          expected_size: number
+          expires_at: string
+          id: string
+          post_id: string | null
+          profile_id: string | null
+          status: string
+          storage_reference: string
+        }
+        Insert: {
+          attached_at?: string | null
+          content_type: string
+          created_at?: string
+          expected_size: number
+          expires_at?: string
+          id?: string
+          post_id?: string | null
+          profile_id?: string | null
+          status?: string
+          storage_reference: string
+        }
+        Update: {
+          attached_at?: string | null
+          content_type?: string
+          created_at?: string
+          expected_size?: number
+          expires_at?: string
+          id?: string
+          post_id?: string | null
+          profile_id?: string | null
+          status?: string
+          storage_reference?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_upload_reservations_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_upload_reservations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       moderation_appeals: {
         Row: {
           appellant_id: string
@@ -397,12 +451,13 @@ export type Database = {
       }
       moderation_items: {
         Row: {
-          author_id: string
+          author_id: string | null
           content_preview: string | null
           created_at: string
           decided_at: string | null
           decided_by: string | null
           decision: string
+          evidence_reference: string | null
           entity_id: string
           entity_type: string
           id: string
@@ -417,12 +472,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          author_id: string
+          author_id: string | null
           content_preview?: string | null
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
           decision: string
+          evidence_reference?: string | null
           entity_id: string
           entity_type: string
           id?: string
@@ -437,12 +493,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          author_id?: string
+          author_id?: string | null
           content_preview?: string | null
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
           decision?: string
+          evidence_reference?: string | null
           entity_id?: string
           entity_type?: string
           id?: string
@@ -468,6 +525,39 @@ export type Database = {
             foreignKeyName: "moderation_items_decided_by_fkey"
             columns: ["decided_by"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moderation_legal_hold_reviewers: {
+        Row: {
+          created_at: string
+          granted_by: string | null
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          granted_by?: string | null
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          granted_by?: string | null
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moderation_legal_hold_reviewers_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_legal_hold_reviewers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -510,6 +600,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      storage_cleanup_jobs: {
+        Row: {
+          attempt_count: number
+          completed_at: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          next_attempt_at: string
+          reason: string
+          status: string
+          storage_reference: string
+        }
+        Insert: {
+          attempt_count?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          reason: string
+          status?: string
+          storage_reference: string
+        }
+        Update: {
+          attempt_count?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          reason?: string
+          status?: string
+          storage_reference?: string
+        }
+        Relationships: []
       }
       user_enforcement_actions: {
         Row: {
@@ -2617,6 +2743,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_moderation_review: {
+        Args: {
+          p_enforcement: string
+          p_item_id: string
+          p_media_url: string | null
+          p_next_decision: string
+          p_next_status: string
+          p_notes: string | null
+          p_reviewer_id: string
+        }
+        Returns: undefined
+      }
       am_i_in_conversation: { Args: { conv_id: string }; Returns: boolean }
       can_access_submission: {
         Args: { submission_id: string }
@@ -2728,6 +2866,24 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      open_moderation_appeal: {
+        Args: {
+          p_appellant_id: string
+          p_item_id: string
+          p_statement: string
+        }
+        Returns: undefined
+      }
+      submit_moderation_report: {
+        Args: {
+          p_details: string | null
+          p_entity_id: string
+          p_entity_type: string
+          p_reason_code: string
+          p_reporter_id: string
+        }
+        Returns: undefined
       }
       dev_switch_role: {
         Args: { p_role: Database["public"]["Enums"]["user_role"] }
