@@ -1,4 +1,10 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Cloudflare R2 presigned URL generation
@@ -69,6 +75,27 @@ export async function generatePresignedUrl(params: {
   return { uploadUrl, publicUrl };
 }
 
+/** Presigns a write into the private bucket and returns only an opaque reference. */
+export async function generateQuarantinePresignedUrl(params: {
+  key: string;
+  contentType: string;
+  expiresIn?: number;
+}): Promise<{ uploadUrl: string; storageReference: string }> {
+  if (!isPrivateR2Configured()) {
+    throw new Error("Private R2 quarantine storage is not configured");
+  }
+  const key = params.key.replace(/^\/+/, "");
+  const command = new PutObjectCommand({
+    Bucket: process.env.R2_PRIVATE_BUCKET_NAME!,
+    Key: key,
+    ContentType: params.contentType,
+  });
+  const uploadUrl = await getSignedUrl(getS3Client(), command, {
+    expiresIn: params.expiresIn ?? 600,
+  });
+  return { uploadUrl, storageReference: privateStorageReference(key) };
+}
+
 export async function uploadObject(params: {
   key: string;
   body: Uint8Array | Buffer;
@@ -111,6 +138,42 @@ export async function uploadPrivateObject(params: {
   );
 
   return { storageReference: privateStorageReference(key) };
+}
+
+/** Moves an approved quarantined object into the public media bucket. */
+export async function promoteQuarantinedObject(params: {
+  storageReference: string;
+  destinationKey: string;
+}): Promise<{ publicUrl: string }> {
+  if (!isPrivateStorageReference(params.storageReference)) {
+    throw new Error("Expected a quarantined storage reference");
+  }
+  if (!isPrivateR2Configured() || !isR2Configured()) {
+    throw new Error("R2 quarantine and public storage must both be configured");
+  }
+
+  const sourceKey = params.storageReference
+    .slice(PRIVATE_STORAGE_PREFIX.length)
+    .replace(/^\/+/, "");
+  const destinationKey = params.destinationKey.replace(/^\/+/, "");
+  const source = [process.env.R2_PRIVATE_BUCKET_NAME!, ...sourceKey.split("/")]
+    .map(encodeURIComponent)
+    .join("/");
+
+  await getS3Client().send(new CopyObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME!,
+    Key: destinationKey,
+    CopySource: source,
+    MetadataDirective: "COPY",
+  }));
+  await getS3Client().send(new DeleteObjectCommand({
+    Bucket: process.env.R2_PRIVATE_BUCKET_NAME!,
+    Key: sourceKey,
+  }));
+
+  return {
+    publicUrl: `${process.env.R2_PUBLIC_URL!.replace(/\/$/, "")}/${destinationKey}`,
+  };
 }
 
 export function privateStorageReference(key: string): string {
@@ -292,4 +355,13 @@ export function buildStorageKey(params: {
   const ext = params.filename.split(".").pop() || "bin";
   const timestamp = Date.now();
   return `${params.entity}/${params.ownerId}/${params.recordId}/${timestamp}.${ext}`;
+}
+
+export function buildQuarantineKey(params: {
+  entity: string;
+  ownerId: string;
+  recordId: string;
+  filename: string;
+}): string {
+  return `quarantine/${buildStorageKey(params)}`;
 }

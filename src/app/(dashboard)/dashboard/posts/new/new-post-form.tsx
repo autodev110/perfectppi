@@ -33,6 +33,7 @@ export function NewPostForm({ vehicles, listings }: NewPostFormProps) {
   // A failed media upload leaves the post already created — retrying the form
   // must attach to that post rather than publish a second one.
   const createdPostId = useRef<string | null>(null);
+  const createdModerationStatus = useRef<string | null>(null);
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -51,6 +52,7 @@ export function NewPostForm({ vehicles, listings }: NewPostFormProps) {
       }
       postId = result.data?.id ?? null;
       createdPostId.current = postId;
+      createdModerationStatus.current = result.data?.moderationStatus ?? null;
     }
 
     if (postId && media.length > 0) {
@@ -88,7 +90,7 @@ export function NewPostForm({ vehicles, listings }: NewPostFormProps) {
       }
     }
 
-    router.push("/dashboard/posts");
+    router.push(createdModerationStatus.current === "active" ? "/dashboard/posts" : "/dashboard/posts?tab=review");
     router.refresh();
   }
 

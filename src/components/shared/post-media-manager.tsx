@@ -104,7 +104,13 @@ export function PostMediaManager({
               key={item.id}
               className="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
             >
-              {item.media_type === "video" ? (
+              {item.moderation_status !== "active" ? (
+                <div className="flex h-full flex-col items-center justify-center gap-1 p-2 text-center text-xs text-muted-foreground">
+                  <ImagePlus className="h-5 w-5" />
+                  <span className="font-semibold capitalize">{item.moderation_status.replaceAll("_", " ")}</span>
+                  <span>This media is not public.</span>
+                </div>
+              ) : item.media_type === "video" ? (
                 <>
                   <video src={item.url} className="h-full w-full object-cover" muted playsInline preload="metadata" />
                   <Video className="absolute bottom-1.5 left-1.5 h-3.5 w-3.5 text-white drop-shadow" />

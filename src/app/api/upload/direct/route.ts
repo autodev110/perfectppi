@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { uploadObject, buildStorageKey } from "@/lib/storage/r2";
+import {
+  buildQuarantineKey,
+  buildStorageKey,
+  uploadObject,
+  uploadPrivateObject,
+} from "@/lib/storage/r2";
 import { z } from "zod";
 import { UPLOAD_LIMITS } from "@/config/constants";
 import { canUploadToTarget } from "@/features/uploads/access";
@@ -97,17 +102,26 @@ export async function POST(request: Request) {
     );
   }
 
-  const key = buildStorageKey({
+  const keyParams = {
     entity: parsed.data.entity,
     ownerId: profile.id,
     recordId: parsed.data.recordId,
     filename: file.name,
-  });
+  };
 
   try {
     const arrayBuffer = await file.arrayBuffer();
+    if (parsed.data.entity === "community_post") {
+      const { storageReference } = await uploadPrivateObject({
+        key: buildQuarantineKey(keyParams),
+        body: Buffer.from(arrayBuffer),
+        contentType: file.type,
+      });
+      return NextResponse.json({ publicUrl: storageReference }, { status: 201 });
+    }
+
     const { publicUrl } = await uploadObject({
-      key,
+      key: buildStorageKey(keyParams),
       body: Buffer.from(arrayBuffer),
       contentType: file.type,
     });

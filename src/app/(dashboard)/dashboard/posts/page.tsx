@@ -11,6 +11,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils/formatting";
 import { AlertTriangle, Archive, ExternalLink, MessageSquare, Plus, RotateCcw, Trash2, Users } from "lucide-react";
 import { PostMediaManager } from "@/components/shared/post-media-manager";
+import { appealModerationItem } from "@/features/moderation/actions";
+import { Textarea } from "@/components/ui/textarea";
 
 type PageProps = {
   searchParams: Promise<{ tab?: string }>;
@@ -22,7 +24,7 @@ function getVehicleName(vehicle: { year: number | null; make: string | null; mod
 
 export default async function DashboardPostsPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const tab = params.tab === "archived" ? "archived" : "active";
+  const tab = params.tab === "archived" ? "archived" : params.tab === "review" ? "review" : "active";
 
   const posts = await getMyCommunityPosts(tab);
 
@@ -56,6 +58,16 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
           Active
         </Link>
         <Link
+          href="/dashboard/posts?tab=review"
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            tab === "review"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          In Review
+        </Link>
+        <Link
           href="/dashboard/posts?tab=archived"
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             tab === "archived"
@@ -87,6 +99,12 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
                   Posts you archive will appear here for 30 days before being permanently removed.
                 </p>
               </>
+            ) : tab === "review" ? (
+              <>
+                <AlertTriangle className="mb-4 h-12 w-12 text-muted-foreground" />
+                <p className="text-lg font-medium">Nothing awaiting moderation</p>
+                <p className="max-w-md text-sm text-muted-foreground">Posts held for review or rejected under the community guidelines appear here.</p>
+              </>
             ) : (
               <>
                 <Users className="mb-4 h-12 w-12 text-muted-foreground" />
@@ -115,6 +133,11 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
                       <div className="flex flex-wrap items-center gap-2">
                         {vehicleName && <Badge variant="secondary">{vehicleName}</Badge>}
                         {post.marketplace_listing && <Badge variant="secondary">Listing shared</Badge>}
+                        {tab === "review" && (
+                          <Badge variant={post.moderation_status === "rejected" ? "destructive" : "outline"}>
+                            {post.moderation_status.replaceAll("_", " ")}
+                          </Badge>
+                        )}
                         {daysLeft !== null && (
                           <Badge
                             variant="outline"
@@ -130,6 +153,14 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
                       </div>
                       <p className="max-w-3xl whitespace-pre-wrap text-sm text-muted-foreground">{post.content}</p>
                       <PostMediaManager postId={post.id} media={post.media} />
+                      {tab === "review" && post.moderation_status === "rejected" ? (
+                        <form action={appealModerationItem} className="max-w-xl space-y-2 rounded-xl border p-3">
+                          <input type="hidden" name="entity_id" value={post.id} />
+                          <p className="text-xs font-semibold">Think this was a mistake?</p>
+                          <Textarea name="statement" minLength={10} maxLength={1000} rows={2} required placeholder="Explain why this post should be reviewed again." />
+                          <Button type="submit" size="sm" variant="outline">Submit appeal</Button>
+                        </form>
+                      ) : null}
                       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                         <span>Created {formatDate(post.created_at)}</span>
                         {tab === "archived" && (

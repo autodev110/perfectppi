@@ -24,6 +24,8 @@ enum CommunityAPI {
 
     struct CreatePostResponse: Decodable {
         let id: String
+        let moderationStatus: String?
+        let moderationMessage: String?
     }
 
     static func createPost(_ payload: CreatePostPayload) async throws -> CreatePostResponse {
@@ -71,15 +73,29 @@ enum CommunityAPI {
         let content: String
     }
 
-    /// The server responds with only `{ id }` for a created comment, so we
-    /// don't try to decode a full `CommunityComment` here (that mismatch is
-    /// what made commenting surface "couldn't read the server response" even
-    /// though the insert succeeded). Callers reload the feed to pick up the new
-    /// comment with its full shape.
-    static func comment(postId: String, content: String) async throws -> Empty {
+    struct CommentResponse: Decodable {
+        let id: String
+        let moderationStatus: String?
+        let moderationMessage: String?
+    }
+
+    static func comment(postId: String, content: String) async throws -> CommentResponse {
         try await APIClient.shared.post(
             "/api/community/posts/\(postId)/comments",
             body: CommentPayload(content: content)
+        )
+    }
+
+    struct ReportPayload: Encodable {
+        let entityType: String
+        let entityId: String
+        let reasonCode: String
+    }
+
+    static func report(entityType: String, entityId: String, reasonCode: String) async throws -> Empty {
+        try await APIClient.shared.postCamel(
+            "/api/community/reports",
+            body: ReportPayload(entityType: entityType, entityId: entityId, reasonCode: reasonCode)
         )
     }
 }

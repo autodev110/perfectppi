@@ -1,10 +1,30 @@
 # Social Media User Image Upload Compliance Brainstorm
 
+**Status:** MVP implemented; production configuration and legal review pending
+
+This is the only active product plan currently tracked for PerfectPPI. The OBD
+tool, native iOS app, and PerfectPPI side of the DealerSpace integration are
+completed and are documented separately as implemented functionality.
+
 Date: 2026-08-04
 
 Purpose: define a practical moderation system for PerfectPPI community posts, comments, and user-uploaded media so posts can publish quickly when clearly safe while still blocking, quarantining, or escalating illegal, obscene, abusive, or off-policy content.
 
 This is a product and engineering brainstorming note, not legal advice. The final policy, enforcement wording, retention rules, and reporting obligations should be reviewed by counsel before launch.
+
+## Implementation Status (2026-08-31)
+
+Phases 1 through 3 of the MVP are implemented in PerfectPPI:
+
+- Posts and comments are checked before publication using native spam rules and OpenAI `omni-moderation-latest`.
+- Community images and videos upload to private R2 quarantine storage. Approved images are promoted; videos remain private for manual review in the MVP.
+- Moderation decisions, events, reports, hashes, appeals, and account enforcement are stored in service-only Supabase tables.
+- Users can report posts/comments, see posts held for review, and appeal rejected posts.
+- Administrators have a protected moderation queue with approve, reject, legal-hold, warning, temporary hold, and suspension actions.
+- Web and iOS clients show pending-review outcomes instead of presenting held content as published.
+- Direct authenticated database writes to community content are revoked so clients cannot bypass the server moderation flow.
+
+Production rollout still requires applying the moderation migration, configuring `OPENAI_API_KEY` and private/public R2 storage, and completing counsel review of legal-hold, evidence retention, moderator access, enforcement language, and reporting obligations. Phase 4 model improvements remain future work.
 
 ## Current Project Surface
 
@@ -18,7 +38,7 @@ The repo already has a lightweight social/community layer:
   - `src/app/api/upload/presigned-url/route.ts`
 - Community posts currently attach vehicles/listings rather than arbitrary post images, but user image compliance still matters because public posts can expose vehicle photos, media packages, avatars, inspection media, and future post attachments.
 
-Main gap: there is no content moderation state machine, no automated scan, no human review queue, no user enforcement/audit history, and no way to prevent public exposure before uploaded media is checked.
+Historical gap when this plan was written: there was no content moderation state machine, automated scan, human review queue, user enforcement/audit history, or quarantine-first media flow. The MVP implementation above now covers those surfaces.
 
 ## Recommended Direction
 
@@ -441,7 +461,7 @@ Hash matching:
 
 ## Initial MVP Implementation Plan
 
-### Phase 1: Stop Public-First Posting
+### Phase 1: Stop Public-First Posting (Implemented)
 
 Goal: no unreviewed suspicious content goes public.
 
@@ -455,7 +475,7 @@ Tasks:
 6. Add report buttons on posts/comments.
 7. Add rate limits and account-level cooldowns.
 
-### Phase 2: Media Quarantine
+### Phase 2: Media Quarantine (Implemented)
 
 Goal: images never become public before scan.
 
@@ -468,7 +488,7 @@ Tasks:
 5. Promote approved uploads to public/approved path.
 6. Show upload state: scanning, approved, rejected, pending review.
 
-### Phase 3: Better Review And Enforcement
+### Phase 3: Better Review And Enforcement (Implemented)
 
 Goal: reduce manual work without losing control.
 
@@ -486,7 +506,7 @@ Tasks:
    - time to review
    - repeat offender count
 
-### Phase 4: Native Model Improvements
+### Phase 4: Native Model Improvements (Future)
 
 Goal: reduce vendor reliance.
 

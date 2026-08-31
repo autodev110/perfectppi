@@ -1,5 +1,7 @@
 # Perfect PPI ↔ DealerSpace Integration — Perfect PPI side
 
+**Status:** Completed on the PerfectPPI side
+
 This is the reference for the partner integration implemented in this
 repository. It documents the contract DealerSpace must implement against, the
 environment it needs, and how to run the acceptance tests locally.

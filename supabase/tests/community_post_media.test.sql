@@ -51,13 +51,6 @@ INSERT INTO public.community_posts (id, author_id, content, status) VALUES (
   'active'
 );
 
-SET LOCAL ROLE authenticated;
-SELECT set_config(
-  'request.jwt.claims',
-  '{"sub":"41000000-0000-0000-0000-000000000001","role":"authenticated"}',
-  true
-);
-
 INSERT INTO public.community_post_media (
   post_id, uploader_id, url, media_type, content_type, sort_order
 )
@@ -69,6 +62,13 @@ SELECT
   'image/jpeg',
   position
 FROM generate_series(0, 9) AS position;
+
+SET LOCAL ROLE authenticated;
+SELECT set_config(
+  'request.jwt.claims',
+  '{"sub":"41000000-0000-0000-0000-000000000001","role":"authenticated"}',
+  true
+);
 
 DO $$
 BEGIN
@@ -86,8 +86,22 @@ BEGIN
     FROM public.community_post_media
     WHERE post_id = '42000000-0000-0000-0000-000000000001'
   ) <> 10 THEN
-    RAISE EXCEPTION 'owner could not create a ten-item post carousel';
+    RAISE EXCEPTION 'server could not create a ten-item post carousel';
   END IF;
+
+  BEGIN
+    INSERT INTO public.community_post_media (
+      post_id, uploader_id, url, media_type, content_type, sort_order
+    ) VALUES (
+      '42000000-0000-0000-0000-000000000002',
+      '41100000-0000-0000-0000-000000000001',
+      'https://media.example.test/direct-write.jpg',
+      'image', 'image/jpeg', 0
+    );
+    RAISE EXCEPTION 'an authenticated client bypassed server moderation';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
 
   BEGIN
     INSERT INTO public.community_post_media (
@@ -103,7 +117,7 @@ BEGIN
     );
     RAISE EXCEPTION 'an eleventh post-media item was accepted';
   EXCEPTION
-    WHEN check_violation THEN NULL;
+    WHEN check_violation OR insufficient_privilege THEN NULL;
   END;
 END;
 $$;

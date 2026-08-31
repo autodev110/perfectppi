@@ -61,11 +61,15 @@ function getProfileIdFromAuthUserId(authUserId: string) {
     .single();
 }
 
-function cleanPosts(posts: CommunityPost[]) {
+function cleanPosts(posts: CommunityPost[], includeModerated = false) {
   return posts.map((post) => ({
     ...post,
-    media: [...(post.media ?? [])].sort((a, b) => a.sort_order - b.sort_order),
-    comments: (post.comments ?? []).filter((comment) => comment.status === "active"),
+    media: [...(post.media ?? [])]
+      .filter((media) => includeModerated || media.moderation_status === "active")
+      .sort((a, b) => a.sort_order - b.sort_order),
+    comments: (post.comments ?? []).filter((comment) =>
+      comment.status === "active" && comment.moderation_status === "active"
+    ),
   }));
 }
 
@@ -75,6 +79,7 @@ export async function getCommunityPosts() {
     .from("community_posts")
     .select(COMMUNITY_POST_SELECT)
     .eq("status", "active")
+    .eq("moderation_status", "active")
     .order("created_at", { ascending: false })
     .order("created_at", { ascending: true, referencedTable: "community_comments" });
 
@@ -96,7 +101,7 @@ export function archiveDaysRemaining(updatedAt: string): number {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-export async function getMyCommunityPosts(status: "active" | "archived" = "active") {
+export async function getMyCommunityPosts(status: "active" | "archived" | "review" = "active") {
   const supabase = await createClient();
   const {
     data: { user },
@@ -112,11 +117,16 @@ export async function getMyCommunityPosts(status: "active" | "archived" = "activ
     .from("community_posts")
     .select(COMMUNITY_POST_SELECT)
     .eq("author_id", profile.id)
-    .eq("status", status)
     .order("created_at", { ascending: false })
     .order("created_at", { ascending: true, referencedTable: "community_comments" });
 
   // For archived posts, only show those within the 30-day window
+  if (status === "review") {
+    query = query.neq("moderation_status", "active").neq("status", "archived");
+  } else {
+    query = query.eq("status", status);
+  }
+
   if (status === "archived") {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - ARCHIVE_EXPIRY_DAYS);
@@ -124,7 +134,7 @@ export async function getMyCommunityPosts(status: "active" | "archived" = "activ
   }
 
   const { data } = await query;
-  return cleanPosts((data ?? []) as CommunityPost[]);
+  return cleanPosts((data ?? []) as CommunityPost[], true);
 }
 
 export async function getAdminCommunityPosts(page = 1, perPage = 50, status?: "active" | "archived" | "all") {
@@ -149,7 +159,7 @@ export async function getAdminCommunityPosts(page = 1, perPage = 50, status?: "a
   const { data, count } = await query;
 
   return {
-    posts: (data ?? []) as CommunityPost[],
+    posts: cleanPosts((data ?? []) as CommunityPost[], true),
     total: count ?? 0,
   };
 }
@@ -193,6 +203,7 @@ export async function getVehicleDiscussionPosts(vehicleId: string) {
     .from("community_posts")
     .select(COMMUNITY_POST_SELECT)
     .eq("status", "active")
+    .eq("moderation_status", "active")
     .eq("vehicle_id", vehicleId)
     .order("created_at", { ascending: false })
     .order("created_at", { ascending: true, referencedTable: "community_comments" });

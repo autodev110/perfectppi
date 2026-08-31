@@ -134,6 +134,7 @@ private struct CommunityPostDetailView: View {
     @State private var showingPhotoPicker = false
     @State private var removingMediaId: String?
     @StateObject private var uploadProgress = UploadProgressModel()
+    @State private var reportSubmitted = false
 
     init(post: CommunityPost, onChanged: @escaping () -> Void) {
         self.post = post
@@ -146,89 +147,19 @@ private struct CommunityPostDetailView: View {
         auth.profile?.id == post.authorId
     }
 
+    private var authorName: String {
+        post.author?.displayName ?? post.author?.username ?? "PerfectPPI member"
+    }
+
     var body: some View {
         List {
-            Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(post.author?.displayName ?? post.author?.username ?? "PerfectPPI member")
-                        .font(.headline)
-                    Text(post.content)
-                        .font(.body)
-                    if !media.isEmpty {
-                        CommunityMediaCarousel(media: media)
-                            .frame(height: 320)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                    if let vehicle = post.vehicle {
-                        VehicleMiniCard(vehicle: vehicle)
-                    }
-                    if let listing = post.marketplaceListing {
-                        MarketplaceListingMiniCard(listing: listing)
-                    }
-                }
-                .padding(.vertical, 6)
-            }
+            postSection
 
             if isMyPost {
-                Section("Photos and videos (\(media.count)/10)") {
-                    ForEach(media) { item in
-                        HStack {
-                            Image(systemName: item.mediaType == "video" ? "video.fill" : "photo.fill")
-                                .foregroundStyle(Theme.Palette.primary)
-                            Text("Item \(item.sortOrder + 1)")
-                                .font(.subheadline)
-                            Spacer()
-                            Button(role: .destructive) {
-                                Task { await removeMedia(item) }
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                            .disabled(removingMediaId != nil || uploadProgress.isUploading)
-                        }
-                    }
-
-                    Button {
-                        Task { await openPhotoLibrary() }
-                    } label: {
-                        Label(media.isEmpty ? "Add Photos or Videos" : "Add More", systemImage: "photo.on.rectangle.angled")
-                    }
-                    .disabled(media.count >= 10 || uploadProgress.isUploading || removingMediaId != nil)
-
-                    if let label = uploadProgress.label {
-                        ProgressView(value: uploadProgress.fraction ?? 0) {
-                            Text(label).font(.caption)
-                        }
-                        .tint(Theme.Palette.primary)
-                    }
-                }
+                mediaManagementSection
             }
 
-            Section(comments.isEmpty ? "Comments" : "Comments (\(comments.count))") {
-                ForEach(comments) { comment in
-                    HStack(alignment: .top, spacing: 10) {
-                        Avatar(name: comment.author?.displayName ?? comment.author?.username ?? "Member", size: 32)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(comment.author?.displayName ?? comment.author?.username ?? "Member")
-                                .font(.caption.weight(.semibold))
-                            Text(comment.content)
-                                .font(.subheadline)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("Add a comment", text: $comment, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(1...4)
-                    Button(submitting ? "Posting..." : "Post Comment") {
-                        Task { await submitComment() }
-                    }
-                    .buttonStyle(PrimaryButtonStyle(isLoading: submitting))
-                    .disabled(submitting || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-                .padding(.vertical, 4)
-            }
+            commentsSection
         }
         .navigationTitle("Post")
         .navigationBarTitleDisplayMode(.inline)
@@ -245,6 +176,105 @@ private struct CommunityPostDetailView: View {
                isPresented: .constant(error != nil),
                actions: { Button("OK") { error = nil } },
                message: { Text(error ?? "") })
+        .alert("Report submitted", isPresented: $reportSubmitted) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Thank you. The moderation team will review this content.")
+        }
+    }
+
+    private var postSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(authorName)
+                    .font(.headline)
+                Text(post.content)
+                    .font(.body)
+                ReportMenu { reasonCode in
+                    Task { await report(entityType: "community_post", entityId: post.id, reasonCode: reasonCode) }
+                }
+                if !media.isEmpty {
+                    CommunityMediaCarousel(media: media)
+                        .frame(height: 320)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                if let vehicle = post.vehicle {
+                    VehicleMiniCard(vehicle: vehicle)
+                }
+                if let listing = post.marketplaceListing {
+                    MarketplaceListingMiniCard(listing: listing)
+                }
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    private var mediaManagementSection: some View {
+        Section("Photos and videos (\(media.count)/10)") {
+            ForEach(media) { item in
+                HStack {
+                    Image(systemName: item.mediaType == "video" ? "video.fill" : "photo.fill")
+                        .foregroundStyle(Theme.Palette.primary)
+                    Text("Item \(item.sortOrder + 1)")
+                        .font(.subheadline)
+                    Spacer()
+                    Button(role: .destructive) {
+                        Task { await removeMedia(item) }
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .disabled(removingMediaId != nil || uploadProgress.isUploading)
+                }
+            }
+
+            Button {
+                Task { await openPhotoLibrary() }
+            } label: {
+                Label(media.isEmpty ? "Add Photos or Videos" : "Add More", systemImage: "photo.on.rectangle.angled")
+            }
+            .disabled(media.count >= 10 || uploadProgress.isUploading || removingMediaId != nil)
+
+            if let label = uploadProgress.label {
+                ProgressView(value: uploadProgress.fraction ?? 0) {
+                    Text(label).font(.caption)
+                }
+                .tint(Theme.Palette.primary)
+            }
+        }
+    }
+
+    private var commentsSection: some View {
+        Section(comments.isEmpty ? "Comments" : "Comments (\(comments.count))") {
+            ForEach(comments) { item in
+                let commentAuthor = item.author?.displayName ?? item.author?.username ?? "Member"
+                HStack(alignment: .top, spacing: 10) {
+                    Avatar(name: commentAuthor, size: 32)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(commentAuthor)
+                            .font(.caption.weight(.semibold))
+                        Text(item.content)
+                            .font(.subheadline)
+                    }
+                    Spacer()
+                    ReportMenu { reasonCode in
+                        Task { await report(entityType: "community_comment", entityId: item.id, reasonCode: reasonCode) }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("Add a comment", text: $comment, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...4)
+                Button(submitting ? "Posting..." : "Post Comment") {
+                    Task { await submitComment() }
+                }
+                .buttonStyle(PrimaryButtonStyle(isLoading: submitting))
+                .disabled(submitting || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.vertical, 4)
+        }
     }
 
     private func openPhotoLibrary() async {
@@ -286,7 +316,11 @@ private struct CommunityPostDetailView: View {
                 ))
             }
             let created = try await CommunityAPI.addMedia(postId: post.id, items: payload)
-            media = (media + created).sorted { $0.sortOrder < $1.sortOrder }
+            let approved = created.filter { $0.moderationStatus == "active" }
+            media = (media + approved).sorted { $0.sortOrder < $1.sortOrder }
+            if approved.count != created.count {
+                self.error = "Some media is being reviewed and is not public yet."
+            }
             onChanged()
         } catch {
             self.error = error.localizedDescription
@@ -324,6 +358,8 @@ private struct CommunityPostDetailView: View {
             authorId: auth.profile?.id ?? "",
             content: text,
             status: .active,
+            moderationStatus: "active",
+            moderationReason: nil,
             createdAt: Date(),
             updatedAt: nil,
             author: auth.profile
@@ -332,7 +368,12 @@ private struct CommunityPostDetailView: View {
         comment = ""
 
         do {
-            _ = try await CommunityAPI.comment(postId: post.id, content: text)
+            let response = try await CommunityAPI.comment(postId: post.id, content: text)
+            if response.moderationStatus != "active" {
+                comments.removeAll { $0.id == optimistic.id }
+                self.error = response.moderationMessage ?? "Your comment is being reviewed and is not public yet."
+                return
+            }
             onChanged()
             // Replace the optimistic placeholder with the canonical rows so the
             // count and author details match the server.
@@ -344,6 +385,37 @@ private struct CommunityPostDetailView: View {
             comments.removeAll { $0.id == optimistic.id }
             comment = text
             self.error = error.localizedDescription
+        }
+    }
+
+    private func report(entityType: String, entityId: String, reasonCode: String) async {
+        do {
+            _ = try await CommunityAPI.report(entityType: entityType, entityId: entityId, reasonCode: reasonCode)
+            reportSubmitted = true
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+private struct ReportMenu: View {
+    let onReport: (String) -> Void
+
+    var body: some View {
+        Menu {
+            Button("Spam") { onReport("spam") }
+            Button("Harassment") { onReport("harassment") }
+            Button("Hate or abuse") { onReport("hate") }
+            Button("Violence") { onReport("violence") }
+            Button("Sexual content") { onReport("sexual_content") }
+            Button("Personal information") { onReport("personal_information") }
+            Button("Fraud or scam") { onReport("fraud") }
+            Button("Illegal content", role: .destructive) { onReport("illegal_content") }
+            Button("Other") { onReport("other") }
+        } label: {
+            Label("Report", systemImage: "flag")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -363,9 +435,11 @@ private struct NewCommunityPostView: View {
     @State private var showingCamera = false
     @State private var photoAccessBlocked = false
     @StateObject private var uploadProgress = UploadProgressModel()
+    @State private var submittedForReview = false
     /// A failed media upload leaves the post already created — a retry has to
     /// attach to that post instead of publishing a second one.
     @State private var createdPostId: String?
+    @State private var createdModerationStatus = "active"
 
     var body: some View {
         NavigationStack {
@@ -480,6 +554,11 @@ private struct NewCommunityPostView: View {
                     onCancel: { showingCamera = false }
                 )
             }
+            .alert("Submitted for review", isPresented: $submittedForReview) {
+                Button("OK") { dismiss() }
+            } message: {
+                Text("Content that needs review will remain private until it is approved.")
+            }
         }
     }
 
@@ -516,17 +595,23 @@ private struct NewCommunityPostView: View {
             let listingId = selectedListingId.isEmpty ? nil : selectedListingId
             let vehicleId = selectedVehicleId.isEmpty ? nil : selectedVehicleId
             let postId: String
+            var moderationStatus = "active"
+            var hasPendingMedia = false
             if let createdPostId {
                 postId = createdPostId
+                moderationStatus = createdModerationStatus
             } else {
-                postId = try await CommunityAPI.createPost(
+                let response = try await CommunityAPI.createPost(
                     .init(
                         content: trimmed,
                         vehicleId: listingId == nil ? vehicleId : nil,
                         listingId: listingId
                     )
-                ).id
+                )
+                postId = response.id
+                moderationStatus = response.moderationStatus ?? "pending_review"
                 createdPostId = postId
+                createdModerationStatus = moderationStatus
             }
             if !media.isEmpty {
                 uploadProgress.begin(total: media.count)
@@ -549,10 +634,15 @@ private struct NewCommunityPostView: View {
                         sortOrder: index
                     ))
                 }
-                _ = try await CommunityAPI.addMedia(postId: postId, items: uploaded)
+                let created = try await CommunityAPI.addMedia(postId: postId, items: uploaded)
+                hasPendingMedia = created.contains { $0.moderationStatus != "active" }
             }
             onCreated()
-            dismiss()
+            if moderationStatus == "active" && !hasPendingMedia {
+                dismiss()
+            } else {
+                submittedForReview = true
+            }
         } catch {
             self.error = error.localizedDescription
             photoAccessBlocked = false

@@ -50,6 +50,7 @@ export const navConfig = {
     { label: "Vehicles", href: "/admin/vehicles", icon: "Car" },
     { label: "Listings", href: "/admin/listings", icon: "Tag" },
     { label: "Community", href: "/admin/community", icon: "Newspaper" },
+    { label: "Moderation", href: "/admin/moderation", icon: "ShieldAlert" },
     { label: "Technicians", href: "/admin/technicians", icon: "Wrench" },
     { label: "Organizations", href: "/admin/organizations", icon: "Building2" },
     {

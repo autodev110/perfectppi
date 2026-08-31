@@ -107,6 +107,8 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let marketplaceListingId: String?
     let content: String
     let status: CommunityContentStatus
+    let moderationStatus: String?
+    let moderationReason: String?
     let createdAt: Date?
     let updatedAt: Date?
     let author: Profile?
@@ -124,6 +126,8 @@ struct CommunityPostMedia: Codable, Identifiable, Hashable {
     let mediaType: String
     let contentType: String
     let sortOrder: Int
+    let moderationStatus: String?
+    let moderationReason: String?
     let createdAt: Date?
 }
 
@@ -139,6 +143,8 @@ extension CommunityPostMedia {
             mediaType: mediaType,
             contentType: contentType,
             sortOrder: value,
+            moderationStatus: moderationStatus,
+            moderationReason: moderationReason,
             createdAt: createdAt
         )
     }
@@ -150,6 +156,8 @@ struct CommunityComment: Codable, Identifiable, Hashable {
     let authorId: String
     let content: String
     let status: CommunityContentStatus
+    let moderationStatus: String?
+    let moderationReason: String?
     let createdAt: Date?
     let updatedAt: Date?
     let author: Profile?

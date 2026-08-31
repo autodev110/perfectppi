@@ -60,6 +60,10 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          moderation_checked_at: string | null
+          moderation_reason: string | null
+          moderation_status: string
+          moderation_version: string | null
           post_id: string
           status: Database["public"]["Enums"]["community_content_status"]
           updated_at: string
@@ -69,6 +73,10 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          moderation_checked_at?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          moderation_version?: string | null
           post_id: string
           status?: Database["public"]["Enums"]["community_content_status"]
           updated_at?: string
@@ -78,6 +86,10 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          moderation_checked_at?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          moderation_version?: string | null
           post_id?: string
           status?: Database["public"]["Enums"]["community_content_status"]
           updated_at?: string
@@ -106,6 +118,10 @@ export type Database = {
           created_at: string
           id: string
           marketplace_listing_id: string | null
+          moderation_checked_at: string | null
+          moderation_reason: string | null
+          moderation_status: string
+          moderation_version: string | null
           status: Database["public"]["Enums"]["community_content_status"]
           updated_at: string
           vehicle_id: string | null
@@ -116,6 +132,10 @@ export type Database = {
           created_at?: string
           id?: string
           marketplace_listing_id?: string | null
+          moderation_checked_at?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          moderation_version?: string | null
           status?: Database["public"]["Enums"]["community_content_status"]
           updated_at?: string
           vehicle_id?: string | null
@@ -126,6 +146,10 @@ export type Database = {
           created_at?: string
           id?: string
           marketplace_listing_id?: string | null
+          moderation_checked_at?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          moderation_version?: string | null
           status?: Database["public"]["Enums"]["community_content_status"]
           updated_at?: string
           vehicle_id?: string | null
@@ -160,6 +184,10 @@ export type Database = {
           created_at: string
           id: string
           media_type: Database["public"]["Enums"]["community_media_type"]
+          moderation_checked_at: string | null
+          moderation_reason: string | null
+          moderation_status: string
+          moderation_version: string | null
           post_id: string
           sort_order: number
           uploader_id: string
@@ -170,6 +198,10 @@ export type Database = {
           created_at?: string
           id?: string
           media_type: Database["public"]["Enums"]["community_media_type"]
+          moderation_checked_at?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          moderation_version?: string | null
           post_id: string
           sort_order: number
           uploader_id: string
@@ -180,6 +212,10 @@ export type Database = {
           created_at?: string
           id?: string
           media_type?: Database["public"]["Enums"]["community_media_type"]
+          moderation_checked_at?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          moderation_version?: string | null
           post_id?: string
           sort_order?: number
           uploader_id?: string
@@ -198,6 +234,337 @@ export type Database = {
             columns: ["uploader_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moderation_appeals: {
+        Row: {
+          appellant_id: string
+          created_at: string
+          id: string
+          moderation_item_id: string
+          resolution_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          statement: string
+          status: string
+        }
+        Insert: {
+          appellant_id: string
+          created_at?: string
+          id?: string
+          moderation_item_id: string
+          resolution_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          statement: string
+          status?: string
+        }
+        Update: {
+          appellant_id?: string
+          created_at?: string
+          id?: string
+          moderation_item_id?: string
+          resolution_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          statement?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moderation_appeals_appellant_id_fkey"
+            columns: ["appellant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_appeals_moderation_item_id_fkey"
+            columns: ["moderation_item_id"]
+            isOneToOne: false
+            referencedRelation: "moderation_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_appeals_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moderation_events: {
+        Row: {
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          moderation_item_id: string
+          next_status: string
+          notes: string | null
+          previous_status: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_type: string
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          moderation_item_id: string
+          next_status: string
+          notes?: string | null
+          previous_status?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          moderation_item_id?: string
+          next_status?: string
+          notes?: string | null
+          previous_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moderation_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_events_moderation_item_id_fkey"
+            columns: ["moderation_item_id"]
+            isOneToOne: false
+            referencedRelation: "moderation_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moderation_hashes: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          entity_id: string
+          entity_type: string
+          file_size: number
+          height: number | null
+          id: string
+          mime_type: string
+          perceptual_hash: string | null
+          scan_status: string
+          sha256: string
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          entity_id: string
+          entity_type: string
+          file_size: number
+          height?: number | null
+          id?: string
+          mime_type: string
+          perceptual_hash?: string | null
+          scan_status: string
+          sha256: string
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          entity_id?: string
+          entity_type?: string
+          file_size?: number
+          height?: number | null
+          id?: string
+          mime_type?: string
+          perceptual_hash?: string | null
+          scan_status?: string
+          sha256?: string
+          width?: number | null
+        }
+        Relationships: []
+      }
+      moderation_items: {
+        Row: {
+          author_id: string
+          content_preview: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string
+          entity_id: string
+          entity_type: string
+          id: string
+          model_name: string | null
+          model_provider: string
+          model_version: string
+          raw_result: Json
+          reason_codes: string[]
+          report_count: number
+          risk_level: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          content_preview?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          model_name?: string | null
+          model_provider: string
+          model_version: string
+          raw_result?: Json
+          reason_codes?: string[]
+          report_count?: number
+          risk_level: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          content_preview?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          model_name?: string | null
+          model_provider?: string
+          model_version?: string
+          raw_result?: Json
+          reason_codes?: string[]
+          report_count?: number
+          risk_level?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moderation_items_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_items_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moderation_reports: {
+        Row: {
+          created_at: string
+          details: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+          reason_code: string
+          reporter_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          reason_code: string
+          reporter_id: string
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          reason_code?: string
+          reporter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moderation_reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_enforcement_actions: {
+        Row: {
+          action_type: string
+          created_at: string
+          created_by: string | null
+          ends_at: string | null
+          id: string
+          profile_id: string
+          reason_code: string
+          related_moderation_item_id: string | null
+          starts_at: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          id?: string
+          profile_id: string
+          reason_code: string
+          related_moderation_item_id?: string | null
+          starts_at?: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          id?: string
+          profile_id?: string
+          reason_code?: string
+          related_moderation_item_id?: string | null
+          starts_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_enforcement_actions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_enforcement_actions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_enforcement_actions_related_moderation_item_id_fkey"
+            columns: ["related_moderation_item_id"]
+            isOneToOne: false
+            referencedRelation: "moderation_items"
             referencedColumns: ["id"]
           },
         ]

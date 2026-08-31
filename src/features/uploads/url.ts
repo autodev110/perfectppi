@@ -27,3 +27,14 @@ export const uploadedUrlSchema = z
     (value) => isManagedUploadUrl(value),
     "Media must be uploaded through PerfectPPI",
   );
+
+export function isQuarantineReference(value: string): boolean {
+  return value.startsWith("r2-private:///quarantine/") && value.length > 27;
+}
+
+export const communityUploadReferenceSchema = z
+  .string()
+  .refine(
+    (value) => isQuarantineReference(value),
+    "Community media must be uploaded to PerfectPPI quarantine storage",
+  );

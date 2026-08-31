@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { createCommunityComment } from "@/features/community/actions";
+import { reportCommunityContent } from "@/features/moderation/actions";
 import { getCommunityPosts } from "@/features/community/queries";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate, formatMileage, getInitials } from "@/lib/utils/formatting";
-import { Car, MessageSquare, Plus, Tag, Users } from "lucide-react";
+import { Car, Flag, MessageSquare, Plus, Tag, Users } from "lucide-react";
 import { PostMediaCarousel } from "@/components/shared/post-media-carousel";
 
 export const metadata = {
@@ -86,9 +87,10 @@ export default async function CommunityPage() {
                           <p className="text-xs text-on-surface-variant">{formatDate(post.created_at)}</p>
                         </div>
                       </div>
-                      <Badge variant="outline" className="rounded-full">
-                        Discussion
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="rounded-full">Discussion</Badge>
+                        <ReportControl entityType="community_post" entityId={post.id} />
+                      </div>
                     </div>
 
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">
@@ -155,7 +157,10 @@ export default async function CommunityPage() {
                               <p className="text-xs font-bold text-on-surface">
                                 {comment.author?.display_name ?? comment.author?.username ?? "PerfectPPI user"}
                               </p>
-                              <p className="text-[10px] text-on-surface-variant">{formatDate(comment.created_at)}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-[10px] text-on-surface-variant">{formatDate(comment.created_at)}</p>
+                                <ReportControl entityType="community_comment" entityId={comment.id} compact />
+                              </div>
                             </div>
                             <p className="whitespace-pre-wrap text-sm text-on-surface-variant">{comment.content}</p>
                           </div>
@@ -176,5 +181,42 @@ export default async function CommunityPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function ReportControl({
+  entityType,
+  entityId,
+  compact = false,
+}: {
+  entityType: "community_post" | "community_comment";
+  entityId: string;
+  compact?: boolean;
+}) {
+  return (
+    <details className="relative">
+      <summary className="cursor-pointer list-none rounded-full p-1.5 text-on-surface-variant hover:bg-surface-container-high" aria-label="Report content">
+        <Flag className={compact ? "h-3 w-3" : "h-4 w-4"} />
+      </summary>
+      <form action={reportCommunityContent} className="absolute right-0 z-20 mt-2 w-72 space-y-3 rounded-xl border bg-background p-4 shadow-xl">
+        <input type="hidden" name="entity_type" value={entityType} />
+        <input type="hidden" name="entity_id" value={entityId} />
+        <p className="text-sm font-bold">Report content</p>
+        <select name="reason_code" required defaultValue="" className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+          <option value="" disabled>Choose a reason</option>
+          <option value="spam">Spam</option>
+          <option value="harassment">Harassment</option>
+          <option value="hate">Hate or abuse</option>
+          <option value="violence">Violence</option>
+          <option value="sexual_content">Sexual content</option>
+          <option value="personal_information">Personal information</option>
+          <option value="fraud">Fraud or scam</option>
+          <option value="illegal_content">Illegal content</option>
+          <option value="other">Other</option>
+        </select>
+        <Textarea name="details" rows={2} maxLength={500} placeholder="Optional details" />
+        <Button size="sm" type="submit">Submit report</Button>
+      </form>
+    </details>
   );
 }

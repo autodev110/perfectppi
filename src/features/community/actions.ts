@@ -3,9 +3,27 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { uploadedUrlSchema } from "@/features/uploads/url";
+import { communityUploadReferenceSchema } from "@/features/uploads/url";
+import {
+  getActivePostingRestriction,
+  isCommunityRateLimited,
+  moderateImage,
+  moderateText,
+  moderateVideo,
+  moderationUserMessage,
+  publicStatusForDecision,
+  recordModeration,
+  statusForDecision,
+} from "@/lib/moderation";
+import type { ModerationResult } from "@/lib/moderation";
+import {
+  buildStorageKey,
+  getObjectFromStoredUrl,
+  promoteQuarantinedObject,
+} from "@/lib/storage/r2";
 
 const postSchema = z.object({
   content: z.string().trim().min(1, "Write something before posting").max(1200),
@@ -18,11 +36,14 @@ const MAX_POST_MEDIA = 10;
 const postMediaSchema = z.object({
   postId: z.string().uuid(),
   items: z.array(z.object({
-    url: uploadedUrlSchema,
+    url: communityUploadReferenceSchema,
     mediaType: z.enum(["image", "video"]),
     contentType: z.string().regex(/^(image|video)\//),
     sortOrder: z.number().int().min(0).max(MAX_POST_MEDIA - 1),
-  })).min(1).max(MAX_POST_MEDIA),
+  })).min(1).max(MAX_POST_MEDIA).refine(
+    (items) => new Set(items.map((item) => item.url)).size === items.length,
+    "The same upload cannot be attached more than once",
+  ),
 });
 
 const removePostMediaSchema = z.object({
@@ -76,6 +97,16 @@ export async function createCommunityPostFromInput(input: unknown) {
   const profile = await getCurrentProfileId();
   if ("error" in profile) return { error: profile.error };
 
+  const restriction = await getActivePostingRestriction(profile.profileId);
+  if (restriction) {
+    return { error: restriction.ends_at
+      ? `Community posting is unavailable until ${new Date(restriction.ends_at).toLocaleString()}`
+      : "Community posting is unavailable for this account" };
+  }
+  if (await isCommunityRateLimited(profile.profileId, "post")) {
+    return { error: "You are posting too quickly. Please wait a few minutes and try again." };
+  }
+
   const admin = createAdminClient();
   let vehicleId = parsed.data.vehicleId ?? null;
   const listingId = parsed.data.listingId ?? null;
@@ -111,16 +142,49 @@ export async function createCommunityPostFromInput(input: unknown) {
     vehicle_id: vehicleId,
     marketplace_listing_id: listingId,
     content: parsed.data.content,
-    status: "active",
+    status: "hidden",
+    moderation_status: "pending_scan",
   }).select("id").single();
 
   if (error || !data) return { error: error?.message ?? "Could not create post" };
 
+  const result = await moderateText(parsed.data.content);
+  try {
+    await recordModeration({
+      entityType: "community_post",
+      entityId: data.id,
+      authorId: profile.profileId,
+      contentPreview: parsed.data.content,
+      result,
+    });
+    const { error: updateError } = await admin
+      .from("community_posts")
+      .update({
+        status: publicStatusForDecision(result.decision),
+        moderation_status: statusForDecision(result.decision),
+        moderation_reason: result.reasonCodes[0] ?? null,
+        moderation_checked_at: new Date().toISOString(),
+        moderation_version: result.modelVersion,
+      })
+      .eq("id", data.id);
+    if (updateError) throw updateError;
+  } catch {
+    // The row remains hidden/pending_scan if persistence fails.
+    return { error: "Your post could not be checked yet. Please try again." };
+  }
+
   revalidatePath("/community");
   revalidatePath("/dashboard/posts");
   revalidatePath("/admin/community");
+  revalidatePath("/admin/moderation");
 
-  return { data };
+  return {
+    data: {
+      ...data,
+      moderationStatus: statusForDecision(result.decision),
+      moderationMessage: moderationUserMessage(result.decision),
+    },
+  };
 }
 
 export async function addCommunityPostMedia(input: unknown) {
@@ -129,6 +193,10 @@ export async function addCommunityPostMedia(input: unknown) {
 
   const profile = await getCurrentProfileId();
   if ("error" in profile) return { error: profile.error };
+
+  if (await getActivePostingRestriction(profile.profileId, true)) {
+    return { error: "Media uploads are unavailable for this account" };
+  }
 
   const admin = createAdminClient();
   const { data: post } = await admin
@@ -139,6 +207,11 @@ export async function addCommunityPostMedia(input: unknown) {
 
   if (!post || post.author_id !== profile.profileId) {
     return { error: "Post not found" };
+  }
+
+  const quarantinePrefix = `r2-private:///quarantine/community_post/${profile.profileId}/${post.id}/`;
+  if (parsed.data.items.some((item) => !item.url.startsWith(quarantinePrefix))) {
+    return { error: "Community upload does not belong to this post" };
   }
 
   // The 10-item cap is per post, not per request, and `sort_order` is unique
@@ -163,6 +236,7 @@ export async function addCommunityPostMedia(input: unknown) {
       media_type: item.mediaType,
       content_type: item.contentType,
       sort_order: existing + index,
+      moderation_status: "pending_scan",
     }));
 
   const { data, error } = await admin
@@ -173,10 +247,165 @@ export async function addCommunityPostMedia(input: unknown) {
 
   if (error) return { error: error.message };
 
+  const scanned = [];
+  for (const media of data ?? []) {
+    let result: ModerationResult;
+    let bytes: Uint8Array | null = null;
+    let sha256: string | null = null;
+
+    try {
+      const object = await getObjectFromStoredUrl(media.url);
+      bytes = object.bytes;
+      sha256 = createHash("sha256").update(bytes).digest("hex");
+
+      if (!hasExpectedMediaSignature(bytes, media.content_type)) {
+        result = blockedMediaResult("invalid_media_signature");
+      } else {
+        const { data: duplicate } = await admin
+          .from("moderation_hashes")
+          .select("scan_status")
+          .eq("sha256", sha256)
+          .in("scan_status", ["rejected", "legal_hold"])
+          .limit(1)
+          .maybeSingle();
+
+        result = duplicate
+          ? blockedMediaResult("blocked_duplicate")
+          : media.media_type === "video"
+            ? moderateVideo()
+            : await moderateImage(bytes, media.content_type);
+      }
+
+      await recordModeration({
+        entityType: "community_post_media",
+        entityId: media.id,
+        authorId: profile.profileId,
+        contentPreview: `${media.media_type} upload`,
+        result,
+      });
+
+      let storedUrl = media.url;
+      if (result.decision === "allow") {
+        const extension = extensionForContentType(media.content_type);
+        const promoted = await promoteQuarantinedObject({
+          storageReference: media.url,
+          destinationKey: buildStorageKey({
+            entity: "community_post",
+            ownerId: profile.profileId,
+            recordId: post.id,
+            filename: `${media.id}.${extension}`,
+          }),
+        });
+        storedUrl = promoted.publicUrl;
+      }
+
+      const moderationStatus = statusForDecision(result.decision);
+      const { data: updated } = await admin
+        .from("community_post_media")
+        .update({
+          url: storedUrl,
+          moderation_status: moderationStatus,
+          moderation_reason: result.reasonCodes[0] ?? null,
+          moderation_checked_at: new Date().toISOString(),
+          moderation_version: result.modelVersion,
+        })
+        .eq("id", media.id)
+        .select("*")
+        .single();
+
+      if (sha256 && bytes) {
+        await admin.from("moderation_hashes").upsert({
+          entity_type: "community_post_media",
+          entity_id: media.id,
+          sha256,
+          mime_type: media.content_type,
+          file_size: bytes.byteLength,
+          scan_status: hashStatusForDecision(result.decision),
+        }, { onConflict: "entity_type,entity_id" });
+      }
+      if (updated) scanned.push(updated);
+    } catch (scanError) {
+      const fallback = blockedMediaResult("media_scan_failed", "review");
+      await recordModeration({
+        entityType: "community_post_media",
+        entityId: media.id,
+        authorId: profile.profileId,
+        contentPreview: `${media.media_type} upload`,
+        result: fallback,
+      }).catch(() => undefined);
+      const { data: updated } = await admin
+        .from("community_post_media")
+        .update({
+          moderation_status: "pending_review",
+          moderation_reason: "media_scan_failed",
+          moderation_checked_at: new Date().toISOString(),
+          moderation_version: fallback.modelVersion,
+        })
+        .eq("id", media.id)
+        .select("*")
+        .single();
+      if (updated) scanned.push(updated);
+      console.error("community media moderation failed", scanError);
+    }
+  }
+
   revalidatePath("/community");
   revalidatePath("/dashboard/posts");
   revalidatePath("/admin/community");
-  return { data: data ?? [] };
+  revalidatePath("/admin/moderation");
+  return { data: scanned };
+}
+
+function hasExpectedMediaSignature(bytes: Uint8Array, contentType: string): boolean {
+  if (bytes.byteLength < 12) return false;
+  if (contentType === "image/jpeg" || contentType === "image/jpg") {
+    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  if (contentType === "image/png") {
+    return [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+      .every((value, index) => bytes[index] === value);
+  }
+  if (contentType === "image/webp") {
+    return String.fromCharCode(...bytes.slice(0, 4)) === "RIFF"
+      && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+  }
+  if (["image/heic", "image/heif", "video/mp4", "video/quicktime"].includes(contentType)) {
+    return String.fromCharCode(...bytes.slice(4, 8)) === "ftyp";
+  }
+  return false;
+}
+
+function extensionForContentType(contentType: string) {
+  const extensions: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/heic": "heic",
+    "image/heif": "heif",
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+  };
+  return extensions[contentType] ?? "bin";
+}
+
+function blockedMediaResult(reason: string, decision: "block" | "review" = "block"): ModerationResult {
+  return {
+    decision,
+    riskLevel: decision === "block" ? "high" : "medium",
+    reasonCodes: [reason],
+    provider: "native_rules",
+    modelName: null,
+    modelVersion: "perfectppi-moderation-v1",
+    rawResult: { reason },
+  };
+}
+
+function hashStatusForDecision(decision: ModerationResult["decision"]) {
+  if (decision === "allow") return "approved";
+  if (decision === "legal_hold") return "legal_hold";
+  if (decision === "block") return "rejected";
+  return "review";
 }
 
 export async function removeCommunityPostMedia(input: unknown) {
@@ -250,28 +479,64 @@ export async function createCommunityCommentFromInput(input: unknown) {
   const profile = await getCurrentProfileId();
   if ("error" in profile) return { error: profile.error };
 
+  if (await getActivePostingRestriction(profile.profileId)) {
+    return { error: "Community commenting is unavailable for this account" };
+  }
+  if (await isCommunityRateLimited(profile.profileId, "comment")) {
+    return { error: "You are commenting too quickly. Please wait a few minutes and try again." };
+  }
+
   const admin = createAdminClient();
   const { data: post } = await admin
     .from("community_posts")
-    .select("id, status")
+    .select("id, status, moderation_status")
     .eq("id", parsed.data.postId)
     .eq("status", "active")
     .maybeSingle();
 
-  if (!post) return { error: "Post not found" };
+  if (!post || post.moderation_status !== "active") return { error: "Post not found" };
 
   const { data, error } = await admin.from("community_comments").insert({
     post_id: post.id,
     author_id: profile.profileId,
     content: parsed.data.content,
-    status: "active",
+    status: "hidden",
+    moderation_status: "pending_scan",
   }).select("id").single();
 
   if (error) return { error: error.message };
 
+  const moderation = await moderateText(parsed.data.content);
+  try {
+    await recordModeration({
+      entityType: "community_comment",
+      entityId: data.id,
+      authorId: profile.profileId,
+      contentPreview: parsed.data.content,
+      result: moderation,
+    });
+    const { error: updateError } = await admin.from("community_comments").update({
+      status: publicStatusForDecision(moderation.decision),
+      moderation_status: statusForDecision(moderation.decision),
+      moderation_reason: moderation.reasonCodes[0] ?? null,
+      moderation_checked_at: new Date().toISOString(),
+      moderation_version: moderation.modelVersion,
+    }).eq("id", data.id);
+    if (updateError) throw updateError;
+  } catch {
+    return { error: "Your comment could not be checked yet. Please try again." };
+  }
+
   revalidatePath("/community");
   revalidatePath("/admin/community");
-  return { data };
+  revalidatePath("/admin/moderation");
+  return {
+    data: {
+      ...data,
+      moderationStatus: statusForDecision(moderation.decision),
+      moderationMessage: moderationUserMessage(moderation.decision),
+    },
+  };
 }
 
 export async function archiveMyCommunityPost(formData: FormData) {
@@ -293,6 +558,18 @@ export async function updateMyCommunityPostStatus(postId: string, status: "activ
   if ("error" in profile) return { error: profile.error };
 
   const admin = createAdminClient();
+  if (status === "active") {
+    const { data: post } = await admin
+      .from("community_posts")
+      .select("moderation_status")
+      .eq("id", postId)
+      .eq("author_id", profile.profileId)
+      .maybeSingle();
+    if (!post || post.moderation_status !== "active") {
+      return { error: "This post must be approved before it can be restored" };
+    }
+  }
+
   const updates: { status: "active" | "archived"; updated_at?: string } = { status };
   if (status === "archived") updates.updated_at = new Date().toISOString();
 
@@ -353,6 +630,15 @@ export async function updateCommunityPostStatus(formData: FormData) {
   if ("error" in profile || profile.role !== "admin") return;
 
   const admin = createAdminClient();
+  if (parsedStatus.data === "active") {
+    const { data: post } = await admin
+      .from("community_posts")
+      .select("moderation_status")
+      .eq("id", postId)
+      .maybeSingle();
+    if (!post || post.moderation_status !== "active") return;
+  }
+
   const updates: { status: "active" | "archived"; updated_at?: string } = { status: parsedStatus.data };
   if (parsedStatus.data === "archived") updates.updated_at = new Date().toISOString();
 

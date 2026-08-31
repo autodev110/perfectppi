@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { generatePresignedUrl, buildStorageKey } from "@/lib/storage/r2";
+import {
+  buildQuarantineKey,
+  buildStorageKey,
+  generatePresignedUrl,
+  generateQuarantinePresignedUrl,
+} from "@/lib/storage/r2";
 import { z } from "zod";
 import { UPLOAD_LIMITS } from "@/config/constants";
 import { canUploadToTarget } from "@/features/uploads/access";
@@ -75,16 +80,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const key = buildStorageKey({
+  const keyParams = {
     entity: parsed.data.entity,
     ownerId: profile.id,
     recordId: parsed.data.recordId,
     filename: parsed.data.filename,
-  });
+  };
 
   try {
+    if (parsed.data.entity === "community_post") {
+      const result = await generateQuarantinePresignedUrl({
+        key: buildQuarantineKey(keyParams),
+        contentType: parsed.data.contentType,
+      });
+      // Keep the response shape compatible with existing web/iOS uploaders.
+      return NextResponse.json({ uploadUrl: result.uploadUrl, publicUrl: result.storageReference });
+    }
+
     const result = await generatePresignedUrl({
-      key,
+      key: buildStorageKey(keyParams),
       contentType: parsed.data.contentType,
     });
     return NextResponse.json(result);
