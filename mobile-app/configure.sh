@@ -9,18 +9,28 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
-# Load .env (skip blank lines and comments; strip surrounding quotes from values)
-while IFS='=' read -r key value; do
-  [[ -z "$key" || "$key" =~ ^# ]] && continue
-  value="${value%\"}"
-  value="${value#\"}"
-  export "$key=$value"
-done < "$ENV_FILE"
+read_env_value() {
+  local wanted="$1"
+  local key value
 
-# Accept either mobile-style names or NEXT_PUBLIC_* (so a shared .env works)
-SUPABASE_URL="${SUPABASE_URL:-${NEXT_PUBLIC_SUPABASE_URL:-}}"
-SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}}"
-API_BASE_URL="${API_BASE_URL:-${NEXT_PUBLIC_SITE_URL:-}}"
+  while IFS='=' read -r key value; do
+    [[ "$key" == "$wanted" ]] || continue
+    value="${value%$'\r'}"
+    value="${value%\"}"
+    value="${value#\"}"
+    printf '%s' "$value"
+    return
+  done < "$ENV_FILE"
+}
+
+# Read only values that are safe to bundle in the client. Server credentials
+# must remain in the web app's .env.local and are never exported here.
+SUPABASE_URL="${SUPABASE_URL:-$(read_env_value SUPABASE_URL)}"
+SUPABASE_URL="${SUPABASE_URL:-$(read_env_value NEXT_PUBLIC_SUPABASE_URL)}"
+SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-$(read_env_value SUPABASE_ANON_KEY)}"
+SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-$(read_env_value NEXT_PUBLIC_SUPABASE_ANON_KEY)}"
+API_BASE_URL="${API_BASE_URL:-$(read_env_value API_BASE_URL)}"
+API_BASE_URL="${API_BASE_URL:-$(read_env_value NEXT_PUBLIC_SITE_URL)}"
 
 : "${SUPABASE_URL:?SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL missing from .env}"
 : "${SUPABASE_ANON_KEY:?SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY missing from .env}"
