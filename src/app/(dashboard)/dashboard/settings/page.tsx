@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { Database } from "@/types/database";
+import { PrivacyCenter } from "@/components/legal/privacy-center";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type TechProfile = Database["public"]["Tables"]["technician_profiles"]["Row"];
@@ -388,6 +389,7 @@ export default function AccountSettingsPage() {
           </CardContent>
         </Card>
       )}
+      <PrivacyCenter />
     </div>
   );
 }

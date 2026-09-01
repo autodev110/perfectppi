@@ -11,6 +11,18 @@ const PUBLIC_ROUTES = [
   "/profile",
   "/share",
   "/callback",
+  "/privacy",
+  "/terms",
+  "/privacy-choices",
+  "/notice-at-collection",
+  "/community-guidelines",
+  "/ai-disclosure",
+  "/accessibility",
+  "/copyright",
+  "/warranty-disclosure",
+  "/support",
+  "/sitemap.xml",
+  "/robots.txt",
 ];
 const AUTH_ROUTES = ["/login", "/signup"];
 

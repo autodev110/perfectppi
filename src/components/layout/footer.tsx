@@ -10,8 +10,8 @@ export function Footer() {
               PerfectPPI
             </div>
             <p className="text-sm text-on-surface-variant leading-relaxed">
-              The universal standard for verified vehicle trust. Precision,
-              transparency, and protection in every report.
+              Guided vehicle inspections, diagnostic context, and structured
+              reports for clearer decisions.
             </p>
           </div>
 
@@ -44,13 +44,13 @@ export function Footer() {
             </h5>
             <ul className="space-y-4 text-sm text-on-surface-variant font-medium">
               <li>
-                <Link href="#" className="hover:text-primary transition-colors">
-                  About Us
+                <Link href="/support" className="hover:text-primary transition-colors">
+                  Contact &amp; Support
                 </Link>
               </li>
               <li>
-                <Link href="#" className="hover:text-primary transition-colors">
-                  Technician Careers
+                <Link href="/accessibility" className="hover:text-primary transition-colors">
+                  Accessibility
                 </Link>
               </li>
             </ul>
@@ -62,18 +62,28 @@ export function Footer() {
             </h5>
             <ul className="space-y-4 text-sm text-on-surface-variant font-medium">
               <li>
-                <Link href="#" className="hover:text-primary transition-colors">
+                <Link href="/privacy" className="hover:text-primary transition-colors">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link href="#" className="hover:text-primary transition-colors">
+                <Link href="/terms" className="hover:text-primary transition-colors">
                   Terms of Service
                 </Link>
               </li>
               <li>
-                <Link href="#" className="hover:text-primary transition-colors">
-                  Warranty Terms
+                <Link href="/privacy-choices" className="hover:text-primary transition-colors">
+                  Your Privacy Choices
+                </Link>
+              </li>
+              <li>
+                <Link href="/notice-at-collection" className="hover:text-primary transition-colors">
+                  Notice at Collection
+                </Link>
+              </li>
+              <li>
+                <Link href="/warranty-disclosure" className="hover:text-primary transition-colors">
+                  Service Contract Disclosure
                 </Link>
               </li>
             </ul>
@@ -83,6 +93,9 @@ export function Footer() {
         <div className="pt-8 border-t border-outline-variant/20 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-xs text-on-surface-variant font-medium">
             &copy; {new Date().getFullYear()} PerfectPPI. All rights reserved.
+          </p>
+          <p className="text-center text-xs text-on-surface-variant md:text-right">
+            PerfectPPI is a product managed by DnD Solutions &amp; Optimization LLC.
           </p>
         </div>
       </div>

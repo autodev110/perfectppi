@@ -54,6 +54,97 @@ export type Database = {
           },
         ]
       }
+      legal_acceptances: {
+        Row: {
+          accepted_at: string
+          document_hash: string
+          document_type: string
+          document_version: string
+          evidence: Json
+          id: string
+          profile_id: string
+          source: string
+        }
+        Insert: {
+          accepted_at?: string
+          document_hash: string
+          document_type: string
+          document_version: string
+          evidence?: Json
+          id?: string
+          profile_id: string
+          source: string
+        }
+        Update: {
+          accepted_at?: string
+          document_hash?: string
+          document_type?: string
+          document_version?: string
+          evidence?: Json
+          id?: string
+          profile_id?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_acceptances_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      privacy_requests: {
+        Row: {
+          acknowledged_at: string | null
+          completed_at: string | null
+          details: string | null
+          id: string
+          profile_id: string | null
+          request_type: string
+          resolution_summary: string | null
+          source: string
+          status: string
+          submitted_at: string
+          updated_at: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          completed_at?: string | null
+          details?: string | null
+          id?: string
+          profile_id?: string | null
+          request_type: string
+          resolution_summary?: string | null
+          source: string
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          completed_at?: string | null
+          details?: string | null
+          id?: string
+          profile_id?: string | null
+          request_type?: string
+          resolution_summary?: string | null
+          source?: string
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "privacy_requests_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_comments: {
         Row: {
           author_id: string

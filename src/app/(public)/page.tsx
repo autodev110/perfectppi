@@ -41,17 +41,16 @@ export default async function HomePage() {
           <div className="flex-1 text-left">
             <span className="inline-flex items-center gap-2 px-3 py-1 mb-6 text-[10px] font-bold tracking-[0.12em] uppercase bg-secondary-container text-on-secondary-container rounded-full ghost-border">
               <span className="w-1.5 h-1.5 rounded-full bg-on-tertiary-container inline-block" />
-              The New Standard in PPI
+              Guided vehicle inspection platform
             </span>
             <h1 className="text-5xl md:text-[4.25rem] font-extrabold tracking-tighter text-on-surface mb-6 leading-[1.06]">
-              The Universal Standard<br />
-              for Verified{" "}
-              <span className="text-on-tertiary-container">Vehicle Trust.</span>
+              Vehicle details,<br />
+              inspection evidence, and{" "}
+              <span className="text-on-tertiary-container">diagnostic context.</span>
             </h1>
             <p className="text-lg text-on-surface-variant max-w-lg mb-9 leading-relaxed">
-              PerfectPPI brings institutional-grade transparency to the
-              automotive market. Every detail, every repair, every mile —
-              verified by experts and backed by service contracts.
+              PerfectPPI guides vehicle inspections, captures photos and OBD
+              results, and turns the submitted evidence into structured reports.
             </p>
             <div className="flex flex-wrap gap-4">
               <Link
@@ -92,7 +91,7 @@ export default async function HomePage() {
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Gold Certified
+                    Inspection record
                   </p>
                   <p className="text-xs font-bold text-on-surface">
                     Full inspection completed
@@ -113,10 +112,10 @@ export default async function HomePage() {
           {[...Array(4)].flatMap((_, set) =>
             [
               { Icon: ClipboardCheck, label: "Standardized Inspections" },
-              { Icon: BadgeCheck,     label: "Verified Technicians" },
-              { Icon: Shield,         label: "Vehicle Service Contracts" },
-              { Icon: BarChart3,      label: "AI-Generated Reports" },
-              { Icon: Award,          label: "Certified Tech Network" },
+              { Icon: BadgeCheck,     label: "Technician Directory" },
+              { Icon: Shield,         label: "Private Report Access" },
+              { Icon: BarChart3,      label: "Structured Reports" },
+              { Icon: Award,          label: "OBD Diagnostic Context" },
               { Icon: Users,          label: "12 Inspection Sections" },
             ].map(({ Icon, label }) => (
               <div
@@ -262,8 +261,8 @@ export default async function HomePage() {
                   Service Contracts
                 </h3>
                 <p className="text-sm text-primary-fixed-dim leading-relaxed mb-7">
-                  Beyond the inspection. Secure your asset with vehicle service
-                  contracts backed by tier-one providers.
+                  Where legally available, users may review service-contract
+                  options governed by an issued provider agreement.
                 </p>
 
                 {/* Tier table */}
@@ -304,31 +303,32 @@ export default async function HomePage() {
 
               <div className="px-8 pb-7 relative z-10">
                 <Link
-                  href="/signup"
+                  href="/warranty-disclosure"
                   className="flex items-center gap-2 font-heading font-bold text-sm tracking-tight hover:gap-3 transition-all text-white/70 hover:text-white"
                 >
-                  View Coverage Options
+                  Read Important Disclosures
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
             </div>
 
-            {/* ─ Certified Network ──────────────────────────────── */}
+            {/* ─ Technician directory ───────────────────────────── */}
             <div className="md:col-span-4 bg-surface-container-lowest p-8 rounded-[1.75rem] shadow-sm ghost-border">
               <div className="w-11 h-11 bg-secondary-container rounded-xl flex items-center justify-center text-on-secondary-container mb-5">
                 <BadgeCheck className="h-5 w-5" />
               </div>
               <h3 className="text-xl font-extrabold tracking-tighter mb-3">
-                Certified Network
+                Technician Directory
               </h3>
               <p className="text-sm text-on-surface-variant mb-5">
-                Only verified technicians pass our certification protocol.
+                Review technician profiles, specialties, experience, and any
+                credential status recorded by the platform.
               </p>
               <div className="space-y-2.5">
                 {[
-                  { label: "Gold Certified", sublabel: "OEM Qualified", color: "text-amber-600", bg: "bg-amber-500/10 border-amber-500/20" },
-                  { label: "Silver Technician", sublabel: "ASE Certified", color: "text-slate-600", bg: "bg-slate-300/30 border-slate-400/20" },
-                  { label: "Bronze Inspector", sublabel: "General Tech", color: "text-orange-700", bg: "bg-orange-400/10 border-orange-400/20" },
+                  { label: "OEM Experience", sublabel: "Profile information", color: "text-amber-600", bg: "bg-amber-500/10 border-amber-500/20" },
+                  { label: "ASE Credential", sublabel: "Verification shown separately", color: "text-slate-600", bg: "bg-slate-300/30 border-slate-400/20" },
+                  { label: "General Technician", sublabel: "Experience and specialties", color: "text-orange-700", bg: "bg-orange-400/10 border-orange-400/20" },
                 ].map(({ label, sublabel, color, bg }) => (
                   <div key={label} className={`flex items-center gap-3 p-3 bg-surface rounded-xl border ${bg}`}>
                     <div className={`w-7 h-7 rounded-lg ${bg} border flex items-center justify-center`}>
@@ -394,7 +394,7 @@ export default async function HomePage() {
                   Vehicles for Sale
                 </h2>
                 <p className="text-sm text-on-surface-variant max-w-md">
-                  Real listings from verified sellers with PPI inspection history attached.
+                  Public listings with vehicle details and available PerfectPPI inspection records.
                 </p>
               </div>
               <Link
@@ -465,7 +465,7 @@ export default async function HomePage() {
               How It Works
             </h2>
             <p className="text-sm text-on-surface-variant max-w-md mx-auto">
-              From profile setup to full coverage in five seamless steps.
+              From profile setup to a structured inspection report.
             </p>
           </div>
           <div className="relative flex flex-col md:flex-row justify-between gap-6">
@@ -475,7 +475,7 @@ export default async function HomePage() {
               { icon: Car, label: "Add Vehicle", desc: "Enter your VIN and vehicle details." },
               { icon: Search, label: "Inspection", desc: "Self-perform or assign a technician." },
               { icon: BarChart3, label: "Results", desc: "Receive your detailed inspection report." },
-              { icon: BadgeCheck, label: "Coverage", desc: "Activate warranty-backed service contracts." },
+              { icon: BadgeCheck, label: "Options", desc: "Review separate provider options where offered." },
             ].map((step, i) => (
               <div key={step.label} className="flex-1 flex flex-col items-center text-center group">
                 <div
@@ -496,42 +496,30 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Social Proof ────────────────────────────────────────── */}
+      {/* ── Product evidence ─────────────────────────────────────── */}
       <section className="py-20 px-8 bg-surface">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-14 items-center">
             <div>
               <h2 className="text-3xl font-extrabold tracking-tighter mb-7 leading-tight">
-                Trust is the Only Currency that Matters.
+                Built for evidence you can review.
               </h2>
               <div className="bg-surface-container-lowest p-7 rounded-2xl ghost-border shadow-sm">
-                <p className="text-base italic text-on-surface-variant mb-5">
-                  &ldquo;PerfectPPI changed how we source inventory. The reports
-                  are so detailed, we feel comfortable buying sight-unseen from
-                  across the country.&rdquo;
+                <p className="text-base text-on-surface-variant leading-relaxed">
+                  Inspection answers, photos, OBD snapshots, report versions,
+                  and performer information stay connected so a reader can see
+                  what the report was based on. AI-assisted summaries remain
+                  reviewable and correctable rather than being presented as a
+                  guarantee.
                 </p>
-                <div className="flex items-center gap-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfGo8LSFZRopRJU7KJIAENifIAcp5BBTNRW85sijzOtAHE_Pyl4x8OtPAey9-CDCQpb9SxoiS9LgB52ZWtuQ6g5yK4h92_quJxLy_EEF9Evey5TPcy1ifuSDbfcSZNE3PGGUXwLPR4RxTJ7X-vqKforwgYQD1truD77gUb84zCTc49HUOz2gsagakfSAPob05Ng4c6X5Sbl9cJSra5tUpqMT9gaXnb8jfwHrWWXsBxAStDDAH6SXh3dDEBDf10nUkWXUslpo5aZQ"
-                    alt="James R. Sterling"
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
-                  <div>
-                    <p className="font-heading font-bold text-sm">James R. Sterling</p>
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
-                      Sterling Automotive Group
-                    </p>
-                  </div>
-                </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { stat: "15k+", label: "Inspections Done", dark: false },
-                { stat: "99.8%", label: "Accuracy Rate", dark: true },
-                { stat: "240+", label: "Technician Hubs", dark: false, dimBg: true },
-                { stat: "$0", label: "Hidden Fees", dark: false },
+                { stat: "12", label: "Inspection Sections", dark: false },
+                { stat: "PDF", label: "Downloadable Reports", dark: true },
+                { stat: "OBD", label: "Diagnostic Snapshots", dark: false, dimBg: true },
+                { stat: "AI + Human", label: "Reviewable Outputs", dark: false },
               ].map(({ stat, label, dark, dimBg }) => (
                 <div
                   key={label}

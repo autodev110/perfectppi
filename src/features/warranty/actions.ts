@@ -9,6 +9,13 @@ import { stripeIsConfigured } from "@/lib/stripe/client";
 import type { VscCoverageData } from "@/types/api";
 import type { WarrantyPlan } from "./queries";
 
+const VSC_SALES_DISABLED_MESSAGE =
+  "Service-contract transactions are unavailable pending provider and legal approval.";
+
+function vscSalesEnabled() {
+  return process.env.ENABLE_VSC_SALES === "true";
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -207,6 +214,7 @@ export async function selectPlan(
   warrantyOptionId: string,
   planIndex: number,
 ): Promise<{ orderId: string } | { error: string }> {
+  if (!vscSalesEnabled()) return { error: VSC_SALES_DISABLED_MESSAGE };
   const auth = await getAuthProfile();
   if (!auth) return { error: "Not authenticated" };
 
@@ -265,6 +273,7 @@ export async function selectPlan(
 export async function presentContract(
   orderId: string,
 ): Promise<{ contractId: string } | { error: string }> {
+  if (!vscSalesEnabled()) return { error: VSC_SALES_DISABLED_MESSAGE };
   const auth = await getAuthProfile();
   if (!auth) return { error: "Not authenticated" };
 
@@ -440,6 +449,7 @@ export async function presentContract(
 export async function getContractSigningUrl(
   contractId: string,
 ): Promise<{ embedSrc: string } | { error: string }> {
+  if (!vscSalesEnabled()) return { error: VSC_SALES_DISABLED_MESSAGE };
   const auth = await getAuthProfile();
   if (!auth) return { error: "Not authenticated" };
 
@@ -477,6 +487,7 @@ export async function getContractSigningUrl(
 export async function syncContractSignatureStatus(
   contractId: string,
 ): Promise<{ signed: boolean } | { error: string }> {
+  if (!vscSalesEnabled()) return { error: VSC_SALES_DISABLED_MESSAGE };
   const auth = await getAuthProfile();
   if (!auth) return { error: "Not authenticated" };
 
@@ -545,6 +556,7 @@ export async function syncContractSignatureStatus(
 export async function initiatePayment(
   contractId: string,
 ): Promise<{ checkoutUrl: string } | { error: string }> {
+  if (!vscSalesEnabled()) return { error: VSC_SALES_DISABLED_MESSAGE };
   const auth = await getAuthProfile();
   if (!auth) return { error: "Not authenticated" };
 

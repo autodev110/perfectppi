@@ -69,14 +69,23 @@ enum AttachmentPickerSupport {
         let type = item.supportedContentTypes.first(where: { $0.conforms(to: .movie) })
             ?? item.supportedContentTypes.first(where: { $0.conforms(to: .image) })
             ?? .data
-        let contentType = type.preferredMIMEType ?? "application/octet-stream"
-        let extensionName = type.preferredFilenameExtension ?? "bin"
         let kind: PickedAttachment.Kind = type.conforms(to: .movie) ? .video : .image
+
+        // Re-encoding selected still images removes EXIF, GPS, camera serial,
+        // and other source metadata that is not needed for the attachment.
+        if kind == .image, let image = UIImage(data: data), let sanitized = image.jpegData(compressionQuality: 0.9) {
+            return PickedAttachment(
+                data: sanitized,
+                filename: "attachment-\(UUID().uuidString).jpg",
+                contentType: "image/jpeg",
+                kind: .image
+            )
+        }
 
         return PickedAttachment(
             data: data,
-            filename: "attachment-\(UUID().uuidString).\(extensionName)",
-            contentType: contentType,
+            filename: "attachment-\(UUID().uuidString).\(type.preferredFilenameExtension ?? "bin")",
+            contentType: type.preferredMIMEType ?? "application/octet-stream",
             kind: kind
         )
     }

@@ -3,6 +3,7 @@ import { RoleSwitcher } from "@/components/dev/role-switcher";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { USER_ROLE_LABELS } from "@/types/enums";
+import { PrivacyCenter } from "@/components/legal/privacy-center";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export default async function AdminSettingsPage() {
           </p>
         </CardContent>
       </Card>
+      <PrivacyCenter />
     </div>
   );
 }

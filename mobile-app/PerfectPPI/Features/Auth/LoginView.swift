@@ -8,6 +8,7 @@ struct LoginView: View {
     @State private var isWorking = false
     @State private var errorMessage: String?
     @State private var mode: Mode = .signIn
+    @State private var acceptsTerms = false
 
     enum Mode { case signIn, signUp }
 
@@ -50,6 +51,22 @@ struct LoginView: View {
                         }
                     }
 
+                    if mode == .signUp {
+                        Toggle(isOn: $acceptsTerms) {
+                            Text("I have read and agree to the Terms of Service.")
+                                .font(.footnote)
+                        }
+                        .toggleStyle(.switch)
+
+                        HStack(spacing: 14) {
+                            Link("Terms", destination: legalURL("terms"))
+                            Link("Privacy", destination: legalURL("privacy"))
+                            Link("Notice at Collection", destination: legalURL("notice-at-collection"))
+                        }
+                        .font(.caption)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     if let errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.circle.fill")
                             .font(.callout)
@@ -83,6 +100,7 @@ struct LoginView: View {
                     Button(mode == .signIn ? "Need an account? Sign up" : "Have an account? Sign in") {
                         withAnimation(.easeInOut) {
                             mode = mode == .signIn ? .signUp : .signIn
+                            acceptsTerms = false
                             errorMessage = nil
                         }
                     }
@@ -116,7 +134,7 @@ struct LoginView: View {
 
     private var canSubmit: Bool {
         return !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !password.isEmpty
+        !password.isEmpty && (mode == .signIn || acceptsTerms)
     }
 
     private func submit() async {

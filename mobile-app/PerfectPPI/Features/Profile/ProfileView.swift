@@ -66,6 +66,11 @@ struct ProfileView: View {
                         NotificationsView()
                     }
                 }
+                NavigationLink {
+                    PrivacyCenterView()
+                } label: {
+                    Label("Privacy & Account", systemImage: "hand.raised.fill")
+                }
             }
 
             // Mirrors the web switcher, which appears in every portal's
@@ -103,6 +108,181 @@ struct ProfileView: View {
         let parts = source.split(separator: " ").prefix(2)
         let initials = parts.compactMap { $0.first }.map(String.init).joined()
         return initials.isEmpty ? "?" : initials.uppercased()
+    }
+}
+
+private enum PrivacyRequestType: String, CaseIterable, Identifiable {
+    case access, export, correction, optOut = "opt_out", appeal
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .access: "Access my data"
+        case .export: "Export my data"
+        case .correction: "Correct my data"
+        case .optOut: "Privacy opt-out"
+        case .appeal: "Appeal a decision"
+        }
+    }
+}
+
+private struct PrivacyRequestRecord: Decodable, Identifiable {
+    let id: String
+    let requestType: String
+    let status: String
+}
+
+private struct PrivacyRequestBody: Encodable {
+    let requestType: String
+    let source = "ios"
+    let details: String?
+    let deletionConfirmation: String?
+}
+
+private struct ConnectedIdentity: Decodable, Identifiable {
+    let id: String
+    let provider: String
+}
+
+private struct DisconnectIdentityBody: Encodable {
+    let provider = "google"
+}
+
+private struct DisconnectResult: Decodable {
+    let disconnected: Bool
+}
+
+private struct PrivacyCenterView: View {
+    @State private var requestType = PrivacyRequestType.access
+    @State private var details = ""
+    @State private var deletionConfirmation = ""
+    @State private var requests: [PrivacyRequestRecord] = []
+    @State private var identities: [ConnectedIdentity] = []
+    @State private var working = false
+    @State private var message: String?
+
+    var body: some View {
+        Form {
+            Section("Legal") {
+                Link("Privacy Policy", destination: legalURL("privacy"))
+                Link("Terms of Service", destination: legalURL("terms"))
+                Link("Notice at Collection", destination: legalURL("notice-at-collection"))
+                Link("Privacy Choices", destination: legalURL("privacy-choices"))
+                Link("AI Disclosure", destination: legalURL("ai-disclosure"))
+            }
+
+            Section {
+                Picker("Request", selection: $requestType) {
+                    ForEach(PrivacyRequestType.allCases) { type in
+                        Text(type.label).tag(type)
+                    }
+                }
+                TextField("Details (optional)", text: $details, axis: .vertical)
+                    .lineLimit(2...5)
+                Button("Submit Privacy Request") {
+                    Task { await submit(type: requestType.rawValue) }
+                }
+                .disabled(working)
+            } header: {
+                Text("Privacy Requests")
+            } footer: {
+                Text("We may verify your identity before completing a request.")
+            }
+
+            if !requests.isEmpty {
+                Section("Recent Requests") {
+                    ForEach(requests.prefix(5)) { request in
+                        LabeledContent(
+                            request.requestType.replacingOccurrences(of: "_", with: " ").capitalized,
+                            value: request.status.replacingOccurrences(of: "_", with: " ").capitalized
+                        )
+                    }
+                }
+            }
+
+            if identities.contains(where: { $0.provider == "google" }) {
+                Section {
+                    Button("Disconnect Google") {
+                        Task { await disconnectGoogle() }
+                    }
+                    .disabled(working)
+                } header: {
+                    Text("Connected Sign-In")
+                } footer: {
+                    Text("Another sign-in method is required before Google can be disconnected.")
+                }
+            }
+
+            Section {
+                TextField("Type DELETE to confirm", text: $deletionConfirmation)
+                    .textInputAutocapitalization(.characters)
+                Button("Request Account Deletion", role: .destructive) {
+                    Task { await submit(type: "deletion", confirmation: deletionConfirmation) }
+                }
+                .disabled(working || deletionConfirmation != "DELETE")
+            } header: {
+                Text("Delete Account")
+            } footer: {
+                Text("This starts deletion review. Identity verification or legally required retention may apply. Removing the app does not delete your account.")
+            }
+
+            if let message {
+                Section { Text(message) }
+            }
+        }
+        .navigationTitle("Privacy & Account")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+    }
+
+    private func load() async {
+        do {
+            async let requestLoad: [PrivacyRequestRecord] = APIClient.shared.get("/api/privacy/requests")
+            async let identityLoad: [ConnectedIdentity] = APIClient.shared.get("/api/account/identities")
+            requests = try await requestLoad
+            identities = try await identityLoad
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func submit(type: String, confirmation: String? = nil) async {
+        working = true
+        message = nil
+        defer { working = false }
+        do {
+            let trimmed = details.trimmingCharacters(in: .whitespacesAndNewlines)
+            let _: PrivacyRequestRecord = try await APIClient.shared.postCamel(
+                "/api/privacy/requests",
+                body: PrivacyRequestBody(
+                    requestType: type,
+                    details: trimmed.isEmpty ? nil : trimmed,
+                    deletionConfirmation: confirmation
+                )
+            )
+            details = ""
+            deletionConfirmation = ""
+            message = "Request submitted. We will contact you if verification is needed."
+            await load()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func disconnectGoogle() async {
+        working = true
+        message = nil
+        defer { working = false }
+        do {
+            let _: DisconnectResult = try await APIClient.shared.delete(
+                "/api/account/identities",
+                body: DisconnectIdentityBody()
+            )
+            message = "Google was disconnected."
+            await load()
+        } catch {
+            message = error.localizedDescription
+        }
     }
 }
 

@@ -2,7 +2,7 @@ export const siteConfig = {
   name: "PerfectPPI",
   description:
     "Professional pre-purchase vehicle inspections with standardized reports and warranty options.",
-  url: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+  url: process.env.NEXT_PUBLIC_SITE_URL || "https://www.perfectppi.com",
 } as const;
 
 export const navConfig = {

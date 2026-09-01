@@ -52,7 +52,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const name = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ");
   return {
     title: `${name} — PerfectPPI`,
-    description: `View the verified inspection history and details for this ${name} on PerfectPPI.`,
+    description: `View available inspection records and details for this ${name} on PerfectPPI.`,
   };
 }
 
@@ -331,7 +331,8 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                 Request an Inspection
               </h2>
               <p className="text-sm text-primary-fixed-dim mb-5">
-                Get a verified PPI from a certified technician in our network.
+                Request a PPI from an available technician and review any
+                displayed credential status before assigning the work.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link

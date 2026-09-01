@@ -46,6 +46,9 @@ export default function SignUpPage() {
             Continue with Google
           </button>
         </form>
+        <p className="-mt-3 text-center text-xs leading-5 text-on-secondary-container">
+          Google sign-in continues to a versioned Terms review before the app opens.
+        </p>
 
         {/* Separator */}
         <div className="relative flex items-center py-2">
@@ -77,6 +80,16 @@ export default function SignUpPage() {
               <User className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-outline-variant" />
             </div>
           </div>
+
+          <label className="flex items-start gap-3 rounded-xl bg-surface-container-low p-4 text-sm leading-6 text-on-secondary-container">
+            <input name="acceptTerms" type="checkbox" required className="mt-1 h-4 w-4" />
+            <span>
+              I have read and agree to the{" "}
+              <Link href="/terms" target="_blank" className="font-bold underline">Terms of Service</Link>.
+              The <Link href="/privacy" target="_blank" className="font-bold underline">Privacy Policy</Link> explains data use and is not a separate consent.
+              {" "}<Link href="/notice-at-collection" target="_blank" className="font-bold underline">Notice at Collection</Link>.
+            </span>
+          </label>
 
           <div className="space-y-1.5">
             <label
@@ -142,6 +155,13 @@ export default function SignUpPage() {
           >
             Sign In
           </Link>
+        </p>
+        <p className="mt-4 text-xs leading-5 text-on-secondary-container">
+          <Link href="/privacy" className="underline">Privacy</Link>
+          {" · "}
+          <Link href="/terms" className="underline">Terms</Link>
+          {" · "}
+          <Link href="/support" className="underline">Support</Link>
         </p>
       </footer>
     </>

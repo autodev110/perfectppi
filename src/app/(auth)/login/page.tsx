@@ -87,10 +87,10 @@ export default function LoginPage() {
                 Password
               </label>
               <Link
-                href="#"
+                href="/support"
                 className="text-xs font-bold text-on-tertiary-container hover:underline"
               >
-                Forgot?
+                Need help?
               </Link>
             </div>
             <div className="relative">
@@ -129,6 +129,13 @@ export default function LoginPage() {
           >
             Create Account
           </Link>
+        </p>
+        <p className="mt-4 text-xs leading-5 text-on-secondary-container">
+          <Link href="/privacy" className="underline">Privacy</Link>
+          {" · "}
+          <Link href="/terms" className="underline">Terms</Link>
+          {" · "}
+          <Link href="/support" className="underline">Support</Link>
         </p>
       </footer>
     </>

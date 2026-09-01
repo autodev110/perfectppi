@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/utils/formatting";
 import { Building2, Users, Link as LinkIcon, Hash, Plug } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { PrivacyCenter } from "@/components/legal/privacy-center";
 
 export default async function OrgSettingsPage() {
   const profile = await requireRole(["org_manager"]);
@@ -170,6 +171,7 @@ export default async function OrgSettingsPage() {
           </div>
         </CardContent>
       </Card>
+      <PrivacyCenter />
     </div>
   );
 }
