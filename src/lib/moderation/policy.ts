@@ -1,4 +1,4 @@
-import { moderateImageWithProvider, moderateTextWithProvider } from "./openai";
+import { moderateImageWithProvider, moderateTextWithProvider } from "./gemini";
 import type { ModerationResult } from "./types";
 
 const POLICY_VERSION = "perfectppi-moderation-v1";

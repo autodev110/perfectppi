@@ -18,7 +18,7 @@ export default function AiDisclosurePage() {
 
       <h2>Community moderation</h2>
       <p>
-        PerfectPPI uses OpenAI&apos;s moderation service for community text and still images. Results can allow content, hold it for review, block it, or place it under restricted legal review. Uploaded videos are held for manual review in the current implementation. Native anti-spam rules also evaluate limited content patterns.
+        PerfectPPI uses Gemini 2.5 Flash to moderate community text and still images. Results can allow content, hold it for review, block it, or place it under restricted legal review. Uploaded videos are held for manual review in the current implementation. Native anti-spam rules also evaluate limited content patterns.
       </p>
 
       <h2>Important limitations</h2>

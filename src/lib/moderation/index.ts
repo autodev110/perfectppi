@@ -51,7 +51,7 @@ export async function recordModeration(input: {
         ? "auto_blocked"
         : "escalated";
 
-  await admin.from("moderation_events").insert({
+  const { error: eventError } = await admin.from("moderation_events").insert({
     moderation_item_id: item.id,
     actor_type: "system",
     event_type: eventType,
@@ -59,6 +59,7 @@ export async function recordModeration(input: {
     next_status: status,
     metadata: { reasonCodes: input.result.reasonCodes },
   });
+  if (eventError) throw new Error(`Could not record moderation event: ${eventError.message}`);
 
   return { itemId: item.id, status };
 }

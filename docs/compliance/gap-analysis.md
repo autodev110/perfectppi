@@ -39,6 +39,6 @@ Status as of September 2, 2026. “Implemented” means an engineering control e
 - Public legal routes and real links; canonical origin is `https://www.perfectppi.com`.
 - Versioned Terms acceptance and privacy request tables have RLS and server-mediated writes.
 - Account deletion can be initiated inside iOS and web settings.
-- Gemini/OpenAI/OBD/public-content disclosures are factual and visible.
+- Gemini/OBD/public-content disclosures are factual and visible.
 - iOS still-image metadata removal and expanded privacy manifest categories.
 - No optional ad/behavioral analytics was found in source or the inspected deployed public homepage; this must be rechecked after deployment/config changes.

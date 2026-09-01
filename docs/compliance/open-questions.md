@@ -25,7 +25,7 @@ Do not treat the legal drafts or product as approved for nationwide launch until
 - [ ] Confirm statutory applicability thresholds using actual annual user, household, revenue and sale/share data.
 - [ ] Approve whether precise location, face/voice processing, plate extraction, biometrics or age assurance will be used. Current code should not be described as biometric identification.
 - [ ] Approve privacy-request verification, authorized-agent proof, state deadlines, extensions, appeals, processor propagation and completion notices.
-- [ ] Inventory and test deletion for Supabase Auth/tables, sessions, public/private R2, share links, APNs, Stripe, DocuSeal, Gemini/OpenAI, DealerSpace and backups.
+- [ ] Inventory and test deletion for Supabase Auth/tables, sessions, public/private R2, share links, APNs, Stripe, DocuSeal, Gemini, DealerSpace and backups.
 - [ ] Assign security owner, incident commander, privacy lead, counsel, forensic vendor, cyber insurer contact and notification authority.
 - [ ] Designate and register a Copyright Office DMCA agent before claiming Section 512 safe harbor.
 
@@ -42,4 +42,3 @@ Do not treat the legal drafts or product as approved for nationwide launch until
 - [ ] Approve AI vendor contracts/settings, model-input minimization, human-review SLA, correction/appeal and prohibited significant decisions.
 - [ ] Complete WCAG 2.2 AA and iOS VoiceOver/Dynamic Type/manual testing before making a conformance claim.
 - [ ] Verify private contracts and non-public media fail anonymously, and move any remaining private artifacts out of public R2 paths.
-

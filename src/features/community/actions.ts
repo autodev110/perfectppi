@@ -235,6 +235,19 @@ export async function addCommunityPostMedia(input: unknown) {
     return { error: "One or more uploads are missing, expired, or do not match the selected media" };
   }
 
+  // Check the post-wide cap before claiming reservations. A rejected request
+  // must not consume uploads that the user can still remove or retry.
+  const { count, error: countError } = await admin
+    .from("community_post_media")
+    .select("id", { count: "exact", head: true })
+    .eq("post_id", post.id);
+  if (countError) return { error: "Could not verify the post media limit" };
+
+  const existing = count ?? 0;
+  if (existing + parsed.data.items.length > MAX_POST_MEDIA) {
+    return { error: `Posts can include up to ${MAX_POST_MEDIA} photos or videos` };
+  }
+
   const claimedReservationIds: string[] = [];
   for (const reservation of reservations ?? []) {
     const { data: claimed } = await admin
@@ -255,19 +268,8 @@ export async function addCommunityPostMedia(input: unknown) {
     claimedReservationIds.push(claimed.id);
   }
 
-  // The 10-item cap is per post, not per request, and `sort_order` is unique
-  // per post — so derive the slot server-side instead of trusting the client's
-  // indexes, which would collide on a second call.
-  const { count } = await admin
-    .from("community_post_media")
-    .select("id", { count: "exact", head: true })
-    .eq("post_id", post.id);
-
-  const existing = count ?? 0;
-  if (existing + parsed.data.items.length > MAX_POST_MEDIA) {
-    return { error: `Posts can include up to ${MAX_POST_MEDIA} photos or videos` };
-  }
-
+  // `sort_order` is unique per post, so derive the slot server-side instead
+  // of trusting client indexes, which would collide on a second call.
   const rows = [...parsed.data.items]
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((item, index) => ({

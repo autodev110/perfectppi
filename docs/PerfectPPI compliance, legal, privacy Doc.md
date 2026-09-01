@@ -12,7 +12,7 @@ Use these facts consistently:
 * Contact: `info@dndsolutions.io`  
 * Intended availability: users in all 50 U.S. states  
 * Repository: `/Users/dan/Desktop/perfect ppi/ppi-standalone`  
-* Stack includes Next.js, Supabase Auth/Postgres/RLS, Vercel, an iOS app, Cloudflare R2, Stripe, DocuSeal, Google Gemini, OpenAI moderation, Apple Push Notification service, vehicle/VIN/OBD data, inspections, photos/video, community content, messages, reviews, marketplace features, technicians/organizations, and warranty or vehicle-service-contract workflows.  
+* Stack includes Next.js, Supabase Auth/Postgres/RLS, Vercel, an iOS app, Cloudflare R2, Stripe, DocuSeal, Google Gemini, Apple Push Notification service, vehicle/VIN/OBD data, inspections, photos/video, community content, messages, reviews, marketplace features, technicians/organizations, and warranty or vehicle-service-contract workflows.
 * Supabase project reference: `rnufzjpswyqxdkciglbi`  
 * Provider callback used by Google and Apple web OAuth:  
   `https://rnufzjpswyqxdkciglbi.supabase.co/auth/v1/callback`  
@@ -75,7 +75,7 @@ Build a complete data inventory covering collection, source, purpose, storage, a
 * Marketplace listings, seller contact details, reviews, community content, private messages, and attachments  
 * Device identifiers, APNs tokens, logs, cookies, analytics, crash data, and security events  
 * Payments, Stripe identifiers, contracts, signatures, receipts, warranties, VSCs, claims, and refunds  
-* AI inputs and outputs sent to Gemini, OpenAI, or other services  
+* AI inputs and outputs sent to Gemini or other services
 * DealerSpace or other partner identifiers, webhooks, snapshots, and deliverables  
 * Public content, public links, bearer share links, and data available without authentication
 
@@ -93,7 +93,7 @@ Do not blindly assume these remain accurate, but investigate them first:
 * Signed DocuSeal contracts and other private user media may be placed in a public R2 bucket.  
 * Some database deletions may leave orphaned R2 objects.  
 * “Verified technician,” “verified seller,” and similar public claims may not be backed by administrative verification.  
-* Gemini receives VIN/vehicle/inspection/OBD information and OpenAI receives moderation content, but user-facing disclosure appears incomplete.  
+* Gemini receives VIN/vehicle/inspection/OBD information and moderation content; the user-facing disclosure must remain accurate as those flows change.
 * Sophisticated moderation exists for community content, but other UGC surfaces may lack equivalent report, block, appeal, and moderation controls.  
 * Public VINs, public profiles, permanent share links, and media metadata may expose more information than necessary.  
 * Refund/cancellation functionality and public policies appear incomplete.  
@@ -312,4 +312,3 @@ Use these as starting points and add every applicable official federal/state/pro
 * [California privacy rights](https://privacy.ca.gov/california-privacy-rights/rights-under-the-california-consumer-privacy-act/)  
 * [Colorado universal opt-out guidance](https://coag.gov/opt-out/)  
 * [NCSL state breach-law index](https://www.ncsl.org/technology-and-communication/security-breach-notification-laws)
-

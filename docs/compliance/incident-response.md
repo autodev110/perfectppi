@@ -48,5 +48,4 @@ Status: implementation draft pending named contacts, insurer and counsel. Do not
 
 ## Contacts to complete before production launch
 
-Incident commander; security/privacy owners and backups; outside breach counsel; forensic provider; cyber insurer/broker; Vercel, Supabase, Cloudflare, Google, Apple, Stripe, DocuSeal, OpenAI and DealerSpace escalation contacts; law enforcement decision contact; communications lead; customer-support lead.
-
+Incident commander; security/privacy owners and backups; outside breach counsel; forensic provider; cyber insurer/broker; Vercel, Supabase, Cloudflare, Google, Apple, Stripe, DocuSeal and DealerSpace escalation contacts; law enforcement decision contact; communications lead; customer-support lead.

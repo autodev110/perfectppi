@@ -12,11 +12,11 @@ Purpose: define a practical moderation system for PerfectPPI community posts, co
 
 This is a product and engineering brainstorming note, not legal advice. The final policy, enforcement wording, retention rules, and reporting obligations should be reviewed by counsel before launch.
 
-## Implementation Status (2026-09-01)
+## Implementation Status (2026-09-02)
 
 Phases 1 through 3 of the MVP are implemented in PerfectPPI:
 
-- Posts and comments are checked before publication using native spam rules and OpenAI `omni-moderation-latest`.
+- Posts and comments are checked before publication using native spam rules and Gemini 2.5 Flash structured classification.
 - Community images and videos upload to private R2 quarantine storage. Approved images are promoted; videos remain private for manual review in the MVP.
 - Moderation decisions, events, reports, hashes, appeals, and account enforcement are stored in service-only Supabase tables.
 - Users can report posts/comments, see posts held for review, and appeal rejected posts.
@@ -28,7 +28,7 @@ Phases 1 through 3 of the MVP are implemented in PerfectPPI:
 - Legal-hold decisions require a separately designated reviewer, and suspected evidence retains a private storage reference.
 - Web and iOS expose enforcement notices and held/rejected posts; iOS users can submit appeals.
 
-Production rollout still requires applying the moderation migration, configuring `OPENAI_API_KEY`, private/public R2 storage, cron secrets, and at least one designated legal-hold reviewer. Counsel must approve legal-hold retention, reviewer access, enforcement language, and reporting obligations. The general moderation model does not identify minors in images; sexually flagged images are conservatively locked for restricted review, but launch still requires a specialist illegal-content/hash-matching provider and counsel-approved reporting workflow. Phase 4 model improvements and full operational metrics remain future work.
+Production rollout still requires confirming the moderation migrations in the production migration history, configuring `GEMINI_PERFECTPPI` or `GEMINI_API_KEY`, private/public R2 storage, cron secrets, and at least one designated legal-hold reviewer. Counsel must approve legal-hold retention, reviewer access, enforcement language, and reporting obligations. The general moderation model does not identify minors in images; sexually flagged images are conservatively locked for restricted review, but launch still requires a specialist illegal-content/hash-matching provider and counsel-approved reporting workflow. Phase 4 model improvements and full operational metrics remain future work.
 
 ## Current Project Surface
 
@@ -110,7 +110,7 @@ Fields:
 - `risk_level`: `none`, `low`, `medium`, `high`, `critical`
 - `decision`: `allow`, `warn`, `review`, `block`, `legal_hold`
 - `reason_codes`: array or jsonb
-- `model_provider`: `native_rules`, `openai`, `aws_rekognition`, `google_vision`, `local_model`, etc.
+- `model_provider`: `native_rules`, `gemini`, `aws_rekognition`, `google_vision`, `local_model`, etc.
 - `model_name`
 - `model_version`
 - `raw_result`: jsonb, access restricted to admins/service role
@@ -396,9 +396,9 @@ States:
 
 ## AI And Vendor Options
 
-### Best MVP Classifier
+### Current MVP Classifier
 
-Use OpenAI `omni-moderation-latest` as the first external classifier because it supports text and image moderation through one API and returns categories/scores. The moderation endpoint accepts text and image inputs, with `omni-moderation-latest` as the default model in the API reference. OpenAI also documents `omni-moderation-latest` as a multimodal moderation model for text and image inputs.
+Use Gemini 2.5 Flash as the external text and still-image classifier. PerfectPPI requests schema-constrained category and confidence output, then applies its own deterministic allow, review, block, and legal-hold policy. Adjustable Gemini safety filters are configured to permit classification output rather than silently discarding it; Gemini's non-adjustable core-harm protections remain in force and any provider safety block is routed to restricted legal review.
 
 Why this fits:
 
@@ -583,7 +583,7 @@ For MVP:
 2. Images/media: quarantine-first upload, async moderation, publish only after approval.
 3. AI cascade:
    - native rules
-   - OpenAI `omni-moderation-latest` for text/image first pass
+   - Gemini 2.5 Flash structured classification for text/image first pass
    - second-pass vision provider or manual queue only for flagged/uncertain cases
 4. Data model:
    - `moderation_items`
@@ -603,9 +603,8 @@ This gives PerfectPPI the automation needed to avoid manually approving every po
 
 ## Sources And Integrations To Review
 
-- [OpenAI Moderations API reference](https://platform.openai.com/docs/api-reference/moderations)
-- [OpenAI omni-moderation-latest model](https://developers.openai.com/api/docs/models/omni-moderation-latest)
-- [OpenAI Moderation endpoint cost note](https://help.openai.com/en/articles/4936833-is-the-moderation-endpoint-free-to-use)
+- [Gemini safety settings](https://ai.google.dev/gemini-api/docs/safety-settings)
+- [Gemini structured output](https://ai.google.dev/gemini-api/docs/structured-output)
 - [AWS Rekognition content moderation docs](https://docs.aws.amazon.com/rekognition/latest/dg/moderation.html)
 - [AWS Rekognition image/video moderation API docs](https://docs.aws.amazon.com/rekognition/latest/dg/moderation-api.html)
 - [Google Cloud Vision SafeSearch docs](https://docs.cloud.google.com/vision/docs/detecting-safe-search)

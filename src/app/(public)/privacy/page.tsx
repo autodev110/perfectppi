@@ -69,7 +69,7 @@ export default function PrivacyPage() {
 
       <h2>5. AI processing</h2>
       <p>
-        PerfectPPI sends relevant vehicle, VIN, inspection-answer, diagnostic, and report context to Google Gemini to assist with structured inspection reports and coverage-related outputs. VIN images may also be sent to Gemini to read a VIN. Community text and still images are sent to OpenAI&apos;s moderation service to identify content requiring blocking or human review; video is held for manual review in the current implementation. We minimize inputs to what the feature needs and do not intentionally send account passwords or payment-card data to these models.
+        PerfectPPI sends relevant vehicle, VIN, inspection-answer, diagnostic, and report context to Google Gemini to assist with structured inspection reports and coverage-related outputs. VIN images may also be sent to Gemini to read a VIN. Community text and still images are sent to Gemini 2.5 Flash to identify content requiring blocking or human review; video is held for manual review in the current implementation. We minimize inputs to what the feature needs and do not intentionally send account passwords or payment-card data to these models.
       </p>
       <p>
         AI output can be incomplete or wrong. It is not a substitute for a physical inspection, diagnostic procedure, safety decision, repair advice, appraisal, insurance decision, or the binding terms of a service contract. Users may request correction or human review through <Link href="/support">Support</Link>. See the <Link href="/ai-disclosure">AI Processing Disclosure</Link> for more detail.
@@ -77,7 +77,7 @@ export default function PrivacyPage() {
 
       <h2>6. When information is disclosed</h2>
       <p>
-        We disclose information as needed to Supabase for authentication and database services; Vercel for application hosting; Cloudflare R2 for object storage; Google for sign-in, Gemini, and VIN/vehicle processing; OpenAI for content moderation; Apple for push delivery and platform services; Stripe for payment processing; DocuSeal for electronic-signature workflows; NHTSA vPIC for VIN decoding; connected organizations, technicians, and transaction participants; DealerSpace or another partner you or your organization connects; professional advisers; and authorities or other parties when required for law, safety, fraud prevention, or legal claims.
+        We disclose information as needed to Supabase for authentication and database services; Vercel for application hosting; Cloudflare R2 for object storage; Google for sign-in, Gemini AI processing, moderation, and VIN/vehicle processing; Apple for push delivery and platform services; Stripe for payment processing; DocuSeal for electronic-signature workflows; NHTSA vPIC for VIN decoding; connected organizations, technicians, and transaction participants; DealerSpace or another partner you or your organization connects; professional advisers; and authorities or other parties when required for law, safety, fraud prevention, or legal claims.
       </p>
       <p>
         Processor practices and contract terms require ongoing review. Each third party may process information under its own terms and privacy notice when acting independently.
