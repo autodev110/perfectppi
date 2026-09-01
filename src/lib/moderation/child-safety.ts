@@ -38,10 +38,20 @@ export async function scanForKnownIllegalContent(
     return heldResult("specialist_scan_not_configured", { configured: false, sha256 });
   }
 
+  let scannerUrl: URL;
+  try {
+    scannerUrl = new URL(endpoint);
+  } catch {
+    throw new Error("Specialist scanner URL is invalid");
+  }
+  if (scannerUrl.protocol !== "https:") {
+    throw new Error("Specialist scanner URL must use HTTPS");
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetch(scannerUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

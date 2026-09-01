@@ -42,9 +42,12 @@ export default async function TechOrganizationPage() {
 
       <Card>
         <CardHeader className="flex flex-row items-center gap-3">
-          {org.logo_url && (
-            <img src={org.logo_url} alt={org.name} className="h-10 w-10 rounded-lg object-cover" />
-          )}
+          <Avatar className="h-10 w-10 rounded-lg">
+            <AvatarImage src={org.logo_url ?? ""} alt={org.name} />
+            <AvatarFallback className="rounded-lg">
+              <Building2 className="h-5 w-5 text-muted-foreground" />
+            </AvatarFallback>
+          </Avatar>
           <div>
             <CardTitle>{org.name}</CardTitle>
             <p className="text-sm text-muted-foreground">/{org.slug}</p>

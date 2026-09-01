@@ -60,7 +60,8 @@ async function fulfillDeletion(request: {
   const admin = createAdminClient();
   const stored = metadata(request.result_metadata);
   const profileId = request.profile_id ?? stored.profileId;
-  if (!profileId || !request.auth_user_id) {
+  const authUserId = request.auth_user_id;
+  if (!profileId || (!request.account_deleted_at && !authUserId)) {
     throw new Error("Deletion request is missing its server-recorded account identity");
   }
 
@@ -79,6 +80,7 @@ async function fulfillDeletion(request: {
         status: "on_hold",
         acknowledged_at: new Date().toISOString(),
         resolution_summary: "Automated deletion is paused because restricted evidence is subject to a legal preservation hold.",
+        next_attempt_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
         last_error: null,
         locked_at: null,
         lock_expires_at: null,
@@ -87,7 +89,7 @@ async function fulfillDeletion(request: {
       return { status: "on_hold" as const, deletedObjects: 0 };
     }
 
-    const { data: userData, error: userError } = await admin.auth.admin.getUserById(request.auth_user_id);
+    const { data: userData, error: userError } = await admin.auth.admin.getUserById(authUserId!);
     if (userError && !isMissingAuthUser(userError.message)) throw userError;
 
     if (userData.user) {
@@ -101,19 +103,31 @@ async function fulfillDeletion(request: {
       }).eq("id", request.id);
       if (metadataError) throw new Error(metadataError.message);
 
-      const { error: deleteError } = await admin.auth.admin.deleteUser(request.auth_user_id, false);
+    }
+
+    // Minimize every related request before deleting the profile. Keep the
+    // current row's Auth ID until its completion checkpoint is written so a
+    // worker crash can safely retry the irreversible Auth deletion step.
+    const { error: minimizeError } = await admin.from("privacy_requests").update({
+      details: null,
+    }).eq("profile_id", profileId);
+    if (minimizeError) throw new Error(minimizeError.message);
+
+    const { error: relatedIdentityError } = await admin.from("privacy_requests").update({
+      auth_user_id: null,
+    }).eq("auth_user_id", authUserId!).neq("id", request.id);
+    if (relatedIdentityError) throw new Error(relatedIdentityError.message);
+
+    if (userData.user) {
+      const { error: deleteError } = await admin.auth.admin.deleteUser(authUserId!, false);
       if (deleteError && !isMissingAuthUser(deleteError.message)) throw deleteError;
     }
 
     accountDeletedAt = new Date().toISOString();
-    const { error: minimizeError } = await admin.from("privacy_requests").update({
-      auth_user_id: null,
-      details: null,
-    }).eq("auth_user_id", request.auth_user_id);
-    if (minimizeError) throw new Error(minimizeError.message);
-
     const { error: checkpointError } = await admin.from("privacy_requests").update({
       account_deleted_at: accountDeletedAt,
+      auth_user_id: null,
+      details: null,
       result_metadata: { profileId, storageReferences },
     }).eq("id", request.id);
     if (checkpointError) throw new Error(checkpointError.message);

@@ -108,6 +108,33 @@ describe("moderation policy", () => {
     }
   });
 
+  test("never sends media or credentials to an insecure specialist scanner", async () => {
+    const endpoint = process.env.CHILD_SAFETY_SCANNER_URL;
+    const token = process.env.CHILD_SAFETY_SCANNER_TOKEN;
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = false;
+    process.env.CHILD_SAFETY_SCANNER_URL = "http://scanner.example.test/scan";
+    process.env.CHILD_SAFETY_SCANNER_TOKEN = "test-token";
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      throw new Error("fetch must not be called");
+    };
+
+    try {
+      await assert.rejects(
+        scanForKnownIllegalContent(new Uint8Array([1, 2, 3]), "image/jpeg"),
+        /must use HTTPS/,
+      );
+      assert.equal(fetchCalled, false);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (endpoint) process.env.CHILD_SAFETY_SCANNER_URL = endpoint;
+      else delete process.env.CHILD_SAFETY_SCANNER_URL;
+      if (token) process.env.CHILD_SAFETY_SCANNER_TOKEN = token;
+      else delete process.env.CHILD_SAFETY_SCANNER_TOKEN;
+    }
+  });
+
   test("places a specialist hash match on legal hold", async () => {
     const endpoint = process.env.CHILD_SAFETY_SCANNER_URL;
     const token = process.env.CHILD_SAFETY_SCANNER_TOKEN;
@@ -132,5 +159,13 @@ describe("moderation policy", () => {
       if (token) process.env.CHILD_SAFETY_SCANNER_TOKEN = token;
       else delete process.env.CHILD_SAFETY_SCANNER_TOKEN;
     }
+  });
+
+  test("preserves a clean specialist result when image classification fails", async () => {
+    const policy = await import("node:fs/promises").then(({ readFile }) =>
+      readFile(new URL("../../src/lib/moderation/policy.ts", import.meta.url), "utf8"));
+    const fallbackStart = policy.indexOf("const unavailable = providerUnavailable(error)");
+    assert.notEqual(fallbackStart, -1);
+    assert.ok(policy.slice(fallbackStart).includes("specialistScan: specialist.rawResult"));
   });
 });

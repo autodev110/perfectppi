@@ -58,10 +58,16 @@ describe("compliance foundation", () => {
 
   test("account deletion is claimed atomically and privacy logs expire", async () => {
     const migration = await source("supabase/migrations/20260901215220_account_privacy_fulfillment.sql");
+    const recoveryMigration = await source("supabase/migrations/20260901221852_resume_held_privacy_deletions.sql");
     const worker = await source("src/lib/privacy/fulfillment.ts");
     assert.ok(migration.includes("FOR UPDATE SKIP LOCKED"));
     assert.ok(migration.includes("claim_privacy_deletion_requests"));
-    assert.ok(worker.includes("deleteUser(request.auth_user_id, false)"));
+    assert.ok(recoveryMigration.includes("status IN ('submitted', 'in_progress', 'on_hold')"));
+    assert.ok(recoveryMigration.includes("p_limit IS NULL"));
+    assert.ok(recoveryMigration.includes("p_worker_id IS NULL"));
+    assert.ok(worker.includes("deleteUser(authUserId!, false)"));
+    assert.ok(worker.includes("next_attempt_at: new Date(Date.now() + 24 * 60 * 60_000)"));
+    assert.ok(worker.indexOf("deleteUser(authUserId!, false)") < worker.indexOf("account_deleted_at: accountDeletedAt"));
     assert.ok(worker.includes("deleteOwnerStoredObjects"));
     assert.ok(worker.includes("retention_expires_at"));
   });

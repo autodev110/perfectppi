@@ -1,6 +1,7 @@
 import { getAdminOrganizations } from "@/features/admin/queries";
 import { requireRole } from "@/features/auth/guards";
 import { formatDate } from "@/lib/utils/formatting";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Building2 } from "lucide-react";
 
 export default async function OrganizationManagementPage() {
@@ -36,17 +37,12 @@ export default async function OrganizationManagementPage() {
                 <tr key={org.id} className="hover:bg-muted/30">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      {org.logo_url ? (
-                        <img
-                          src={org.logo_url}
-                          alt={org.name}
-                          className="h-8 w-8 rounded object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-8 w-8 items-center justify-center rounded bg-muted">
+                      <Avatar className="h-8 w-8 rounded">
+                        <AvatarImage src={org.logo_url ?? ""} alt={org.name} />
+                        <AvatarFallback className="rounded">
                           <Building2 className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                      )}
+                        </AvatarFallback>
+                      </Avatar>
                       <p className="font-medium">{org.name}</p>
                     </div>
                   </td>

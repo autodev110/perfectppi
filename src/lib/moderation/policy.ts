@@ -88,7 +88,11 @@ export async function moderateImage(bytes: Uint8Array, contentType: string): Pro
       rawResult: { ...provider.rawResult, specialistScan: specialist.rawResult },
     };
   } catch (error) {
-    return providerUnavailable(error);
+    const unavailable = providerUnavailable(error);
+    return {
+      ...unavailable,
+      rawResult: { ...unavailable.rawResult, specialistScan: specialist.rawResult },
+    };
   }
 }
 
