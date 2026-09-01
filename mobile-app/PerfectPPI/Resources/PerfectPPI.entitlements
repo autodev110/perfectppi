@@ -7,7 +7,9 @@
     <key>com.apple.developer.associated-domains</key>
     <array>
         <string>applinks:perfectppi.com</string>
+        <string>applinks:www.perfectppi.com</string>
         <string>webcredentials:perfectppi.com</string>
+        <string>webcredentials:www.perfectppi.com</string>
     </array>
 </dict>
 </plist>

@@ -27,7 +27,7 @@ enum AppConfig {
     }()
 
     static let universalLinkHost: String =
-        stringValue(forKey: "UniversalLinkHost") ?? "perfectppi.com"
+        stringValue(forKey: "UniversalLinkHost") ?? "www.perfectppi.com"
 
     static let customURLScheme: String =
         stringValue(forKey: "CustomURLScheme") ?? "perfectppi"

@@ -15,8 +15,14 @@ const PUBLIC_ROUTES = [
 const AUTH_ROUTES = ["/login", "/signup"];
 
 export async function middleware(request: NextRequest) {
-  const { supabaseResponse, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
+
+  // Apple must fetch this file anonymously and without redirects.
+  if (pathname === "/.well-known/apple-app-site-association") {
+    return NextResponse.next();
+  }
+
+  const { supabaseResponse, user } = await updateSession(request);
 
   // Public routes — always accessible
   if (
