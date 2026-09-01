@@ -18,7 +18,7 @@ export default function AiDisclosurePage() {
 
       <h2>Community moderation</h2>
       <p>
-        PerfectPPI uses Gemini 2.5 Flash to moderate community text and still images. Results can allow content, hold it for review, block it, or place it under restricted legal review. Uploaded videos are held for manual review in the current implementation. Native anti-spam rules also evaluate limited content patterns.
+        Community media must first pass a configured specialist illegal-content scan. PerfectPPI then uses Gemini 2.5 Flash to moderate community text and cleared still images. Results can allow content, hold it for review, block it, or place it under restricted legal review. Cleared videos are still held for manual review in the current implementation. Missing, failed, matched, or uncertain specialist scans do not publish. Native anti-spam rules also evaluate limited content patterns.
       </p>
 
       <h2>Important limitations</h2>
@@ -33,7 +33,7 @@ export default function AiDisclosurePage() {
 
       <h2>Vendor controls</h2>
       <p>
-        API keys remain server-side. PerfectPPI minimizes model inputs and does not intentionally include passwords or full payment-card details. Vendor retention, training, regional processing, security terms, and data-processing agreements require continuing contract and configuration review.
+        API keys remain server-side. PerfectPPI minimizes model and scanner inputs and does not intentionally include passwords or full payment-card details. Vendor retention, training, regional processing, security terms, and data-processing agreements require continuing contract and configuration review.
       </p>
     </LegalDocument>
   );

@@ -21,11 +21,11 @@ Do not treat the legal drafts or product as approved for nationwide launch until
 
 ## Privacy, records and security
 
-- [ ] Approve category-specific retention periods, backup deletion, legal holds and evidence preservation. No periods have been invented.
+- [ ] Approve the still-open contract, payment, tax, ordinary moderation, provider-log, and backup periods. Engineering now enforces account deletion, 24-month privacy-request logs, 30-minute unattached-upload expiry, and legal-hold preservation.
 - [ ] Confirm statutory applicability thresholds using actual annual user, household, revenue and sale/share data.
 - [ ] Approve whether precise location, face/voice processing, plate extraction, biometrics or age assurance will be used. Current code should not be described as biometric identification.
-- [ ] Approve privacy-request verification, authorized-agent proof, state deadlines, extensions, appeals, processor propagation and completion notices.
-- [ ] Inventory and test deletion for Supabase Auth/tables, sessions, public/private R2, share links, APNs, Stripe, DocuSeal, Gemini, DealerSpace and backups.
+- [ ] Approve authorized-agent proof, state deadlines/extensions, exceptional verification, appeals, independent-processor propagation, and completion notices. Authenticated direct export and deletion processing are implemented.
+- [ ] Run seeded acceptance tests for Supabase Auth/tables, sessions, public/private R2, share links and APNs; decide propagation for any enabled Stripe, DocuSeal, Gemini, DealerSpace, logs, and backups.
 - [ ] Assign security owner, incident commander, privacy lead, counsel, forensic vendor, cyber insurer contact and notification authority.
 - [ ] Designate and register a Copyright Office DMCA agent before claiming Section 512 safe harbor.
 
@@ -39,6 +39,7 @@ Do not treat the legal drafts or product as approved for nationwide launch until
 ## Product operations
 
 - [ ] Establish moderation/report/block/appeal/copyright/safety coverage for listings, reviews, profiles, messages and all media, not only community posts.
+- [ ] Contract and configure the specialist illegal-content scanner adapter, approve the CyberTipline/reporting runbook, and test match, review, outage, and evidence-preservation cases before public media launch.
 - [ ] Approve AI vendor contracts/settings, model-input minimization, human-review SLA, correction/appeal and prohibited significant decisions.
 - [ ] Complete WCAG 2.2 AA and iOS VoiceOver/Dynamic Type/manual testing before making a conformance claim.
 - [ ] Verify private contracts and non-public media fail anonymously, and move any remaining private artifacts out of public R2 paths.

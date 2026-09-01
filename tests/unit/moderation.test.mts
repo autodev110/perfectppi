@@ -5,6 +5,7 @@ import {
   classifyModerationProviderResult,
   moderateTextWithProvider,
 } from "../../src/lib/moderation/gemini.ts";
+import { scanForKnownIllegalContent } from "../../src/lib/moderation/child-safety.ts";
 import type { GeminiModerationProviderResult } from "../../src/lib/moderation/gemini.ts";
 import { publicStatusForDecision, statusForDecision } from "../../src/lib/moderation/types.ts";
 
@@ -68,6 +69,13 @@ describe("moderation policy", () => {
     assert.equal(publicStatusForDecision("block"), "hidden");
   });
 
+  test("manual media approval requires a clean specialist scan", async () => {
+    const actions = await import("node:fs/promises").then(({ readFile }) =>
+      readFile(new URL("../../src/features/moderation/actions.ts", import.meta.url), "utf8"));
+    assert.ok(actions.includes("hasCleanSpecialistScan(item.raw_result)"));
+    assert.ok(actions.includes("Media cannot be approved until the specialist safety scan passes"));
+  });
+
   test("fails closed when Gemini is not configured", async () => {
     const perfectPpiKey = process.env.GEMINI_PERFECTPPI;
     const fallbackKey = process.env.GEMINI_API_KEY;
@@ -81,6 +89,48 @@ describe("moderation policy", () => {
     } finally {
       if (perfectPpiKey) process.env.GEMINI_PERFECTPPI = perfectPpiKey;
       if (fallbackKey) process.env.GEMINI_API_KEY = fallbackKey;
+    }
+  });
+
+  test("fails closed when the specialist media scanner is not configured", async () => {
+    const endpoint = process.env.CHILD_SAFETY_SCANNER_URL;
+    const token = process.env.CHILD_SAFETY_SCANNER_TOKEN;
+    delete process.env.CHILD_SAFETY_SCANNER_URL;
+    delete process.env.CHILD_SAFETY_SCANNER_TOKEN;
+
+    try {
+      const result = await scanForKnownIllegalContent(new Uint8Array([1, 2, 3]), "image/jpeg");
+      assert.equal(result.decision, "review");
+      assert.deepEqual(result.reasonCodes, ["specialist_scan_not_configured"]);
+    } finally {
+      if (endpoint) process.env.CHILD_SAFETY_SCANNER_URL = endpoint;
+      if (token) process.env.CHILD_SAFETY_SCANNER_TOKEN = token;
+    }
+  });
+
+  test("places a specialist hash match on legal hold", async () => {
+    const endpoint = process.env.CHILD_SAFETY_SCANNER_URL;
+    const token = process.env.CHILD_SAFETY_SCANNER_TOKEN;
+    const originalFetch = globalThis.fetch;
+    process.env.CHILD_SAFETY_SCANNER_URL = "https://scanner.example.test/scan";
+    process.env.CHILD_SAFETY_SCANNER_TOKEN = "test-token";
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      verdict: "match",
+      provider: "specialist-test",
+      reference: "case-123",
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+
+    try {
+      const result = await scanForKnownIllegalContent(new Uint8Array([1, 2, 3]), "image/jpeg");
+      assert.equal(result.decision, "legal_hold");
+      assert.equal(result.riskLevel, "critical");
+      assert.deepEqual(result.reasonCodes, ["known_illegal_content_match"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (endpoint) process.env.CHILD_SAFETY_SCANNER_URL = endpoint;
+      else delete process.env.CHILD_SAFETY_SCANNER_URL;
+      if (token) process.env.CHILD_SAFETY_SCANNER_TOKEN = token;
+      else delete process.env.CHILD_SAFETY_SCANNER_TOKEN;
     }
   });
 });

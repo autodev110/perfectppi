@@ -1,7 +1,9 @@
 import {
   CopyObjectCommand,
+  DeleteObjectsCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -14,6 +16,13 @@ import { randomUUID } from "node:crypto";
 
 let s3Client: S3Client | null = null;
 const PRIVATE_STORAGE_PREFIX = "r2-private:///";
+const OWNER_STORAGE_ENTITIES = [
+  "ppi_media",
+  "vehicle_media",
+  "media_package",
+  "community_post",
+  "message_attachment",
+] as const;
 
 function isR2ClientConfigured() {
   return Boolean(
@@ -180,6 +189,71 @@ export async function promoteQuarantinedObject(params: {
 export async function deleteStoredObject(storedValue: string): Promise<void> {
   const { bucket, key } = resolveStoredObject(storedValue);
   await getS3Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+async function deleteBucketPrefix(bucket: string, prefix: string): Promise<number> {
+  let continuationToken: string | undefined;
+  let deleted = 0;
+
+  do {
+    const listed = await getS3Client().send(new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+      MaxKeys: 1000,
+    }));
+    const keys = (listed.Contents ?? []).flatMap((object) => object.Key ? [object.Key] : []);
+    if (keys.length > 0) {
+      const result = await getS3Client().send(new DeleteObjectsCommand({
+        Bucket: bucket,
+        Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+      }));
+      if (result.Errors?.length) {
+        throw new Error(`R2 rejected ${result.Errors.length} account-deletion objects`);
+      }
+      deleted += keys.length;
+    }
+    continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return deleted;
+}
+
+/** Removes every object created through an owner-scoped upload path. */
+export async function deleteOwnerStoredObjects(
+  ownerId: string,
+  additionalReferences: string[] = [],
+): Promise<number> {
+  let deleted = 0;
+  if (isR2Configured()) {
+    for (const entity of OWNER_STORAGE_ENTITIES) {
+      deleted += await deleteBucketPrefix(process.env.R2_BUCKET_NAME!, `${entity}/${ownerId}/`);
+    }
+  }
+  if (isPrivateR2Configured()) {
+    for (const entity of OWNER_STORAGE_ENTITIES) {
+      deleted += await deleteBucketPrefix(
+        process.env.R2_PRIVATE_BUCKET_NAME!,
+        `quarantine/${entity}/${ownerId}/`,
+      );
+    }
+    deleted += await deleteBucketPrefix(
+      process.env.R2_PRIVATE_BUCKET_NAME!,
+      `integration_artifacts/${ownerId}/`,
+    );
+  }
+
+  for (const reference of new Set(additionalReferences)) {
+    if (isPrivateStorageReference(reference) && !isPrivateR2Configured()) {
+      throw new Error("Private R2 is not configured for account deletion");
+    }
+    if (!isPrivateStorageReference(reference) && !isR2Configured()) {
+      throw new Error("Public R2 is not configured for account deletion");
+    }
+    await deleteStoredObject(reference);
+    deleted += 1;
+  }
+  return deleted;
 }
 
 export function privateStorageReference(key: string): string {

@@ -32,6 +32,8 @@ The public Terms intentionally contain no governing-law choice, arbitration/clas
 - Public/canonical legal center and factual processor/AI/OBD/public-content disclosures.
 - Versioned Terms evidence: account/profile, document version/hash, timestamp, source and limited evidence.
 - Web/iOS Privacy Center: request/status, deletion initiation, appeal/opt-out and lockout-safe Google disconnect.
+- Direct authenticated web/iOS JSON export and durable account deletion covering Auth, application cascades, sessions, links, devices, and managed R2 objects, with retries and legal-hold pause.
+- Fail-closed specialist illegal-content scanner gateway before public image/video publication; videos remain subject to manual review.
 - Native Terms gate and email signup checkbox; web email and OAuth acceptance flows.
 - Supabase migration with RLS and server-mediated privacy/assent writes.
 - iOS still-image metadata stripping and expanded privacy manifest.
@@ -39,7 +41,8 @@ The public Terms intentionally contain no governing-law choice, arbitration/clas
 
 ## Not implemented or not approved
 
-- Final deletion/exports/verification/SLAs/vendor propagation and retention jobs.
+- Licensed approval of exceptional verification, statutory SLAs/notices, independent-processor and backup propagation, and the still-open record-class retention periods.
+- Contracted specialist scanner configuration, CyberTipline/reporting operations, and counsel-approved preservation/release workflow.
 - Sign in with Apple and Apple token revocation/secret rotation/relay tests.
 - VSC sales/issuance approval, refunds/cancellations and E-SIGN packet.
 - Full UGC controls outside community, registered DMCA agent and repeat-infringer operations.
@@ -49,4 +52,3 @@ The public Terms intentionally contain no governing-law choice, arbitration/clas
 ## Approval record requested
 
 Counsel should identify document/version approved, jurisdiction/feature limits, unresolved conditions, effective date, whether re-assent is required, approver and next review date. Product should not remove a launch block based on an informal message alone.
-

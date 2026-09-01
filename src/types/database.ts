@@ -97,41 +97,74 @@ export type Database = {
       }
       privacy_requests: {
         Row: {
+          account_deleted_at: string | null
           acknowledged_at: string | null
+          auth_user_id: string | null
           completed_at: string | null
           details: string | null
           id: string
+          last_error: string | null
+          lock_expires_at: string | null
+          locked_at: string | null
+          locked_by: string | null
+          next_attempt_at: string
+          processing_attempts: number
           profile_id: string | null
           request_type: string
+          result_metadata: Json
           resolution_summary: string | null
+          retention_expires_at: string | null
           source: string
           status: string
+          subject_reference_hash: string
           submitted_at: string
           updated_at: string
         }
         Insert: {
+          account_deleted_at?: string | null
           acknowledged_at?: string | null
+          auth_user_id?: string | null
           completed_at?: string | null
           details?: string | null
           id?: string
+          last_error?: string | null
+          lock_expires_at?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          next_attempt_at?: string
+          processing_attempts?: number
           profile_id?: string | null
           request_type: string
+          result_metadata?: Json
           resolution_summary?: string | null
+          retention_expires_at?: string | null
           source: string
           status?: string
+          subject_reference_hash: string
           submitted_at?: string
           updated_at?: string
         }
         Update: {
+          account_deleted_at?: string | null
           acknowledged_at?: string | null
+          auth_user_id?: string | null
           completed_at?: string | null
           details?: string | null
           id?: string
+          last_error?: string | null
+          lock_expires_at?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          next_attempt_at?: string
+          processing_attempts?: number
           profile_id?: string | null
           request_type?: string
+          result_metadata?: Json
           resolution_summary?: string | null
+          retention_expires_at?: string | null
           source?: string
           status?: string
+          subject_reference_hash?: string
           submitted_at?: string
           updated_at?: string
         }
@@ -2859,6 +2892,16 @@ export type Database = {
           target_type_in: Database["public"]["Enums"]["share_target_type"]
         }
         Returns: boolean
+      }
+      claim_privacy_deletion_requests: {
+        Args: { p_limit: number; p_worker_id: string }
+        Returns: Database["public"]["Tables"]["privacy_requests"]["Row"][]
+        SetofOptions: {
+          from: "*"
+          to: "privacy_requests"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       claim_outbound_events: {
         Args: {

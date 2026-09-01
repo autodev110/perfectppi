@@ -1,4 +1,5 @@
 import { moderateImageWithProvider, moderateTextWithProvider } from "./gemini";
+import { scanForKnownIllegalContent } from "./child-safety";
 import type { ModerationResult } from "./types";
 
 const POLICY_VERSION = "perfectppi-moderation-v1";
@@ -23,6 +24,18 @@ function providerUnavailable(error: unknown): ModerationResult {
     modelName: null,
     modelVersion: POLICY_VERSION,
     rawResult: { error: error instanceof Error ? error.message : "Unknown classifier error" },
+  };
+}
+
+function specialistUnavailable(error: unknown): ModerationResult {
+  return {
+    decision: "review",
+    riskLevel: "medium",
+    reasonCodes: ["specialist_scan_unavailable"],
+    provider: "specialist_gateway",
+    modelName: "illegal-content-hash-matching",
+    modelVersion: POLICY_VERSION,
+    rawResult: { error: error instanceof Error ? error.message : "Unknown specialist scanner error" },
   };
 }
 
@@ -60,21 +73,44 @@ export async function moderateImage(bytes: Uint8Array, contentType: string): Pro
     };
   }
 
+  let specialist: ModerationResult;
   try {
-    return await moderateImageWithProvider(bytes, contentType);
+    specialist = await scanForKnownIllegalContent(bytes, contentType);
+  } catch (error) {
+    return specialistUnavailable(error);
+  }
+  if (specialist.decision !== "allow") return specialist;
+
+  try {
+    const provider = await moderateImageWithProvider(bytes, contentType);
+    return {
+      ...provider,
+      rawResult: { ...provider.rawResult, specialistScan: specialist.rawResult },
+    };
   } catch (error) {
     return providerUnavailable(error);
   }
 }
 
-export function moderateVideo(): ModerationResult {
+export async function moderateVideo(bytes: Uint8Array, contentType: string): Promise<ModerationResult> {
+  let specialist: ModerationResult;
+  try {
+    specialist = await scanForKnownIllegalContent(bytes, contentType);
+  } catch (error) {
+    return specialistUnavailable(error);
+  }
+  if (specialist.decision !== "allow") return specialist;
+
   return {
     decision: "review",
     riskLevel: "medium",
     reasonCodes: ["video_manual_review"],
-    provider: "native_rules",
-    modelName: null,
+    provider: specialist.provider,
+    modelName: specialist.modelName,
     modelVersion: POLICY_VERSION,
-    rawResult: { reason: "Video frame moderation is not enabled in the MVP" },
+    rawResult: {
+      reason: "Specialist hash scan passed; video still requires manual review",
+      specialistScan: specialist.rawResult,
+    },
   };
 }

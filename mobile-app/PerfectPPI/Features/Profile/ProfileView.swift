@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ProfileView: View {
     let profile: Profile
@@ -112,13 +113,12 @@ struct ProfileView: View {
 }
 
 private enum PrivacyRequestType: String, CaseIterable, Identifiable {
-    case access, export, correction, optOut = "opt_out", appeal
+    case access, correction, optOut = "opt_out", appeal
 
     var id: String { rawValue }
     var label: String {
         switch self {
         case .access: "Access my data"
-        case .export: "Export my data"
         case .correction: "Correct my data"
         case .optOut: "Privacy opt-out"
         case .appeal: "Appeal a decision"
@@ -134,7 +134,6 @@ private struct PrivacyRequestRecord: Decodable, Identifiable {
 
 private struct PrivacyRequestBody: Encodable {
     let requestType: String
-    let source = "ios"
     let details: String?
     let deletionConfirmation: String?
 }
@@ -160,6 +159,8 @@ private struct PrivacyCenterView: View {
     @State private var identities: [ConnectedIdentity] = []
     @State private var working = false
     @State private var message: String?
+    @State private var exportDocument: PrivacyExportDocument?
+    @State private var showingExporter = false
 
     var body: some View {
         Form {
@@ -169,6 +170,17 @@ private struct PrivacyCenterView: View {
                 Link("Notice at Collection", destination: legalURL("notice-at-collection"))
                 Link("Privacy Choices", destination: legalURL("privacy-choices"))
                 Link("AI Disclosure", destination: legalURL("ai-disclosure"))
+            }
+
+            Section {
+                Button("Download My Data", systemImage: "square.and.arrow.down") {
+                    Task { await downloadExport() }
+                }
+                .disabled(working)
+            } header: {
+                Text("Account Export")
+            } footer: {
+                Text("Downloads a JSON copy of your account, inspections, vehicles, posts, messages, and related records.")
             }
 
             Section {
@@ -223,7 +235,7 @@ private struct PrivacyCenterView: View {
             } header: {
                 Text("Delete Account")
             } footer: {
-                Text("This starts deletion review. Identity verification or legally required retention may apply. Removing the app does not delete your account.")
+                Text("This schedules permanent deletion, normally beginning within 24 hours. Processing pauses only where a documented legal preservation hold applies. Removing the app does not delete your account.")
             }
 
             if let message {
@@ -233,6 +245,17 @@ private struct PrivacyCenterView: View {
         .navigationTitle("Privacy & Account")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .fileExporter(
+            isPresented: $showingExporter,
+            document: exportDocument,
+            contentType: .json,
+            defaultFilename: "perfectppi-account-data"
+        ) { result in
+            if case let .failure(error) = result {
+                message = error.localizedDescription
+            }
+            exportDocument = nil
+        }
     }
 
     private func load() async {
@@ -262,8 +285,23 @@ private struct PrivacyCenterView: View {
             )
             details = ""
             deletionConfirmation = ""
-            message = "Request submitted. We will contact you if verification is needed."
+            message = type == "deletion"
+                ? "Account deletion is scheduled and normally begins within 24 hours."
+                : "Request submitted. We will contact you if verification is needed."
             await load()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func downloadExport() async {
+        working = true
+        message = nil
+        defer { working = false }
+        do {
+            let (data, _) = try await APIClient.shared.bytes("/api/privacy/export")
+            exportDocument = PrivacyExportDocument(data: data)
+            showingExporter = true
         } catch {
             message = error.localizedDescription
         }
@@ -283,6 +321,23 @@ private struct PrivacyCenterView: View {
         } catch {
             message = error.localizedDescription
         }
+    }
+}
+
+private struct PrivacyExportDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+    let data: Data
+
+    init(data: Data) {
+        self.data = data
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }
 

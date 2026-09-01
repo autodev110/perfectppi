@@ -55,4 +55,14 @@ describe("compliance foundation", () => {
     assert.ok(actions.includes("pending provider and legal approval"));
     assert.ok(env.includes("ENABLE_VSC_SALES=false"));
   });
+
+  test("account deletion is claimed atomically and privacy logs expire", async () => {
+    const migration = await source("supabase/migrations/20260901215220_account_privacy_fulfillment.sql");
+    const worker = await source("src/lib/privacy/fulfillment.ts");
+    assert.ok(migration.includes("FOR UPDATE SKIP LOCKED"));
+    assert.ok(migration.includes("claim_privacy_deletion_requests"));
+    assert.ok(worker.includes("deleteUser(request.auth_user_id, false)"));
+    assert.ok(worker.includes("deleteOwnerStoredObjects"));
+    assert.ok(worker.includes("retention_expires_at"));
+  });
 });

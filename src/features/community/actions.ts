@@ -327,7 +327,7 @@ export async function addCommunityPostMedia(input: unknown) {
             ? blockedMediaResult("legal_hold_duplicate", "legal_hold")
             : blockedMediaResult("blocked_duplicate")
           : media.media_type === "video"
-            ? moderateVideo()
+            ? await moderateVideo(bytes, media.content_type)
             : await moderateImage(bytes, media.content_type);
       }
 

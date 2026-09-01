@@ -17,7 +17,6 @@ type Identity = { id: string; provider: string };
 
 const requestTypes = [
   ["access", "Access my data"],
-  ["export", "Export my data"],
   ["correction", "Correct my data"],
   ["opt_out", "Privacy opt-out"],
   ["appeal", "Appeal a privacy decision"],
@@ -60,14 +59,13 @@ export function PrivacyCenter() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         requestType: type,
-        source: "web",
         details: details.trim() || undefined,
         deletionConfirmation: confirmation,
       }),
     });
     const body = await response.json().catch(() => ({}));
     setMessage(response.ok
-      ? "Request submitted. We will contact you if identity verification is needed."
+      ? body.message ?? "Request submitted."
       : body.error ?? "Request could not be submitted.");
     if (response.ok) {
       setDetails("");
@@ -107,6 +105,14 @@ export function PrivacyCenter() {
         </div>
 
         <div className="space-y-3">
+          <div className="rounded-md border p-4">
+            <h3 className="text-sm font-semibold">Download your data</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Create an authenticated JSON export of your account, inspections, vehicles, posts, messages, and related records.</p>
+            <Button asChild variant="outline" className="mt-3">
+              <a href="/api/privacy/export" download>Download My Data</a>
+            </Button>
+          </div>
+
           <Label htmlFor="privacy-request-type">Request type</Label>
           <select
             id="privacy-request-type"
@@ -150,7 +156,7 @@ export function PrivacyCenter() {
 
         <div className="space-y-3 border-t pt-5">
           <h3 className="text-sm font-semibold text-destructive">Delete account</h3>
-          <p className="text-sm text-muted-foreground">This starts account deletion review. Processing may require identity verification, and data may be retained when legally required or needed for security and dispute records.</p>
+          <p className="text-sm text-muted-foreground">This schedules permanent account deletion. It normally begins within 24 hours; processing pauses only where a documented legal preservation hold applies.</p>
           <Label htmlFor="delete-confirmation">Type DELETE to confirm</Label>
           <input
             id="delete-confirmation"

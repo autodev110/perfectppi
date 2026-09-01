@@ -42,9 +42,8 @@ export default function PrivacyChoicesPage() {
 
       <h2>Account deletion</h2>
       <p>
-        A deletion request initiates review of account, public content, private messages and attachments, inspections, media, share links, push tokens, partner records, payments, and signed contracts. Information not legally required or reasonably necessary to retain will be deleted or deidentified, including associated user-generated content. We will explain retained categories and provide completion confirmation. Removing the app or disconnecting Google does not itself delete the PerfectPPI account.
+        An authenticated deletion request schedules removal of the account, account-owned application data, public content, private messages and attachments, inspections, managed media, share links, push tokens, and partner links. Processing normally begins within 24 hours and retries transient failures. A documented legal preservation hold pauses deletion of the affected account and is shown in request status while the account remains available. Minimized request evidence is retained for 24 months. Removing the app or disconnecting Google does not itself delete the PerfectPPI account.
       </p>
     </LegalDocument>
   );
 }
-

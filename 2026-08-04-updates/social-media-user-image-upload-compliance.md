@@ -1,6 +1,6 @@
 # Social Media User Image Upload Compliance Brainstorm
 
-**Status:** Hardened MVP implemented; production configuration, specialist illegal-content detection, and legal review pending
+**Status:** Hardened MVP and fail-closed specialist gateway implemented; provider configuration and legal/operational review pending
 
 This is the only active product plan currently tracked for PerfectPPI. The OBD
 tool, native iOS app, and PerfectPPI side of the DealerSpace integration are
@@ -27,8 +27,9 @@ Phases 1 through 3 of the MVP are implemented in PerfectPPI:
 - Review decisions, appeals, reports, events, and enforcement updates use atomic database functions; legal-hold deletion is blocked by database triggers.
 - Legal-hold decisions require a separately designated reviewer, and suspected evidence retains a private storage reference.
 - Web and iOS expose enforcement notices and held/rejected posts; iOS users can submit appeals.
+- Images require an explicit clean result from the configured specialist illegal-content scanner before Gemini can approve publication. Videos require the same specialist clearance and remain queued for manual review.
 
-Production rollout still requires confirming the moderation migrations in the production migration history, configuring `GEMINI_PERFECTPPI` or `GEMINI_API_KEY`, private/public R2 storage, cron secrets, and at least one designated legal-hold reviewer. Counsel must approve legal-hold retention, reviewer access, enforcement language, and reporting obligations. The general moderation model does not identify minors in images; sexually flagged images are conservatively locked for restricted review, but launch still requires a specialist illegal-content/hash-matching provider and counsel-approved reporting workflow. Phase 4 model improvements and full operational metrics remain future work.
+Public media rollout still requires configuring `GEMINI_PERFECTPPI` or `GEMINI_API_KEY`, private/public R2 storage, cron secrets, at least one designated legal-hold reviewer, and a contracted specialist scanner behind `CHILD_SAFETY_SCANNER_URL`. Missing, failed, matched, or uncertain specialist results cannot publish. Counsel must approve legal-hold access/release, enforcement language, reporting obligations, and the CyberTipline workflow. Phase 4 model improvements and full operational metrics remain future work.
 
 ## Current Project Surface
 

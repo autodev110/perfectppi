@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import type { Json } from "@/types/database";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -71,6 +72,14 @@ const reviewSchema = z.object({
   enforcement: z.enum(["none", "warning", "posting_hold", "media_hold", "suspension"]).default("none"),
 });
 
+function hasCleanSpecialistScan(value: Json): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, Json | undefined>;
+  const scan = record.specialistScan;
+  if (!scan || typeof scan !== "object" || Array.isArray(scan)) return false;
+  return (scan as Record<string, Json | undefined>).verdict === "clean";
+}
+
 export async function reviewModerationItem(formData: FormData) {
   const profile = await currentProfile();
   if (!profile || profile.role !== "admin") return;
@@ -100,6 +109,9 @@ export async function reviewModerationItem(formData: FormData) {
   let sourceUrl: string | null = null;
   let promotedUrl: string | null = null;
   if (item.entity_type === "community_post_media" && nextStatus === "active") {
+    if (!hasCleanSpecialistScan(item.raw_result)) {
+      throw new Error("Media cannot be approved until the specialist safety scan passes");
+    }
     const { data: media, error: mediaError } = await admin
       .from("community_post_media")
       .select("url, post_id, content_type")

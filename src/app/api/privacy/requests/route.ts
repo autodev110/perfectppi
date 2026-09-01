@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { privacyRequestSource, privacySubjectReference } from "@/lib/privacy/identity";
 
 const requestSchema = z.object({
   requestType: z.enum([
     "access", "correction", "export", "deletion", "opt_out",
     "appeal", "authorized_agent", "other",
   ]),
-  source: z.enum(["web", "ios"]).default("web"),
   details: z.string().trim().max(2000).optional(),
   deletionConfirmation: z.string().optional(),
 });
@@ -24,7 +24,7 @@ async function currentProfile() {
     .eq("auth_user_id", user.id)
     .single();
   if (!profile) return { response: NextResponse.json({ error: "Profile not found" }, { status: 404 }) };
-  return { profile };
+  return { profile, user };
 }
 
 export async function GET() {
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     .from("privacy_requests")
     .select("id", { count: "exact", head: true })
     .eq("profile_id", account.profile.id)
-    .in("status", ["submitted", "identity_verification", "in_progress"]);
+    .in("status", ["submitted", "identity_verification", "in_progress", "on_hold"]);
   if ((count ?? 0) >= 5) {
     return NextResponse.json({ error: "You already have several open requests. Please wait for an update." }, { status: 429 });
   }
@@ -69,7 +69,9 @@ export async function POST(request: Request) {
     .insert({
       profile_id: account.profile.id,
       request_type: parsed.data.requestType,
-      source: parsed.data.source,
+      source: privacyRequestSource(request),
+      auth_user_id: account.user.id,
+      subject_reference_hash: privacySubjectReference(account.user.id),
       details: parsed.data.details || null,
     })
     .select("id, request_type, status, details, resolution_summary, submitted_at, updated_at, completed_at")
@@ -79,6 +81,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "An account deletion request is already in progress" }, { status: 409 });
   }
   if (error) return NextResponse.json({ error: "Could not submit the privacy request" }, { status: 500 });
-  return NextResponse.json({ data }, { status: 201 });
+  return NextResponse.json({
+    data,
+    message: parsed.data.requestType === "deletion"
+      ? "Account deletion has been scheduled and normally completes within 24 hours."
+      : "Privacy request submitted.",
+  }, { status: 201 });
 }
-

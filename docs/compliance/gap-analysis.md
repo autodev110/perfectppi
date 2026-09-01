@@ -8,7 +8,7 @@ Status as of September 2, 2026. “Implemented” means an engineering control e
 |---|---|---|
 | Sign in with Apple absent while Google is offered on iOS | Google exists; Apple entitlement/native flow absent | Configure credentials/capability/server and complete Apple tests |
 | VSC/warranty nationwide role and terms unresolved | Code paths exist; disclosure blocks reliance; no approved provider/state packet | Keep paid issuance disabled; engage specialist counsel/provider |
-| Retention and end-to-end deletion incomplete | Request intake implemented; schedules/R2/vendor propagation not approved | Approve schedule and build/test deletion orchestrator |
+| External retention and deletion propagation incomplete | Auth, database, session, device, link, and managed R2 deletion worker implemented; provider backups and independent processors remain | Approve provider/contract schedules and run production acceptance tests |
 | Company/legal contract facts missing | No postal address, governing law, dispute/refund terms | Owner supplies facts; counsel approves agreements |
 | 50-state inspection/licensing/worker classification incomplete | Product operates nationwide | Specialist counsel matrix and state launch controls |
 
@@ -18,10 +18,11 @@ Status as of September 2, 2026. “Implemented” means an engineering control e
 |---|---|---|
 | No public legal center | Public Privacy, Terms, Support, choices, notice, AI, community, accessibility, copyright, VSC disclosure; canonical/sitemap/footer | Counsel approve and production 200/link tests |
 | No auditable assent | Version/hash/time/source table and web/iOS gates | Migration deploy; confirmation/OAuth/browser/device tests; material-change runbook |
-| No privacy request UI | Web/iOS intake, status and deletion initiation | Staff queue, verification, deadlines, export, propagation, completion and appeal operations |
+| Privacy operations need external acceptance testing | Web/iOS direct export, intake/status, durable deletion, retry, minimization, and 24-month request-log expiry implemented | Test representative production accounts, legal holds, backups, independent processors, deadlines, and notices |
 | Google disconnect absent | User-visible, lockout-safe unlink endpoint/UI | Verify provider revocation semantics and first/repeat login tests |
 | Unsupported “verified” and marketing claims | Public copy revised | Full route/content scan and credential system if claims return |
-| Private object/deletion uncertainty | Private R2 scheme exists for quarantine/reports | Inventory each upload; anonymous-denial and orphan cleanup tests |
+| Private object/deletion uncertainty | Private R2 quarantine, owner-prefix deletion, referenced-object deletion, and retry cleanup exist | Run anonymous-denial and seeded orphan/account-deletion acceptance tests against configured buckets |
+| Specialist illegal-content service not contracted | Fail-closed gateway is wired before image/video publication; missing/error/review results remain private | Contract a specialist provider, configure the adapter credentials, and complete controlled acceptance/reporting tests |
 | UGC controls uneven | Community moderation/report/appeal hardened | Extend report/block/appeal/DMCA/safety to all UGC surfaces |
 
 ## Medium priority
@@ -39,6 +40,8 @@ Status as of September 2, 2026. “Implemented” means an engineering control e
 - Public legal routes and real links; canonical origin is `https://www.perfectppi.com`.
 - Versioned Terms acceptance and privacy request tables have RLS and server-mediated writes.
 - Account deletion can be initiated inside iOS and web settings.
+- Authenticated JSON account export is available directly in web and iOS settings.
+- Account deletion is processed by an idempotent leased worker, with legal-hold pause, R2 cleanup, retry, and request-record minimization.
 - Gemini/OBD/public-content disclosures are factual and visible.
 - iOS still-image metadata removal and expanded privacy manifest categories.
 - No optional ad/behavioral analytics was found in source or the inspected deployed public homepage; this must be rechecked after deployment/config changes.

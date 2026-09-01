@@ -69,7 +69,7 @@ export default function PrivacyPage() {
 
       <h2>5. AI processing</h2>
       <p>
-        PerfectPPI sends relevant vehicle, VIN, inspection-answer, diagnostic, and report context to Google Gemini to assist with structured inspection reports and coverage-related outputs. VIN images may also be sent to Gemini to read a VIN. Community text and still images are sent to Gemini 2.5 Flash to identify content requiring blocking or human review; video is held for manual review in the current implementation. We minimize inputs to what the feature needs and do not intentionally send account passwords or payment-card data to these models.
+        PerfectPPI sends relevant vehicle, VIN, inspection-answer, diagnostic, and report context to Google Gemini to assist with structured inspection reports and coverage-related outputs. VIN images may also be sent to Gemini to read a VIN. Community media is checked through a configured specialist illegal-content scanning service before it can be published. Community text and cleared still images are sent to Gemini 2.5 Flash to identify content requiring blocking or human review; cleared video remains held for manual review in the current implementation. We minimize inputs to what the feature needs and do not intentionally send account passwords or payment-card data to these services.
       </p>
       <p>
         AI output can be incomplete or wrong. It is not a substitute for a physical inspection, diagnostic procedure, safety decision, repair advice, appraisal, insurance decision, or the binding terms of a service contract. Users may request correction or human review through <Link href="/support">Support</Link>. See the <Link href="/ai-disclosure">AI Processing Disclosure</Link> for more detail.
@@ -77,7 +77,7 @@ export default function PrivacyPage() {
 
       <h2>6. When information is disclosed</h2>
       <p>
-        We disclose information as needed to Supabase for authentication and database services; Vercel for application hosting; Cloudflare R2 for object storage; Google for sign-in, Gemini AI processing, moderation, and VIN/vehicle processing; Apple for push delivery and platform services; Stripe for payment processing; DocuSeal for electronic-signature workflows; NHTSA vPIC for VIN decoding; connected organizations, technicians, and transaction participants; DealerSpace or another partner you or your organization connects; professional advisers; and authorities or other parties when required for law, safety, fraud prevention, or legal claims.
+        We disclose information as needed to Supabase for authentication and database services; Vercel for application hosting; Cloudflare R2 for object storage; Google for sign-in, Gemini AI processing, moderation, and VIN/vehicle processing; a configured specialist illegal-content scanning service for community media safety; Apple for push delivery and platform services; Stripe for payment processing; DocuSeal for electronic-signature workflows; NHTSA vPIC for VIN decoding; connected organizations, technicians, and transaction participants; DealerSpace or another partner you or your organization connects; professional advisers; and authorities or other parties when required for law, safety, fraud prevention, or legal claims.
       </p>
       <p>
         Processor practices and contract terms require ongoing review. Each third party may process information under its own terms and privacy notice when acting independently.
@@ -98,7 +98,7 @@ export default function PrivacyPage() {
 
       <h2>9. Retention and deletion</h2>
       <p>
-        We keep each category only as long as reasonably necessary for the feature, account, transaction, security, moderation, dispute, contractual, and legal purposes described here. Relevant criteria include whether an account or transaction remains active, whether a share link remains active, whether records support a signed contract or payment, whether content is under appeal or legal hold, and applicable legal requirements. Backups and processor copies may persist after production deletion according to provider backup and deletion processes. Category-specific schedules and legal-hold rules are being finalized and will be published after business-owner and counsel approval rather than assigning unsupported periods.
+        We keep each category only as long as reasonably necessary for the feature, account, transaction, security, moderation, dispute, contractual, and legal purposes described here. Authenticated account deletion removes the account and account-owned application data and managed media, normally beginning within 24 hours, unless affected evidence is subject to a documented legal hold. We keep minimized privacy-request records for 24 months. Unattached quarantined uploads expire after 30 minutes and enter retryable cleanup. Reported illegal-content evidence is preserved for the period required by law. Backups and independent processor copies may persist according to their deletion cycles; contract, payment, tax, ordinary moderation, and provider-specific periods remain subject to applicable requirements and approved schedules.
       </p>
 
       <h2>10. Security</h2>

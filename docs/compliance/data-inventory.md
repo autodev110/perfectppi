@@ -4,12 +4,12 @@ Status: implemented as an engineering inventory pending business-owner and licen
 
 | Data | Source and purpose | Primary storage/access | Disclosures | Deletion/retention state |
 |---|---|---|---|---|
-| Auth ID, email, name, avatar, role, Google identity | User/Google; authentication, profile, authorization | Supabase Auth and `profiles`; user, authorized staff, service processes | Supabase, Google for OAuth | Account deletion workflow records a request; Auth/provider revocation and final schedule remain open |
+| Auth ID, email, name, avatar, role, Google identity | User/Google; authentication, profile, authorization | Supabase Auth and `profiles`; user, authorized staff, service processes | Supabase, Google for OAuth | Durable deletion removes Auth, profile-owned data, sessions, links, devices, and managed media; documented legal holds pause processing |
 | Legal assent evidence | Signup or post-OAuth clickwrap; prove versioned assent | `legal_acceptances`; owner select, service-role write | Supabase | Preserve according to counsel-approved dispute/contract schedule |
 | Organization and technician profile | User/org; directory, assignment, permissions | Supabase organization, membership, technician tables | Public fields when profile is public; relevant organization members | Verification evidence and credential schedule not implemented |
 | Vehicle, VIN, make/model, mileage | User, scanner, NHTSA vPIC, partner; identify vehicle and support inspection | Supabase vehicle/inspection tables | NHTSA vPIC, Gemini where feature requires, inspectors/org/partner | VIN minimization and final schedule open |
 | Inspection answers, notes, OBD codes/readings | User, technician, OBD adapter; inspection and report | Supabase; report artifacts in R2 | Gemini, inspection participants, approved partner | Transaction/dispute schedule and R2 propagation open |
-| Inspection/listing/community photos and video | Camera/library/user; evidence and UGC | Cloudflare R2 public or private paths depending feature; references in Supabase | Public for approved public content; participants for private content; Gemini for moderation stills | iOS still-image metadata stripped; video metadata and legacy objects require review |
+| Inspection/listing/community photos and video | Camera/library/user; evidence and UGC | Cloudflare R2 public or private paths depending feature; references in Supabase | Public for approved public content; participants for private content; specialist scanner and Gemini for community moderation | Community media stays private unless specialist scanning clears it; videos also require manual review; account owner-prefix cleanup implemented |
 | Community posts/comments/reports/appeals | User/moderation; social features and safety | Supabase; quarantine media in private R2 | Public after approval; Gemini moderation; admins | Moderation evidence/legal-hold schedule open |
 | Marketplace listings, price, location, seller | User; public listing and contact | Supabase/public R2 | Public visitors and transaction participants | Listing closure/deletion rules open |
 | Reviews | User; reputation and feedback | Supabase | Public | Consumer Review Rule/CRFA preservation and fraud controls require operational review |
@@ -22,7 +22,7 @@ Status: implemented as an engineering inventory pending business-owner and licen
 | VSC/warranty options and generated outputs | Inspection context/Gemini; preview workflow | Supabase, Gemini output, DocuSeal/Stripe if enabled | Providers/processors if launched | Launch blocked pending role, licensing, forms, cancellation, and state approval |
 | AI inputs/outputs | Feature-selected VIN/vehicle/inspection/OBD/text/image | Gemini during processing; outputs/evidence in Supabase/R2 | Google Gemini | Vendor training/retention contractual settings require owner review |
 | DealerSpace IDs, snapshots, events, deliverables | Connected organization/partner; integration | Supabase and private/public artifacts by route | Connected DealerSpace tenant | Disconnect exists; downstream deletion/contract schedule open |
-| Privacy requests | Account user/support; exercise rights | `privacy_requests`; user read/service-role processing | Authorized staff/processors needed to fulfill | Keep under counsel-approved request-evidence schedule |
+| Privacy requests | Account user/support; exercise rights | `privacy_requests`; user read/service-role processing | Authorized staff/processes needed to fulfill | Completed request evidence expires after 24 months; account identifiers/details are minimized after deletion |
 
 ## Public exposure map
 
