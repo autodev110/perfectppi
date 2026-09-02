@@ -1,6 +1,6 @@
 # PerfectPPI Compliance Workspace
 
-These materials document engineering research and controls as of September 2, 2026. They are not a claim of full compliance and are not a substitute for licensed counsel.
+These materials document engineering research and controls as of September 3, 2026. They are not a claim of full compliance and are not a substitute for licensed counsel.
 
 - Start with `gap-analysis.md` and `open-questions.md`.
 - Use `counsel-review-packet.md` for legal review.
@@ -8,6 +8,6 @@ These materials document engineering research and controls as of September 2, 20
 - Use `research-matrix.md` for issue spotting and primary-source links.
 - Use `retention-schedule.md`, `wisp.md`, and `incident-response.md` as operational control drafts.
 - Use `provider-compliance.md` for Google, Apple, Supabase and App Store actions.
+- Use `child-safety-provider-integration-plan.md` for specialist media scanning provider selection, implementation, testing and rollout.
 
 Public legal pages are implemented in `src/app/(public)` and version/evidence constants in `src/lib/legal`. Any approved material legal change must increment the version, update the document hash, decide whether re-assent is required and preserve prior evidence.
-
