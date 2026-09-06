@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useReducer, useCallback, useRef } from "react";
-import { SECTION_QUESTION_TEMPLATES } from "@/features/ppi/constants";
 import { buildQuestionOrder, deferQuestion } from "@/features/ppi/workflow-order";
 import type {
   PpiRequestResponse,
@@ -10,7 +9,8 @@ import type {
   PpiAnswerItem,
   PpiMediaItem,
 } from "@/types/api";
-import type { SectionType, CompletionState } from "@/types/enums";
+import type { InspectionScope, CompletionState } from "@/types/enums";
+import { inspectionAnswerValidationError } from "@/features/ppi/answer-validation";
 
 // ============================================================================
 // usePpiWizard
@@ -18,6 +18,7 @@ import type { SectionType, CompletionState } from "@/types/enums";
 // ============================================================================
 
 export type WizardStep =
+  | "inspection_scope"
   | "vehicle"
   | "vehicle_info"
   | "whose_car"
@@ -27,6 +28,7 @@ export type WizardStep =
   | "confirm";
 
 export interface WizardFormState {
+  inspection_scope: InspectionScope;
   vehicle_id: string;
   vin: string;
   mileage: string;
@@ -38,6 +40,8 @@ export interface WizardFormState {
 }
 
 const WIZARD_STEPS: WizardStep[] = [
+  // Coarsest choice first: it decides which questions the inspection will ask.
+  "inspection_scope",
   "vehicle",
   "vehicle_info",
   "whose_car",
@@ -48,8 +52,9 @@ const WIZARD_STEPS: WizardStep[] = [
 ];
 
 export function usePpiWizard() {
-  const [step, setStep] = useState<WizardStep>("vehicle");
+  const [step, setStep] = useState<WizardStep>("inspection_scope");
   const [form, setForm] = useState<WizardFormState>({
+    inspection_scope: "complete",
     vehicle_id: "",
     vin: "",
     mileage: "",
@@ -96,6 +101,7 @@ export function usePpiWizard() {
 
     try {
       const payload: Record<string, string> = {
+        inspection_scope: form.inspection_scope,
         vehicle_id: form.vehicle_id,
         vin: form.vin.trim(),
         mileage: form.mileage.trim(),
@@ -200,9 +206,17 @@ function hasAnswerValue(value: string | undefined) {
 }
 
 function hasRequiredPhoto(section: PpiSectionItem, answerId: string) {
-  return section.media.some(
-    (media) => media.ppi_answer_id === answerId || media.ppi_section_id === section.id
-  );
+  return section.media.some((media) => media.ppi_answer_id === answerId);
+}
+
+function isAnswerValid(answer: PpiAnswerItem, answers: Map<string, string>) {
+  return inspectionAnswerValidationError({
+    prompt: answer.prompt,
+    answerType: answer.answer_type,
+    value: answers.get(answer.id),
+    required: answer.is_required,
+    options: answer.options,
+  }) === null;
 }
 
 function answerLocations(sections: PpiSectionItem[]) {
@@ -233,14 +247,10 @@ function navigateToAnswer(state: WorkflowState, answerId: string): WorkflowState
 }
 
 function isSectionComplete(section: PpiSectionItem, answers: Map<string, string>) {
-  const templates = SECTION_QUESTION_TEMPLATES[section.section_type as SectionType] ?? [];
-
-  return section.answers.every((answer, index) => {
-    const template = templates[index];
-    const answerFilled = hasAnswerValue(answers.get(answer.id));
-    const answerSatisfied = !answer.is_required || answerFilled;
+  return section.answers.every((answer) => {
+    const answerSatisfied = isAnswerValid(answer, answers);
     const photoSatisfied =
-      !template?.requiresPhoto || hasRequiredPhoto(section, answer.id);
+      !answer.requires_photo || hasRequiredPhoto(section, answer.id);
 
     return answerSatisfied && photoSatisfied;
   });
@@ -793,8 +803,9 @@ export function useInspectionWorkflow(submissionId: string) {
 
   const allComplete = sectionProgress.every((s) => s.completed);
 
-  const canGoNext =
-    !currentQuestion?.is_required || (currentQuestion.is_required && currentValue !== "");
+  const canGoNext = currentQuestion
+    ? isAnswerValid(currentQuestion, state.answers)
+    : false;
 
   return {
     loading,

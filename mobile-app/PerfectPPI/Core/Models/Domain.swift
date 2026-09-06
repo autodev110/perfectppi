@@ -324,6 +324,7 @@ struct PpiRequest: Codable, Identifiable, Hashable {
     let whoseCar: WhoseCar?
     let requesterRole: RequesterRole?
     let performerType: PerformerType?
+    let inspectionScope: InspectionScope?
     let createdAt: Date?
     let updatedAt: Date?
     /// "perfectppi" for consumer inspections, "dealerspace" for ones pushed in
@@ -381,6 +382,8 @@ struct PpiSubmission: Codable, Identifiable, Hashable {
     let submittedAt: Date?
     let completedAt: Date?
     let createdAt: Date?
+    /// Denormalized from the parent request so the workflow needs one fetch.
+    let inspectionScope: InspectionScope?
 }
 
 /// Org-wide inspection row returned by `GET /api/organizations/me/inspections`.
@@ -426,6 +429,8 @@ struct PpiAnswer: Codable, Identifiable, Hashable {
     let deferredAt: Date?
     let options: [String]?
     let isRequired: Bool?
+    let requiresPhoto: Bool?
+    let photoPrompt: String?
     let sortOrder: Int?
 }
 
@@ -501,6 +506,7 @@ struct StandardizedContent: Codable, Hashable {
 
     struct InspectionMetadata: Codable, Hashable {
         let ppiType: String?
+        let inspectionScope: InspectionScope?
         let performerType: String?
         let submittedAt: String?
         let version: Int?

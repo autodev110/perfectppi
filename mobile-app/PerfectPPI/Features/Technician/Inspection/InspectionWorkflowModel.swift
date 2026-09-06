@@ -15,16 +15,15 @@ final class InspectionWorkflowModel: ObservableObject {
     @Published private(set) var loadError: Error?
     @Published private(set) var localPhotoAnswerIds: Set<String> = []
     @Published private(set) var skippedAnswerIds: Set<String> = []
+    /// Drives the scanner gate: Dents & Tires uses the adapter for the VIN only.
+    @Published private(set) var inspectionScope: InspectionScope = .complete
 
     private var submissionId: String?
-    private let photoRequiredPrompts: Set<String> = [
-        "Current odometer reading (miles)",
-        "Are any warning lights currently on?",
-        "Overall paint condition",
-        "Overall interior condition",
+    private let treadDepthPrompts: Set<String> = [
         "Front left tire tread depth (in 32nds of an inch)",
-        "Engine oil condition",
-        "Frame rust level",
+        "Front right tire tread depth (in 32nds of an inch)",
+        "Rear left tire tread depth (in 32nds of an inch)",
+        "Rear right tire tread depth (in 32nds of an inch)",
     ]
 
     // MARK: - Public
@@ -110,7 +109,7 @@ final class InspectionWorkflowModel: ObservableObject {
 
     func media(for answerId: String?) -> [PpiMedia] {
         guard let answerId else { return [] }
-        return allMedia.filter { $0.ppiAnswerId == answerId }
+        return allMedia.filter { $0.ppiAnswerId == answerId && $0.mediaType == "image" }
     }
 
     func setOBDSnapshot(_ snapshot: OBDSnapshotRecord) {
@@ -161,6 +160,7 @@ final class InspectionWorkflowModel: ObservableObject {
             async let answers = PpiAPI.answers(submissionId: submissionId)
             async let media = PpiAPI.media(submissionId: submissionId)
             async let obd = PpiAPI.obdSnapshots(submissionId: submissionId)
+            async let submission = PpiAPI.getSubmission(id: submissionId)
             let orderedSections = try await sections.sorted {
                 ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0)
             }
@@ -182,6 +182,7 @@ final class InspectionWorkflowModel: ObservableObject {
             self.answers = canonicalAnswers.filter { !deferredIds.contains($0.id) } + deferredAnswers
             self.allMedia = try await media
             self.obdSnapshots = try await obd
+            self.inspectionScope = (try? await submission)?.inspectionScope ?? .complete
             self.currentIndex = 0
             self.skippedAnswerIds = deferredIds
         } catch {
@@ -300,7 +301,11 @@ final class InspectionWorkflowModel: ObservableObject {
 
         switch answer.answerType {
         case .number:
-            return Double(v) != nil
+            guard let number = Double(v), number.isFinite else { return false }
+            if treadDepthPrompts.contains(answer.prompt) {
+                return number.rounded() == number && (0...32).contains(number)
+            }
+            return true
         case .yesNo:
             return v == "yes" || v == "no"
         case .select:
@@ -336,6 +341,8 @@ final class InspectionWorkflowModel: ObservableObject {
             deferredAt: deferredAt,
             options: answer.options,
             isRequired: answer.isRequired,
+            requiresPhoto: answer.requiresPhoto,
+            photoPrompt: answer.photoPrompt,
             sortOrder: answer.sortOrder
         )
     }
@@ -348,13 +355,16 @@ final class InspectionWorkflowModel: ObservableObject {
         return bytes.contains(mode)
     }
 
+    /// Read from the answer row rather than a prompt-keyed set. Two inspection
+    /// scopes deliberately share tread wording while differing on whether every
+    /// corner needs its own photo, which a set keyed on prompt cannot express.
     private func requiresPhoto(_ answer: PpiAnswer) -> Bool {
-        photoRequiredPrompts.contains(answer.prompt.trimmingCharacters(in: .whitespacesAndNewlines))
+        answer.requiresPhoto ?? false
     }
 
     private func hasPhoto(for answerId: String) -> Bool {
         localPhotoAnswerIds.contains(answerId) ||
-        allMedia.contains { $0.ppiAnswerId == answerId } ||
+        allMedia.contains { $0.ppiAnswerId == answerId && $0.mediaType == "image" } ||
         OfflineQueue.shared.pendingMedia.contains { $0.answerId == answerId }
     }
 }

@@ -6,6 +6,14 @@ import Combine
 /// stored DTCs, pending DTCs). The UI binds to the `@Published` state.
 @MainActor
 final class OBDSession: ObservableObject {
+    private enum ScanError: LocalizedError {
+        case vinUnavailable
+
+        var errorDescription: String? {
+            "The vehicle did not return a valid 17-character VIN. Check the ignition and try again."
+        }
+    }
+
     enum Phase: Equatable {
         case idle
         case handshaking(stepLabel: String)
@@ -24,10 +32,20 @@ final class OBDSession: ObservableObject {
         self.bluetooth = bluetooth
     }
 
-    /// Run the full MVP sequence: handshake, then read VIN + supported PIDs +
-    /// stored/pending DTCs. Idempotent — call it again after a disconnect or
-    /// to refresh the data.
-    func runScan() async {
+    /// How much of the vehicle to interrogate.
+    enum ScanDepth {
+        /// Everything: supported PIDs, readiness, VIN, all three DTC modes, live data.
+        case full
+        /// VIN only. A Dents & Tires inspection uses the adapter purely to
+        /// identify the car; reading diagnostics it will never report on would
+        /// be slower and would imply a diagnostic result the report does not make.
+        case vinOnly
+    }
+
+    /// Run the MVP sequence: handshake, then read VIN and — at `.full` depth —
+    /// supported PIDs, readiness, DTCs, and live data. Idempotent: call it again
+    /// after a disconnect or to refresh the data.
+    func runScan(depth: ScanDepth = .full) async {
         switch phase {
         case .handshaking, .reading:
             return
@@ -44,6 +62,22 @@ final class OBDSession: ObservableObject {
         do {
             try await handshake(generation: generation)
             guard isCurrent(generation) else { return }
+
+            if depth == .vinOnly {
+                phase = .reading(stepLabel: "Reading VIN")
+                let onlyVinResponse = try await bluetooth.send("0902", timeout: 8)
+                guard isCurrent(generation) else { return }
+                guard let vin = OBDParser.parseVIN(from: onlyVinResponse), vin.count == 17 else {
+                    throw ScanError.vinUnavailable
+                }
+                collected.vin = vin
+                collected.rawVinResponse = onlyVinResponse
+                collected.completedAt = Date()
+                collected.adapterName = bluetooth.connectedDevice?.name
+                snapshot = collected
+                phase = .ready
+                return
+            }
 
             phase = .reading(stepLabel: "Reading supported PIDs")
             let supported = try await readSupportedPIDs(generation: generation)

@@ -3,8 +3,9 @@ import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus, ClipboardCheck, ChevronRight } from "lucide-react";
-import type { PpiRequestStatus } from "@/types/enums";
+import type { InspectionScope, PpiRequestStatus } from "@/types/enums";
 import { inspectionDisplayName } from "@/features/ppi/presentation";
+import { INSPECTION_SCOPE_LABELS } from "@/features/ppi/constants";
 
 const STATUS_TABS: { label: string; value: PpiRequestStatus | "all" }[] = [
   { label: "All", value: "all" },
@@ -103,6 +104,11 @@ export default async function MyInspectionsPage({ searchParams }: PageProps) {
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <PpiStatusBadge status={req.status} />
+                    <span className="rounded-full bg-secondary px-2 py-1 text-xs font-medium">
+                      {INSPECTION_SCOPE_LABELS[
+                        (req.inspection_scope ?? "complete") as InspectionScope
+                      ]}
+                    </span>
                     <span className="text-xs text-muted-foreground">
                       {new Date(req.created_at).toLocaleDateString("en-US", {
                         month: "short",

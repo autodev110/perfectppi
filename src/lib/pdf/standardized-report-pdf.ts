@@ -18,15 +18,19 @@ function addLabelValue(lines: Parameters<typeof createSimplePdf>[0], label: stri
 }
 
 export function generateStandardizedReportPdf(content: StandardizedContent) {
+  const scopeLabel = content.inspection_metadata.inspection_scope === "dents_tires"
+    ? "Dents & Tires"
+    : "Complete Inspection";
   const lines: Parameters<typeof createSimplePdf>[0] = [
     { text: "PerfectPPI", fontSize: 22, font: "bold", gapAfter: 8 },
-    { text: "Pre-Purchase Inspection Report", fontSize: 16, font: "bold", gapAfter: 12 },
+    { text: `${scopeLabel} Report`, fontSize: 16, font: "bold", gapAfter: 12 },
     { text: vehicleLabel(content), fontSize: 14, font: "bold", gapAfter: 6 },
   ];
 
   addLabelValue(lines, "VIN", content.vehicle.vin);
   addLabelValue(lines, "Mileage", content.vehicle.mileage ? `${content.vehicle.mileage.toLocaleString()} mi` : null);
   addLabelValue(lines, "PPI Type", content.inspection_metadata.ppi_type);
+  addLabelValue(lines, "Inspection Scope", scopeLabel);
   addLabelValue(lines, "Performer Type", content.inspection_metadata.performer_type);
   addLabelValue(lines, "Inspector", content.performer.display_name ?? "Self");
   addLabelValue(lines, "Generated From Submission Version", content.inspection_metadata.version);

@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProgressTracker } from "@/components/shared/progress-tracker";
+import {
+  INSPECTION_SCOPE_DESCRIPTIONS,
+  INSPECTION_SCOPE_LABELS,
+} from "@/features/ppi/constants";
 import { createClient } from "@/lib/supabase/client";
 import {
   Car,
@@ -18,6 +22,8 @@ import {
   UserCheck,
   ChevronLeft,
   Plus,
+  ClipboardCheck,
+  CircleDot,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -34,6 +40,7 @@ interface Vehicle {
 }
 
 const STEP_LABELS = [
+  "Inspection Type",
   "Vehicle",
   "Vehicle Info",
   "Ownership",
@@ -183,6 +190,32 @@ export default function NewInspectionPage() {
       {wizard.error && (
         <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20">
           <p className="text-sm text-destructive font-medium">{wizard.error}</p>
+        </div>
+      )}
+
+      {/* Step: Inspection type */}
+      {wizard.step === "inspection_scope" && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold">What kind of inspection?</h2>
+          <div className="space-y-3">
+            <OptionCard
+              selected={wizard.form.inspection_scope === "complete"}
+              onClick={() => wizard.update("inspection_scope", "complete")}
+              icon={ClipboardCheck}
+              title={INSPECTION_SCOPE_LABELS.complete}
+              description={INSPECTION_SCOPE_DESCRIPTIONS.complete}
+            />
+            <OptionCard
+              selected={wizard.form.inspection_scope === "dents_tires"}
+              onClick={() => wizard.update("inspection_scope", "dents_tires")}
+              icon={CircleDot}
+              title={INSPECTION_SCOPE_LABELS.dents_tires}
+              description={INSPECTION_SCOPE_DESCRIPTIONS.dents_tires}
+            />
+          </div>
+          <div className="flex gap-3">
+            <Button onClick={wizard.next} className="flex-1">Continue</Button>
+          </div>
         </div>
       )}
 
@@ -439,6 +472,15 @@ export default function NewInspectionPage() {
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Your Role</p>
                 <p className="font-semibold capitalize">{wizard.form.requester_role}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Inspection Type</p>
+                <p className="font-semibold">
+                  {INSPECTION_SCOPE_LABELS[wizard.form.inspection_scope]}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3">

@@ -84,6 +84,13 @@ export function generateVscDeterminationPdf(
   addLabelValue(lines, "Generated At", context.generatedAt);
   addLabelValue(lines, "Inspector", content.performer.display_name ?? "Self");
   addLabelValue(lines, "Inspection Type", content.inspection_metadata.ppi_type);
+  addLabelValue(
+    lines,
+    "Inspection Scope",
+    content.inspection_metadata.inspection_scope === "dents_tires"
+      ? "Dents & Tires"
+      : "Complete Inspection",
+  );
 
   lines.push({ text: " ", fontSize: 8, gapAfter: 10 });
   lines.push({ text: "Determination", fontSize: 14, font: "bold", gapAfter: 4 });

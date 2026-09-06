@@ -56,10 +56,7 @@ private struct RequestCard: View {
                 Text(vehicleLabel)
                     .font(.headline)
                     .lineLimit(1)
-                Text(request.ppiType?.rawValue
-                        .replacingOccurrences(of: "_", with: " ")
-                        .capitalized
-                     ?? "PPI")
+                Text("\(request.inspectionScope?.label ?? InspectionScope.complete.label) · \(request.ppiType?.rawValue.replacingOccurrences(of: "_", with: " ").capitalized ?? "PPI")")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                 StatusBadge(text: request.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized,

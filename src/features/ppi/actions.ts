@@ -4,17 +4,18 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
-  SECTION_ORDER,
   SECTION_QUESTION_TEMPLATES,
+  getSectionOrder,
   VEHICLE_BASICS_ODOMETER_PROMPT,
   VEHICLE_BASICS_VIN_PROMPT,
   canonicalInspectionPrompt,
   isValidTransition,
 } from "./constants";
-import type { PpiRequestStatus, SectionType } from "@/types/enums";
+import type { InspectionScope, PpiRequestStatus, SectionType } from "@/types/enums";
 import type { Database, Json } from "@/types/database";
 import { syncPartnerLifecycle } from "@/features/partner/events";
 import { uploadedUrlSchema } from "@/features/uploads/url";
+import { inspectionAnswerValidationError } from "./answer-validation";
 
 // ============================================================================
 // Helpers
@@ -49,6 +50,7 @@ const createRequestSchema = z.object({
   requester_role: z.enum(["buying", "selling", "documenting"]),
   performer_type: z.enum(["self", "technician"]),
   assigned_tech_profile_id: z.string().uuid().optional(),
+  inspection_scope: z.enum(["complete", "dents_tires"]).default("complete"),
 });
 
 export async function createPpiRequest(formData: FormData) {
@@ -70,6 +72,7 @@ export async function createPpiRequest(formData: FormData) {
     requester_role,
     performer_type,
     assigned_tech_profile_id,
+    inspection_scope,
   } =
     parsed.data;
 
@@ -135,6 +138,7 @@ export async function createPpiRequest(formData: FormData) {
       requester_role,
       performer_type,
       ppi_type: ppiType,
+      inspection_scope,
       status: initialStatus,
     })
     .select()
@@ -168,7 +172,7 @@ export async function createSubmission(
 
   const { data: request } = await supabase
     .from("ppi_requests")
-    .select("id, requester_id, assigned_tech_id, performer_type")
+    .select("id, requester_id, assigned_tech_id, performer_type, inspection_scope")
     .eq("id", requestId)
     .single();
 
@@ -220,7 +224,8 @@ export async function createSubmission(
   }
 
   // Seed sections
-  const sectionInserts = SECTION_ORDER.map((sectionType, index) => ({
+  const scope = (request.inspection_scope ?? "complete") as InspectionScope;
+  const sectionInserts = getSectionOrder(scope).map((sectionType, index) => ({
     ppi_submission_id: submission.id,
     section_type: sectionType,
     completion_state: "not_started" as const,
@@ -243,6 +248,8 @@ export async function createSubmission(
     answer_type: "text" | "yes_no" | "select" | "number";
     options: string[] | null;
     is_required: boolean;
+    requires_photo: boolean;
+    photo_prompt: string | null;
     sort_order: number;
   }[] = [];
 
@@ -256,6 +263,8 @@ export async function createSubmission(
         answer_type: template.answerType,
         options: template.options ?? null,
         is_required: template.isRequired,
+        requires_photo: template.requiresPhoto ?? false,
+        photo_prompt: template.photoPrompt ?? null,
         sort_order: idx + 1,
       });
     });
@@ -519,7 +528,9 @@ export async function submitPpi(submissionId: string) {
   // Load all answers for this submission to validate required fields
   const { data: sections } = await supabase
     .from("ppi_sections")
-    .select("id, answers:ppi_answers(id, is_required, answer_value)")
+    .select(
+      "id, answers:ppi_answers(id, prompt, answer_type, options, is_required, requires_photo, answer_value), media:ppi_media(ppi_answer_id, media_type)",
+    )
     .eq("ppi_submission_id", submissionId);
 
   if (!sections) return { error: "Submission not found" };
@@ -528,7 +539,16 @@ export async function submitPpi(submissionId: string) {
   const missing: string[] = [];
   for (const section of sections) {
     for (const answer of section.answers ?? []) {
-      if (answer.is_required && !answer.answer_value) {
+      const options = Array.isArray(answer.options)
+        ? answer.options.filter((option): option is string => typeof option === "string")
+        : null;
+      if (inspectionAnswerValidationError({
+        prompt: answer.prompt,
+        answerType: answer.answer_type,
+        value: answer.answer_value,
+        required: answer.is_required,
+        options,
+      })) {
         missing.push(answer.id);
       }
     }
@@ -538,6 +558,30 @@ export async function submitPpi(submissionId: string) {
     return {
       error: `${missing.length} required answer(s) are incomplete`,
       missingAnswerIds: missing,
+    };
+  }
+
+  // Photo requirements were client-only until requires_photo became a column,
+  // which meant a client could submit past them. Enforce them here too.
+  const missingPhotos: string[] = [];
+  for (const section of sections) {
+    const photographedAnswerIds = new Set(
+      (section.media ?? [])
+        .filter((media) => media.media_type === "image")
+        .map((media) => media.ppi_answer_id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    for (const answer of section.answers ?? []) {
+      if (!answer.requires_photo) continue;
+      if (photographedAnswerIds.has(answer.id)) continue;
+      missingPhotos.push(answer.id);
+    }
+  }
+
+  if (missingPhotos.length > 0) {
+    return {
+      error: `${missingPhotos.length} question(s) still need a photo`,
+      missingAnswerIds: missingPhotos,
     };
   }
 
@@ -569,7 +613,7 @@ export async function resubmitPpi(requestId: string) {
 
   const { data: request } = await supabase
     .from("ppi_requests")
-    .select("id, requester_id, performer_type")
+    .select("id, requester_id, performer_type, inspection_scope")
     .eq("id", requestId)
     .single();
 
@@ -583,8 +627,8 @@ export async function resubmitPpi(requestId: string) {
       id, version, performer_id,
       sections:ppi_sections(
         id, section_type, notes, sort_order,
-        answers:ppi_answers(id, prompt, answer_type, answer_value, options, is_required, sort_order, deferred_at),
-        media:ppi_media(id, url, media_type, caption, captured_at, metadata)
+        answers:ppi_answers(id, prompt, answer_type, answer_value, options, is_required, requires_photo, photo_prompt, sort_order, deferred_at),
+        media:ppi_media(id, ppi_answer_id, url, media_type, caption, captured_at, metadata)
       )
     `
     )
@@ -627,7 +671,9 @@ export async function resubmitPpi(requestId: string) {
 
   // Deep-copy sections, answers, and media
   for (const section of currentSub.sections ?? []) {
-    const canonicalSectionIndex = SECTION_ORDER.indexOf(section.section_type as SectionType);
+    const canonicalSectionIndex = getSectionOrder(
+      (request.inspection_scope ?? "complete") as InspectionScope,
+    ).indexOf(section.section_type as SectionType);
     const { data: newSection } = await supabase
       .from("ppi_sections")
       .insert({
@@ -643,9 +689,16 @@ export async function resubmitPpi(requestId: string) {
 
     if (!newSection) continue;
 
-    // Copy answers
+    // Copy answers. The new rows get new ids, so keep an old→new map: media
+    // rows point at an answer, and a revision that drops that pointer turns
+    // every per-question photo into a loose section-level one.
+    const answerIdRemap = new Map<string, string>();
+
     if (section.answers?.length) {
-      const answerInserts = section.answers.map(
+      const orderedAnswers = [...section.answers].sort(
+        (a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order,
+      );
+      const answerInserts = orderedAnswers.map(
         (a: {
           prompt: string;
           answer_type: "text" | "yes_no" | "select" | "number";
@@ -653,6 +706,8 @@ export async function resubmitPpi(requestId: string) {
           deferred_at: string | null;
           options: Json | null;
           is_required: boolean;
+          requires_photo: boolean;
+          photo_prompt: string | null;
           sort_order: number;
         }) => ({
           ppi_section_id: newSection.id,
@@ -662,16 +717,32 @@ export async function resubmitPpi(requestId: string) {
           deferred_at: a.deferred_at,
           options: a.options as Json,
           is_required: a.is_required,
+          requires_photo: a.requires_photo,
+          photo_prompt: a.photo_prompt,
           sort_order: a.sort_order,
         })
       );
-      await supabase.from("ppi_answers").insert(answerInserts);
+      const { data: insertedAnswers } = await supabase
+        .from("ppi_answers")
+        .insert(answerInserts)
+        .select("id, sort_order");
+
+      // Insert order is not guaranteed on the way back, so pair the two sides
+      // on sort_order, which is unique within a section and copied verbatim.
+      const newIdBySortOrder = new Map(
+        (insertedAnswers ?? []).map((a) => [a.sort_order, a.id]),
+      );
+      for (const old of orderedAnswers as { id: string; sort_order: number }[]) {
+        const newId = newIdBySortOrder.get(old.sort_order);
+        if (newId) answerIdRemap.set(old.id, newId);
+      }
     }
 
     // Copy media references
     if (section.media?.length) {
       const mediaInserts = section.media.map(
         (m: {
+          ppi_answer_id: string | null;
           url: string;
           media_type: string;
           caption: string | null;
@@ -679,6 +750,9 @@ export async function resubmitPpi(requestId: string) {
           metadata: Json | null;
         }) => ({
           ppi_section_id: newSection.id,
+          ppi_answer_id: m.ppi_answer_id
+            ? answerIdRemap.get(m.ppi_answer_id) ?? null
+            : null,
           url: m.url,
           media_type: m.media_type,
           caption: m.caption,
@@ -786,6 +860,17 @@ export async function attachMedia(data: {
     .eq("id", parsed.data.ppi_section_id)
     .maybeSingle();
   if (!section) return { error: "Inspection section not found" };
+
+  if (parsed.data.ppi_answer_id) {
+    const { data: answer } = await supabase
+      .from("ppi_answers")
+      .select("id")
+      .eq("id", parsed.data.ppi_answer_id)
+      .eq("ppi_section_id", parsed.data.ppi_section_id)
+      .maybeSingle();
+    if (!answer) return { error: "Inspection answer does not belong to this section" };
+  }
+
   const expectedPrefix = `r2-private:///ppi_media/${ctx.id}/${section.ppi_submission_id}/`;
   if (!parsed.data.url.startsWith(expectedPrefix)) return { error: "Inspection upload is invalid" };
 

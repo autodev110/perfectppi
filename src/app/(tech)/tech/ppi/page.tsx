@@ -3,8 +3,9 @@ import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
 import Link from "next/link";
 import { ChevronRight, ClipboardCheck } from "lucide-react";
 import { SourceBadge } from "@/components/shared/source-badge";
-import type { PpiRequestStatus } from "@/types/enums";
+import type { InspectionScope, PpiRequestStatus } from "@/types/enums";
 import { inspectionDisplayName } from "@/features/ppi/presentation";
+import { INSPECTION_SCOPE_LABELS } from "@/features/ppi/constants";
 
 const QUEUE_TABS: { label: string; value: PpiRequestStatus | "active" }[] = [
   { label: "Active", value: "active" },
@@ -101,8 +102,13 @@ export default async function InspectionQueuePage({ searchParams }: PageProps) {
                       day: "numeric",
                     })}
                   </p>
-                  <div className="mt-2">
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
                     <PpiStatusBadge status={req.status} />
+                    <span className="rounded-full bg-secondary px-2 py-1 text-xs font-medium">
+                      {INSPECTION_SCOPE_LABELS[
+                        (req.inspection_scope ?? "complete") as InspectionScope
+                      ]}
+                    </span>
                   </div>
                 </div>
                 <Link

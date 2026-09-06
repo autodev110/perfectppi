@@ -82,6 +82,27 @@ enum PpiSubmissionStatus: String, Codable {
     case completed
 }
 
+/// Which question set an inspection asks. Distinct from `PpiType`, which is the
+/// trust tier derived from the performer's certification.
+enum InspectionScope: String, Codable, CaseIterable {
+    case complete
+    case dentsTires = "dents_tires"
+
+    var label: String {
+        switch self {
+        case .complete: return "Complete Inspection"
+        case .dentsTires: return "Dents & Tires"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .complete: return "Full pre-purchase inspection — every system, inside and out."
+        case .dentsTires: return "Tire tread, wheels, and cosmetic body damage."
+        }
+    }
+}
+
 enum SectionType: String, Codable, CaseIterable {
     case vehicleBasics = "vehicle_basics"
     case dashboardWarnings = "dashboard_warnings"
@@ -95,6 +116,16 @@ enum SectionType: String, Codable, CaseIterable {
     case underbody
     case roadTest = "road_test"
     case modifications
+    // dents_tires scope only
+    case wheelsTires = "wheels_tires"
+    case bodyDamage = "body_damage"
+
+    var label: String {
+        switch self {
+        case .wheelsTires: return "Wheels & Tires"
+        default: return rawValue.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
 }
 
 enum CompletionState: String, Codable {

@@ -10,6 +10,7 @@ import type {
   RequesterRole,
   PerformerType,
   PpiType,
+  InspectionScope,
   PpiRequestStatus,
   SectionType,
   CompletionState,
@@ -156,6 +157,8 @@ export interface PpiAnswerItem {
   deferred_at: string | null;
   options: string[] | null;
   is_required: boolean;
+  requires_photo: boolean;
+  photo_prompt: string | null;
   sort_order: number;
 }
 
@@ -180,6 +183,8 @@ export interface PpiSubmissionResponse {
   submitted_at: string | null;
   completed_at: string | null;
   created_at: string;
+  /** Denormalized from the parent request so clients need one fetch, not two. */
+  inspection_scope: InspectionScope;
   sections: PpiSectionItem[];
 }
 
@@ -192,6 +197,7 @@ export interface PpiRequestResponse {
   requester_role: RequesterRole;
   performer_type: PerformerType;
   ppi_type: PpiType;
+  inspection_scope: InspectionScope;
   status: PpiRequestStatus;
   created_at: string;
   updated_at: string;
@@ -314,6 +320,7 @@ export interface StandardizedContent {
   };
   inspection_metadata: {
     ppi_type: PpiType;
+    inspection_scope: InspectionScope;
     performer_type: PerformerType;
     submitted_at: string;
     version: number;

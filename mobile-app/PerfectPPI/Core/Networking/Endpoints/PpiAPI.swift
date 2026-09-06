@@ -14,6 +14,7 @@ enum PpiAPI {
         let requesterRole: RequesterRole
         let performerType: PerformerType
         let assignedTechProfileId: String?
+        let inspectionScope: InspectionScope
     }
 
     struct CreateRequestResponse: Codable {

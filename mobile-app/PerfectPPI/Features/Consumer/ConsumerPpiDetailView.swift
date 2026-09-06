@@ -17,6 +17,9 @@ struct ConsumerPpiDetailView: View {
                                 value: (request.ppiType?.rawValue ?? "-")
                                     .replacingOccurrences(of: "_", with: " ").capitalized,
                                 icon: "wrench.and.screwdriver.fill")
+                        InfoRow(label: "Inspection",
+                                value: request.inspectionScope?.label ?? InspectionScope.complete.label,
+                                icon: "checklist")
                         InfoRow(label: "Status",
                                 value: request.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized,
                                 icon: "circle.dashed",
@@ -321,6 +324,9 @@ private struct NativeReportView: View {
             }
             if let m = content.vehicle?.mileage {
                 Text("\(m.formatted()) mi").font(.caption).foregroundStyle(.secondary)
+            }
+            if let scope = content.inspectionMetadata?.inspectionScope {
+                Text(scope.label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
         }
     }

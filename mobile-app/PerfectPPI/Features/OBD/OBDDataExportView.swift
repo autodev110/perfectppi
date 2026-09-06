@@ -7,6 +7,7 @@ struct OBDDataExportView: View {
     @ObservedObject var session: OBDSession
     @ObservedObject var bluetooth: OBDBluetoothManager
     var submissionId: String?
+    var scanDepth: OBDSession.ScanDepth = .full
     var onSaved: ((OBDSnapshotRecord?) -> Void)?
     var onDisconnect: () -> Void
 
@@ -35,13 +36,14 @@ struct OBDDataExportView: View {
         .task {
             // Auto-start the scan on first arrival.
             if session.phase == .idle {
-                await session.runScan()
+                await session.runScan(depth: scanDepth)
             }
         }
         .sheet(item: $shareItem) { item in
             ShareSheet(items: [item.url])
         }
-        .alert("OBD Diagnostics", isPresented: .constant(savedMessage != nil),
+        .alert(scanDepth == .vinOnly ? "Vehicle Identification" : "OBD Diagnostics",
+               isPresented: .constant(savedMessage != nil),
                actions: { Button("OK") { savedMessage = nil } },
                message: { Text(savedMessage ?? "") })
         .alert("Save Failed", isPresented: .constant(saveError != nil),
@@ -77,9 +79,10 @@ struct OBDDataExportView: View {
     @ViewBuilder
     private var idleCTA: some View {
         Button {
-            Task { await session.runScan() }
+            Task { await session.runScan(depth: scanDepth) }
         } label: {
-            Label("Run diagnostic scan", systemImage: "play.circle.fill")
+            Label(scanDepth == .vinOnly ? "Read VIN" : "Run diagnostic scan",
+                  systemImage: "play.circle.fill")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(PrimaryButtonStyle())
@@ -102,56 +105,59 @@ struct OBDDataExportView: View {
     @ViewBuilder
     private var resultsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Diagnostic Snapshot").font(.headline)
+            Text(scanDepth == .vinOnly ? "Vehicle Identification" : "Diagnostic Snapshot")
+                .font(.headline)
 
             ResultRow(label: "VIN", value: session.snapshot.vin ?? "—")
-            ResultRow(label: "MIL / Check Engine", value: milStatusText)
-            ResultRow(
-                label: "ECU DTC Count",
-                value: session.snapshot.monitorStatus.map { "\($0.storedDTCCount)" } ?? "—"
-            )
-            ResultRow(
-                label: "Stored DTCs",
-                value: session.snapshot.storedDTCs.isEmpty
-                    ? "None"
-                    : session.snapshot.storedDTCs.joined(separator: ", ")
-            )
-            ResultRow(
-                label: "Pending DTCs",
-                value: session.snapshot.pendingDTCs.isEmpty
-                    ? "None"
-                    : session.snapshot.pendingDTCs.joined(separator: ", ")
-            )
-            // Mode 0A. These survive a battery disconnect, so a permanent code
-            // with no stored code means the history was cleared, not repaired.
-            ResultRow(
-                label: "Permanent DTCs",
-                value: session.snapshot.permanentDTCs.isEmpty
-                    ? "None"
-                    : session.snapshot.permanentDTCs.joined(separator: ", ")
-            )
-            // Emissions readiness. Clearing codes resets these, so several
-            // incomplete monitors is the same signal from the other direction.
-            ResultRow(
-                label: "Readiness Monitors",
-                value: session.snapshot.readinessMonitors.isEmpty
-                    ? "—"
-                    : "\(session.snapshot.incompleteMonitors.count) of \(session.snapshot.readinessMonitors.filter(\.supported).count) not complete"
-            )
-            if session.snapshot.readinessIncomplete {
+
+            // A VIN-only scan never queries these. Rendering them as "None"
+            // would read as a clean diagnostic result for checks that were
+            // never run.
+            if scanDepth == .full {
+                ResultRow(label: "MIL / Check Engine", value: milStatusText)
                 ResultRow(
-                    label: "Not Ready",
-                    value: session.snapshot.incompleteMonitors.map(\.name).joined(separator: ", ")
+                    label: "ECU DTC Count",
+                    value: session.snapshot.monitorStatus.map { "\($0.storedDTCCount)" } ?? "—"
+                )
+                ResultRow(
+                    label: "Stored DTCs",
+                    value: session.snapshot.storedDTCs.isEmpty
+                        ? "None"
+                        : session.snapshot.storedDTCs.joined(separator: ", ")
+                )
+                ResultRow(
+                    label: "Pending DTCs",
+                    value: session.snapshot.pendingDTCs.isEmpty
+                        ? "None"
+                        : session.snapshot.pendingDTCs.joined(separator: ", ")
+                )
+                ResultRow(
+                    label: "Permanent DTCs",
+                    value: session.snapshot.permanentDTCs.isEmpty
+                        ? "None"
+                        : session.snapshot.permanentDTCs.joined(separator: ", ")
+                )
+                ResultRow(
+                    label: "Readiness Monitors",
+                    value: session.snapshot.readinessMonitors.isEmpty
+                        ? "—"
+                        : "\(session.snapshot.incompleteMonitors.count) of \(session.snapshot.readinessMonitors.filter(\.supported).count) not complete"
+                )
+                if session.snapshot.readinessIncomplete {
+                    ResultRow(
+                        label: "Not Ready",
+                        value: session.snapshot.incompleteMonitors.map(\.name).joined(separator: ", ")
+                    )
+                }
+                ResultRow(
+                    label: "Supported PIDs",
+                    value: session.snapshot.supportedPids.isEmpty
+                        ? "—"
+                        : session.snapshot.supportedPids.map { String(format: "0x%02X", $0) }.joined(separator: ", ")
                 )
             }
-            ResultRow(
-                label: "Supported PIDs",
-                value: session.snapshot.supportedPids.isEmpty
-                    ? "—"
-                    : session.snapshot.supportedPids.map { String(format: "0x%02X", $0) }.joined(separator: ", ")
-            )
 
-            if !session.snapshot.liveReadings.isEmpty {
+            if scanDepth == .full, !session.snapshot.liveReadings.isEmpty {
                 Divider()
                 Text("Live Sensor Data")
                     .font(.subheadline.weight(.semibold))
@@ -162,9 +168,10 @@ struct OBDDataExportView: View {
 
             HStack {
                 Button {
-                    Task { await session.runScan() }
+                    Task { await session.runScan(depth: scanDepth) }
                 } label: {
-                    Label("Re-run", systemImage: "arrow.clockwise")
+                    Label(scanDepth == .vinOnly ? "Read Again" : "Re-run",
+                          systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
                 Spacer()
@@ -172,10 +179,11 @@ struct OBDDataExportView: View {
                     Button {
                         Task { await saveToInspection() }
                     } label: {
-                        Label(saving ? "Saving..." : "Save", systemImage: "tray.and.arrow.down")
+                        Label(saving ? "Saving..." : (scanDepth == .vinOnly ? "Use VIN" : "Save"),
+                              systemImage: "tray.and.arrow.down")
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(!session.snapshot.hasAnyData || saving)
+                    .disabled(!hasUsableResult || saving)
                 }
                 Button {
                     shareItem = exportSnapshotToTempFile()
@@ -206,7 +214,7 @@ struct OBDDataExportView: View {
                 .foregroundStyle(Theme.Palette.danger)
             Text(message).font(.subheadline)
             Button("Try again") {
-                Task { await session.runScan() }
+                Task { await session.runScan(depth: scanDepth) }
             }
             .buttonStyle(PrimaryButtonStyle())
         }
@@ -243,7 +251,7 @@ struct OBDDataExportView: View {
 
     private func saveToInspection() async {
         guard let submissionId else { return }
-        guard session.snapshot.hasAnyData else { return }
+        guard hasUsableResult else { return }
 
         if !OfflineQueue.shared.isOnline {
             do {
@@ -283,6 +291,13 @@ struct OBDDataExportView: View {
                 saveError = "The scanner results could not be uploaded or saved offline. Please try again."
             }
         }
+    }
+
+    private var hasUsableResult: Bool {
+        if scanDepth == .vinOnly {
+            return session.snapshot.vin?.count == 17
+        }
+        return session.snapshot.hasAnyData
     }
 
     // MARK: - Export

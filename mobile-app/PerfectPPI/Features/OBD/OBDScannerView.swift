@@ -7,6 +7,7 @@ struct OBDScannerView: View {
     @StateObject private var session: OBDSession
     @State private var step: ConnectionStep = .prepare
     private let submissionId: String?
+    private let scanDepth: OBDSession.ScanDepth
     private let onSaved: ((OBDSnapshotRecord?) -> Void)?
 
     enum ConnectionStep: Int, CaseIterable {
@@ -20,6 +21,7 @@ struct OBDScannerView: View {
 
     init(
         submissionId: String? = nil,
+        scanDepth: OBDSession.ScanDepth = .full,
         onSaved: ((OBDSnapshotRecord?) -> Void)? = nil
     ) {
         // Single shared OBDBluetoothManager instance the session also points
@@ -29,6 +31,7 @@ struct OBDScannerView: View {
         _bluetooth = StateObject(wrappedValue: bt)
         _session = StateObject(wrappedValue: OBDSession(bluetooth: bt))
         self.submissionId = submissionId
+        self.scanDepth = scanDepth
         self.onSaved = onSaved
     }
 
@@ -40,7 +43,11 @@ struct OBDScannerView: View {
                     .padding()
             }
         }
-        .navigationTitle(submissionId == nil ? "OBD Scanner" : "Inspection Diagnostics")
+        .navigationTitle(
+            scanDepth == .vinOnly
+                ? "Vehicle Identification"
+                : (submissionId == nil ? "OBD Scanner" : "Inspection Diagnostics")
+        )
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: bluetooth.phase) { _, newPhase in
             sync(with: newPhase)
@@ -94,7 +101,9 @@ struct OBDScannerView: View {
         StepCard(
             number: 1,
             title: "Get ready",
-            message: "We'll connect your phone to an OBDLink CX (or compatible BLE OBD-II adapter), then pull diagnostic data straight from the car."
+            message: scanDepth == .vinOnly
+                ? "We'll connect your phone to an OBDLink CX (or compatible BLE OBD-II adapter) and read only the vehicle VIN."
+                : "We'll connect your phone to an OBDLink CX (or compatible BLE OBD-II adapter), then pull diagnostic data straight from the car."
         ) {
             phaseHint
             Button {
@@ -231,6 +240,7 @@ struct OBDScannerView: View {
             session: session,
             bluetooth: bluetooth,
             submissionId: submissionId,
+            scanDepth: scanDepth,
             onSaved: onSaved
         ) {
             // User tapped disconnect — reset the session too so a reconnect

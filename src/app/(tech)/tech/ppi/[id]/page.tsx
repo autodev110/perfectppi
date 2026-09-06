@@ -12,10 +12,13 @@ import { InspectionResultsPanel } from "@/components/shared/inspection-results-p
 import { SourceBadge } from "@/components/shared/source-badge";
 import Link from "next/link";
 import { inspectionDisplayName } from "@/features/ppi/presentation";
+import { INSPECTION_SCOPE_LABELS } from "@/features/ppi/constants";
+import type { InspectionScope } from "@/types/enums";
 
 interface RequestDetail {
   id: string;
   ppi_type: string;
+  inspection_scope?: InspectionScope;
   status: string;
   whose_car: string;
   requester_role: string;
@@ -124,6 +127,12 @@ export default function TechInspectionDetailPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-muted-foreground text-xs">Inspection</p>
+            <p className="font-medium">
+              {INSPECTION_SCOPE_LABELS[request.inspection_scope ?? "complete"]}
+            </p>
+          </div>
           {request.vehicle?.vin && (
             <div>
               <p className="text-muted-foreground text-xs">VIN</p>

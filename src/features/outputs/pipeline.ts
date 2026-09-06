@@ -18,7 +18,9 @@ import {
 import { setIntegrationStatus } from "@/features/partner/events";
 import type { Json } from "@/types/database";
 import type { StandardizedContent, VscCoverageData } from "@/types/api";
-import type { SectionType } from "@/types/enums";
+import type { InspectionScope, SectionType } from "@/types/enums";
+import { loadInspectionPhotos } from "./inspection-photos";
+import { evaluateDentsTiresCoverage } from "@/features/warranty/dents-tires-coverage";
 
 // ============================================================================
 // Output generation, as a resumable job.
@@ -103,7 +105,8 @@ export async function runOutputGenerationJob(params: {
       id, ppi_request_id, performer_id, version, status, submitted_at,
       sections:ppi_sections(
         id, section_type, notes, sort_order,
-        answers:ppi_answers(prompt, answer_value, answer_type, sort_order)
+        answers:ppi_answers(id, prompt, answer_value, answer_type, requires_photo, sort_order),
+        media:ppi_media(id, ppi_answer_id, url, media_type, caption, uploaded_at)
       )
     `,
     )
@@ -132,7 +135,7 @@ export async function runOutputGenerationJob(params: {
     .from("ppi_requests")
     .select(
       `
-      id, ppi_type, performer_type, requester_id, requesting_organization_id,
+      id, ppi_type, inspection_scope, performer_type, requester_id, requesting_organization_id,
       vehicle:vehicles(year, make, model, trim, vin, mileage)
     `,
     )
@@ -163,25 +166,38 @@ export async function runOutputGenerationJob(params: {
     .map((section) => ({
       section_type: section.section_type as SectionType,
       notes: section.notes,
+      media: section.media ?? [],
       answers: [...(section.answers ?? [])]
         .sort((a, b) => a.sort_order - b.sort_order)
         .map((answer) => ({
+          id: answer.id,
           prompt: answer.prompt,
           answer_value: answer.answer_value,
           answer_type: answer.answer_type,
+          requires_photo: answer.requires_photo,
         })),
     }));
 
-  const { data: obdSnapshot } = await admin
-    .from("obd_snapshots")
-    .select(
-      "vin, adapter_name, mil_on, stored_dtc_count, stored_dtcs, pending_dtcs, permanent_dtcs, readiness_monitors, incomplete_monitor_count, supported_pids, live_readings, started_at, completed_at",
-    )
-    .eq("ppi_submission_id", submissionId)
-    .eq("is_current", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const scope = (request.inspection_scope ?? "complete") as InspectionScope;
+
+  const currentObdSnapshot = (
+    await admin
+      .from("obd_snapshots")
+      .select(
+        "vin, adapter_name, mil_on, stored_dtc_count, stored_dtcs, pending_dtcs, permanent_dtcs, readiness_monitors, incomplete_monitor_count, supported_pids, live_readings, started_at, completed_at",
+      )
+      .eq("ppi_submission_id", submissionId)
+      .eq("is_current", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  ).data;
+
+  // Dents & Tires uses the adapter for identification only. Keep its VIN so a
+  // mismatch is visible in the report, but never pass diagnostic fields from
+  // an older/full snapshot into this narrower inspection.
+  const adapterVin = scope === "dents_tires" ? currentObdSnapshot?.vin ?? null : null;
+  const obdSnapshot = scope === "dents_tires" ? null : currentObdSnapshot;
 
   // Organization-owned inspections have no consumer requester, so the storage
   // prefix follows whichever ownership path the request actually uses.
@@ -205,6 +221,20 @@ export async function runOutputGenerationJob(params: {
       existingStandardized.structured_content as unknown as StandardizedContent;
     standardizedOutputId = existingStandardized.id;
   } else {
+    // Best-effort: photos enrich the report but must never fail the job.
+    let photos: Awaited<ReturnType<typeof loadInspectionPhotos>> | null = null;
+    try {
+      photos = await loadInspectionPhotos(
+        sortedSections.map((section) => ({
+          section_type: section.section_type,
+          answers: section.answers,
+          media: section.media,
+        })),
+      );
+    } catch (error) {
+      console.error("[outputs] photo load failed, continuing text-only", error);
+    }
+
     try {
       standardizedContent = await generateStandardizedOutput({
         vehicle:
@@ -218,6 +248,7 @@ export async function runOutputGenerationJob(params: {
           },
         request: {
           ppi_type: request.ppi_type,
+          inspection_scope: scope,
           performer_type: request.performer_type,
         },
         submission: {
@@ -229,6 +260,14 @@ export async function runOutputGenerationJob(params: {
           role: performer?.role ?? "consumer",
         },
         sections: sortedSections,
+        photos: photos
+          ? {
+              parts: photos.parts,
+              manifest: photos.manifest,
+              omitted: photos.skipped + photos.unreadable,
+            }
+          : undefined,
+        adapterVin,
         obdSnapshot: obdSnapshot ?? null,
       });
     } catch (error) {
@@ -288,13 +327,32 @@ export async function runOutputGenerationJob(params: {
     coverageData = existingVsc.coverage_data as unknown as VscCoverageData;
     vscOutputId = existingVsc.id;
   } else {
-    try {
-      coverageData = await generateVscCoverage(standardizedContent);
-    } catch (error) {
-      throw new OutputJobError(
-        "ai_generation",
-        `VSC generation failed: ${asMessage(error)}`,
-      );
+    if (scope === "dents_tires") {
+      // Deterministic: the rules are stated as if-then by the business, and the
+      // Stage 2 prompt hardcodes nine mechanical categories with tires listed as
+      // an always-excluded wear item — the opposite of what this product covers.
+      coverageData = evaluateDentsTiresCoverage({
+        sections: sortedSections,
+        answerIdsWithMedia: new Set(
+          sortedSections
+            .flatMap((section) => section.media)
+            .filter((media) => media.media_type === "image")
+            .map((media) => media.ppi_answer_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+        standardizedFindings: standardizedContent.sections.flatMap(
+          (section) => section.findings,
+        ),
+      });
+    } else {
+      try {
+        coverageData = await generateVscCoverage(standardizedContent);
+      } catch (error) {
+        throw new OutputJobError(
+          "ai_generation",
+          `VSC generation failed: ${asMessage(error)}`,
+        );
+      }
     }
 
     const { data: inserted, error: insertError } = await admin

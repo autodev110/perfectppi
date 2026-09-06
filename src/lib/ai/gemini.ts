@@ -58,16 +58,29 @@ function parseAndValidate<T>(text: string, schema: z.ZodType<T>): T {
   return validated.data;
 }
 
+/** A base64 image sent alongside the prompt. */
+export interface InlineMediaPart {
+  mimeType: string;
+  data: string;
+}
+
 /**
  * Call Gemini with JSON mode, validate with Zod, and retry with backoff on 429s.
+ *
+ * `mediaParts` are appended after the text part. With none supplied the request
+ * is identical to a text-only call, which is what keeps inspections with no
+ * readable photos working unchanged.
  */
 export async function generateStructuredOutput<T>(
   prompt: string,
   schema: z.ZodType<T>,
-  options?: { maxRetries?: number; model?: string }
+  options?: { maxRetries?: number; model?: string; mediaParts?: InlineMediaPart[] }
 ): Promise<T> {
   const maxRetries = options?.maxRetries ?? 3;
   const model = getGeminiModel(options?.model);
+  const mediaParts = (options?.mediaParts ?? []).map((part) => ({
+    inlineData: { mimeType: part.mimeType, data: part.data },
+  }));
 
   let lastError: Error | null = null;
   let clarifiedRetryUsed = false;
@@ -75,7 +88,7 @@ export async function generateStructuredOutput<T>(
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        contents: [{ role: "user", parts: [{ text: prompt }, ...mediaParts] }],
         generationConfig: {
           responseMimeType: "application/json",
         },
@@ -96,7 +109,9 @@ export async function generateStructuredOutput<T>(
 
         try {
           const retryResult = await model.generateContent({
-            contents: [{ role: "user", parts: [{ text: clarifiedPrompt }] }],
+            contents: [
+              { role: "user", parts: [{ text: clarifiedPrompt }, ...mediaParts] },
+            ],
             generationConfig: {
               responseMimeType: "application/json",
             },

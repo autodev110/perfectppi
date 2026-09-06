@@ -12,10 +12,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Car, Calendar, User, ChevronRight, FileText, Shield } from "lucide-react";
-import { SECTION_LABELS } from "@/features/ppi/constants";
+import { INSPECTION_SCOPE_LABELS, SECTION_LABELS } from "@/features/ppi/constants";
 import { GetCoverageButton } from "./get-coverage-button";
 import { MarkCompleteButton } from "./mark-complete-button";
-import type { SectionType } from "@/types/enums";
+import type { InspectionScope, SectionType } from "@/types/enums";
 import type { StandardizedContent, VscCoverageData } from "@/types/api";
 import { inspectionDisplayName } from "@/features/ppi/presentation";
 
@@ -152,6 +152,14 @@ export default async function InspectionDetailPage({ params }: PageProps) {
           <div>
             <p className="text-muted-foreground">Type</p>
             <PpiBadge type={request.ppi_type} className="mt-1" />
+          </div>
+          <div>
+            <p className="text-muted-foreground">Inspection</p>
+            <p className="font-medium">
+              {INSPECTION_SCOPE_LABELS[
+                (request.inspection_scope ?? "complete") as InspectionScope
+              ]}
+            </p>
           </div>
           <div>
             <p className="text-muted-foreground flex items-center gap-1">

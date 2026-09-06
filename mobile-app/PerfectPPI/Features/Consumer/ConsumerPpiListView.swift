@@ -24,6 +24,9 @@ struct ConsumerPpiListView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(req.inspectionTitle)
                                         .font(.headline)
+                                    Text(req.inspectionScope?.label ?? InspectionScope.complete.label)
+                                        .font(.caption.weight(.medium))
+                                        .foregroundStyle(.secondary)
                                     Text(req.status.rawValue.replacingOccurrences(of: "_", with: " "))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)

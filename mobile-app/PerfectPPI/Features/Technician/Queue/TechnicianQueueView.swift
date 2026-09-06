@@ -47,6 +47,8 @@ private struct QueueRow: View {
                             color: badgeColor(for: request.status))
             }
             HStack(spacing: 8) {
+                StatusBadge(text: request.inspectionScope?.label ?? InspectionScope.complete.label,
+                            color: Theme.Palette.primary)
                 if let sourceLabel = request.sourceLabel {
                     StatusBadge(text: sourceLabel, color: Theme.Palette.primary)
                 }

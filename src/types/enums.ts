@@ -50,6 +50,12 @@ export type PerformerType = "self" | "technician";
 
 export type PpiType = "personal" | "general_tech" | "certified_tech";
 
+/**
+ * Which question set an inspection asks. Distinct from `PpiType`, which is the
+ * trust tier derived from the performer's certification.
+ */
+export type InspectionScope = "complete" | "dents_tires";
+
 export type PpiRequestStatus =
   | "draft"
   | "pending_assignment"
@@ -79,7 +85,10 @@ export type SectionType =
   | "electrical_controls"
   | "underbody"
   | "road_test"
-  | "modifications";
+  | "modifications"
+  // dents_tires scope only
+  | "wheels_tires"
+  | "body_damage";
 
 export type CompletionState = "not_started" | "in_progress" | "completed";
 export type AnswerType = "text" | "yes_no" | "select" | "number";

@@ -2044,8 +2044,10 @@ export type Database = {
           id: string
           is_required: boolean
           options: Json | null
+          photo_prompt: string | null
           ppi_section_id: string
           prompt: string
+          requires_photo: boolean
           sort_order: number
           updated_at: string
         }
@@ -2057,8 +2059,10 @@ export type Database = {
           id?: string
           is_required?: boolean
           options?: Json | null
+          photo_prompt?: string | null
           ppi_section_id: string
           prompt: string
+          requires_photo?: boolean
           sort_order?: number
           updated_at?: string
         }
@@ -2070,8 +2074,10 @@ export type Database = {
           id?: string
           is_required?: boolean
           options?: Json | null
+          photo_prompt?: string | null
           ppi_section_id?: string
           prompt?: string
+          requires_photo?: boolean
           sort_order?: number
           updated_at?: string
         }
@@ -2141,6 +2147,7 @@ export type Database = {
           assigned_tech_id: string | null
           created_at: string
           id: string
+          inspection_scope: Database["public"]["Enums"]["inspection_scope"]
           performer_type: Database["public"]["Enums"]["performer_type"]
           ppi_type: Database["public"]["Enums"]["ppi_type"]
           requester_id: string | null
@@ -2156,6 +2163,7 @@ export type Database = {
           assigned_tech_id?: string | null
           created_at?: string
           id?: string
+          inspection_scope?: Database["public"]["Enums"]["inspection_scope"]
           performer_type: Database["public"]["Enums"]["performer_type"]
           ppi_type?: Database["public"]["Enums"]["ppi_type"]
           requester_id?: string | null
@@ -2171,6 +2179,7 @@ export type Database = {
           assigned_tech_id?: string | null
           created_at?: string
           id?: string
+          inspection_scope?: Database["public"]["Enums"]["inspection_scope"]
           performer_type?: Database["public"]["Enums"]["performer_type"]
           ppi_type?: Database["public"]["Enums"]["ppi_type"]
           requester_id?: string | null
@@ -3318,6 +3327,7 @@ export type Database = {
         | "needs_revision"
         | "completed"
         | "archived"
+      inspection_scope: "complete" | "dents_tires"
       ppi_type: "personal" | "general_tech" | "certified_tech"
       requester_role: "buying" | "selling" | "documenting"
       review_status: "active" | "hidden"
@@ -3334,6 +3344,8 @@ export type Database = {
         | "underbody"
         | "road_test"
         | "modifications"
+        | "wheels_tires"
+        | "body_damage"
       share_target_type:
         | "media_package"
         | "inspection_result"
@@ -3526,6 +3538,7 @@ export const Constants = {
         "completed",
         "archived",
       ],
+      inspection_scope: ["complete", "dents_tires"],
       ppi_type: ["personal", "general_tech", "certified_tech"],
       requester_role: ["buying", "selling", "documenting"],
       review_status: ["active", "hidden"],
@@ -3542,6 +3555,8 @@ export const Constants = {
         "underbody",
         "road_test",
         "modifications",
+        "wheels_tires",
+        "body_damage",
       ],
       share_target_type: [
         "media_package",

@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { AnswerType } from "@/types/enums";
+import type { NumberInputConstraints } from "@/features/ppi/answer-validation";
 
 interface AnswerInputProps {
   answerType: AnswerType;
@@ -13,6 +14,7 @@ interface AnswerInputProps {
   required?: boolean;
   disabled?: boolean;
   hasError?: boolean;
+  numberConstraints?: NumberInputConstraints | null;
 }
 
 export function AnswerInput({
@@ -23,6 +25,7 @@ export function AnswerInput({
   required,
   disabled,
   hasError,
+  numberConstraints,
 }: AnswerInputProps) {
   if (answerType === "yes_no") {
     return (
@@ -93,18 +96,37 @@ export function AnswerInput({
 
   if (answerType === "number") {
     return (
-      <Input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        required={required}
-        className={cn(
-          "text-lg h-14 rounded-xl text-center font-mono",
-          hasError && "border-destructive"
+      <div className="space-y-2">
+        <div className="relative">
+          <Input
+            type="number"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
+            required={required}
+            min={numberConstraints?.min}
+            max={numberConstraints?.max}
+            step={numberConstraints?.step}
+            inputMode="decimal"
+            className={cn(
+              "text-lg h-14 rounded-xl text-center font-mono",
+              numberConstraints?.unit && "pr-20",
+              hasError && "border-destructive"
+            )}
+            placeholder="0"
+          />
+          {numberConstraints?.unit && (
+            <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm font-semibold text-muted-foreground">
+              {numberConstraints.unit}
+            </span>
+          )}
+        </div>
+        {numberConstraints && (
+          <p className="text-xs text-muted-foreground">
+            Enter a whole-number tread reading from {numberConstraints.min}/32 to {numberConstraints.max}/32.
+          </p>
         )}
-        placeholder="0"
-      />
+      </div>
     );
   }
 

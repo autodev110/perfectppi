@@ -90,7 +90,10 @@ struct InspectionWorkflowView: View {
         }
         .sheet(isPresented: $showOBDScanner) {
             NavigationStack {
-                OBDScannerView(submissionId: submissionId) { snapshot in
+                OBDScannerView(
+                    submissionId: submissionId,
+                    scanDepth: model.inspectionScope == .dentsTires ? .vinOnly : .full
+                ) { snapshot in
                     if let snapshot {
                         model.setOBDSnapshot(snapshot)
                     }
@@ -134,9 +137,7 @@ struct InspectionWorkflowView: View {
                 VStack(alignment: .leading, spacing: Theme.spacing) {
                     obdDiagnosticsCard
 
-                    Text(section.sectionType.rawValue
-                            .replacingOccurrences(of: "_", with: " ")
-                            .capitalized)
+                    Text(section.sectionType.label)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
 
@@ -214,7 +215,7 @@ struct InspectionWorkflowView: View {
                         .font(.title2)
                         .foregroundStyle(Theme.Palette.primary)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Start With a Scanner?")
+                        Text(isVinOnlyScan ? "Read the VIN From the Adapter?" : "Start With a Scanner?")
                             .font(.title3.bold())
                         Text("Swift can connect to the OBD adapter over Bluetooth before the inspection begins.")
                             .font(.subheadline)
@@ -222,14 +223,21 @@ struct InspectionWorkflowView: View {
                     }
                 }
 
-                Text("If you scan now, we'll save the VIN and diagnostic trouble codes with this inspection and use them in the generated AI report.")
+                Text(isVinOnlyScan
+                     ? "A Dents & Tires inspection uses the adapter only to identify the vehicle. We'll read the VIN and nothing else."
+                     : "If you scan now, we'll save the VIN and diagnostic trouble codes with this inspection and use them in the generated AI report.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Pull check-engine and pending codes up front", systemImage: "checkmark.circle.fill")
-                    Label("Save the OBD VIN with the inspection", systemImage: "checkmark.circle.fill")
-                    Label("Use scanner data in the final report and warranty analysis", systemImage: "checkmark.circle.fill")
+                    if isVinOnlyScan {
+                        Label("Read the VIN straight off the vehicle", systemImage: "checkmark.circle.fill")
+                        Label("No trouble codes or emissions data are read", systemImage: "checkmark.circle.fill")
+                    } else {
+                        Label("Pull check-engine and pending codes up front", systemImage: "checkmark.circle.fill")
+                        Label("Save the OBD VIN with the inspection", systemImage: "checkmark.circle.fill")
+                        Label("Use scanner data in the final report and warranty analysis", systemImage: "checkmark.circle.fill")
+                    }
                 }
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -237,7 +245,8 @@ struct InspectionWorkflowView: View {
                 Button {
                     showOBDScanner = true
                 } label: {
-                    Label("Use Scanner", systemImage: "dot.radiowaves.left.and.right")
+                    Label(isVinOnlyScan ? "Read VIN" : "Use Scanner",
+                          systemImage: "dot.radiowaves.left.and.right")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(PrimaryButtonStyle())
@@ -259,13 +268,15 @@ struct InspectionWorkflowView: View {
         }
     }
 
+    private var isVinOnlyScan: Bool { model.inspectionScope == .dentsTires }
+
     @ViewBuilder
     private var obdDiagnosticsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "waveform.path.ecg")
+                Image(systemName: isVinOnlyScan ? "barcode.viewfinder" : "waveform.path.ecg")
                     .foregroundStyle(Theme.Palette.primary)
-                Text("OBD Diagnostics")
+                Text(isVinOnlyScan ? "Vehicle Identification" : "OBD Diagnostics")
                     .font(.headline)
                 Spacer()
                 if model.currentOBDSnapshot != nil {
@@ -278,19 +289,21 @@ struct InspectionWorkflowView: View {
                 if let vin = snapshot.vin, !vin.isEmpty {
                     ResultLine(label: "VIN", value: vin)
                 }
-                ResultLine(
-                    label: "Check Engine",
-                    value: snapshot.milOn == nil ? "Unknown" : (snapshot.milOn == true ? "On" : "Off")
-                )
-                if !snapshot.storedDtcs.isEmpty {
-                    ResultLine(label: "Stored Codes", value: snapshot.storedDtcs.joined(separator: ", "))
+                if !isVinOnlyScan {
+                    ResultLine(
+                        label: "Check Engine",
+                        value: snapshot.milOn == nil ? "Unknown" : (snapshot.milOn == true ? "On" : "Off")
+                    )
+                    if !snapshot.storedDtcs.isEmpty {
+                        ResultLine(label: "Stored Codes", value: snapshot.storedDtcs.joined(separator: ", "))
+                    }
+                    if !snapshot.pendingDtcs.isEmpty {
+                        ResultLine(label: "Pending Codes", value: snapshot.pendingDtcs.joined(separator: ", "))
+                    }
+                    Text(snapshot.summaryLine)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-                if !snapshot.pendingDtcs.isEmpty {
-                    ResultLine(label: "Pending Codes", value: snapshot.pendingDtcs.joined(separator: ", "))
-                }
-                Text(snapshot.summaryLine)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
                 if let completedAt = snapshot.completedAt ?? snapshot.createdAt {
                     Text(completedAt, style: .date)
                         .font(.caption)
@@ -303,7 +316,7 @@ struct InspectionWorkflowView: View {
             } else {
                 Text(scannerEntryChoice == .withoutScanner
                      ? "Inspection started without a scanner. You can add one any time."
-                     : "No OBD snapshot saved")
+                     : (isVinOnlyScan ? "No adapter VIN saved" : "No OBD snapshot saved"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -311,7 +324,10 @@ struct InspectionWorkflowView: View {
             Button {
                 showOBDScanner = true
             } label: {
-                Label(model.currentOBDSnapshot == nil ? "Scan Vehicle" : "Re-scan Vehicle",
+                Label(
+                    isVinOnlyScan
+                        ? (model.currentOBDSnapshot == nil ? "Read VIN" : "Read VIN Again")
+                        : (model.currentOBDSnapshot == nil ? "Scan Vehicle" : "Re-scan Vehicle"),
                       systemImage: "dot.radiowaves.left.and.right")
             }
             .buttonStyle(OutlineButtonStyle())

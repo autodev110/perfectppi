@@ -17,6 +17,9 @@ struct PpiDetailView: View {
                                 value: (request.ppiType?.rawValue ?? "-")
                                     .replacingOccurrences(of: "_", with: " ").capitalized,
                                 icon: "wrench.and.screwdriver.fill")
+                        InfoRow(label: "Inspection",
+                                value: request.inspectionScope?.label ?? InspectionScope.complete.label,
+                                icon: "checklist")
                         InfoRow(label: "Status",
                                 value: request.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized,
                                 icon: "circle.dashed",

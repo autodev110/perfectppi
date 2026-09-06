@@ -2,9 +2,11 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  SECTION_ORDER,
+  COMPLETE_SECTION_ORDER,
+  DENTS_TIRES_SECTION_ORDER,
   SECTION_QUESTION_TEMPLATES,
   VEHICLE_BASICS_VIN_PROMPT,
+  getSectionOrder,
 } from "../../src/features/ppi/constants.ts";
 import {
   buildQuestionOrder,
@@ -16,10 +18,14 @@ import {
 } from "../../src/features/obd/answer-prefills.ts";
 import { inspectionDisplayName } from "../../src/features/ppi/presentation.ts";
 import { isValidVin } from "../../src/lib/utils/vin.ts";
+import {
+  inspectionAnswerValidationError,
+  numberInputConstraints,
+} from "../../src/features/ppi/answer-validation.ts";
 
 describe("inspection question flow", () => {
   test("starts with vehicle details, exterior, interior, then road test", () => {
-    assert.deepEqual(SECTION_ORDER.slice(0, 4), [
+    assert.deepEqual(COMPLETE_SECTION_ORDER.slice(0, 4), [
       "vehicle_basics",
       "exterior",
       "interior",
@@ -27,16 +33,92 @@ describe("inspection question flow", () => {
     ]);
   });
 
-  test("asks for VIN first and keeps every prompt unique", () => {
+  test("asks for VIN first", () => {
     assert.equal(
       SECTION_QUESTION_TEMPLATES.vehicle_basics[0]?.prompt,
       VEHICLE_BASICS_VIN_PROMPT,
     );
+  });
 
-    const normalizedPrompts = Object.values(SECTION_QUESTION_TEMPLATES)
-      .flat()
-      .map((question) => question.prompt.trim().toLocaleLowerCase());
-    assert.equal(new Set(normalizedPrompts).size, normalizedPrompts.length);
+  // Uniqueness is per scope, not global. Dents & Tires deliberately reuses the
+  // complete inspection's tread wording so the two read identically to an
+  // inspector — renaming one to "fix a duplicate" would be a regression, not a
+  // cleanup. What must never happen is the same prompt twice inside one
+  // inspection, where an answer could no longer be identified by its prompt.
+  for (const scope of ["complete", "dents_tires"] as const) {
+    test(`keeps every prompt unique within a ${scope} inspection`, () => {
+      const normalizedPrompts = getSectionOrder(scope)
+        .flatMap((sectionType) => SECTION_QUESTION_TEMPLATES[sectionType] ?? [])
+        .map((question) => question.prompt.trim().toLocaleLowerCase());
+
+      assert.ok(normalizedPrompts.length > 0);
+      assert.equal(new Set(normalizedPrompts).size, normalizedPrompts.length);
+    });
+  }
+
+  test("scopes a dents & tires inspection to wheels and body damage", () => {
+    assert.deepEqual(DENTS_TIRES_SECTION_ORDER, ["wheels_tires", "body_damage"]);
+    assert.deepEqual(getSectionOrder("dents_tires"), DENTS_TIRES_SECTION_ORDER);
+    assert.deepEqual(getSectionOrder("complete"), COMPLETE_SECTION_ORDER);
+
+    // No brakes, engine, interior, or road test.
+    for (const excluded of ["engine_bay", "road_test", "fluids", "interior"] as const) {
+      assert.ok(!DENTS_TIRES_SECTION_ORDER.includes(excluded));
+    }
+  });
+
+  test("requires a photo of every tire in a dents & tires inspection", () => {
+    const tires = SECTION_QUESTION_TEMPLATES.wheels_tires.filter((question) =>
+      question.prompt.includes("tread depth"),
+    );
+
+    assert.equal(tires.length, 4);
+    for (const tire of tires) {
+      assert.equal(tire.requiresPhoto, true, tire.prompt);
+      assert.equal(tire.isRequired, true, tire.prompt);
+      assert.ok(tire.photoPrompt);
+    }
+
+    // The rim question and every body-damage area stay optional, but each still
+    // offers a photo.
+    const optional = [
+      ...SECTION_QUESTION_TEMPLATES.wheels_tires.filter(
+        (question) => !question.prompt.includes("tread depth"),
+      ),
+      ...SECTION_QUESTION_TEMPLATES.body_damage,
+    ];
+    assert.equal(optional.length, 7);
+    for (const question of optional) {
+      assert.notEqual(question.isRequired, true, question.prompt);
+      assert.notEqual(question.requiresPhoto, true, question.prompt);
+      assert.ok(question.photoPrompt, question.prompt);
+    }
+  });
+
+  test("accepts only whole-number tread readings from 0/32 through 32/32", () => {
+    const prompt = "Front left tire tread depth (in 32nds of an inch)";
+    assert.deepEqual(numberInputConstraints(prompt), {
+      min: 0,
+      max: 32,
+      step: 1,
+      unit: "/32 in",
+    });
+    for (const value of ["0", "2", "32"]) {
+      assert.equal(inspectionAnswerValidationError({
+        prompt,
+        answerType: "number",
+        value,
+        required: true,
+      }), null);
+    }
+    for (const value of ["", "-1", "33", "2.5", "2abc"]) {
+      assert.ok(inspectionAnswerValidationError({
+        prompt,
+        answerType: "number",
+        value,
+        required: true,
+      }));
+    }
   });
 
   test("keeps all four tire tread questions together", () => {

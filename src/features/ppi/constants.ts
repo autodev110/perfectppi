@@ -1,6 +1,12 @@
-import type { SectionType, AnswerType, PpiRequestStatus } from "@/types/enums";
+import type {
+  SectionType,
+  AnswerType,
+  InspectionScope,
+  PpiRequestStatus,
+} from "@/types/enums";
+import { DENTS_TIRES_TREAD_QUESTIONS } from "./answer-validation.ts";
 
-export const SECTION_ORDER: SectionType[] = [
+export const COMPLETE_SECTION_ORDER: SectionType[] = [
   "vehicle_basics",
   "exterior",
   "interior",
@@ -15,6 +21,37 @@ export const SECTION_ORDER: SectionType[] = [
   "modifications",
 ];
 
+/**
+ * Dents & Tires is wheels and cosmetic body damage only — no brakes, engine,
+ * interior, or road test.
+ */
+export const DENTS_TIRES_SECTION_ORDER: SectionType[] = [
+  "wheels_tires",
+  "body_damage",
+];
+
+const SECTION_ORDER_BY_SCOPE: Record<InspectionScope, SectionType[]> = {
+  complete: COMPLETE_SECTION_ORDER,
+  dents_tires: DENTS_TIRES_SECTION_ORDER,
+};
+
+/** Which sections an inspection of this scope seeds, in the order asked. */
+export function getSectionOrder(scope: InspectionScope): SectionType[] {
+  return SECTION_ORDER_BY_SCOPE[scope] ?? COMPLETE_SECTION_ORDER;
+}
+
+export const INSPECTION_SCOPE_LABELS: Record<InspectionScope, string> = {
+  complete: "Complete Inspection",
+  dents_tires: "Dents & Tires",
+};
+
+export const INSPECTION_SCOPE_DESCRIPTIONS: Record<InspectionScope, string> = {
+  complete:
+    "Full pre-purchase inspection — every system, inside and out.",
+  dents_tires:
+    "Quick pass over tire tread, wheels, and cosmetic body damage.",
+};
+
 export const SECTION_LABELS: Record<SectionType, string> = {
   vehicle_basics: "Vehicle Basics",
   dashboard_warnings: "Dashboard & Warnings",
@@ -28,6 +65,8 @@ export const SECTION_LABELS: Record<SectionType, string> = {
   underbody: "Underbody",
   road_test: "Road Test",
   modifications: "Modifications",
+  wheels_tires: "Wheels & Tires",
+  body_damage: "Body Damage",
 };
 
 // ============================================================================
@@ -460,6 +499,67 @@ export const SECTION_QUESTION_TEMPLATES: Record<SectionType, QuestionTemplate[]>
       prompt: "Additional findings or notes not covered in other sections",
       answerType: "text",
       isRequired: false,
+    },
+  ],
+
+  // ── Dents & Tires scope ───────────────────────────────────────────────────
+  // The tread prompts intentionally match the complete inspection's wording so
+  // the two read identically to an inspector. They differ in that every corner
+  // requires its own photo here, which is only expressible because
+  // requires_photo is persisted per answer rather than keyed on prompt text.
+
+  wheels_tires: [
+    ...DENTS_TIRES_TREAD_QUESTIONS.map(({ corner, prompt }) => ({
+      prompt,
+      answerType: "number" as const,
+      isRequired: true,
+      requiresPhoto: true,
+      photoPrompt: `Capture the ${corner.toLowerCase()} tire`,
+    })),
+    {
+      prompt: "Any problems with the rims or tires?",
+      answerType: "text",
+      isRequired: false,
+      photoPrompt: "Capture any rim or tire damage",
+    },
+  ],
+
+  body_damage: [
+    {
+      prompt: "Left front fender — scratches or dents",
+      answerType: "text",
+      isRequired: false,
+      photoPrompt: "Capture any left front fender damage",
+    },
+    {
+      prompt: "Right front fender — scratches or dents",
+      answerType: "text",
+      isRequired: false,
+      photoPrompt: "Capture any right front fender damage",
+    },
+    {
+      prompt: "Hood — scratches or dents",
+      answerType: "text",
+      isRequired: false,
+      photoPrompt: "Capture any hood damage",
+    },
+    {
+      prompt: "Left door — scratches or dents",
+      answerType: "text",
+      isRequired: false,
+      photoPrompt: "Capture any left door damage",
+    },
+    {
+      prompt: "Right door — scratches or dents",
+      answerType: "text",
+      isRequired: false,
+      photoPrompt: "Capture any right door damage",
+    },
+    {
+      prompt: "Body panels — scratches or dents",
+      answerType: "text",
+      isRequired: false,
+      photoPrompt: "Capture any body panel damage",
     },
   ],
 };

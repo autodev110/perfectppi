@@ -11,7 +11,6 @@ import { useInspectionWorkflow } from "@/features/ppi/hooks";
 import { deletePpiMedia, startInspection } from "@/features/ppi/actions";
 import { DeletePhotoButton } from "@/components/shared/delete-photo-button";
 import {
-  SECTION_QUESTION_TEMPLATES,
   SECTION_LABELS,
   VEHICLE_BASICS_VIN_PROMPT,
 } from "@/features/ppi/constants";
@@ -20,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, AlertCircle, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { numberInputConstraints } from "@/features/ppi/answer-validation";
 
 interface InspectionWorkflowViewProps {
   requestId: string;
@@ -283,15 +283,14 @@ export function InspectionWorkflowView({
       : currentSection.completion_state === "in_progress"
       ? "In Progress"
       : "Not Started";
-  const templates = SECTION_QUESTION_TEMPLATES[sectionType] ?? [];
-  const template = templates[workflow.currentQuestionIdx];
-  const requiresPhoto = template?.requiresPhoto ?? false;
+  // Photo rules come off the answer row, not a positional lookup into the
+  // template array: two scopes can seed the same section with different rules,
+  // and a stored answer order can outlive a template edit.
+  const requiresPhoto = currentQuestion.requires_photo ?? false;
+  const photoPrompt = currentQuestion.photo_prompt ?? undefined;
   const currentQuestionMedia = currentSection.media.filter(
     (media) =>
-      media.ppi_answer_id === currentQuestion.id ||
-      (requiresPhoto &&
-        media.ppi_answer_id === null &&
-        media.ppi_section_id === currentSection.id)
+      media.ppi_answer_id === currentQuestion.id && media.media_type === "image",
   );
   const hasRequiredPhoto = !requiresPhoto || currentQuestionMedia.length > 0;
   const canGoNext = workflow.canGoNext && hasRequiredPhoto;
@@ -350,6 +349,7 @@ export function InspectionWorkflowView({
             onChange={(val) => workflow.setAnswer(currentQuestion.id, val)}
             required={currentQuestion.is_required}
             hasError={hasError}
+            numberConstraints={numberInputConstraints(currentQuestion.prompt)}
           />
 
           {currentQuestion.prompt === VEHICLE_BASICS_VIN_PROMPT && (
@@ -381,11 +381,11 @@ export function InspectionWorkflowView({
             />
           </div>
 
-          {/* Camera capture button */}
-          {requiresPhoto && (
-            <button
+          {/* Camera capture button — offered on every question; `requiresPhoto`
+              only decides whether Continue is gated. */}
+          <button
               onClick={() => {
-                setCameraPhotoPrompt(template.photoPrompt);
+                setCameraPhotoPrompt(photoPrompt);
                 setCameraAnswerId(currentQuestion.id);
                 setCameraSectionId(currentSection.id);
                 setViewMode("camera");
@@ -397,9 +397,8 @@ export function InspectionWorkflowView({
               )}
             >
               <Camera className="h-5 w-5" />
-              {template.photoPrompt ?? "Capture Photo"}
+              {photoPrompt ?? "Capture Photo"}
             </button>
-          )}
 
           {uploadingMedia && (
             <p className="text-xs text-muted-foreground text-center">Uploading photo…</p>
@@ -451,7 +450,7 @@ export function InspectionWorkflowView({
 
           {hasError && (
             <p className="text-sm text-destructive font-medium">
-              This question is required.
+              This answer is missing or invalid.
             </p>
           )}
         </div>

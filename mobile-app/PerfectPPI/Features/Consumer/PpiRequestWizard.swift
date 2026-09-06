@@ -1,12 +1,13 @@
 import SwiftUI
 
 /// Mirrors the web's multi-step PPI request wizard:
-///   1. Select vehicle
-///   2. Confirm VIN + mileage
-///   3. Whose car / requester role
-///   4. Choose self or technician
-///   5. Select technician when needed
-///   6. Review + submit
+///   1. Choose the inspection type
+///   2. Select vehicle
+///   3. Confirm VIN + mileage
+///   4. Whose car / requester role
+///   5. Choose self or technician
+///   6. Select technician when needed
+///   7. Review + submit
 struct PpiRequestWizard: View {
     @Environment(\.dismiss) private var dismiss
     private let onComplete: () -> Void
@@ -23,6 +24,7 @@ struct PpiRequestWizard: View {
     @State private var selectedTechId: String?
     @State private var vin: String = ""
     @State private var mileage: String = ""
+    @State private var inspectionScope: InspectionScope = .complete
     @State private var whoseCar: WhoseCar = .own
     @State private var requesterRole: RequesterRole = .buying
     @State private var performerType: PerformerType = .technician
@@ -46,11 +48,12 @@ struct PpiRequestWizard: View {
 
                 Group {
                     switch step {
-                    case 0: vehicleStep
-                    case 1: vehicleInfoStep
-                    case 2: roleStep
-                    case 3: performerStep
-                    case 4:
+                    case 0: inspectionScopeStep
+                    case 1: vehicleStep
+                    case 2: vehicleInfoStep
+                    case 3: roleStep
+                    case 4: performerStep
+                    case 5:
                         if performerType == .technician { technicianStep } else { reviewStep }
                     default: reviewStep
                     }
@@ -74,7 +77,23 @@ struct PpiRequestWizard: View {
 
     // MARK: - Steps
 
-    private var maxStep: Int { performerType == .technician ? 5 : 4 }
+    private var maxStep: Int { performerType == .technician ? 6 : 5 }
+
+    @ViewBuilder
+    private var inspectionScopeStep: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("What kind of inspection?").font(.headline)
+            Picker("Inspection type", selection: $inspectionScope) {
+                ForEach(InspectionScope.allCases, id: \.self) { scope in
+                    Text(scope.label).tag(scope)
+                }
+            }
+            .pickerStyle(.segmented)
+            Text(inspectionScope.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
 
     @ViewBuilder
     private var vehicleStep: some View {
@@ -306,6 +325,7 @@ struct PpiRequestWizard: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Review").font(.headline)
             Group {
+                Row(label: "Inspection", value: inspectionScope.label)
                 Row(label: "Vehicle",
                     value: vehicles.first(where: { $0.id == selectedVehicleId })
                         .map { "\($0.year.map { "\($0) " } ?? "")\($0.make ?? "") \($0.model ?? "")" }
@@ -354,9 +374,11 @@ struct PpiRequestWizard: View {
 
     private var canAdvance: Bool {
         switch step {
-        case 0: return selectedVehicleId != nil
-        case 1: return hasValidVehicleInfo
-        case 4: return performerType == .selfInspection || selectedTechId != nil
+        case 0: return true
+        case 1: return selectedVehicleId != nil
+        case 2: return hasValidVehicleInfo
+        case 4: return true
+        case 5: return performerType != .technician || selectedTechId != nil
         default: return true
         }
     }
@@ -415,7 +437,8 @@ struct PpiRequestWizard: View {
                     whoseCar: whoseCar,
                     requesterRole: requesterRole,
                     performerType: performerType,
-                    assignedTechProfileId: performerType == .technician ? selectedTechId : nil
+                    assignedTechProfileId: performerType == .technician ? selectedTechId : nil,
+                    inspectionScope: inspectionScope
                 )
             )
             onComplete()
