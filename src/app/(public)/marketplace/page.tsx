@@ -62,6 +62,7 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant" />
                 <Input
+                  aria-label="Search marketplace"
                   name="q"
                   defaultValue={q ?? ""}
                   placeholder="Search make, model, VIN, or location…"
@@ -69,6 +70,7 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                 />
               </div>
               <select
+                aria-label="Sort listings"
                 name="sort"
                 defaultValue={sort ?? "newest"}
                 className="h-12 rounded-xl px-4 text-sm font-bold bg-surface-container-lowest ghost-border text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 min-w-[180px]"
@@ -91,18 +93,21 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                 Filters:
               </span>
               <Input
+                aria-label="Filter by make"
                 name="make"
                 defaultValue={make ?? ""}
                 placeholder="Make"
                 className="h-9 w-28 text-sm rounded-lg bg-surface-container-lowest ghost-border"
               />
               <Input
+                aria-label="Filter by model"
                 name="model"
                 defaultValue={model ?? ""}
                 placeholder="Model"
                 className="h-9 w-28 text-sm rounded-lg bg-surface-container-lowest ghost-border"
               />
               <Input
+                aria-label="Minimum year"
                 name="minYear"
                 defaultValue={minYear ?? ""}
                 placeholder="Min year"
@@ -110,6 +115,7 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                 className="h-9 w-24 text-sm rounded-lg bg-surface-container-lowest ghost-border"
               />
               <Input
+                aria-label="Maximum year"
                 name="maxYear"
                 defaultValue={maxYear ?? ""}
                 placeholder="Max year"
@@ -117,6 +123,7 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                 className="h-9 w-24 text-sm rounded-lg bg-surface-container-lowest ghost-border"
               />
               <Input
+                aria-label="Maximum price"
                 name="maxPrice"
                 defaultValue={maxPrice ?? ""}
                 placeholder="Max price $"

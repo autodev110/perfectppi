@@ -124,12 +124,11 @@ export function ConversationThread({
   const carLabel = listingCarLabel(listingContext);
 
   const refetch = useCallback(async () => {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true });
+    const response = await fetch(`/api/messages/conversations/${conversationId}/messages`, {
+      cache: "no-store",
+    });
+    const payload = response.ok ? await response.json() as { data?: MessageRow[] } : null;
+    const data = payload?.data;
 
     if (data) {
       setMessages((prev) => {

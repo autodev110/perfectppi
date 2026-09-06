@@ -71,7 +71,7 @@ export default async function ModerationPage({ searchParams }: PageProps) {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {item.entity_type === "community_post_media" ? (
+                  {item.entity_type === "community_post_media" || item.entity_type === "vehicle_media" ? (
                     item.status === "legal_hold" ? (
                       <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
                         Preview is locked for legal-hold content. Follow the approved escalation process.

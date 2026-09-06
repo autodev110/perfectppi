@@ -64,6 +64,7 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search technicians"
             name="q"
             defaultValue={q ?? ""}
             placeholder="Search by name, specialty, or area…"
@@ -71,6 +72,7 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
           />
         </div>
         <select
+          aria-label="Filter by certification"
           name="cert"
           defaultValue={cert ?? "all"}
           className="h-10 rounded-md border border-input bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/40 min-w-[180px]"
@@ -84,7 +86,7 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
         <Button type="submit">Search</Button>
         {hasFilters && (
           <Button asChild variant="outline" size="icon">
-            <Link href="/technicians">
+            <Link href="/technicians" aria-label="Clear technician filters">
               <X className="h-4 w-4" />
             </Link>
           </Button>

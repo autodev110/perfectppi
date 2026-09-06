@@ -17,6 +17,7 @@ final class AuthStore: ObservableObject {
     enum State: Equatable {
         case loading
         case lockedBiometric
+        case profileUnavailable
         case signedOut
         case signedIn(Profile)
     }
@@ -148,6 +149,11 @@ final class AuthStore: ObservableObject {
         state = .signedIn(profile)
     }
 
+    func retryProfileLoad() async {
+        state = .loading
+        await loadProfile()
+    }
+
     /// Returns the freshest access token, refreshing if necessary.
     func currentAccessToken() async -> String? {
         do {
@@ -163,9 +169,10 @@ final class AuthStore: ObservableObject {
             let profile: Profile = try await APIClient.shared.get("/api/profiles/me")
             state = .signedIn(profile)
         } catch {
-            // If we can't load a profile after auth, log out to recover.
-            try? await client.auth.signOut()
-            state = .signedOut
+            // Preserve the keychain session during transient API/network failures.
+            // Let the user retry without creating a second authentication session.
+            if case .signedIn = state { return }
+            state = .profileUnavailable
         }
     }
 }

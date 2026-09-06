@@ -22,6 +22,7 @@ const OWNER_STORAGE_ENTITIES = [
   "media_package",
   "community_post",
   "message_attachment",
+  "contracts",
 ] as const;
 
 function isR2ClientConfigured() {
@@ -96,6 +97,29 @@ export async function generateQuarantinePresignedUrl(params: {
 }): Promise<{ uploadUrl: string; storageReference: string }> {
   if (!isPrivateR2Configured()) {
     throw new Error("Private R2 quarantine storage is not configured");
+  }
+  const key = params.key.replace(/^\/+/, "");
+  const command = new PutObjectCommand({
+    Bucket: process.env.R2_PRIVATE_BUCKET_NAME!,
+    Key: key,
+    ContentType: params.contentType,
+    ContentLength: params.contentLength,
+  });
+  const uploadUrl = await getSignedUrl(getS3Client(), command, {
+    expiresIn: params.expiresIn ?? 600,
+  });
+  return { uploadUrl, storageReference: privateStorageReference(key) };
+}
+
+/** Presigns a write into private storage without exposing a public object URL. */
+export async function generatePrivatePresignedUrl(params: {
+  key: string;
+  contentType: string;
+  contentLength: number;
+  expiresIn?: number;
+}): Promise<{ uploadUrl: string; storageReference: string }> {
+  if (!isPrivateR2Configured()) {
+    throw new Error("Private R2 storage is not configured");
   }
   const key = params.key.replace(/^\/+/, "");
   const command = new PutObjectCommand({
@@ -232,6 +256,10 @@ export async function deleteOwnerStoredObjects(
   }
   if (isPrivateR2Configured()) {
     for (const entity of OWNER_STORAGE_ENTITIES) {
+      deleted += await deleteBucketPrefix(
+        process.env.R2_PRIVATE_BUCKET_NAME!,
+        `${entity}/${ownerId}/`,
+      );
       deleted += await deleteBucketPrefix(
         process.env.R2_PRIVATE_BUCKET_NAME!,
         `quarantine/${entity}/${ownerId}/`,

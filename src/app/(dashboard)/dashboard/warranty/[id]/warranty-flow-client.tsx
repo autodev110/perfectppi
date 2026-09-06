@@ -546,7 +546,7 @@ export function WarrantyFlowClient({
 
           {contract?.document_url && (
             <a
-              href={contract.document_url}
+              href={`/api/warranty/contracts/${contract.id}/document`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-sm font-bold text-on-tertiary-container hover:underline"

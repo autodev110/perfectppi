@@ -1,7 +1,11 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { isManagedUploadUrl } from "../../src/features/uploads/url.ts";
+import {
+  isManagedPrivateUploadReference,
+  isManagedUploadUrl,
+  isVehicleQuarantineReference,
+} from "../../src/features/uploads/url.ts";
 
 // ============================================================================
 // Attaching media is a second request that carries a URL string. These tests
@@ -35,5 +39,36 @@ describe("managed upload URLs", () => {
 
   test("rejects everything when the bucket is not configured", () => {
     assert.equal(isManagedUploadUrl(`${BASE}/ok.jpg`, ""), false);
+  });
+
+  test("accepts only owner-scoped private upload references", () => {
+    const owner = "11111111-1111-4111-8111-111111111111";
+    const record = "22222222-2222-4222-8222-222222222222";
+    assert.equal(
+      isManagedPrivateUploadReference(`r2-private:///ppi_media/${owner}/${record}/capture.jpg`),
+      true,
+    );
+    assert.equal(
+      isManagedPrivateUploadReference(`r2-private:///quarantine/community_post/${owner}/${record}/capture.jpg`),
+      false,
+    );
+    assert.equal(isManagedPrivateUploadReference("r2-private:///../../secret"), false);
+  });
+
+  test("accepts only vehicle media in the vehicle quarantine namespace", () => {
+    const owner = "11111111-1111-4111-8111-111111111111";
+    const record = "22222222-2222-4222-8222-222222222222";
+    assert.equal(
+      isVehicleQuarantineReference(
+        `r2-private:///quarantine/vehicle_media/${owner}/${record}/capture.jpg`,
+      ),
+      true,
+    );
+    assert.equal(
+      isVehicleQuarantineReference(
+        `r2-private:///quarantine/community_post/${owner}/${record}/capture.jpg`,
+      ),
+      false,
+    );
   });
 });

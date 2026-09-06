@@ -74,6 +74,8 @@ describe("moderation policy", () => {
       readFile(new URL("../../src/features/moderation/actions.ts", import.meta.url), "utf8"));
     assert.ok(actions.includes("hasCleanSpecialistScan(item.raw_result)"));
     assert.ok(actions.includes("Media cannot be approved until the specialist safety scan passes"));
+    assert.ok(actions.includes('item.entity_type === "vehicle_media"'));
+    assert.ok(actions.includes('"apply_vehicle_media_review"'));
   });
 
   test("fails closed when Gemini is not configured", async () => {

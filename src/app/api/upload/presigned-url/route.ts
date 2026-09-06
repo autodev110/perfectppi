@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   buildQuarantineKey,
   buildStorageKey,
-  generatePresignedUrl,
+  generatePrivatePresignedUrl,
   generateQuarantinePresignedUrl,
 } from "@/lib/storage/r2";
 import { z } from "zod";
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
   };
 
   try {
-    if (parsed.data.entity === "community_post") {
+    if (parsed.data.entity === "community_post" || parsed.data.entity === "vehicle_media") {
       const admin = createAdminClient();
       const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
       const [{ count: recentCount }, { count: openCount }] = await Promise.all([
@@ -120,6 +120,9 @@ export async function POST(request: Request) {
         contentType: parsed.data.contentType,
         contentLength: parsed.data.size,
       });
+      if (parsed.data.entity === "vehicle_media") {
+        return NextResponse.json({ uploadUrl: result.uploadUrl, publicUrl: result.storageReference });
+      }
       const { error: reservationError } = await admin.from("community_upload_reservations").insert({
         profile_id: profile.id,
         post_id: parsed.data.recordId,
@@ -132,12 +135,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ uploadUrl: result.uploadUrl, publicUrl: result.storageReference });
     }
 
-    const result = await generatePresignedUrl({
-      key: buildStorageKey(keyParams),
-      contentType: parsed.data.contentType,
-      contentLength: parsed.data.size,
-    });
-    return NextResponse.json(result);
+    if (["ppi_media", "media_package", "message_attachment"].includes(parsed.data.entity)) {
+      const result = await generatePrivatePresignedUrl({
+        key: buildStorageKey(keyParams),
+        contentType: parsed.data.contentType,
+        contentLength: parsed.data.size,
+      });
+      return NextResponse.json({ uploadUrl: result.uploadUrl, publicUrl: result.storageReference });
+    }
+
+    return NextResponse.json({ error: "Unsupported upload destination" }, { status: 400 });
   } catch {
     return NextResponse.json(
       { error: "Failed to generate upload URL" },

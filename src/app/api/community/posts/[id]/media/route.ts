@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
 import { addCommunityPostMedia } from "@/features/community/actions";
 
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },

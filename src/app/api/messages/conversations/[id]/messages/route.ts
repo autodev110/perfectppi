@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
 import { sendMessage } from "@/features/messages/actions";
+import { getConversationMessages } from "@/features/messages/queries";
 import { z } from "zod";
 import { uploadedUrlSchema } from "@/features/uploads/url";
 
@@ -11,6 +12,18 @@ const sendMessageSchema = z.object({
 }).refine((value) => Boolean(value.content || value.attachmentUrl), {
   message: "Add a message or attachment",
 });
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireApiRole(["consumer", "technician", "org_manager", "admin"]);
+  if ("response" in auth) return auth.response;
+  const { id } = await params;
+  return NextResponse.json({ data: await getConversationMessages(id) }, {
+    headers: { "Cache-Control": "private, no-store" },
+  });
+}
 
 // POST /api/messages/conversations/[id]/messages — send a message in a conversation
 export async function POST(

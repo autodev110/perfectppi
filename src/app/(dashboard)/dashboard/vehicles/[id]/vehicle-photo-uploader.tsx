@@ -107,6 +107,7 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
         vehicleId,
         url: publicUrl,
         mediaType: file.type.startsWith("video/") ? "video" : "image",
+        contentType: file.type,
       });
 
       if (result?.error) throw new Error(result.error);

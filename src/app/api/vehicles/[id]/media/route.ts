@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
-import { uploadedUrlSchema } from "@/features/uploads/url";
+import { vehicleUploadReferenceSchema } from "@/features/uploads/url";
+import { attachVehiclePhoto } from "@/features/vehicles/actions";
 
 const mediaSchema = z.object({
-  url: uploadedUrlSchema,
+  url: vehicleUploadReferenceSchema,
   media_type: z.enum(["image", "video"]).default("image"),
   is_primary: z.boolean().default(false),
   sort_order: z.number().default(0),
+  content_type: z.string().regex(/^(image|video)\//),
 });
 
 export async function POST(
@@ -15,8 +16,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createClient();
-
   const body = await request.json();
   const parsed = mediaSchema.safeParse(body);
   if (!parsed.success) {
@@ -26,15 +25,12 @@ export async function POST(
     );
   }
 
-  const { data, error } = await supabase
-    .from("vehicle_media")
-    .insert({ ...parsed.data, vehicle_id: id })
-    .select()
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json(data, { status: 201 });
+  const result = await attachVehiclePhoto({
+    vehicleId: id,
+    url: parsed.data.url,
+    mediaType: parsed.data.media_type,
+    contentType: parsed.data.content_type,
+  });
+  if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
+  return NextResponse.json(result.data, { status: 201 });
 }

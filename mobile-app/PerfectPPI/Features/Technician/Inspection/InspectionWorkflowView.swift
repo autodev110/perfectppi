@@ -79,7 +79,11 @@ struct InspectionWorkflowView: View {
                 VINScannerView { decoded in
                     guard let answer = model.currentAnswer else { return }
                     Task {
-                        await model.upsertAnswer(.init(answerId: answer.id, value: decoded.vin))
+                        do {
+                            try await model.upsertAnswer(.init(answerId: answer.id, value: decoded.vin))
+                        } catch {
+                            errorMessage = "The VIN could not be saved offline. Please try again."
+                        }
                     }
                 }
             }
@@ -153,7 +157,13 @@ struct InspectionWorkflowView: View {
                     }
 
                     AnswerEditor(answer: answer) { updated in
-                        Task { await model.upsertAnswer(updated) }
+                        Task {
+                            do {
+                                try await model.upsertAnswer(updated)
+                            } catch {
+                                errorMessage = "This answer could not be saved offline. Please try again."
+                            }
+                        }
                     }
                     .id(answer.id)
 
@@ -387,7 +397,13 @@ struct InspectionWorkflowView: View {
 
             if model.canSkipCurrent {
                 Button("Skip for now") {
-                    Task { await model.skipCurrent() }
+                    Task {
+                        do {
+                            try await model.skipCurrent()
+                        } catch {
+                            errorMessage = "This skipped answer could not be saved offline. Please try again."
+                        }
+                    }
                 }
                 .foregroundStyle(.secondary)
             }
@@ -432,6 +448,26 @@ struct InspectionWorkflowView: View {
 
         let filename = "capture-\(Int(captured.timeIntervalSince1970)).jpg"
 
+        func queueForUpload() throws {
+            let stored = try OfflineQueue.shared.persistMedia(data, filename: filename)
+            do {
+                try OfflineQueue.shared.enqueueMedia(.init(
+                    id: UUID().uuidString,
+                    submissionId: submissionId,
+                    sectionId: section.id,
+                    answerId: answer.id,
+                    localFileURL: stored,
+                    filename: filename,
+                    contentType: "image/jpeg",
+                    capturedAt: captured
+                ))
+            } catch {
+                try? FileManager.default.removeItem(at: stored)
+                throw error
+            }
+            model.markLocalPhoto(answerId: answer.id)
+        }
+
         // If online, upload now; if offline, save to disk and enqueue.
         if OfflineQueue.shared.isOnline {
             do {
@@ -454,22 +490,19 @@ struct InspectionWorkflowView: View {
                 )
                 model.addMedia(media)
             } catch {
-                errorMessage = error.localizedDescription
+                do {
+                    try queueForUpload()
+                    errorMessage = "The upload was interrupted. Your photo is saved and will sync automatically."
+                } catch {
+                    errorMessage = "The photo could not be uploaded or saved offline. Please try again."
+                }
             }
         } else {
-            let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-            try? data.write(to: tmp)
-            OfflineQueue.shared.enqueueMedia(.init(
-                id: UUID().uuidString,
-                submissionId: submissionId,
-                sectionId: section.id,
-                answerId: answer.id,
-                localFileURL: tmp,
-                filename: filename,
-                contentType: "image/jpeg",
-                capturedAt: captured
-            ))
-            model.markLocalPhoto(answerId: answer.id)
+            do {
+                try queueForUpload()
+            } catch {
+                errorMessage = "The photo could not be saved for offline upload. Please try again."
+            }
         }
     }
 

@@ -2572,27 +2572,42 @@ export type Database = {
       }
       vehicle_media: {
         Row: {
+          content_type: string | null
           id: string
           is_primary: boolean
           media_type: Database["public"]["Enums"]["media_type"]
+          moderation_checked_at: string | null
+          moderation_reason: string | null
+          moderation_status: string
+          moderation_version: string | null
           sort_order: number
           uploaded_at: string
           url: string
           vehicle_id: string
         }
         Insert: {
+          content_type?: string | null
           id?: string
           is_primary?: boolean
           media_type?: Database["public"]["Enums"]["media_type"]
+          moderation_checked_at?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          moderation_version?: string | null
           sort_order?: number
           uploaded_at?: string
           url: string
           vehicle_id: string
         }
         Update: {
+          content_type?: string | null
           id?: string
           is_primary?: boolean
           media_type?: Database["public"]["Enums"]["media_type"]
+          moderation_checked_at?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          moderation_version?: string | null
           sort_order?: number
           uploaded_at?: string
           url?: string
@@ -3009,6 +3024,47 @@ export type Database = {
         }
         Returns: undefined
       }
+      apply_vehicle_media_review: {
+        Args: {
+          p_enforcement: string
+          p_item_id: string
+          p_media_url: string | null
+          p_next_decision: string
+          p_next_status: string
+          p_notes: string | null
+          p_reviewer_id: string
+        }
+        Returns: undefined
+      }
+      complete_warranty_payment: {
+        Args: {
+          p_contract_id: string
+          p_order_id: string
+          p_paid_at: string
+          p_payment_id: string
+          p_receipt_url: string | null
+          p_stripe_payment_id: string | null
+        }
+        Returns: undefined
+      }
+      complete_warranty_signature: {
+        Args: {
+          p_contract_id: string
+          p_document_url: string
+          p_order_id: string
+          p_signed_at: string
+        }
+        Returns: undefined
+      }
+      fail_warranty_payment: {
+        Args: {
+          p_contract_id: string
+          p_order_id: string
+          p_payment_id: string
+          p_stripe_payment_id: string
+        }
+        Returns: undefined
+      }
       submit_moderation_report: {
         Args: {
           p_details: string | null
@@ -3018,6 +3074,10 @@ export type Database = {
           p_reporter_id: string
         }
         Returns: undefined
+      }
+      submit_ppi_atomic: {
+        Args: { p_submission_id: string; p_submitted_at: string }
+        Returns: string
       }
       dev_switch_role: {
         Args: { p_role: Database["public"]["Enums"]["user_role"] }

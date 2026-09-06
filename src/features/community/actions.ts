@@ -21,6 +21,11 @@ import {
 } from "@/lib/moderation";
 import type { ModerationResult } from "@/lib/moderation";
 import {
+  blockedMediaResult,
+  extensionForContentType,
+  hasExpectedMediaSignature,
+} from "@/lib/moderation/media-safety";
+import {
   buildStorageKey,
   deleteStoredObject,
   getObjectFromStoredUrl,
@@ -295,8 +300,7 @@ export async function addCommunityPostMedia(input: unknown) {
     return { error: error.message };
   }
 
-  const scanned = [];
-  for (const media of data ?? []) {
+  const scanned = (await Promise.all((data ?? []).map(async (media) => {
     let result: ModerationResult;
     let bytes: Uint8Array | null = null;
     let sha256: string | null = null;
@@ -384,7 +388,7 @@ export async function addCommunityPostMedia(input: unknown) {
           scan_status: hashStatusForDecision(result.decision),
         }, { onConflict: "entity_type,entity_id" });
       }
-      if (updated) scanned.push(updated);
+      return updated ?? null;
     } catch (scanError) {
       const fallback = blockedMediaResult("media_scan_failed", "review");
       await recordModeration({
@@ -405,64 +409,16 @@ export async function addCommunityPostMedia(input: unknown) {
         .eq("id", media.id)
         .select("*")
         .single();
-      if (updated) scanned.push(updated);
       console.error("community media moderation failed", scanError);
+      return updated ?? null;
     }
-  }
+  }))).filter((item): item is NonNullable<typeof item> => item !== null);
 
   revalidatePath("/community");
   revalidatePath("/dashboard/posts");
   revalidatePath("/admin/community");
   revalidatePath("/admin/moderation");
   return { data: scanned };
-}
-
-function hasExpectedMediaSignature(bytes: Uint8Array, contentType: string): boolean {
-  if (bytes.byteLength < 12) return false;
-  if (contentType === "image/jpeg" || contentType === "image/jpg") {
-    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  }
-  if (contentType === "image/png") {
-    return [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
-      .every((value, index) => bytes[index] === value);
-  }
-  if (contentType === "image/webp") {
-    return String.fromCharCode(...bytes.slice(0, 4)) === "RIFF"
-      && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
-  }
-  if (["image/heic", "image/heif", "video/mp4", "video/quicktime"].includes(contentType)) {
-    return String.fromCharCode(...bytes.slice(4, 8)) === "ftyp";
-  }
-  return false;
-}
-
-function extensionForContentType(contentType: string) {
-  const extensions: Record<string, string> = {
-    "image/jpeg": "jpg",
-    "image/jpg": "jpg",
-    "image/png": "png",
-    "image/webp": "webp",
-    "image/heic": "heic",
-    "image/heif": "heif",
-    "video/mp4": "mp4",
-    "video/quicktime": "mov",
-  };
-  return extensions[contentType] ?? "bin";
-}
-
-function blockedMediaResult(
-  reason: string,
-  decision: "block" | "review" | "legal_hold" = "block",
-): ModerationResult {
-  return {
-    decision,
-    riskLevel: decision === "legal_hold" ? "critical" : decision === "block" ? "high" : "medium",
-    reasonCodes: [reason],
-    provider: "native_rules",
-    modelName: null,
-    modelVersion: "perfectppi-moderation-v1",
-    rawResult: { reason },
-  };
 }
 
 function hashStatusForDecision(decision: ModerationResult["decision"]) {

@@ -13,6 +13,15 @@ struct RootView: View {
                 .background(Color(.systemBackground).ignoresSafeArea())
         case .signedOut:
             LoginView()
+        case .profileUnavailable:
+            ContentUnavailableView {
+                Label("Account temporarily unavailable", systemImage: "wifi.exclamationmark")
+            } description: {
+                Text("Your session is still secure. Check your connection and try loading your account again.")
+            } actions: {
+                Button("Try Again") { Task { await auth.retryProfileLoad() } }
+                Button("Sign Out", role: .destructive) { Task { await auth.signOut() } }
+            }
         case .signedIn(let profile):
             SignedInContainer(profile: profile)
         }

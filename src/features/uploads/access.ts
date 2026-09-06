@@ -34,13 +34,9 @@ export async function canUploadToTarget(
       return Boolean(data);
     }
     case "media_package": {
-      const { data } = await supabase
-        .from("media_packages")
-        .select("id")
-        .eq("id", recordId)
-        .eq("creator_id", profileId)
-        .maybeSingle();
-      return Boolean(data);
+      // Packages upload before their row is created. The private object key is
+      // owner-scoped and createMediaPackage verifies the same staging id.
+      return true;
     }
     case "community_post": {
       const { data } = await supabase

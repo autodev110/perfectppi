@@ -54,21 +54,21 @@ export async function getProfilePublicContent(profileId: string) {
   ] = await Promise.all([
     admin
       .from("vehicles")
-      .select("id, year, make, model, trim, mileage, vin, visibility, created_at, vehicle_media(url, is_primary, sort_order)")
+      .select("id, year, make, model, trim, mileage, vin, visibility, created_at, vehicle_media(url, is_primary, sort_order, moderation_status)")
       .eq("owner_id", profileId)
       .eq("visibility", "public")
       .order("created_at", { ascending: false }),
 
     admin
       .from("marketplace_listings")
-      .select("id, title, asking_price_cents, location, vehicle_id, created_at, vehicle:vehicles!marketplace_listings_vehicle_id_fkey(id, year, make, model, trim, mileage, vehicle_media(url, is_primary))")
+      .select("id, title, asking_price_cents, location, vehicle_id, created_at, vehicle:vehicles!marketplace_listings_vehicle_id_fkey(id, year, make, model, trim, mileage, vehicle_media(url, is_primary, moderation_status))")
       .eq("seller_id", profileId)
       .eq("status", "active")
       .order("created_at", { ascending: false }),
 
     admin
       .from("community_posts")
-      .select("id, content, created_at, vehicle:vehicles!community_posts_vehicle_id_fkey(id, year, make, model, trim, vehicle_media(url, is_primary))")
+      .select("id, content, created_at, vehicle:vehicles!community_posts_vehicle_id_fkey(id, year, make, model, trim, vehicle_media(url, is_primary, moderation_status))")
       .eq("author_id", profileId)
       .eq("status", "active")
       .order("created_at", { ascending: false })
@@ -76,7 +76,7 @@ export async function getProfilePublicContent(profileId: string) {
 
     admin
       .from("ppi_requests")
-      .select("id, ppi_type, status, created_at, vehicle:vehicles!ppi_requests_vehicle_id_fkey(id, year, make, model, trim, visibility, vehicle_media(url, is_primary))")
+      .select("id, ppi_type, status, created_at, vehicle:vehicles!ppi_requests_vehicle_id_fkey(id, year, make, model, trim, visibility, vehicle_media(url, is_primary, moderation_status))")
       .eq("requester_id", profileId)
       .eq("status", "completed")
       .order("created_at", { ascending: false }),
@@ -87,10 +87,12 @@ export async function getProfilePublicContent(profileId: string) {
     (p) => (p.vehicle as { visibility?: string } | null)?.visibility === "public",
   );
 
+  const cleanVehicle = <T extends { vehicle_media?: Array<{ moderation_status: string }> } | null>(vehicle: T) =>
+    vehicle ? { ...vehicle, vehicle_media: (vehicle.vehicle_media ?? []).filter((m) => m.moderation_status === "active") } : vehicle;
   return {
-    vehicles: vehicles ?? [],
-    listings: listings ?? [],
-    posts: posts ?? [],
-    ppis: publicPpis,
+    vehicles: (vehicles ?? []).map(cleanVehicle),
+    listings: (listings ?? []).map((item) => ({ ...item, vehicle: cleanVehicle(item.vehicle) })),
+    posts: (posts ?? []).map((item) => ({ ...item, vehicle: cleanVehicle(item.vehicle) })),
+    ppis: publicPpis.map((item) => ({ ...item, vehicle: cleanVehicle(item.vehicle) })),
   };
 }

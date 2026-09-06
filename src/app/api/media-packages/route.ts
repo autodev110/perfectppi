@@ -12,6 +12,7 @@ const itemSchema = z.object({
 });
 
 const createSchema = z.object({
+  uploadRecordId: z.string().uuid(),
   title: z.string().min(2),
   description: z.string().optional(),
   ppiSubmissionId: z.string().uuid().optional(),

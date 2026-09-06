@@ -64,6 +64,10 @@ function getProfileIdFromAuthUserId(authUserId: string) {
 function cleanPosts(posts: CommunityPost[], includeModerated = false) {
   return posts.map((post) => ({
     ...post,
+    vehicle: post.vehicle ? {
+      ...post.vehicle,
+      vehicle_media: (post.vehicle.vehicle_media ?? []).filter((media) => media.moderation_status === "active"),
+    } : null,
     media: [...(post.media ?? [])]
       .filter((media) => includeModerated || media.moderation_status === "active")
       .sort((a, b) => a.sort_order - b.sort_order),
@@ -73,15 +77,17 @@ function cleanPosts(posts: CommunityPost[], includeModerated = false) {
   }));
 }
 
-export async function getCommunityPosts() {
+export async function getCommunityPosts(page = 1, perPage = 20) {
   const admin = createAdminClient();
+  const from = (Math.max(page, 1) - 1) * perPage;
   const { data } = await admin
     .from("community_posts")
     .select(COMMUNITY_POST_SELECT)
     .eq("status", "active")
     .eq("moderation_status", "active")
     .order("created_at", { ascending: false })
-    .order("created_at", { ascending: true, referencedTable: "community_comments" });
+    .order("created_at", { ascending: true, referencedTable: "community_comments" })
+    .range(from, from + perPage - 1);
 
   const posts = cleanPosts((data ?? []) as CommunityPost[]);
   return posts.filter((post) => !post.vehicle || post.vehicle.visibility === "public");

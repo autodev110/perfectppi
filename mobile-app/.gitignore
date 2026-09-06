@@ -1,4 +1,11 @@
 .env
 PerfectPPI/Resources/AppConfig.plist
 
-PerfectPPI.xcodeproj/
+PerfectPPI.xcodeproj/*
+!PerfectPPI.xcodeproj/project.xcworkspace/
+PerfectPPI.xcodeproj/project.xcworkspace/*
+!PerfectPPI.xcodeproj/project.xcworkspace/xcshareddata/
+PerfectPPI.xcodeproj/project.xcworkspace/xcshareddata/*
+!PerfectPPI.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+PerfectPPI.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!PerfectPPI.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved

@@ -40,7 +40,7 @@ export function PortalLayout({
         <header className="flex h-14 items-center justify-between px-4 lg:px-8">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild className="lg:hidden">
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" aria-label="Open navigation">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
@@ -56,6 +56,7 @@ export function PortalLayout({
             <div className="relative hidden md:block">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
               <input
+                aria-label="Search"
                 type="text"
                 placeholder="Search..."
                 className="h-9 w-56 rounded-xl bg-surface-container-lowest pl-9 pr-4 text-sm ring-1 ring-outline-variant/20 placeholder:text-outline-variant focus:outline-none focus:ring-2 focus:ring-on-tertiary-container/30 transition-all"
@@ -66,7 +67,7 @@ export function PortalLayout({
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full">
+                <Button variant="ghost" size="icon" className="rounded-full" aria-label="Open profile menu">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-container text-xs font-bold text-white">
                     <User className="h-4 w-4" />
                   </div>

@@ -107,6 +107,7 @@ export default async function HomePage() {
       <section className="tonal-shift py-5 border-y border-outline-variant/20 overflow-hidden">
         <div
           className="flex w-max"
+          aria-hidden="true"
           style={{ animation: "marquee 50s linear infinite" }}
         >
           {[...Array(4)].flatMap((_, set) =>

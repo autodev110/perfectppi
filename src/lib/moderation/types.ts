@@ -1,7 +1,8 @@
 export type ModerationEntityType =
   | "community_post"
   | "community_comment"
-  | "community_post_media";
+  | "community_post_media"
+  | "vehicle_media";
 
 export type ModerationDecision = "allow" | "warn" | "review" | "block" | "legal_hold";
 export type ModerationRisk = "none" | "low" | "medium" | "high" | "critical";

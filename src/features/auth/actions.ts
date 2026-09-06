@@ -59,6 +59,7 @@ export async function signUp(formData: FormData) {
     .eq("auth_user_id", signUpData.user.id)
     .single();
   if (profileError || !createdProfile) {
+    await createAdminClient().auth.admin.deleteUser(signUpData.user.id).catch(() => undefined);
     return { error: "Your account was created, but setup could not be completed. Contact support." };
   }
 
@@ -69,6 +70,7 @@ export async function signUp(formData: FormData) {
       headers: await headers(),
     });
   } catch {
+    await createAdminClient().auth.admin.deleteUser(signUpData.user.id).catch(() => undefined);
     return { error: "Your account was created, but Terms acceptance could not be recorded. Contact support." };
   }
 

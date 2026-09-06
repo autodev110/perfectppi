@@ -3,7 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
-import { createSubmission, getSubmission, getSubmitter, docusealIsConfigured } from "@/lib/docuseal/client";
+import { createSubmission, downloadSubmissionDocument, getSubmission, getSubmitter, docusealIsConfigured } from "@/lib/docuseal/client";
+import { buildStorageKey, uploadPrivateObject } from "@/lib/storage/r2";
 import { createCheckoutSession } from "@/lib/stripe/helpers";
 import { stripeIsConfigured } from "@/lib/stripe/client";
 import type { VscCoverageData } from "@/types/api";
@@ -14,6 +15,10 @@ const VSC_SALES_DISABLED_MESSAGE =
 
 function vscSalesEnabled() {
   return process.env.ENABLE_VSC_SALES === "true";
+}
+
+function mockWarrantyFlowEnabled() {
+  return process.env.NODE_ENV !== "production" && process.env.ALLOW_MOCK_WARRANTY_FLOW === "true";
 }
 
 // ============================================================================
@@ -422,7 +427,7 @@ export async function presentContract(
       docuseal_submitter_slug: submitterSlug,
       presented_at: new Date().toISOString(),
       // In local/dev without DocuSeal configured, auto-sign immediately.
-      signed_at: docusealEnabled ? null : new Date().toISOString(),
+      signed_at: docusealEnabled ? null : mockWarrantyFlowEnabled() ? new Date().toISOString() : null,
     })
     .select("id")
     .single();
@@ -431,6 +436,10 @@ export async function presentContract(
 
   // If DocuSeal is not configured at all, advance order to signed immediately.
   if (!docusealEnabled) {
+    if (!mockWarrantyFlowEnabled()) {
+      await admin.from("contracts").delete().eq("id", contract.id);
+      return { error: "DocuSeal must be configured before contracts can be presented." };
+    }
     await admin
       .from("warranty_orders")
       .update({ status: "signed" })
@@ -522,17 +531,25 @@ export async function syncContractSignatureStatus(
     }
 
     const signedAt = new Date().toISOString();
+    const pdf = await downloadSubmissionDocument(submissionId);
+    const { storageReference } = await uploadPrivateObject({
+      key: buildStorageKey({
+        entity: "contracts",
+        ownerId: contract.signer_id,
+        recordId: contract.warranty_order_id,
+        filename: `${submissionId}.pdf`,
+      }),
+      body: pdf,
+      contentType: "application/pdf",
+    });
 
-    await admin
-      .from("contracts")
-      .update({ signed_at: signedAt })
-      .eq("id", contract.id)
-      .is("signed_at", null);
-
-    await admin
-      .from("warranty_orders")
-      .update({ status: "signed" })
-      .eq("id", contract.warranty_order_id);
+    const { error: completionError } = await admin.rpc("complete_warranty_signature", {
+      p_contract_id: contract.id,
+      p_order_id: contract.warranty_order_id,
+      p_signed_at: signedAt,
+      p_document_url: storageReference,
+    });
+    if (completionError) throw completionError;
 
     revalidatePath(`/dashboard/warranty/${contract.warranty_order_id}`);
     revalidatePath(`/dashboard/warranty`);
@@ -623,6 +640,9 @@ export async function initiatePayment(
   }
 
   if (!stripeIsConfigured()) {
+    if (!mockWarrantyFlowEnabled()) {
+      return { error: "Stripe must be configured before payments can be accepted." };
+    }
     // Dev mode — mark paid immediately without Stripe
     await admin
       .from("payments")

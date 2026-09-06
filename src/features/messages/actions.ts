@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { uploadedUrlSchema } from "@/features/uploads/url";
+import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 
 const createConversationSchema = z.object({
   participantId: z.string().uuid(),
@@ -221,6 +222,12 @@ export async function sendMessage(input: {
   if (!membership) return { error: "Not authorized for this conversation" };
 
   const hasAttachment = !!parsed.data.attachmentUrl;
+  if (parsed.data.attachmentUrl) {
+    const expectedPrefix = `r2-private:///message_attachment/${profile.id}/${parsed.data.conversationId}/`;
+    if (!parsed.data.attachmentUrl.startsWith(expectedPrefix)) {
+      return { error: "Attachment upload is invalid" };
+    }
+  }
 
   const { data: message, error: msgErr } = await admin
     .from("messages")
@@ -277,7 +284,10 @@ export async function sendMessage(input: {
   revalidatePath("/org/messages");
   revalidatePath("/admin/messages");
 
-  return { data: message };
+  const attachmentUrl = message.attachment_url && isPrivateStorageReference(message.attachment_url)
+    ? await generatePresignedGetUrl(message.attachment_url, 900)
+    : message.attachment_url;
+  return { data: { ...message, attachment_url: attachmentUrl } };
 }
 
 export async function markConversationRead(conversationId: string) {

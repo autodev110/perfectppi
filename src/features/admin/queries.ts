@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 
 export async function getAdminMetrics() {
   const supabase = createAdminClient();
@@ -82,7 +83,16 @@ export async function getAdminVehicles(page = 1, perPage = 50) {
     .order("created_at", { ascending: false })
     .range(from, to);
 
-  return { vehicles: data ?? [], total: count ?? 0 };
+  const vehicles = await Promise.all((data ?? []).map(async (vehicle) => ({
+    ...vehicle,
+    vehicle_media: await Promise.all((vehicle.vehicle_media ?? []).map(async (media) => ({
+      ...media,
+      url: isPrivateStorageReference(media.url)
+        ? await generatePresignedGetUrl(media.url, 900)
+        : media.url,
+    }))),
+  })));
+  return { vehicles, total: count ?? 0 };
 }
 
 type AdminOutputStatus = "ready" | "pending_vsc";

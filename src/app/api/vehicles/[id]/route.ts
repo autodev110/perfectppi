@@ -1,25 +1,18 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { getVehicle } from "@/features/vehicles/queries";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("vehicles")
-    .select("*, vehicle_media(*)")
-    .eq("id", id)
-    .single();
-
-  if (error || !data) {
+  const vehicle = await getVehicle(id);
+  if (!vehicle) {
     return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
   }
-
-  return NextResponse.json(data);
+  return NextResponse.json(vehicle);
 }
 
 const updateSchema = z.object({

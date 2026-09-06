@@ -246,13 +246,17 @@ struct OBDDataExportView: View {
         guard session.snapshot.hasAnyData else { return }
 
         if !OfflineQueue.shared.isOnline {
-            OfflineQueue.shared.enqueueOBDSnapshot(
-                submissionId: submissionId,
-                snapshot: session.snapshot,
-                transcript: bluetooth.transcript
-            )
-            onSaved?(nil)
-            savedMessage = "Queued for sync."
+            do {
+                try OfflineQueue.shared.enqueueOBDSnapshot(
+                    submissionId: submissionId,
+                    snapshot: session.snapshot,
+                    transcript: bluetooth.transcript
+                )
+                onSaved?(nil)
+                savedMessage = "Queued for sync."
+            } catch {
+                saveError = "The scanner results could not be saved offline. Please try again."
+            }
             return
         }
 
@@ -267,7 +271,17 @@ struct OBDDataExportView: View {
             onSaved?(record)
             savedMessage = "Saved to inspection."
         } catch {
-            saveError = error.localizedDescription
+            do {
+                try OfflineQueue.shared.enqueueOBDSnapshot(
+                    submissionId: submissionId,
+                    snapshot: session.snapshot,
+                    transcript: bluetooth.transcript
+                )
+                onSaved?(nil)
+                savedMessage = "Connection interrupted. Queued for sync."
+            } catch {
+                saveError = "The scanner results could not be uploaded or saved offline. Please try again."
+            }
         }
     }
 

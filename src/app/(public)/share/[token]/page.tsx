@@ -137,7 +137,7 @@ export default async function SharePage({
             {resolved.target.standardized_output.document_url ? (
               <Button asChild>
                 <a
-                  href={`/api/outputs/${resolved.target.standardized_output.id}/pdf`}
+                  href={resolved.target.standardized_output.document_url}
                   target="_blank"
                   rel="noopener noreferrer"
                 >

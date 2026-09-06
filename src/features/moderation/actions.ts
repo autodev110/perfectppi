@@ -9,9 +9,13 @@ import { createClient } from "@/lib/supabase/server";
 import {
   buildStorageKey,
   deleteStoredObject,
+  getObjectFromStoredUrl,
   isPrivateStorageReference,
   promoteQuarantinedObject,
 } from "@/lib/storage/r2";
+import { UPLOAD_LIMITS } from "@/config/constants";
+import { extensionForContentType, moderateMediaBytes } from "@/lib/moderation/media-safety";
+import { recordModeration } from "@/lib/moderation";
 
 const reportSchema = z.object({
   entityType: z.enum(["community_post", "community_comment"]),
@@ -80,6 +84,17 @@ function hasCleanSpecialistScan(value: Json): boolean {
   return (scan as Record<string, Json | undefined>).verdict === "clean";
 }
 
+function legacyContentType(url: string, mediaType: "image" | "video") {
+  const pathname = url.toLowerCase().split("?")[0];
+  if (pathname.endsWith(".png")) return "image/png";
+  if (pathname.endsWith(".webp")) return "image/webp";
+  if (pathname.endsWith(".heic")) return "image/heic";
+  if (pathname.endsWith(".heif")) return "image/heif";
+  if (pathname.endsWith(".mov")) return "video/quicktime";
+  if (pathname.endsWith(".mp4") || mediaType === "video") return "video/mp4";
+  return "image/jpeg";
+}
+
 export async function reviewModerationItem(formData: FormData) {
   const profile = await currentProfile();
   if (!profile || profile.role !== "admin") return;
@@ -106,36 +121,73 @@ export async function reviewModerationItem(formData: FormData) {
     ? "allow"
     : parsed.data.decision === "legal_hold" ? "legal_hold" : "block";
 
+  const isMedia = item.entity_type === "community_post_media" || item.entity_type === "vehicle_media";
   let sourceUrl: string | null = null;
   let promotedUrl: string | null = null;
-  if (item.entity_type === "community_post_media" && nextStatus === "active") {
-    if (!hasCleanSpecialistScan(item.raw_result)) {
-      throw new Error("Media cannot be approved until the specialist safety scan passes");
+  if (isMedia && nextStatus === "active") {
+    const mediaResult = item.entity_type === "vehicle_media"
+      ? await admin.from("vehicle_media")
+        .select("url, vehicle_id, media_type, content_type")
+        .eq("id", item.entity_id)
+        .single()
+      : await admin.from("community_post_media")
+        .select("url, post_id, media_type, content_type")
+        .eq("id", item.entity_id)
+        .single();
+    if (mediaResult.error || !mediaResult.data) {
+      throw new Error(mediaResult.error?.message ?? "Moderated media was not found");
     }
-    const { data: media, error: mediaError } = await admin
-      .from("community_post_media")
-      .select("url, post_id, content_type")
-      .eq("id", item.entity_id)
-      .single();
-    if (mediaError) throw new Error(mediaError.message);
+    const media = mediaResult.data;
+    const contentType = media.content_type ?? legacyContentType(media.url, media.media_type);
+
+    if (!hasCleanSpecialistScan(item.raw_result)) {
+      const object = await getObjectFromStoredUrl(media.url, { maxBytes: UPLOAD_LIMITS.maxVideoSize });
+      const scan = await moderateMediaBytes(object.bytes, contentType, media.media_type);
+      if (!hasCleanSpecialistScan(scan.rawResult as Json)) {
+        await recordModeration({
+          entityType: item.entity_type as "community_post_media" | "vehicle_media",
+          entityId: item.entity_id,
+          authorId: item.author_id ?? profile.id,
+          contentPreview: item.content_preview,
+          evidenceReference: scan.decision === "legal_hold" ? media.url : item.evidence_reference,
+          result: scan,
+        });
+        throw new Error("Media cannot be approved until the specialist safety scan passes");
+      }
+
+      // Preserve pending review until promotion and the review RPC both succeed.
+      const { error: scanUpdateError } = await admin
+        .from("moderation_items")
+        .update({
+          model_provider: scan.provider,
+          model_name: scan.modelName,
+          model_version: scan.modelVersion,
+          raw_result: scan.rawResult as Json,
+        })
+        .eq("id", item.id);
+      if (scanUpdateError) throw new Error(scanUpdateError.message);
+    }
+
     if (isPrivateStorageReference(media.url)) {
       if (!item.author_id) throw new Error("Moderated media has no retained owner");
       sourceUrl = media.url;
-      const ext = media.content_type.split("/").pop()?.replace("jpeg", "jpg") ?? "bin";
       const promoted = await promoteQuarantinedObject({
         storageReference: media.url,
         destinationKey: buildStorageKey({
-          entity: "community_post",
+          entity: item.entity_type === "vehicle_media" ? "vehicle_media" : "community_post",
           ownerId: item.author_id,
-          recordId: media.post_id,
-          filename: `${item.entity_id}.${ext}`,
+          recordId: "vehicle_id" in media ? media.vehicle_id : media.post_id,
+          filename: `${item.entity_id}.${extensionForContentType(contentType)}`,
         }),
       });
       promotedUrl = promoted.publicUrl;
     }
   }
 
-  const { error: reviewError } = await admin.rpc("apply_moderation_review", {
+  const reviewFunction = item.entity_type === "vehicle_media"
+    ? "apply_vehicle_media_review"
+    : "apply_moderation_review";
+  const { error: reviewError } = await admin.rpc(reviewFunction, {
     p_item_id: item.id,
     p_reviewer_id: profile.id,
     p_next_status: nextStatus,

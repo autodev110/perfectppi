@@ -13,6 +13,7 @@ const packageItemSchema = z.object({
 });
 
 const mediaPackageSchema = z.object({
+  uploadRecordId: z.string().uuid(),
   title: z.string().trim().min(2).max(120),
   description: z.string().trim().max(2000).optional(),
   ppiSubmissionId: z.string().uuid().optional(),
@@ -89,6 +90,7 @@ function buildSharePayload(targetType: ShareTargetType, targetId: string) {
 }
 
 export async function createMediaPackage(input: {
+  uploadRecordId: string;
   title: string;
   description?: string;
   ppiSubmissionId?: string;
@@ -103,6 +105,11 @@ export async function createMediaPackage(input: {
   if (!auth) return { error: "Not authenticated" };
 
   const { supabase, profile } = auth;
+
+  const expectedPrefix = `r2-private:///media_package/${profile.id}/${parsed.data.uploadRecordId}/`;
+  if (parsed.data.items.some((item) => !item.url.startsWith(expectedPrefix))) {
+    return { error: "One or more package uploads are invalid" };
+  }
 
   if (parsed.data.ppiSubmissionId) {
     const allowed = await canAccessSubmission(supabase, parsed.data.ppiSubmissionId);
@@ -142,6 +149,17 @@ export async function updateMediaPackage(input: {
   if (!auth) return { error: "Not authenticated" };
 
   const { supabase, profile } = auth;
+
+  if (parsed.data.items) {
+    const privatePrefix = `r2-private:///media_package/${profile.id}/`;
+    const publicPrefix = process.env.R2_PUBLIC_URL
+      ? `${process.env.R2_PUBLIC_URL.replace(/\/$/, "")}/media_package/${profile.id}/`
+      : null;
+    const ownsEveryItem = parsed.data.items.every((item) =>
+      item.url.startsWith(privatePrefix) || Boolean(publicPrefix && item.url.startsWith(publicPrefix)),
+    );
+    if (!ownsEveryItem) return { error: "One or more package uploads are invalid" };
+  }
 
   const { data: existing } = await supabase
     .from("media_packages")

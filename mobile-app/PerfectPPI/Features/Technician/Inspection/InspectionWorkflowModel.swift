@@ -202,7 +202,7 @@ final class InspectionWorkflowModel: ObservableObject {
         }
     }
 
-    func skipCurrent() async {
+    func skipCurrent() async throws {
         guard canSkipCurrent, let submissionId else { return }
         let current = answers[currentIndex]
         let payload = PpiAPI.SaveAnswerPayload(
@@ -214,10 +214,10 @@ final class InspectionWorkflowModel: ObservableObject {
             do {
                 _ = try await PpiAPI.saveAnswer(submissionId: submissionId, payload: payload)
             } catch {
-                OfflineQueue.shared.enqueueAnswer(submissionId: submissionId, payload: payload)
+                try OfflineQueue.shared.enqueueAnswer(submissionId: submissionId, payload: payload)
             }
         } else {
-            OfflineQueue.shared.enqueueAnswer(submissionId: submissionId, payload: payload)
+            try OfflineQueue.shared.enqueueAnswer(submissionId: submissionId, payload: payload)
         }
 
         let skipped = answerCopy(current, answerValue: current.answerValue, deferredAt: Date())
@@ -251,8 +251,10 @@ final class InspectionWorkflowModel: ObservableObject {
 
     /// Save an answer (online or queued). The view passes the updated
     /// payload; we optimistically update the local list and persist.
-    func upsertAnswer(_ payload: PpiAPI.SaveAnswerPayload) async {
+    func upsertAnswer(_ payload: PpiAPI.SaveAnswerPayload) async throws {
         guard let submissionId else { return }
+        let previousAnswers = answers
+        let previousSkippedAnswerIds = skippedAnswerIds
         // Optimistic local update.
         if let idx = answers.firstIndex(where: { $0.id == payload.answerId }) {
             let clearsDeferral = !payload.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -266,23 +268,29 @@ final class InspectionWorkflowModel: ObservableObject {
             }
         }
 
-        if OfflineQueue.shared.isOnline {
-            do {
-                _ = try await PpiAPI.saveAnswer(
-                    submissionId: submissionId,
-                    payload: payload
-                )
-            } catch {
-                OfflineQueue.shared.enqueueAnswer(
+        do {
+            if OfflineQueue.shared.isOnline {
+                do {
+                    _ = try await PpiAPI.saveAnswer(
+                        submissionId: submissionId,
+                        payload: payload
+                    )
+                } catch {
+                    try OfflineQueue.shared.enqueueAnswer(
+                        submissionId: submissionId,
+                        payload: payload
+                    )
+                }
+            } else {
+                try OfflineQueue.shared.enqueueAnswer(
                     submissionId: submissionId,
                     payload: payload
                 )
             }
-        } else {
-            OfflineQueue.shared.enqueueAnswer(
-                submissionId: submissionId,
-                payload: payload
-            )
+        } catch {
+            answers = previousAnswers
+            skippedAnswerIds = previousSkippedAnswerIds
+            throw error
         }
     }
 

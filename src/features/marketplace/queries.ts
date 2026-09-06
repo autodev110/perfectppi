@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
+import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -97,6 +98,23 @@ function applyFilters(listings: MarketplaceListing[], filters: MarketplaceFilter
   return result;
 }
 
+async function cleanListingMedia(listing: MarketplaceListing, publicOnly = true): Promise<MarketplaceListing> {
+  if (!listing.vehicle) return listing;
+  const visible = publicOnly
+    ? listing.vehicle.vehicle_media.filter((item) => item.moderation_status === "active")
+    : listing.vehicle.vehicle_media;
+  return {
+    ...listing,
+    vehicle: {
+      ...listing.vehicle,
+      vehicle_media: await Promise.all(visible.map(async (item) => ({
+        ...item,
+        url: isPrivateStorageReference(item.url) ? await generatePresignedGetUrl(item.url, 900) : item.url,
+      }))),
+    },
+  };
+}
+
 export async function getMarketplaceListings(filters?: MarketplaceFilters) {
   const supabase = createAdminClient();
 
@@ -110,7 +128,7 @@ export async function getMarketplaceListings(filters?: MarketplaceFilters) {
     (listing) => listing.vehicle?.visibility === "public"
   );
 
-  return applyFilters(publicListings, filters ?? {});
+  return applyFilters(await Promise.all(publicListings.map((item) => cleanListingMedia(item))), filters ?? {});
 }
 
 export async function getVehicleActiveListing(vehicleId: string) {
@@ -123,7 +141,8 @@ export async function getVehicleActiveListing(vehicleId: string) {
     .eq("status", "active")
     .maybeSingle();
 
-  return (data as MarketplaceListing | null) ?? null;
+  const listing = (data as MarketplaceListing | null) ?? null;
+  return listing ? cleanListingMedia(listing) : null;
 }
 
 export async function getMarketplaceListing(listingId: string) {
@@ -142,7 +161,7 @@ export async function getMarketplaceListing(listingId: string) {
     listing.status === "active" && listing.vehicle?.visibility === "public";
 
   if (!isPublicActive) return null;
-  return listing;
+  return cleanListingMedia(listing);
 }
 
 export async function getMyMarketplaceListings() {
@@ -168,7 +187,7 @@ export async function getMyMarketplaceListings() {
     .eq("seller_id", profile.id)
     .order("created_at", { ascending: false });
 
-  return (data ?? []) as MarketplaceListing[];
+  return Promise.all(((data ?? []) as MarketplaceListing[]).map((item) => cleanListingMedia(item, false)));
 }
 
 export async function getMyMarketplaceListing(listingId: string) {
@@ -188,7 +207,8 @@ export async function getAdminMarketplaceListings(page = 1, perPage = 50) {
     .range(from, to);
 
   return {
-    listings: (data ?? []) as MarketplaceListing[],
+    listings: await Promise.all(((data ?? []) as MarketplaceListing[])
+      .map((item) => cleanListingMedia(item, false))),
     total: count ?? 0,
   };
 }

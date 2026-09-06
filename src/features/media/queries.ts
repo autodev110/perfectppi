@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database, Json } from "@/types/database";
+import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 
 type MediaPackageRow = Database["public"]["Tables"]["media_packages"]["Row"];
 type ShareLinkRow = Database["public"]["Tables"]["share_links"]["Row"];
@@ -91,6 +92,15 @@ function parseItems(items: Json): MediaPackageItem[] {
     });
 }
 
+async function authorizeItems(items: MediaPackageItem[]): Promise<MediaPackageItem[]> {
+  return Promise.all(items.map(async (item) => ({
+    ...item,
+    url: isPrivateStorageReference(item.url)
+      ? await generatePresignedGetUrl(item.url, 900)
+      : item.url,
+  })));
+}
+
 export async function getMyPackages(limit = 100): Promise<MediaPackageWithShare[]> {
   const { supabase, profileId } = await getAuthProfileId();
   if (!profileId) return [];
@@ -125,11 +135,11 @@ export async function getMyPackages(limit = 100): Promise<MediaPackageWithShare[
     linksByPackage.set(link.media_package_id, arr);
   }
 
-  return (packages ?? []).map((pkg) => ({
+  return Promise.all((packages ?? []).map(async (pkg) => ({
     ...pkg,
-    items: parseItems(pkg.items),
+    items: await authorizeItems(parseItems(pkg.items)),
     share_links: linksByPackage.get(pkg.id) ?? [],
-  }));
+  })));
 }
 
 export async function getMediaPackage(id: string): Promise<MediaPackageWithShare | null> {
@@ -154,7 +164,7 @@ export async function getMediaPackage(id: string): Promise<MediaPackageWithShare
 
   return {
     ...pkg,
-    items: parseItems(pkg.items),
+    items: await authorizeItems(parseItems(pkg.items)),
     share_links: links ?? [],
   };
 }
@@ -193,7 +203,7 @@ export async function resolveShareLink(token: string): Promise<ResolvedShareLink
         type: "media_package",
         media_package: {
           ...pkg,
-          items: parseItems(pkg.items),
+          items: await authorizeItems(parseItems(pkg.items)),
         },
       },
     };
@@ -268,6 +278,10 @@ export async function resolveShareLink(token: string): Promise<ResolvedShareLink
           .maybeSingle()
       : { data: null };
 
+    const documentUrl = standardized.document_url && isPrivateStorageReference(standardized.document_url)
+      ? await generatePresignedGetUrl(standardized.document_url, 900)
+      : standardized.document_url;
+
     return {
       id: link.id,
       token: link.token,
@@ -276,7 +290,7 @@ export async function resolveShareLink(token: string): Promise<ResolvedShareLink
       created_at: link.created_at,
       target: {
         type: "standardized_output",
-        standardized_output: standardized,
+        standardized_output: { ...standardized, document_url: documentUrl },
         vehicle,
       },
     };

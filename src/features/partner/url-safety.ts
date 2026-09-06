@@ -26,6 +26,7 @@ export interface UrlCheckResult {
   reason?: UrlRejectionReason;
   detail?: string;
   url?: URL;
+  validatedAddresses?: string[];
 }
 
 const MAX_URL_LENGTH = 2048;
@@ -70,7 +71,7 @@ export async function checkUrlIsSafeDestination(raw: string): Promise<UrlCheckRe
   const hostname = url.hostname.replace(/^\[|\]$/g, "");
 
   if (ALLOW_INSECURE() && (hostname === "localhost" || hostname === "127.0.0.1")) {
-    return { ok: true, url };
+    return { ok: true, url, validatedAddresses: ["127.0.0.1"] };
   }
 
   let addresses: string[];
@@ -96,7 +97,7 @@ export async function checkUrlIsSafeDestination(raw: string): Promise<UrlCheckRe
     return { ok: false, reason: "private_address", detail: offender };
   }
 
-  return { ok: true, url };
+  return { ok: true, url, validatedAddresses: addresses };
 }
 
 export function isPublicAddress(address: string): boolean {

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyWebhookSignature, downloadSubmissionDocument } from "@/lib/docuseal/client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { buildStorageKey, uploadPrivateObject } from "@/lib/storage/r2";
 
 /**
  * POST /api/webhooks/docuseal
  *
  * Handles DocuSeal webhook events.
  * Protected by HMAC-SHA256 (X-DocuSeal-Signature header).
- * Always return 200 — DocuSeal retries on non-2xx.
+ * Processing failures return non-2xx so DocuSeal retries delivery.
  *
  * Events handled:
  *   form.completed     — all submitters finished → update contracts + advance order
@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     await handleEvent(event.event_type, event.data ?? {});
   } catch (err: unknown) {
     console.error(`DocuSeal webhook error (${event.event_type}):`, err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });
@@ -93,33 +94,21 @@ async function handleFormCompleted(submissionId: number) {
   }
 
   // Download + upload signed PDF to R2
-  let documentUrl: string | null = null;
-  try {
-    const pdfBuffer = await downloadSubmissionDocument(submissionId);
-    documentUrl = await uploadSignedPdf(
-      pdfBuffer,
-      contract.signer_id,
-      contract.warranty_order_id,
-      submissionId,
-    );
-  } catch (err) {
-    console.error(`Failed to download/upload signed PDF for submission ${submissionId}:`, err);
-  }
+  const pdfBuffer = await downloadSubmissionDocument(submissionId);
+  const documentUrl = await uploadSignedPdf(
+    pdfBuffer,
+    contract.signer_id,
+    contract.warranty_order_id,
+    submissionId,
+  );
 
-  // Update contract
-  await admin
-    .from("contracts")
-    .update({
-      signed_at: new Date().toISOString(),
-      ...(documentUrl && { document_url: documentUrl }),
-    })
-    .eq("id", contract.id);
-
-  // Advance order status to signed
-  await admin
-    .from("warranty_orders")
-    .update({ status: "signed" })
-    .eq("id", contract.warranty_order_id);
+  const { error: completionError } = await admin.rpc("complete_warranty_signature", {
+    p_contract_id: contract.id,
+    p_order_id: contract.warranty_order_id,
+    p_signed_at: new Date().toISOString(),
+    p_document_url: documentUrl,
+  });
+  if (completionError) throw completionError;
 
   console.log(`DocuSeal submission ${submissionId} completed → contract ${contract.id} signed`);
 }
@@ -131,10 +120,11 @@ async function handleSubmissionExpired(submissionId: number) {
   console.log(`DocuSeal submission ${submissionId} expired`);
 
   // Optionally: mark contract docuseal_id as null so a new one can be created
-  await admin
+  const { error } = await admin
     .from("contracts")
     .update({ docuseal_id: null, docuseal_submitter_slug: null })
     .eq("docuseal_id", String(submissionId));
+  if (error) throw error;
 }
 
 async function uploadSignedPdf(
@@ -142,35 +132,16 @@ async function uploadSignedPdf(
   signerId: string,
   orderId: string,
   submissionId: number,
-): Promise<string | null> {
-  const accountId = process.env.R2_ACCOUNT_ID;
-  const bucketName = process.env.R2_BUCKET_NAME;
-  const accessKey = process.env.R2_ACCESS_KEY_ID;
-  const secretKey = process.env.R2_SECRET_ACCESS_KEY;
-  const publicUrl = process.env.R2_PUBLIC_URL;
-
-  if (!accountId || !bucketName || !accessKey || !secretKey) {
-    console.warn("R2 not configured — signed PDF not uploaded");
-    return null;
-  }
-
-  const key = `contracts/${signerId}/${orderId}/${submissionId}.pdf`;
-
-  const client = new S3Client({
-    region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-    credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
-  });
-
-  await client.send(
-    new PutObjectCommand({
-      Bucket: bucketName,
-      Key: key,
-      Body: buffer,
-      ContentType: "application/pdf",
+): Promise<string> {
+  const { storageReference } = await uploadPrivateObject({
+    key: buildStorageKey({
+      entity: "contracts",
+      ownerId: signerId,
+      recordId: orderId,
+      filename: `${submissionId}.pdf`,
     }),
-  );
-
-  const base = publicUrl?.replace(/\/$/, "") ?? "";
-  return base ? `${base}/${key}` : null;
+    body: buffer,
+    contentType: "application/pdf",
+  });
+  return storageReference;
 }

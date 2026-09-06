@@ -71,4 +71,23 @@ describe("compliance foundation", () => {
     assert.ok(worker.includes("deleteOwnerStoredObjects"));
     assert.ok(worker.includes("retention_expires_at"));
   });
+
+  test("warranty webhooks commit state transitions atomically and retry failures", async () => {
+    const migration = await source("supabase/migrations/20260906213718_atomic_warranty_webhooks.sql");
+    const stripe = await source("src/app/api/webhooks/stripe/route.ts");
+    const docuseal = await source("src/app/api/webhooks/docuseal/route.ts");
+    for (const fn of [
+      "complete_warranty_signature",
+      "complete_warranty_payment",
+      "fail_warranty_payment",
+    ]) {
+      assert.ok(migration.includes(`FUNCTION public.${fn}`));
+      assert.ok(migration.includes(`GRANT EXECUTE ON FUNCTION public.${fn}`));
+    }
+    assert.ok(stripe.includes('admin.rpc("complete_warranty_payment"'));
+    assert.ok(stripe.includes('admin.rpc("fail_warranty_payment"'));
+    assert.ok(docuseal.includes('admin.rpc("complete_warranty_signature"'));
+    assert.ok(stripe.includes('{ status: 500 }'));
+    assert.ok(docuseal.includes('{ status: 500 }'));
+  });
 });

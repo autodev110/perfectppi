@@ -1,5 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
+
+async function authorizeVehicleMedia<T extends { url: string }>(media: T[]): Promise<T[]> {
+  return Promise.all(media.map(async (item) => ({
+    ...item,
+    url: isPrivateStorageReference(item.url) ? await generatePresignedGetUrl(item.url, 900) : item.url,
+  })));
+}
 
 export async function getMyVehicles() {
   const supabase = await createClient();
@@ -23,7 +31,10 @@ export async function getMyVehicles() {
     .eq("owner_id", profile.id)
     .order("created_at", { ascending: false });
 
-  return data ?? [];
+  return Promise.all((data ?? []).map(async (vehicle) => ({
+    ...vehicle,
+    vehicle_media: await authorizeVehicleMedia(vehicle.vehicle_media ?? []),
+  })));
 }
 
 export async function getVehicle(id: string) {
@@ -35,7 +46,8 @@ export async function getVehicle(id: string) {
     .eq("id", id)
     .single();
 
-  return data;
+  if (!data) return null;
+  return { ...data, vehicle_media: await authorizeVehicleMedia(data.vehicle_media ?? []) };
 }
 
 export async function getPublicVehicle(id: string) {
@@ -52,7 +64,11 @@ export async function getPublicVehicle(id: string) {
     .eq("visibility", "public")
     .single();
 
-  return vehicle ?? null;
+  if (!vehicle) return null;
+  return {
+    ...vehicle,
+    vehicle_media: (vehicle.vehicle_media ?? []).filter((media) => media.moderation_status === "active"),
+  };
 }
 
 export async function getVehiclePpiHistory(vehicleId: string) {

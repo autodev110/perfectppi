@@ -1,13 +1,8 @@
 import { z } from "zod";
 
 /**
- * Media rows store the public URL the browser/app got back from
- * `/api/upload/*`. Those endpoints authorize the target and hand back a URL
- * under `R2_PUBLIC_URL` — but the follow-up "attach this URL to the record"
- * call is a separate request, so without this check a client could skip the
- * upload entirely and point a post, listing photo, or message attachment at
- * any third-party host. That renders in an <img>/<video> for every viewer,
- * which is a tracking-pixel and hotlinking vector.
+ * Upload and attach are separate requests. Accept only URLs/references issued
+ * by PerfectPPI so clients cannot attach third-party tracking or hotlink URLs.
  */
 function publicUploadBase(): string {
   return (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
@@ -20,12 +15,26 @@ export function isManagedUploadUrl(value: string, base = publicUploadBase()): bo
   return value.startsWith(`${base}/`) && value.length > base.length + 1;
 }
 
+export function isManagedPrivateUploadReference(value: string): boolean {
+  return /^r2-private:\/\/\/(?:ppi_media|vehicle_media|media_package|message_attachment)\/[0-9a-f-]+\/[0-9a-f-]+\/[a-zA-Z0-9._-]+$/.test(value);
+}
+
+export function isVehicleQuarantineReference(value: string): boolean {
+  return /^r2-private:\/\/\/quarantine\/vehicle_media\/[0-9a-f-]+\/[0-9a-f-]+\/[a-zA-Z0-9._-]+$/.test(value);
+}
+
 export const uploadedUrlSchema = z
   .string()
-  .url()
   .refine(
-    (value) => isManagedUploadUrl(value),
+    (value) => isManagedUploadUrl(value) || isManagedPrivateUploadReference(value),
     "Media must be uploaded through PerfectPPI",
+  );
+
+export const vehicleUploadReferenceSchema = z
+  .string()
+  .refine(
+    (value) => isVehicleQuarantineReference(value),
+    "Vehicle media must be uploaded to PerfectPPI quarantine storage",
   );
 
 export function isQuarantineReference(value: string): boolean {

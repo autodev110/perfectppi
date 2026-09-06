@@ -4,7 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { uploadedUrlSchema } from "@/features/uploads/url";
+import { vehicleUploadReferenceSchema } from "@/features/uploads/url";
+import { blockedMediaResult, moderateMediaBytes, extensionForContentType } from "@/lib/moderation/media-safety";
+import { moderationUserMessage, recordModeration, statusForDecision } from "@/lib/moderation";
+import type { ModerationResult } from "@/lib/moderation";
+import { buildStorageKey, deleteStoredObject, getObjectFromStoredUrl, promoteQuarantinedObject } from "@/lib/storage/r2";
+import { UPLOAD_LIMITS } from "@/config/constants";
 
 const createVehicleSchema = z.object({
   vin: z.string().max(17).optional().or(z.literal("")),
@@ -20,8 +25,9 @@ const updateVehicleSchema = createVehicleSchema.partial();
 
 const vehiclePhotoSchema = z.object({
   vehicleId: z.string().uuid(),
-  url: uploadedUrlSchema,
+  url: vehicleUploadReferenceSchema,
   mediaType: z.enum(["image", "video"]),
+  contentType: z.string().regex(/^(image|video)\//),
 });
 
 const deleteVehiclePhotoSchema = z.object({
@@ -170,12 +176,13 @@ export async function attachVehiclePhoto(input: {
   vehicleId: string;
   url: string;
   mediaType: "image" | "video";
+  contentType: string;
 }) {
   const parsed = vehiclePhotoSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
   const profile = await getCurrentProfileId();
-  if ("error" in profile) return profile;
+  if ("error" in profile) return { error: profile.error };
 
   const admin = createAdminClient();
   const { data: vehicle } = await admin
@@ -188,10 +195,16 @@ export async function attachVehiclePhoto(input: {
     return { error: "You can only upload photos for vehicles you own" };
   }
 
-  await admin
-    .from("vehicle_media")
-    .update({ is_primary: false })
-    .eq("vehicle_id", parsed.data.vehicleId);
+  const expectedPrefix = `r2-private:///quarantine/vehicle_media/${profile.profileId}/${vehicle.id}/`;
+  if (!parsed.data.url.startsWith(expectedPrefix)) return { error: "Vehicle upload is invalid" };
+
+  let bytes: Uint8Array;
+  try {
+    bytes = (await getObjectFromStoredUrl(parsed.data.url, { maxBytes: UPLOAD_LIMITS.maxVideoSize })).bytes;
+  } catch {
+    await deleteStoredObject(parsed.data.url).catch(() => undefined);
+    return { error: "Vehicle media could not be inspected" };
+  }
 
   const { data, error } = await admin
     .from("vehicle_media")
@@ -199,13 +212,89 @@ export async function attachVehiclePhoto(input: {
       vehicle_id: parsed.data.vehicleId,
       url: parsed.data.url,
       media_type: parsed.data.mediaType,
-      is_primary: true,
+      content_type: parsed.data.contentType,
+      is_primary: false,
       sort_order: 0,
+      moderation_status: "pending_scan",
     })
     .select()
     .single();
 
   if (error) return { error: error.message };
+
+  let result: ModerationResult;
+  let storedUrl = parsed.data.url;
+  const checkedAt = new Date().toISOString();
+  try {
+    result = await moderateMediaBytes(bytes, parsed.data.contentType, parsed.data.mediaType);
+    if (result.decision === "allow") {
+      const promoted = await promoteQuarantinedObject({
+        storageReference: parsed.data.url,
+        destinationKey: buildStorageKey({
+          entity: "vehicle_media",
+          ownerId: profile.profileId,
+          recordId: vehicle.id,
+          filename: `${data.id}.${extensionForContentType(parsed.data.contentType)}`,
+        }),
+      });
+      storedUrl = promoted.publicUrl;
+    }
+    await recordModeration({
+      entityType: "vehicle_media",
+      entityId: data.id,
+      authorId: profile.profileId,
+      contentPreview: `${parsed.data.mediaType} vehicle upload`,
+      evidenceReference: result.decision === "legal_hold" ? parsed.data.url : null,
+      result,
+    });
+    const { error: updateError } = await admin.from("vehicle_media").update({
+      url: storedUrl,
+      moderation_status: statusForDecision(result.decision),
+      moderation_reason: result.reasonCodes[0] ?? null,
+      moderation_checked_at: checkedAt,
+      moderation_version: result.modelVersion,
+    }).eq("id", data.id);
+    if (updateError) throw updateError;
+    if (result.decision === "allow") {
+      const { error: clearPrimaryError } = await admin
+        .from("vehicle_media")
+        .update({ is_primary: false })
+        .eq("vehicle_id", parsed.data.vehicleId)
+        .neq("id", data.id);
+      if (clearPrimaryError) throw clearPrimaryError;
+      const { error: primaryError } = await admin
+        .from("vehicle_media")
+        .update({ is_primary: true })
+        .eq("id", data.id);
+      if (primaryError) throw primaryError;
+    }
+    if (storedUrl !== parsed.data.url) {
+      // The database already points at the promoted copy. Quarantine cleanup
+      // is best-effort and must not roll a successful scan back to pending.
+      await deleteStoredObject(parsed.data.url).catch(() => undefined);
+    }
+  } catch (moderationError) {
+    if (storedUrl !== parsed.data.url) await deleteStoredObject(storedUrl).catch(() => undefined);
+    const fallback = blockedMediaResult("media_scan_failed", "review");
+    await recordModeration({
+      entityType: "vehicle_media",
+      entityId: data.id,
+      authorId: profile.profileId,
+      contentPreview: `${parsed.data.mediaType} vehicle upload`,
+      result: fallback,
+    }).catch(() => undefined);
+    await admin.from("vehicle_media").update({
+      url: parsed.data.url,
+      moderation_status: "pending_review",
+      moderation_reason: fallback.reasonCodes[0],
+      moderation_checked_at: checkedAt,
+      moderation_version: fallback.modelVersion,
+      is_primary: false,
+    }).eq("id", data.id);
+    console.error("vehicle media moderation failed", moderationError);
+    result = fallback;
+    storedUrl = parsed.data.url;
+  }
 
   revalidatePath("/dashboard/vehicles");
   revalidatePath(`/dashboard/vehicles/${parsed.data.vehicleId}`);
@@ -215,7 +304,18 @@ export async function attachVehiclePhoto(input: {
   revalidatePath("/admin/vehicles");
   revalidatePath("/admin/listings");
 
-  return { data };
+  return {
+    data: {
+      ...data,
+      url: storedUrl,
+      moderation_status: statusForDecision(result.decision),
+      moderation_reason: result.reasonCodes[0] ?? null,
+      moderation_checked_at: checkedAt,
+      moderation_version: result.modelVersion,
+      is_primary: result.decision === "allow",
+    },
+    moderationMessage: moderationUserMessage(result.decision),
+  };
 }
 
 export async function deleteVehiclePhoto(formData: FormData) {

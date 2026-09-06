@@ -9,14 +9,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const admin = createAdminClient();
   const { data: item } = await admin.from("moderation_items")
-    .select("status")
-    .eq("entity_type", "community_post_media")
+    .select("status, entity_type")
+    .in("entity_type", ["community_post_media", "vehicle_media"])
     .eq("entity_id", id)
     .maybeSingle();
   if (!item || item.status === "legal_hold") {
     return NextResponse.json({ error: "Preview unavailable" }, { status: 403 });
   }
-  const { data: media } = await admin.from("community_post_media").select("url").eq("id", id).maybeSingle();
+  const table = item.entity_type === "vehicle_media" ? "vehicle_media" : "community_post_media";
+  const { data: media } = await admin.from(table).select("url").eq("id", id).maybeSingle();
   if (!media) return NextResponse.json({ error: "Media not found" }, { status: 404 });
   const url = await generatePresignedGetUrl(media.url, 300);
   return NextResponse.redirect(url);

@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
+import { isIP } from "node:net";
 import { decryptSecret, signWebhookPayload } from "./crypto";
 import { enqueuePartnerEvent } from "./events";
 import { checkUrlIsSafeDestination } from "./url-safety";
@@ -192,8 +195,9 @@ async function deliverEvent(event: OutboundEventRow): Promise<DeliveryOutcome> {
   let errorMessage: string | null = null;
 
   try {
-    const response = await fetch(connection.webhook_url, {
-      method: "POST",
+    const response = await postValidatedWebhook({
+      url: destination.url!,
+      address: destination.validatedAddresses![0],
       headers: {
         "Content-Type": "application/json",
         "User-Agent": "PerfectPPI-Webhooks/1",
@@ -205,9 +209,6 @@ async function deliverEvent(event: OutboundEventRow): Promise<DeliveryOutcome> {
         "X-PerfectPPI-Signature": signature,
       },
       body: rawBody,
-      // A redirect would send the signed body to a host we never validated.
-      redirect: "manual",
-      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
     });
 
     responseStatus = response.status;
@@ -262,6 +263,46 @@ async function deliverEvent(event: OutboundEventRow): Promise<DeliveryOutcome> {
     errorCategory,
     responseStatus,
   );
+}
+
+function postValidatedWebhook(input: {
+  url: URL;
+  address: string;
+  headers: Record<string, string>;
+  body: string;
+}): Promise<{ status: number }> {
+  return new Promise((resolve, reject) => {
+    const requestImpl = input.url.protocol === "https:" ? httpsRequest : httpRequest;
+    let settled = false;
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      callback();
+    };
+    const req = requestImpl({
+      protocol: input.url.protocol,
+      hostname: input.url.hostname,
+      port: input.url.port || undefined,
+      path: `${input.url.pathname}${input.url.search}`,
+      method: "POST",
+      headers: { ...input.headers, "Content-Length": Buffer.byteLength(input.body) },
+      servername: input.url.hostname,
+      lookup: (_hostname, _options, callback) => {
+        callback(null, input.address, isIP(input.address));
+      },
+    }, (response) => {
+      const status = response.statusCode ?? 0;
+      response.destroy();
+      finish(() => resolve({ status }));
+    });
+    const timer = setTimeout(
+      () => req.destroy(new Error("Webhook request timed out")),
+      WEBHOOK_TIMEOUT_MS,
+    );
+    req.once("error", (error) => finish(() => reject(error)));
+    req.end(input.body);
+  });
 }
 
 async function recordAttempt(

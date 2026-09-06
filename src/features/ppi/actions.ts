@@ -543,31 +543,19 @@ export async function submitPpi(submissionId: string) {
 
   const now = new Date().toISOString();
 
-  // Update submission
-  const { data: sub, error: subError } = await supabase
-    .from("ppi_submissions")
-    .update({ status: "submitted", submitted_at: now })
-    .eq("id", submissionId)
-    .select("ppi_request_id")
-    .single();
+  const { data: requestId, error: submitError } = await supabase.rpc("submit_ppi_atomic", {
+    p_submission_id: submissionId,
+    p_submitted_at: now,
+  });
+  if (submitError || !requestId) return { error: submitError?.message ?? "Failed to submit" };
 
-  if (subError || !sub) return { error: subError?.message ?? "Failed to submit" };
+  await syncPartnerLifecycle(requestId, "submitted", { submissionId });
 
-  // Update request status
-  const { error: reqError } = await supabase
-    .from("ppi_requests")
-    .update({ status: "submitted" })
-    .eq("id", sub.ppi_request_id);
-
-  if (reqError) return { error: reqError.message };
-
-  await syncPartnerLifecycle(sub.ppi_request_id, "submitted", { submissionId });
-
-  revalidatePath(`/dashboard/ppi/${sub.ppi_request_id}`);
+  revalidatePath(`/dashboard/ppi/${requestId}`);
   revalidatePath("/dashboard/ppi");
   revalidatePath("/tech/ppi");
 
-  return { success: true, requestId: sub.ppi_request_id };
+  return { success: true, requestId };
 }
 
 // ============================================================================
@@ -789,7 +777,17 @@ export async function attachMedia(data: {
   const parsed = attachMediaSchema.safeParse(data);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
-  const supabase = await createClient();
+  const ctx = await getAuthProfile();
+  if (!ctx) return { error: "Not authenticated" };
+  const { supabase } = ctx;
+  const { data: section } = await supabase
+    .from("ppi_sections")
+    .select("ppi_submission_id")
+    .eq("id", parsed.data.ppi_section_id)
+    .maybeSingle();
+  if (!section) return { error: "Inspection section not found" };
+  const expectedPrefix = `r2-private:///ppi_media/${ctx.id}/${section.ppi_submission_id}/`;
+  if (!parsed.data.url.startsWith(expectedPrefix)) return { error: "Inspection upload is invalid" };
 
   const { data: media, error } = await supabase
     .from("ppi_media")

@@ -1,9 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/database";
+import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
+
+async function authorizeAttachment(message: MessageRow): Promise<MessageRow> {
+  if (!message.attachment_url || !isPrivateStorageReference(message.attachment_url)) return message;
+  return {
+    ...message,
+    attachment_url: await generatePresignedGetUrl(message.attachment_url, 900),
+  };
+}
 
 type ConversationProfile = Pick<
   ProfileRow,
@@ -323,7 +332,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
     listing_context: conversation.marketplace_listing_id
       ? listingContexts.get(conversation.marketplace_listing_id) ?? null
       : null,
-    messages: (messages ?? []) as MessageRow[],
+    messages: await Promise.all(((messages ?? []) as MessageRow[]).map(authorizeAttachment)),
   };
 }
 

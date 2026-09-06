@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
-  isR2Configured,
+  isPrivateStorageReference,
+  isStoredObjectConfigured,
   getObjectFromStoredUrl,
-  extractKeyFromStoredUrl,
 } from "@/lib/storage/r2";
 import { requireApiRole } from "@/features/auth/api";
 import { deletePpiMedia } from "@/features/ppi/actions";
@@ -27,7 +27,7 @@ export async function GET(
   if (error) {
     console.error("[ppi/media] DB lookup failed", { id, error });
     return NextResponse.json(
-      { error: "Media lookup failed", detail: error.message },
+      { error: "Media lookup failed" },
       { status: 500 }
     );
   }
@@ -36,7 +36,10 @@ export async function GET(
     return NextResponse.json({ error: "Media not found" }, { status: 404 });
   }
 
-  if (!isR2Configured()) {
+  if (!isStoredObjectConfigured(media.url)) {
+    if (isPrivateStorageReference(media.url)) {
+      return NextResponse.json({ error: "Private media storage is unavailable" }, { status: 503 });
+    }
     // Local/dev without R2 — redirect to whatever URL was stored.
     return NextResponse.redirect(media.url);
   }
@@ -55,25 +58,15 @@ export async function GET(
     });
     return new NextResponse(blob, { status: 200, headers });
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    const errName = err instanceof Error ? err.name : undefined;
     console.error("[ppi/media] failed to fetch object", {
       id,
-      url: media.url,
-      key: extractKeyFromStoredUrl(media.url),
-      bucket: process.env.R2_BUCKET_NAME,
-      hasEndpoint: Boolean(process.env.R2_ENDPOINT),
-      errName,
-      detail,
+      error: err instanceof Error ? err.name : "unknown",
     });
     // Surface the underlying error to the client so it shows up in the browser
     // network tab without needing access to server logs. (No secrets included.)
     return NextResponse.json(
       {
         error: "Failed to load media",
-        errName,
-        detail,
-        key: extractKeyFromStoredUrl(media.url),
       },
       { status: 500 }
     );

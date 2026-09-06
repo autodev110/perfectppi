@@ -3,7 +3,7 @@ import Combine
 import Network
 
 /// Lightweight offline queue for inspection drafts. Persists pending answers
-/// and pending media uploads to a JSON file in Caches/ and drains them when
+/// and pending media uploads under Application Support and drains them when
 /// the network comes back. We deliberately avoid Core Data to keep the v1
 /// surface area small — JSON is sufficient for the volumes a single
 /// inspection produces.
@@ -39,13 +39,19 @@ final class OfflineQueue: ObservableObject {
     @Published private(set) var pendingMedia: [PendingMedia] = []
     @Published private(set) var pendingOBDSnapshots: [PendingOBDSnapshot] = []
     @Published private(set) var isOnline: Bool = true
+    @Published private(set) var persistenceError: String?
 
     private let monitor = NWPathMonitor()
     private let storeURL: URL
+    private let mediaDirectory: URL
 
     private init() {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        self.storeURL = caches.appendingPathComponent("perfectppi-offline.json")
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("PerfectPPI", isDirectory: true)
+        try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        self.storeURL = support.appendingPathComponent("offline-queue.json")
+        self.mediaDirectory = support.appendingPathComponent("offline-media", isDirectory: true)
+        try? FileManager.default.createDirectory(at: mediaDirectory, withIntermediateDirectories: true)
 
         load()
         startMonitor()
@@ -53,7 +59,8 @@ final class OfflineQueue: ObservableObject {
 
     // MARK: - Public API
 
-    func enqueueAnswer(submissionId: String, payload: PpiAPI.SaveAnswerPayload) {
+    func enqueueAnswer(submissionId: String, payload: PpiAPI.SaveAnswerPayload) throws {
+        let previous = pendingAnswers
         // Replace existing entry for the same question, otherwise append.
         if let idx = pendingAnswers.firstIndex(where: {
             $0.submissionId == submissionId && $0.payload.answerId == payload.answerId
@@ -62,15 +69,39 @@ final class OfflineQueue: ObservableObject {
         } else {
             pendingAnswers.append(PendingAnswer(submissionId: submissionId, payload: payload))
         }
-        save()
+        do {
+            try writeSnapshot()
+            persistenceError = nil
+        } catch {
+            pendingAnswers = previous
+            persistenceError = "Offline changes could not be saved."
+            throw error
+        }
     }
 
-    func enqueueMedia(_ item: PendingMedia) {
+    func enqueueMedia(_ item: PendingMedia) throws {
         pendingMedia.append(item)
-        save()
+        do {
+            try writeSnapshot()
+            persistenceError = nil
+        } catch {
+            pendingMedia.removeAll { $0.id == item.id }
+            persistenceError = "Offline changes could not be saved."
+            throw error
+        }
     }
 
-    func enqueueOBDSnapshot(submissionId: String, snapshot: OBDDiagnosticSnapshot, transcript: [OBDExchange]) {
+    func persistMedia(_ data: Data, filename: String) throws -> URL {
+        let safeExtension = URL(fileURLWithPath: filename).pathExtension
+        let destination = mediaDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(safeExtension.isEmpty ? "jpg" : safeExtension)
+        try data.write(to: destination, options: [.atomic, .completeFileProtection])
+        return destination
+    }
+
+    func enqueueOBDSnapshot(submissionId: String, snapshot: OBDDiagnosticSnapshot, transcript: [OBDExchange]) throws {
+        let previous = pendingOBDSnapshots
         let item = PendingOBDSnapshot(
             id: "\(submissionId):\(Int(Date().timeIntervalSince1970))",
             submissionId: submissionId,
@@ -79,7 +110,14 @@ final class OfflineQueue: ObservableObject {
         )
         pendingOBDSnapshots.removeAll { $0.submissionId == submissionId }
         pendingOBDSnapshots.append(item)
-        save()
+        do {
+            try writeSnapshot()
+            persistenceError = nil
+        } catch {
+            pendingOBDSnapshots = previous
+            persistenceError = "Offline changes could not be saved."
+            throw error
+        }
     }
 
     /// Try to flush every queued item. Called on app foreground and on
@@ -105,9 +143,7 @@ final class OfflineQueue: ObservableObject {
         var stillPendingMedia: [PendingMedia] = []
         for entry in pendingMedia {
             do {
-                guard let data = try? Data(contentsOf: entry.localFileURL) else {
-                    continue   // file got purged
-                }
+                let data = try Data(contentsOf: entry.localFileURL)
                 let url = try await R2Uploader.upload(
                     data: data,
                     filename: entry.filename,
@@ -158,13 +194,22 @@ final class OfflineQueue: ObservableObject {
     }
 
     private func save() {
+        do {
+            try writeSnapshot()
+            persistenceError = nil
+        } catch {
+            persistenceError = "Offline changes could not be saved."
+        }
+    }
+
+    private func writeSnapshot() throws {
         let snapshot = Snapshot(
             pendingAnswers: pendingAnswers,
             pendingMedia: pendingMedia,
             pendingOBDSnapshots: pendingOBDSnapshots
         )
-        guard let data = try? JSONEncoder().encode(snapshot) else { return }
-        try? data.write(to: storeURL, options: .atomic)
+        let data = try JSONEncoder().encode(snapshot)
+        try data.write(to: storeURL, options: [.atomic, .completeFileProtection])
     }
 
     private func load() {

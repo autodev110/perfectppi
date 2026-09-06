@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "@/features/auth/hooks";
 import { useState } from "react";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Menu } from "lucide-react";
 
 const navLinks = [
@@ -72,12 +72,15 @@ export function PublicNavbar() {
 
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild className="md:hidden">
-            <button className="p-2" suppressHydrationWarning>
+            <button className="p-2" aria-label="Open navigation" suppressHydrationWarning>
               <Menu className="h-5 w-5" />
             </button>
           </SheetTrigger>
           <SheetContent side="right" className="w-72">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <SheetDescription className="sr-only">
+              Navigate PerfectPPI or access your account.
+            </SheetDescription>
             <nav className="mt-8 flex flex-col gap-4">
               {navLinks.map((link) => (
                 <Link

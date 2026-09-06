@@ -152,6 +152,7 @@ export default function CreateMediaPackagePage() {
         }
 
         const result = await createMediaPackage({
+          uploadRecordId,
           title: title.trim(),
           description: description.trim() || undefined,
           items,

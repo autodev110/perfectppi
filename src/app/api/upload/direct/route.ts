@@ -5,7 +5,6 @@ import {
   buildQuarantineKey,
   buildStorageKey,
   deleteStoredObject,
-  uploadObject,
   uploadPrivateObject,
 } from "@/lib/storage/r2";
 import { z } from "zod";
@@ -116,12 +115,15 @@ export async function POST(request: Request) {
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    if (parsed.data.entity === "community_post") {
+    if (parsed.data.entity === "community_post" || parsed.data.entity === "vehicle_media") {
       const { storageReference } = await uploadPrivateObject({
         key: buildQuarantineKey(keyParams),
         body: Buffer.from(arrayBuffer),
         contentType: file.type,
       });
+      if (parsed.data.entity === "vehicle_media") {
+        return NextResponse.json({ publicUrl: storageReference }, { status: 201 });
+      }
       const { error: reservationError } = await createAdminClient()
         .from("community_upload_reservations")
         .insert({
@@ -148,14 +150,16 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ publicUrl: storageReference }, { status: 201 });
     }
+    if (["ppi_media", "media_package", "message_attachment"].includes(parsed.data.entity)) {
+      const { storageReference } = await uploadPrivateObject({
+        key: buildStorageKey(keyParams),
+        body: Buffer.from(arrayBuffer),
+        contentType: file.type,
+      });
+      return NextResponse.json({ publicUrl: storageReference }, { status: 201 });
+    }
 
-    const { publicUrl } = await uploadObject({
-      key: buildStorageKey(keyParams),
-      body: Buffer.from(arrayBuffer),
-      contentType: file.type,
-    });
-
-    return NextResponse.json({ publicUrl }, { status: 201 });
+    return NextResponse.json({ error: "Unsupported upload destination" }, { status: 400 });
   } catch {
     return NextResponse.json({ error: "Failed to upload file" }, { status: 500 });
   }
