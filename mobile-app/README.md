@@ -109,6 +109,10 @@ PerfectPPI/
 
 ## Building from CI
 
+The production workflow is `.github/workflows/testflight.yml`. It runs for each
+commit that reaches `main`; see `docs/testflight-ci.md` for required GitHub and
+Apple setup.
+
 ```
 xcodegen generate
 xcodebuild \
@@ -126,9 +130,9 @@ xcodebuild \
 2. Record the Key ID and Team ID into env.
 3. Bundle ID for `APNS_TOPIC` must match the app's Product Bundle Identifier
    exactly (`com.perfectppi.app` by default).
-4. For TestFlight / production builds, switch the entitlement
-   `aps-environment` from `development` to `production` and the
-   `/api/notifications/devices` payload's `env` from `sandbox` to `prod`.
+4. Release builds register device tokens as `prod`; Debug builds use `sandbox`.
+   Keep the Push Notifications capability in `project.yml` and let Xcode apply
+   the App Store provisioning profile during TestFlight export.
 
 ## Testing
 

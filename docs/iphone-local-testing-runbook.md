@@ -212,7 +212,19 @@ DEVELOPMENT_TEAM = 79P499H2M4
 CODE_SIGN_ENTITLEMENTS = PerfectPPI/Resources/PerfectPPI.entitlements
 ```
 
-Before each upload, increment `CURRENT_PROJECT_VERSION` in `mobile-app/project.yml`, regenerate the project, and verify the embedded runtime configuration. Never put server-only secrets in `mobile-app/.env`; the app bundle should contain only the public Supabase URL, publishable/anonymous key, and public API URL.
+Normal TestFlight uploads are automated by `.github/workflows/testflight.yml`
+whenever a commit reaches `main`. CI assigns the build number, generates the
+project, injects client-safe production configuration, tests the app, verifies
+the archive, and uploads it. Follow `docs/testflight-ci.md` for the one-time
+Apple/GitHub setup and daily operating procedure.
+
+Never put server-only secrets in `mobile-app/.env`; the app bundle should
+contain only the public Supabase URL, publishable/anonymous key, and public API
+URL.
+
+The commands below are an emergency manual fallback. Before a manual upload,
+increment `CURRENT_PROJECT_VERSION` in `mobile-app/project.yml`, regenerate the
+project, and verify the embedded runtime configuration.
 
 Create the archive with the full Xcode developer toolchain:
 

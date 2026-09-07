@@ -1,0 +1,6 @@
+# TestFlight release infrastructure and its signing inputs are security-sensitive.
+/.github/workflows/ @autodev110
+/mobile-app/project.yml @autodev110
+/mobile-app/configure.sh @autodev110
+/mobile-app/ExportOptions-TestFlight.plist @autodev110
+/mobile-app/PerfectPPI.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved @autodev110
