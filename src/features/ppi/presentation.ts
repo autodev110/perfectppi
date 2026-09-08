@@ -15,11 +15,20 @@ export function inspectionTypeLabel(type: string | null | undefined) {
 
 export function inspectionDisplayName(
   vehicle: InspectionVehicle | null | undefined,
-  type: string | null | undefined
+  type: string | null | undefined,
+  createdAt?: string | Date | null
 ) {
   const vehicleName = vehicle
     ? [vehicle.year, vehicle.make?.trim(), vehicle.model?.trim()].filter(Boolean).join(" ")
     : "";
   const typeName = inspectionTypeLabel(type);
-  return vehicleName ? `${vehicleName} ${typeName}` : typeName;
+  const date = createdAt ? new Date(createdAt) : null;
+  const dateLabel = date && !Number.isNaN(date.getTime())
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "numeric",
+        day: "numeric",
+        year: "numeric",
+      }).format(date)
+    : "";
+  return [vehicleName, typeName, dateLabel].filter(Boolean).join(" ");
 }

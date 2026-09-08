@@ -18,6 +18,7 @@ const createSchema = z.object({
   trim: z.string().max(100).optional(),
   mileage: z.number().min(0).optional(),
   visibility: z.enum(["public", "private"]).optional(),
+  notes: z.string().trim().max(5000).optional(),
 });
 
 export async function POST(request: Request) {
@@ -49,15 +50,71 @@ export async function POST(request: Request) {
     );
   }
 
+  const normalizedVin = parsed.data.vin?.trim().toUpperCase() || null;
+  if (normalizedVin) {
+    const { data: existingVehicle } = await supabase
+      .from("vehicles")
+      .select("*, vehicle_media(*)")
+      .eq("owner_id", profile.id)
+      .not("vin", "is", null)
+      .then(({ data }) => ({
+        data: data?.find((vehicle) => vehicle.vin?.trim().toUpperCase() === normalizedVin) ?? null,
+      }));
+    if (existingVehicle) {
+      return NextResponse.json({
+        error: "It looks like you already have a vehicle with this same VIN.",
+        code: "duplicate_vin",
+        existing_vehicle: existingVehicle,
+      }, { status: 409 });
+    }
+  }
+
+  const { notes, ...vehicleFields } = parsed.data;
   const { data, error } = await supabase
     .from("vehicles")
-    .insert({ ...parsed.data, owner_id: profile.id })
+    .insert({
+      ...vehicleFields,
+      vin: normalizedVin,
+      trim: parsed.data.trim || null,
+      owner_id: profile.id,
+    })
     .select()
     .single();
 
+  if (error?.code === "23505" && normalizedVin) {
+    const { data: existingVehicle } = await supabase
+      .from("vehicles")
+      .select("*, vehicle_media(*)")
+      .eq("owner_id", profile.id)
+      .not("vin", "is", null)
+      .then(({ data }) => ({
+        data: data?.find((vehicle) => vehicle.vin?.trim().toUpperCase() === normalizedVin) ?? null,
+      }));
+    return NextResponse.json({
+      error: "It looks like you already have a vehicle with this same VIN.",
+      code: "duplicate_vin",
+      existing_vehicle: existingVehicle,
+    }, { status: 409 });
+  }
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "The vehicle could not be saved. Please try again." },
+      { status: 500 }
+    );
   }
 
-  return NextResponse.json(data, { status: 201 });
+  if (notes) {
+    const { error: notesError } = await supabase
+      .from("vehicle_notes")
+      .insert({ vehicle_id: data.id, notes });
+    if (notesError) {
+      await supabase.from("vehicles").delete().eq("id", data.id);
+      return NextResponse.json(
+        { error: "The vehicle could not be saved. Please try again." },
+        { status: 500 }
+      );
+    }
+  }
+
+  return NextResponse.json({ ...data, notes: notes || null }, { status: 201 });
 }

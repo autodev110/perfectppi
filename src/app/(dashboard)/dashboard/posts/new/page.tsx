@@ -2,7 +2,12 @@ import { getCommunityPostOptions } from "@/features/community/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NewPostForm } from "./new-post-form";
 
-export default async function NewDashboardPostPage() {
+export default async function NewDashboardPostPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ vehicle?: string }>;
+}) {
+  const { vehicle: requestedVehicleId } = await searchParams;
   const { vehicles, listings } = await getCommunityPostOptions();
 
   return (
@@ -18,7 +23,7 @@ export default async function NewDashboardPostPage() {
           <CardTitle>Post Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <NewPostForm vehicles={vehicles} listings={listings} />
+          <NewPostForm vehicles={vehicles} listings={listings} selectedVehicleId={requestedVehicleId} />
         </CardContent>
       </Card>
     </div>

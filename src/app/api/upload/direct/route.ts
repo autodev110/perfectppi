@@ -121,14 +121,12 @@ export async function POST(request: Request) {
         body: Buffer.from(arrayBuffer),
         contentType: file.type,
       });
-      if (parsed.data.entity === "vehicle_media") {
-        return NextResponse.json({ publicUrl: storageReference }, { status: 201 });
-      }
       const { error: reservationError } = await createAdminClient()
         .from("community_upload_reservations")
         .insert({
           profile_id: profile.id,
-          post_id: parsed.data.recordId,
+          post_id: parsed.data.entity === "community_post" ? parsed.data.recordId : null,
+          vehicle_id: parsed.data.entity === "vehicle_media" ? parsed.data.recordId : null,
           storage_reference: storageReference,
           expected_size: file.size,
           content_type: file.type,

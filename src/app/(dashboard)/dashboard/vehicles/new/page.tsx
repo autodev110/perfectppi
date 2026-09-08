@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { VinScanButton } from "@/components/shared/vin-scan-button";
+import Link from "next/link";
 
 export default function NewVehiclePage() {
   const router = useRouter();
@@ -20,6 +21,14 @@ export default function NewVehiclePage() {
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [trim, setTrim] = useState("");
+  const [existingVehicle, setExistingVehicle] = useState<{
+    id: string;
+    year: number | null;
+    make: string | null;
+    model: string | null;
+    trim: string | null;
+    vin: string | null;
+  } | null>(null);
 
   async function handleSubmit(formData: FormData) {
     if (submittingRef.current) return;
@@ -27,9 +36,11 @@ export default function NewVehiclePage() {
     submittingRef.current = true;
     setLoading(true);
     setError(null);
+    setExistingVehicle(null);
     const result = await createVehicle(formData);
     if (result?.error) {
       setError(result.error);
+      setExistingVehicle(result.existingVehicle ?? null);
       setLoading(false);
       submittingRef.current = false;
     } else if (result?.data) {
@@ -153,6 +164,22 @@ export default function NewVehiclePage() {
             </div>
             {error && (
               <p className="text-sm text-destructive">{error}</p>
+            )}
+            {existingVehicle && (
+              <Link
+                href={`/dashboard/vehicles/${existingVehicle.id}`}
+                className="block rounded-xl border border-primary/30 bg-primary/5 p-4 transition-colors hover:bg-primary/10"
+              >
+                <p className="font-semibold">
+                  {[existingVehicle.year, existingVehicle.make, existingVehicle.model, existingVehicle.trim]
+                    .filter(Boolean)
+                    .join(" ") || "Existing vehicle"}
+                </p>
+                {existingVehicle.vin && (
+                  <p className="mt-1 font-mono text-xs text-muted-foreground">{existingVehicle.vin}</p>
+                )}
+                <p className="mt-2 text-sm font-medium text-primary">View vehicle details</p>
+              </Link>
             )}
             <div className="flex gap-3">
               <Button type="submit" disabled={loading}>

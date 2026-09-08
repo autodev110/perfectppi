@@ -70,7 +70,7 @@ export default async function InspectionQueuePage({ searchParams }: PageProps) {
               make: string | null;
               model: string | null;
             } | null;
-            const inspectionName = inspectionDisplayName(vehicle, req.ppi_type);
+            const inspectionName = inspectionDisplayName(vehicle, req.ppi_type, req.created_at);
 
             const requester = req.requester as { display_name: string | null } | null;
             // Organization-requested inspections have no consumer requester.

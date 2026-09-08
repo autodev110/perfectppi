@@ -16,15 +16,17 @@ const MAX_MEDIA = 10;
 type NewPostFormProps = {
   vehicles: CommunityPostOptionVehicle[];
   listings: CommunityPostOptionListing[];
+  selectedVehicleId?: string;
 };
 
 function vehicleLabel(vehicle: CommunityPostOptionVehicle | null) {
   return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ") || "Vehicle";
 }
 
-export function NewPostForm({ vehicles, listings }: NewPostFormProps) {
+export function NewPostForm({ vehicles, listings, selectedVehicleId }: NewPostFormProps) {
   const router = useRouter();
-  const [attachmentType, setAttachmentType] = useState("none");
+  const requestedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
+  const [attachmentType, setAttachmentType] = useState(requestedVehicle ? "vehicle" : "none");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [media, setMedia] = useState<File[]>([]);
@@ -194,6 +196,7 @@ export function NewPostForm({ vehicles, listings }: NewPostFormProps) {
           <select
             id="vehicle_id"
             name="vehicle_id"
+            defaultValue={requestedVehicle?.id ?? ""}
             className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <option value="">Choose a public vehicle</option>

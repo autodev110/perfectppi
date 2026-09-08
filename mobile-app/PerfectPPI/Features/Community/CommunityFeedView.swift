@@ -566,7 +566,7 @@ private struct ReportMenu: View {
     }
 }
 
-private struct NewCommunityPostView: View {
+struct NewCommunityPostView: View {
     @Environment(\.dismiss) private var dismiss
     let onCreated: () -> Void
 
@@ -586,6 +586,11 @@ private struct NewCommunityPostView: View {
     /// attach to that post instead of publishing a second one.
     @State private var createdPostId: String?
     @State private var createdModerationStatus = "active"
+
+    init(preselectedVehicleId: String? = nil, onCreated: @escaping () -> Void) {
+        self.onCreated = onCreated
+        _selectedVehicleId = State(initialValue: preselectedVehicleId ?? "")
+    }
 
     var body: some View {
         NavigationStack {

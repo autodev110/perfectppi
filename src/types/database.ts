@@ -374,6 +374,7 @@ export type Database = {
           profile_id: string | null
           status: string
           storage_reference: string
+          vehicle_id: string | null
         }
         Insert: {
           attached_at?: string | null
@@ -386,6 +387,7 @@ export type Database = {
           profile_id?: string | null
           status?: string
           storage_reference: string
+          vehicle_id?: string | null
         }
         Update: {
           attached_at?: string | null
@@ -398,6 +400,7 @@ export type Database = {
           profile_id?: string | null
           status?: string
           storage_reference?: string
+          vehicle_id?: string | null
         }
         Relationships: [
           {
@@ -412,6 +415,13 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_upload_reservations_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
@@ -2627,6 +2637,32 @@ export type Database = {
             foreignKeyName: "vehicle_media_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_notes: {
+        Row: {
+          notes: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          notes: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          notes?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_notes_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },

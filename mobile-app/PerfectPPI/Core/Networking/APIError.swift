@@ -4,6 +4,7 @@ enum APIError: LocalizedError {
     case notAuthenticated
     case forbidden
     case notFound
+    case duplicateVehicle(Vehicle)
     case server(status: Int, message: String?)
     case transport(URLError)
     case decoding(DecodingError)
@@ -15,6 +16,7 @@ enum APIError: LocalizedError {
         case .notAuthenticated: return "You must sign in to continue."
         case .forbidden: return "You don't have permission for that."
         case .notFound: return "We couldn't find that record."
+        case .duplicateVehicle: return "It looks like you already have a vehicle with this same VIN."
         case .server(_, let m): return m ?? "The server returned an error."
         case .transport(let e): return e.localizedDescription
         case .decoding: return "Couldn't read the server response."
@@ -26,4 +28,6 @@ enum APIError: LocalizedError {
 
 struct ServerErrorBody: Decodable {
     let error: String?
+    let code: String?
+    let existingVehicle: Vehicle?
 }

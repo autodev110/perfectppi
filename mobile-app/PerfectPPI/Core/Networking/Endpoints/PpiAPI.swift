@@ -2,8 +2,9 @@ import Foundation
 
 enum PpiAPI {
     // Requests
-    static func listRequests() async throws -> [PpiRequest] {
-        try await APIClient.shared.get("/api/ppi/requests")
+    static func listRequests(vehicleId: String? = nil) async throws -> [PpiRequest] {
+        let query = vehicleId.map { [URLQueryItem(name: "vehicle_id", value: $0)] } ?? []
+        return try await APIClient.shared.get("/api/ppi/requests", query: query)
     }
 
     struct CreateRequestPayload: Encodable {
@@ -28,6 +29,10 @@ enum PpiAPI {
 
     static func getRequest(id: String) async throws -> PpiRequest {
         try await APIClient.shared.get("/api/ppi/requests/\(id)")
+    }
+
+    static func deleteRequest(id: String) async throws -> Empty {
+        try await APIClient.shared.delete("/api/ppi/requests/\(id)")
     }
 
     struct AssignPayload: Encodable {

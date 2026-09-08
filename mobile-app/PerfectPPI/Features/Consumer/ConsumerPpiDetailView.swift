@@ -2,11 +2,21 @@ import SwiftUI
 
 struct ConsumerPpiDetailView: View {
     let requestId: String
+    private let onDelete: () -> Void
 
+    init(requestId: String, onDelete: @escaping () -> Void = {}) {
+        self.requestId = requestId
+        self.onDelete = onDelete
+    }
+
+    @Environment(\.dismiss) private var dismiss
     @State private var request: PpiRequest?
     @State private var submission: PpiSubmission?
     @State private var error: Error?
     @State private var showingReview = false
+    @State private var showingDeleteConfirmation = false
+    @State private var deleting = false
+    @State private var deleteError: String?
 
     var body: some View {
         Group {
@@ -56,6 +66,14 @@ struct ConsumerPpiDetailView: View {
                             }
                             .buttonStyle(OutlineButtonStyle())
                         }
+
+                        Divider().padding(.top, Theme.spacing)
+                        Button("Delete inspection", role: .destructive) {
+                            showingDeleteConfirmation = true
+                        }
+                        .font(.caption)
+                        .frame(maxWidth: .infinity)
+                        .disabled(deleting)
                     }
                     .padding()
                 }
@@ -72,6 +90,21 @@ struct ConsumerPpiDetailView: View {
             ReviewComposerView(requestId: requestId) {
                 Task { await load() }
             }
+        }
+        .confirmationDialog(
+            "Delete this inspection and its reports?",
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Inspection", role: .destructive) { Task { await deleteInspection() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This cannot be undone.")
+        }
+        .alert("Couldn't delete inspection", isPresented: .constant(deleteError != nil)) {
+            Button("OK") { deleteError = nil }
+        } message: {
+            Text(deleteError ?? "")
         }
     }
 
@@ -97,6 +130,19 @@ struct ConsumerPpiDetailView: View {
         } catch {
             // Tolerate — we just won't show the "Continue Inspection" button.
             self.submission = nil
+        }
+    }
+
+    private func deleteInspection() async {
+        guard !deleting else { return }
+        deleting = true
+        defer { deleting = false }
+        do {
+            _ = try await PpiAPI.deleteRequest(id: requestId)
+            onDelete()
+            dismiss()
+        } catch {
+            deleteError = error.localizedDescription
         }
     }
 }

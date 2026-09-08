@@ -11,8 +11,10 @@ import SwiftUI
 struct PpiRequestWizard: View {
     @Environment(\.dismiss) private var dismiss
     private let onComplete: () -> Void
+    private let preselectedVehicleId: String?
 
-    init(onComplete: @escaping () -> Void = {}) {
+    init(preselectedVehicleId: String? = nil, onComplete: @escaping () -> Void = {}) {
+        self.preselectedVehicleId = preselectedVehicleId
         self.onComplete = onComplete
     }
 
@@ -406,6 +408,12 @@ struct PpiRequestWizard: View {
         // failed (offline, server down, 401).
         do {
             self.vehicles = try await VehiclesAPI.list()
+            if let preselectedVehicleId,
+               let vehicle = self.vehicles.first(where: { $0.id == preselectedVehicleId }) {
+                self.selectedVehicleId = vehicle.id
+                self.vin = vehicle.vin ?? ""
+                self.mileage = vehicle.mileage.map(String.init) ?? ""
+            }
         } catch {
             self.loadError = "Couldn't load your vehicles: \(error.localizedDescription)"
         }

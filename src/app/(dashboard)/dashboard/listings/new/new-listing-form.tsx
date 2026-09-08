@@ -13,6 +13,7 @@ type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 
 type NewListingFormProps = {
   vehicles: Vehicle[];
+  selectedVehicleId?: string;
 };
 
 function getVehicleLabel(vehicle: Vehicle) {
@@ -21,10 +22,11 @@ function getVehicleLabel(vehicle: Vehicle) {
     .join(" ") || "Untitled vehicle";
 }
 
-export function NewListingForm({ vehicles }: NewListingFormProps) {
+export function NewListingForm({ vehicles, selectedVehicleId }: NewListingFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -48,6 +50,7 @@ export function NewListingForm({ vehicles }: NewListingFormProps) {
           id="vehicle_id"
           name="vehicle_id"
           required
+          defaultValue={selectedVehicle?.id ?? ""}
           className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <option value="">Choose a vehicle</option>
@@ -66,7 +69,7 @@ export function NewListingForm({ vehicles }: NewListingFormProps) {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="title">Listing title</Label>
-          <Input id="title" name="title" placeholder="2019 Porsche 911 Carrera S" maxLength={120} />
+          <Input id="title" name="title" placeholder="2019 Porsche 911 Carrera S" maxLength={120} defaultValue={selectedVehicle ? getVehicleLabel(selectedVehicle) : ""} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="asking_price">Asking price *</Label>

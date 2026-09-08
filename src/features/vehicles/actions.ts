@@ -5,11 +5,26 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { vehicleUploadReferenceSchema } from "@/features/uploads/url";
-import { blockedMediaResult, moderateMediaBytes, extensionForContentType } from "@/lib/moderation/media-safety";
-import { moderationUserMessage, recordModeration, statusForDecision } from "@/lib/moderation";
+import {
+  blockedMediaResult,
+  extensionForContentType,
+  hasExpectedMediaSignature,
+  moderateMediaBytes,
+} from "@/lib/moderation/media-safety";
+import {
+  getActivePostingRestriction,
+  moderationUserMessage,
+  recordModeration,
+  statusForDecision,
+} from "@/lib/moderation";
 import type { ModerationResult } from "@/lib/moderation";
-import { buildStorageKey, deleteStoredObject, getObjectFromStoredUrl, promoteQuarantinedObject } from "@/lib/storage/r2";
+import { buildStorageKey, getObjectFromStoredUrl, promoteQuarantinedObject } from "@/lib/storage/r2";
 import { UPLOAD_LIMITS } from "@/config/constants";
+import { deleteStoredObjectOrQueue } from "@/features/uploads/cleanup";
+import {
+  cleanupInspectionStorage,
+  collectInspectionStorageReferences,
+} from "@/features/ppi/deletion";
 
 const createVehicleSchema = z.object({
   vin: z.string().max(17).optional().or(z.literal("")),
@@ -19,6 +34,7 @@ const createVehicleSchema = z.object({
   trim: z.string().max(100).optional().or(z.literal("")),
   mileage: z.coerce.number().min(0).optional(),
   visibility: z.enum(["public", "private"]).optional(),
+  notes: z.string().trim().max(5000).optional().or(z.literal("")),
 });
 
 const updateVehicleSchema = createVehicleSchema.partial();
@@ -28,7 +44,10 @@ const vehiclePhotoSchema = z.object({
   url: vehicleUploadReferenceSchema,
   mediaType: z.enum(["image", "video"]),
   contentType: z.string().regex(/^(image|video)\//),
-});
+}).refine(
+  ({ mediaType, contentType }) => contentType.startsWith(`${mediaType}/`),
+  { message: "Media type does not match its content type", path: ["contentType"] },
+);
 
 const deleteVehiclePhotoSchema = z.object({
   vehicleId: z.string().uuid(),
@@ -57,7 +76,7 @@ async function getCurrentProfileId() {
 export async function createVehicle(formData: FormData) {
   const raw: Record<string, unknown> = {};
   for (const [key, value] of formData.entries()) {
-    if (value !== "") raw[key] = value;
+    if (value !== "" || key === "notes" || key === "vin" || key === "trim") raw[key] = value;
   }
 
   const parsed = createVehicleSchema.safeParse(raw);
@@ -88,18 +107,23 @@ export async function createVehicle(formData: FormData) {
       .from("vehicles")
       .select("*")
       .eq("owner_id", profile.id)
-      .eq("vin", normalizedVin)
-      .limit(1);
+      .not("vin", "is", null);
 
-    const existingVehicle = existingVehicles?.[0];
+    const existingVehicle = existingVehicles?.find(
+      (vehicle) => vehicle.vin?.trim().toUpperCase() === normalizedVin
+    );
     if (existingVehicle) {
-      revalidatePath("/dashboard/vehicles");
-      return { data: existingVehicle };
+      return {
+        error: "It looks like you already have a vehicle with this same VIN.",
+        code: "duplicate_vin" as const,
+        existingVehicle,
+      };
     }
   }
 
+  const { notes, ...vehicleFields } = parsed.data;
   const insertData = {
-    ...parsed.data,
+    ...vehicleFields,
     vin: normalizedVin,
     trim: parsed.data.trim || null,
     owner_id: profile.id,
@@ -111,7 +135,32 @@ export async function createVehicle(formData: FormData) {
     .select()
     .single();
 
-  if (error) return { error: error.message };
+  if (error?.code === "23505" && normalizedVin) {
+    const { data: existingVehicle } = await supabase
+      .from("vehicles")
+      .select("*")
+      .eq("owner_id", profile.id)
+      .not("vin", "is", null)
+      .then(({ data }) => ({
+        data: data?.find((vehicle) => vehicle.vin?.trim().toUpperCase() === normalizedVin) ?? null,
+      }));
+    return {
+      error: "It looks like you already have a vehicle with this same VIN.",
+      code: "duplicate_vin" as const,
+      existingVehicle: existingVehicle ?? undefined,
+    };
+  }
+  if (error) return { error: "The vehicle could not be saved. Please try again." };
+
+  if (notes) {
+    const { error: notesError } = await supabase
+      .from("vehicle_notes")
+      .insert({ vehicle_id: data.id, notes });
+    if (notesError) {
+      await supabase.from("vehicles").delete().eq("id", data.id);
+      return { error: "The vehicle could not be saved. Please try again." };
+    }
+  }
 
   revalidatePath("/dashboard/vehicles");
   return { data };
@@ -120,7 +169,7 @@ export async function createVehicle(formData: FormData) {
 export async function updateVehicle(vehicleId: string, formData: FormData) {
   const raw: Record<string, unknown> = {};
   for (const [key, value] of formData.entries()) {
-    if (value !== "") raw[key] = value;
+    if (value !== "" || key === "notes" || key === "vin" || key === "trim") raw[key] = value;
   }
 
   const parsed = updateVehicleSchema.safeParse(raw);
@@ -128,14 +177,46 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
     return { error: parsed.error.errors[0].message };
   }
 
-  const supabase = await createClient();
+  const profile = await getCurrentProfileId();
+  if ("error" in profile) return { error: profile.error };
+  const admin = createAdminClient();
 
-  const { error } = await supabase
+  const { data: ownedVehicle } = await admin
     .from("vehicles")
-    .update(parsed.data)
-    .eq("id", vehicleId);
+    .select("id")
+    .eq("id", vehicleId)
+    .eq("owner_id", profile.profileId)
+    .maybeSingle();
+  if (!ownedVehicle) return { error: "Vehicle not found" };
 
-  if (error) return { error: error.message };
+  const { notes, ...vehicleFields } = parsed.data;
+  const updateData = {
+    ...vehicleFields,
+    vin: vehicleFields.vin === undefined
+      ? undefined
+      : vehicleFields.vin.trim().toUpperCase() || null,
+    trim: vehicleFields.trim === undefined ? undefined : vehicleFields.trim || null,
+  };
+
+  const hasVehicleUpdates = Object.values(updateData).some((value) => value !== undefined);
+  const { error } = hasVehicleUpdates
+    ? await admin.from("vehicles").update(updateData).eq("id", vehicleId)
+    : { error: null };
+
+  if (error?.code === "23505") {
+    return { error: "It looks like you already have a vehicle with this same VIN." };
+  }
+  if (error) return { error: "The vehicle could not be updated. Please try again." };
+
+  if (notes !== undefined) {
+    const { error: notesError } = notes
+      ? await admin.from("vehicle_notes").upsert(
+          { vehicle_id: vehicleId, notes },
+          { onConflict: "vehicle_id" },
+        )
+      : await admin.from("vehicle_notes").delete().eq("vehicle_id", vehicleId);
+    if (notesError) return { error: "The vehicle notes could not be updated. Please try again." };
+  }
 
   revalidatePath("/dashboard/vehicles");
   revalidatePath(`/dashboard/vehicles/${vehicleId}`);
@@ -184,6 +265,10 @@ export async function attachVehiclePhoto(input: {
   const profile = await getCurrentProfileId();
   if ("error" in profile) return { error: profile.error };
 
+  if (await getActivePostingRestriction(profile.profileId, true)) {
+    return { error: "Media uploads are unavailable for this account" };
+  }
+
   const admin = createAdminClient();
   const { data: vehicle } = await admin
     .from("vehicles")
@@ -198,11 +283,42 @@ export async function attachVehiclePhoto(input: {
   const expectedPrefix = `r2-private:///quarantine/vehicle_media/${profile.profileId}/${vehicle.id}/`;
   if (!parsed.data.url.startsWith(expectedPrefix)) return { error: "Vehicle upload is invalid" };
 
+  const now = new Date().toISOString();
+  const { data: reservation } = await admin
+    .from("community_upload_reservations")
+    .select("id, expected_size, content_type")
+    .eq("profile_id", profile.profileId)
+    .eq("vehicle_id", vehicle.id)
+    .eq("storage_reference", parsed.data.url)
+    .eq("status", "issued")
+    .gt("expires_at", now)
+    .maybeSingle();
+  if (!reservation || reservation.content_type !== parsed.data.contentType) {
+    return { error: "Vehicle upload is missing, expired, or does not match the selected media" };
+  }
+
+  const { data: claimedReservation } = await admin
+    .from("community_upload_reservations")
+    .update({ status: "attached", attached_at: now })
+    .eq("id", reservation.id)
+    .eq("status", "issued")
+    .select("id")
+    .maybeSingle();
+  if (!claimedReservation) {
+    return { error: "This vehicle upload was already attached. Please select the file again." };
+  }
+
   let bytes: Uint8Array;
   try {
-    bytes = (await getObjectFromStoredUrl(parsed.data.url, { maxBytes: UPLOAD_LIMITS.maxVideoSize })).bytes;
+    bytes = (await getObjectFromStoredUrl(parsed.data.url, {
+      expectedBytes: reservation.expected_size,
+      maxBytes: UPLOAD_LIMITS.maxVideoSize,
+    })).bytes;
+    if (!hasExpectedMediaSignature(bytes, parsed.data.contentType)) {
+      throw new Error("Vehicle media signature does not match its content type");
+    }
   } catch {
-    await deleteStoredObject(parsed.data.url).catch(() => undefined);
+    await deleteStoredObjectOrQueue(parsed.data.url, "invalid_vehicle_media_upload");
     return { error: "Vehicle media could not be inspected" };
   }
 
@@ -220,7 +336,10 @@ export async function attachVehiclePhoto(input: {
     .select()
     .single();
 
-  if (error) return { error: error.message };
+  if (error) {
+    await deleteStoredObjectOrQueue(parsed.data.url, "failed_vehicle_media_record");
+    return { error: "Vehicle media could not be saved" };
+  }
 
   let result: ModerationResult;
   let storedUrl = parsed.data.url;
@@ -271,10 +390,12 @@ export async function attachVehiclePhoto(input: {
     if (storedUrl !== parsed.data.url) {
       // The database already points at the promoted copy. Quarantine cleanup
       // is best-effort and must not roll a successful scan back to pending.
-      await deleteStoredObject(parsed.data.url).catch(() => undefined);
+      await deleteStoredObjectOrQueue(parsed.data.url, "promoted_vehicle_media_source");
     }
   } catch (moderationError) {
-    if (storedUrl !== parsed.data.url) await deleteStoredObject(storedUrl).catch(() => undefined);
+    if (storedUrl !== parsed.data.url) {
+      await deleteStoredObjectOrQueue(storedUrl, "failed_vehicle_media_promotion");
+    }
     const fallback = blockedMediaResult("media_scan_failed", "review");
     await recordModeration({
       entityType: "vehicle_media",
@@ -344,26 +465,37 @@ export async function removeVehiclePhoto(input: { vehicleId: string; mediaId: st
     return { error: "You can only remove photos from vehicles you own" };
   }
 
-  await admin
+  const { data: media } = await admin
+    .from("vehicle_media")
+    .select("url, is_primary")
+    .eq("id", parsed.data.mediaId)
+    .eq("vehicle_id", parsed.data.vehicleId)
+    .maybeSingle();
+  if (!media) return { error: "Media not found" };
+
+  const { error: deleteError } = await admin
     .from("vehicle_media")
     .delete()
     .eq("id", parsed.data.mediaId)
     .eq("vehicle_id", parsed.data.vehicleId);
+  if (deleteError) return { error: "Vehicle media could not be deleted" };
 
-  const { data: nextMedia } = await admin
-    .from("vehicle_media")
-    .select("id")
-    .eq("vehicle_id", parsed.data.vehicleId)
-    .order("sort_order", { ascending: true })
-    .order("uploaded_at", { ascending: true })
-    .limit(1);
+  await deleteStoredObjectOrQueue(media.url, "vehicle_media_deleted");
 
-  const nextPrimary = nextMedia?.[0];
-  if (nextPrimary) {
-    await admin
+  if (media.is_primary) {
+    const { data: nextPrimary } = await admin
       .from("vehicle_media")
-      .update({ is_primary: true })
-      .eq("id", nextPrimary.id);
+      .select("id")
+      .eq("vehicle_id", parsed.data.vehicleId)
+      .eq("moderation_status", "active")
+      .order("sort_order", { ascending: true })
+      .order("uploaded_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (nextPrimary) {
+      await admin.from("vehicle_media").update({ is_primary: true }).eq("id", nextPrimary.id);
+    }
   }
 
   revalidatePath("/dashboard/vehicles");
@@ -378,14 +510,54 @@ export async function removeVehiclePhoto(input: { vehicleId: string; mediaId: st
 }
 
 export async function deleteVehicle(vehicleId: string) {
-  const supabase = await createClient();
+  const profile = await getCurrentProfileId();
+  if ("error" in profile) return { error: profile.error };
+  const admin = createAdminClient();
 
-  const { error } = await supabase
+  const { data: vehicle } = await admin
+    .from("vehicles")
+    .select("id")
+    .eq("id", vehicleId)
+    .eq("owner_id", profile.profileId)
+    .maybeSingle();
+  if (!vehicle) return { error: "Vehicle not found" };
+
+  const [mediaResult, requestsResult] = await Promise.all([
+    admin
+      .from("vehicle_media")
+      .select("url")
+      .eq("vehicle_id", vehicleId),
+    admin
+      .from("ppi_requests")
+      .select("id")
+      .eq("vehicle_id", vehicleId),
+  ]);
+  if (mediaResult.error || requestsResult.error) {
+    return { error: "The vehicle could not be prepared for deletion. Please try again." };
+  }
+  const media = mediaResult.data;
+  const requests = requestsResult.data;
+  let inspectionReferences: string[];
+  try {
+    inspectionReferences = await collectInspectionStorageReferences(
+      (requests ?? []).map(({ id }) => id)
+    );
+  } catch {
+    return { error: "The vehicle could not be prepared for deletion. Please try again." };
+  }
+
+  const { error } = await admin
     .from("vehicles")
     .delete()
-    .eq("id", vehicleId);
+    .eq("id", vehicleId)
+    .eq("owner_id", profile.profileId);
 
-  if (error) return { error: error.message };
+  if (error) return { error: "The vehicle could not be deleted. Please try again." };
+
+  await Promise.all([
+    ...(media ?? []).map(({ url }) => deleteStoredObjectOrQueue(url, "vehicle_deleted")),
+    cleanupInspectionStorage(inspectionReferences, "vehicle_inspections_deleted"),
+  ]);
 
   revalidatePath("/dashboard/vehicles");
   return { success: true };

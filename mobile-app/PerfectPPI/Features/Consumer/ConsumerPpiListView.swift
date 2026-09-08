@@ -19,7 +19,9 @@ struct ConsumerPpiListView: View {
                     } else {
                         List(items) { req in
                             NavigationLink {
-                                ConsumerPpiDetailView(requestId: req.id)
+                                ConsumerPpiDetailView(requestId: req.id) {
+                                    reloadToken = UUID()
+                                }
                             } label: {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(req.inspectionTitle)

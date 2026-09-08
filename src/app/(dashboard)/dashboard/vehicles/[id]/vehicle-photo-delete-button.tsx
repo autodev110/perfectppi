@@ -12,7 +12,8 @@ export function VehiclePhotoDeleteButton({
 }) {
   return (
     <DeletePhotoButton
-      label="Delete photo"
+      label="Delete media"
+      confirmMessage="Delete this media item? This cannot be undone."
       onDelete={() => removeVehiclePhoto({ vehicleId, mediaId })}
     />
   );

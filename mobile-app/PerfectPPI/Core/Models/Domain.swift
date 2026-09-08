@@ -40,6 +40,7 @@ struct Vehicle: Codable, Identifiable, Hashable {
     let model: String?
     let trim: String?
     let mileage: Int?
+    let notes: String?
     let visibility: VehicleVisibility?
     let createdAt: Date?
     let vehicleMedia: [VehicleMedia]?
@@ -366,7 +367,13 @@ struct PpiRequest: Codable, Identifiable, Hashable {
         let typeLabel = ppiType?.rawValue
             .replacingOccurrences(of: "_", with: " ")
             .capitalized ?? "Inspection"
-        return (vehicleParts + [typeLabel]).joined(separator: " ")
+        let dateLabel: String? = createdAt.map {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "M/d/yyyy"
+            return formatter.string(from: $0)
+        }
+        return (vehicleParts + [typeLabel, dateLabel].compactMap { $0 }).joined(separator: " ")
     }
 }
 

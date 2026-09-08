@@ -124,24 +124,28 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="vehicle-photo">Upload vehicle photo</Label>
+        <Label htmlFor="vehicle-photo">Upload photos or videos</Label>
         <Input
           id="vehicle-photo"
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime"
           onChange={onPickFile}
           disabled={uploading}
         />
         <p className="text-xs text-muted-foreground">
-          This becomes the primary vehicle photo shown on public profile, marketplace, and admin views.
+          Accepted media is reviewed, then added to this vehicle. The newest approved item becomes primary.
         </p>
       </div>
 
       {previewUrl && (
         <div className="relative overflow-hidden rounded-xl border bg-muted">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={previewUrl} alt="Selected vehicle upload preview" className="h-48 w-full object-cover" />
+          {file?.type.startsWith("video/") ? (
+            <video src={previewUrl} controls playsInline className="h-48 w-full object-cover" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewUrl} alt="Selected vehicle upload preview" className="h-48 w-full object-cover" />
+          )}
           <button
             type="button"
             aria-label="Remove selected photo"
@@ -166,7 +170,7 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
         ) : (
           <>
             <Camera className="mr-2 h-4 w-4" />
-            Upload Photo
+            Upload Media
           </>
         )}
       </Button>

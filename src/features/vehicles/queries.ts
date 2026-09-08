@@ -47,7 +47,52 @@ export async function getVehicle(id: string) {
     .single();
 
   if (!data) return null;
-  return { ...data, vehicle_media: await authorizeVehicleMedia(data.vehicle_media ?? []) };
+  const { data: privateDetails } = await supabase
+    .from("vehicle_notes")
+    .select("notes")
+    .eq("vehicle_id", id)
+    .maybeSingle();
+
+  return {
+    ...data,
+    notes: privateDetails?.notes ?? null,
+    vehicle_media: await authorizeVehicleMedia(data.vehicle_media ?? []),
+  };
+}
+
+export async function getOwnedVehicle(id: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .single();
+  if (!profile) return null;
+
+  const { data } = await supabase
+    .from("vehicles")
+    .select("*, vehicle_media(*)")
+    .eq("id", id)
+    .eq("owner_id", profile.id)
+    .maybeSingle();
+
+  if (!data) return null;
+  const { data: privateDetails } = await supabase
+    .from("vehicle_notes")
+    .select("notes")
+    .eq("vehicle_id", id)
+    .maybeSingle();
+
+  return {
+    ...data,
+    notes: privateDetails?.notes ?? null,
+    vehicle_media: await authorizeVehicleMedia(data.vehicle_media ?? []),
+  };
 }
 
 export async function getPublicVehicle(id: string) {

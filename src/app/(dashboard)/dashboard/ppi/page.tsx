@@ -90,7 +90,7 @@ export default async function MyInspectionsPage({ searchParams }: PageProps) {
               model: string | null;
               trim: string | null;
             } | null;
-            const inspectionName = inspectionDisplayName(vehicle, req.ppi_type);
+            const inspectionName = inspectionDisplayName(vehicle, req.ppi_type, req.created_at);
 
             return (
               <Link

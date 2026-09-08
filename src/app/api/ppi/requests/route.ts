@@ -2,15 +2,37 @@ import { NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
 import { getMyPpiRequests } from "@/features/ppi/queries";
 import { createPpiRequest } from "@/features/ppi/actions";
+import { z } from "zod";
+
+const requestFiltersSchema = z.object({
+  status: z.enum([
+    "draft",
+    "pending_assignment",
+    "assigned",
+    "accepted",
+    "in_progress",
+    "submitted",
+    "needs_revision",
+    "completed",
+    "archived",
+  ]).optional(),
+  vehicleId: z.string().uuid().optional(),
+});
 
 export async function GET(request: Request) {
   const auth = await requireApiRole(["consumer"]);
   if ("response" in auth) return auth.response;
 
   const { searchParams } = new URL(request.url);
-  const status = searchParams.get("status") as import("@/types/enums").PpiRequestStatus | null;
+  const parsed = requestFiltersSchema.safeParse({
+    status: searchParams.get("status") || undefined,
+    vehicleId: searchParams.get("vehicle_id") || undefined,
+  });
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid inspection filter" }, { status: 400 });
+  }
 
-  const data = await getMyPpiRequests(status ? { status } : undefined);
+  const data = await getMyPpiRequests(parsed.data);
   return NextResponse.json({ data });
 }
 

@@ -414,7 +414,7 @@ private struct EditListingView: View {
     }
 }
 
-private struct NewListingView: View {
+struct NewListingView: View {
     @Environment(\.dismiss) private var dismiss
     let onCreated: () -> Void
 
@@ -426,18 +426,29 @@ private struct NewListingView: View {
     @State private var saving = false
     @State private var error: String?
 
+    init(preselectedVehicleId: String? = nil, onCreated: @escaping () -> Void) {
+        self.onCreated = onCreated
+        _selectedVehicleId = State(initialValue: preselectedVehicleId ?? "")
+    }
+
     var body: some View {
         NavigationStack {
             AsyncContent(
                 load: { try await VehiclesAPI.list() },
                 loaded: { vehicles in
+                    let publicVehicles = vehicles.filter { $0.visibility == .public }
                     Form {
                         Section("Vehicle") {
                             Picker("Vehicle", selection: $selectedVehicleId) {
                                 Text("Select a vehicle").tag("")
-                                ForEach(vehicles) { vehicle in
+                                ForEach(publicVehicles) { vehicle in
                                     Text(vehicleLabel(vehicle)).tag(vehicle.id)
                                 }
+                            }
+                            if publicVehicles.isEmpty {
+                                Text("Make a vehicle public before creating a marketplace listing.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
 
@@ -452,6 +463,12 @@ private struct NewListingView: View {
 
                         if let error {
                             Text(error).foregroundStyle(Theme.Palette.danger)
+                        }
+                    }
+                    .onAppear {
+                        if title.isEmpty,
+                           let vehicle = publicVehicles.first(where: { $0.id == selectedVehicleId }) {
+                            title = vehicleLabel(vehicle)
                         }
                     }
                 },

@@ -162,6 +162,9 @@ final class APIClient {
             throw APIError.notFound
         default:
             let parsed = try? decoder.decode(ServerErrorBody.self, from: body)
+            if parsed?.code == "duplicate_vin", let vehicle = parsed?.existingVehicle {
+                throw APIError.duplicateVehicle(vehicle)
+            }
             throw APIError.server(status: http.statusCode, message: parsed?.error)
         }
     }

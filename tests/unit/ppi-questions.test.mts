@@ -224,6 +224,17 @@ describe("inspection display names", () => {
       "2019 Acura TLX Personal",
     );
   });
+
+  test("adds the inspection date when one is available", () => {
+    assert.equal(
+      inspectionDisplayName(
+        { year: 2019, make: "Acura", model: "TLX" },
+        "personal",
+        "2026-09-07T12:00:00.000Z",
+      ),
+      "2019 Acura TLX Personal 9/7/2026",
+    );
+  });
 });
 
 describe("deferred inspection questions", () => {

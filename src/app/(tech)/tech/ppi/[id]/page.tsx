@@ -90,7 +90,11 @@ export default function TechInspectionDetailPage() {
     );
   }
 
-  const inspectionName = inspectionDisplayName(request.vehicle, request.ppi_type);
+  const inspectionName = inspectionDisplayName(
+    request.vehicle,
+    request.ppi_type,
+    request.created_at
+  );
 
   const canAccept = request.status === "assigned";
   const canInspect = ["accepted", "in_progress"].includes(request.status);

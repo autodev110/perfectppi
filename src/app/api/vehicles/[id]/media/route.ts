@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { vehicleUploadReferenceSchema } from "@/features/uploads/url";
 import { attachVehiclePhoto } from "@/features/vehicles/actions";
+import { getOwnedVehicle } from "@/features/vehicles/queries";
 
 const mediaSchema = z.object({
   url: vehicleUploadReferenceSchema,
@@ -10,6 +11,18 @@ const mediaSchema = z.object({
   sort_order: z.number().default(0),
   content_type: z.string().regex(/^(image|video)\//),
 });
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const vehicle = await getOwnedVehicle(id);
+  if (!vehicle) {
+    return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
+  }
+  return NextResponse.json(vehicle.vehicle_media ?? []);
+}
 
 export async function POST(
   request: Request,

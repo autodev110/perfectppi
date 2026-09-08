@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
-import { getVehicle } from "@/features/vehicles/queries";
+import { getOwnedVehicle } from "@/features/vehicles/queries";
+import { deleteVehicle } from "@/features/vehicles/actions";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const vehicle = await getVehicle(id);
+  const vehicle = await getOwnedVehicle(id);
   if (!vehicle) {
     return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
   }
@@ -23,6 +24,7 @@ const updateSchema = z.object({
   trim: z.string().max(100).optional(),
   mileage: z.number().min(0).optional(),
   visibility: z.enum(["public", "private"]).optional(),
+  notes: z.string().trim().max(5000).nullable().optional(),
 });
 
 export async function PATCH(
@@ -41,18 +43,51 @@ export async function PATCH(
     );
   }
 
-  const { data, error } = await supabase
-    .from("vehicles")
-    .update(parsed.data)
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const existing = await getOwnedVehicle(id);
+  if (!existing) {
+    return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
   }
 
-  return NextResponse.json(data);
+  const { notes, ...vehicleFields } = parsed.data;
+  const updateData = {
+    ...vehicleFields,
+    vin: vehicleFields.vin === undefined
+      ? undefined
+      : vehicleFields.vin.trim().toUpperCase() || null,
+    trim: vehicleFields.trim === undefined ? undefined : vehicleFields.trim || null,
+  };
+
+  const hasVehicleUpdates = Object.values(updateData).some((value) => value !== undefined);
+  const { error } = hasVehicleUpdates
+    ? await supabase.from("vehicles").update(updateData).eq("id", id)
+    : { error: null };
+
+  if (error?.code === "23505") {
+    return NextResponse.json(
+      { error: "It looks like you already have a vehicle with this same VIN.", code: "duplicate_vin" },
+      { status: 409 }
+    );
+  }
+  if (error) {
+    return NextResponse.json({ error: "The vehicle could not be updated. Please try again." }, { status: 500 });
+  }
+
+  if (notes !== undefined) {
+    const { error: notesError } = notes
+      ? await supabase.from("vehicle_notes").upsert(
+          { vehicle_id: id, notes },
+          { onConflict: "vehicle_id" },
+        )
+      : await supabase.from("vehicle_notes").delete().eq("vehicle_id", id);
+    if (notesError) {
+      return NextResponse.json(
+        { error: "The vehicle notes could not be updated. Please try again." },
+        { status: 500 }
+      );
+    }
+  }
+
+  return NextResponse.json(await getOwnedVehicle(id));
 }
 
 export async function DELETE(
@@ -60,12 +95,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const { error } = await supabase.from("vehicles").delete().eq("id", id);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const result = await deleteVehicle(id);
+  if (result?.error) {
+    const status = result.error === "Not authenticated"
+      ? 401
+      : result.error === "Vehicle not found" ? 404 : 500;
+    return NextResponse.json({ error: result.error }, { status });
   }
 
   return NextResponse.json({ success: true });

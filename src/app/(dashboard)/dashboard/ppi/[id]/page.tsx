@@ -18,6 +18,7 @@ import { MarkCompleteButton } from "./mark-complete-button";
 import type { InspectionScope, SectionType } from "@/types/enums";
 import type { StandardizedContent, VscCoverageData } from "@/types/api";
 import { inspectionDisplayName } from "@/features/ppi/presentation";
+import { InspectionDeleteButton } from "@/components/shared/inspection-delete-button";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -53,7 +54,7 @@ export default async function InspectionDetailPage({ params }: PageProps) {
     mileage: number | null;
   } | null;
 
-  const inspectionName = inspectionDisplayName(vehicle, request.ppi_type);
+  const inspectionName = inspectionDisplayName(vehicle, request.ppi_type, request.created_at);
 
   const canContinue = ["draft", "in_progress"].includes(request.status);
   const canEdit =
@@ -326,6 +327,10 @@ export default async function InspectionDetailPage({ params }: PageProps) {
           </CardContent>
         </Card>
       )}
+
+      <div className="border-t pt-3">
+        <InspectionDeleteButton inspectionId={id} redirectTo="/dashboard/ppi" />
+      </div>
     </div>
   );
 }

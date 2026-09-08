@@ -69,7 +69,10 @@ async function getMyProfileId(): Promise<string | null> {
   return profile?.id ?? null;
 }
 
-export async function getMyPpiRequests(filters?: { status?: PpiRequestStatus }) {
+export async function getMyPpiRequests(filters?: {
+  status?: PpiRequestStatus;
+  vehicleId?: string;
+}) {
   const supabase = await createClient();
   const profileId = await getMyProfileId();
   if (!profileId) return [];
@@ -88,6 +91,9 @@ export async function getMyPpiRequests(filters?: { status?: PpiRequestStatus }) 
 
   if (filters?.status) {
     query = query.eq("status", filters.status);
+  }
+  if (filters?.vehicleId) {
+    query = query.eq("vehicle_id", filters.vehicleId);
   }
 
   const { data } = await query;

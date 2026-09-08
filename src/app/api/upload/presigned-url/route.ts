@@ -120,12 +120,10 @@ export async function POST(request: Request) {
         contentType: parsed.data.contentType,
         contentLength: parsed.data.size,
       });
-      if (parsed.data.entity === "vehicle_media") {
-        return NextResponse.json({ uploadUrl: result.uploadUrl, publicUrl: result.storageReference });
-      }
       const { error: reservationError } = await admin.from("community_upload_reservations").insert({
         profile_id: profile.id,
-        post_id: parsed.data.recordId,
+        post_id: parsed.data.entity === "community_post" ? parsed.data.recordId : null,
+        vehicle_id: parsed.data.entity === "vehicle_media" ? parsed.data.recordId : null,
         storage_reference: result.storageReference,
         expected_size: parsed.data.size,
         content_type: parsed.data.contentType,

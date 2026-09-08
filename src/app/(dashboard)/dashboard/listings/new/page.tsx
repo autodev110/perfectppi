@@ -4,7 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NewListingForm } from "./new-listing-form";
 
-export default async function NewMarketplaceListingPage() {
+export default async function NewMarketplaceListingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ vehicle?: string }>;
+}) {
+  const { vehicle: requestedVehicleId } = await searchParams;
   const vehicles = await getMyVehicles();
   const publicVehicles = vehicles.filter((vehicle) => vehicle.visibility === "public");
 
@@ -35,7 +40,7 @@ export default async function NewMarketplaceListingPage() {
             <CardTitle>Listing Details</CardTitle>
           </CardHeader>
           <CardContent>
-            <NewListingForm vehicles={publicVehicles} />
+            <NewListingForm vehicles={publicVehicles} selectedVehicleId={requestedVehicleId} />
           </CardContent>
         </Card>
       )}

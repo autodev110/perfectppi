@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ConsumerDashboardView: View {
+    @State private var reloadToken = UUID()
+
     var body: some View {
         AsyncContent(
             load: { try await PpiAPI.listRequests() },
@@ -19,7 +21,9 @@ struct ConsumerDashboardView: View {
                         } else {
                             ForEach(requests.prefix(5)) { req in
                                 NavigationLink {
-                                    ConsumerPpiDetailView(requestId: req.id)
+                                    ConsumerPpiDetailView(requestId: req.id) {
+                                        reloadToken = UUID()
+                                    }
                                 } label: {
                                     RequestCard(request: req)
                                 }
@@ -35,6 +39,7 @@ struct ConsumerDashboardView: View {
                 ErrorView(message: error.localizedDescription, retry: retry)
             }
         )
+        .id(reloadToken)
     }
 }
 

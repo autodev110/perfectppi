@@ -1,6 +1,30 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deleteStoredObject } from "@/lib/storage/r2";
 
+export async function deleteStoredObjectOrQueue(
+  storageReference: string,
+  reason: string,
+) {
+  try {
+    await deleteStoredObject(storageReference);
+  } catch (error) {
+    const { error: queueError } = await createAdminClient()
+      .from("storage_cleanup_jobs")
+      .upsert({
+        storage_reference: storageReference,
+        reason,
+        status: "pending",
+        last_error: error instanceof Error ? error.message.slice(0, 1000) : "Storage deletion failed",
+        next_attempt_at: new Date().toISOString(),
+        completed_at: null,
+      }, { onConflict: "storage_reference" });
+
+    if (queueError) {
+      console.error("Failed to queue storage cleanup", queueError.message);
+    }
+  }
+}
+
 export async function runStorageCleanup(limit = 50) {
   const admin = createAdminClient();
   const now = new Date().toISOString();
