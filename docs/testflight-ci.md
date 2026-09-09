@@ -1,16 +1,17 @@
 # PerfectPPI Automatic TestFlight Releases
 
-PerfectPPI uploads a new iOS build to App Store Connect whenever a commit lands
-on `main`, regardless of who authored or pushed it. A direct push by Dan or Anzo
-triggers the workflow. A pull request triggers it when the pull request is
-merged into `main`.
+PerfectPPI uploads a new iOS build to App Store Connect whenever a commit that
+changes `mobile-app/**` lands on `main`, regardless of who authored or pushed
+it. A web-only commit does not start a TestFlight release. A pull request runs
+the quality checks, then triggers a release after merge only when its merged
+changes include a file under `mobile-app/`.
 
 The workflow is `.github/workflows/testflight.yml`. It can also be run manually
 from GitHub Actions without making an empty commit.
 
 ## What The Workflow Does
 
-For each new `main` commit, GitHub Actions:
+For each qualifying `main` commit, GitHub Actions:
 
 1. Checks out the exact triggering commit.
 2. Installs the locked pnpm dependencies.
@@ -35,6 +36,13 @@ a newer one.
 Pull requests aimed at `main` run the web quality checks, but they never receive
 Apple secrets and never upload an iOS build. Only a commit on `main` can enter
 the TestFlight job.
+
+The `push.paths` allowlist is intentionally limited to `mobile-app/**`. Changes
+to the website, server routes, Supabase files, documentation, or other root
+files therefore do not produce a redundant iOS binary. A manual
+`workflow_dispatch` run remains available for release-pipeline maintenance or
+an emergency rebuild. If iOS later compiles or bundles a shared file outside
+`mobile-app/`, add that path to the allowlist before relying on it.
 
 An Actions success means Apple accepted the upload. Apple still has to process
 the build before it appears in TestFlight. TestFlight builds expire after 90
@@ -202,14 +210,16 @@ empty commit just to retry.
 
 No Xcode or TestFlight action is needed for ordinary updates:
 
-1. A contributor pushes or merges a commit into `main`.
+1. A contributor pushes or merges a commit affecting `mobile-app/**` into
+   `main`.
 2. GitHub Actions tests, archives, signs, verifies, and uploads it.
 3. Apple processes it.
 4. TestFlight automatically offers it to the internal group.
 
 Commits on feature branches are deliberately not uploaded. This prevents
 unfinished work and every intermediate PR commit from being distributed. The
-commit becomes eligible when it reaches `main`.
+commit becomes eligible when it reaches `main`. Commits that change only the
+web application remain excluded even after they reach `main`.
 
 The workflow derives a unique build number from the GitHub Actions run and retry
 number, starting above the repository's older single-digit builds. To start a
