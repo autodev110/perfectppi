@@ -21,10 +21,12 @@ For each new `main` commit, GitHub Actions:
    `Package.resolved` file.
 7. Runs the native iOS unit tests in an iPhone simulator.
 8. Assigns a unique CI build number without editing the repository.
-9. Archives `com.perfectppi.app` as a Release build for team `79P499H2M4`.
-10. Verifies the archive's bundle ID, build number, signing identifier, and
+9. Imports a matched Apple Distribution certificate and App Store provisioning
+   profile into temporary runner storage.
+10. Archives `com.perfectppi.app` as a Release build for team `79P499H2M4`.
+11. Verifies the archive's bundle ID, build number, signing identifier, and
     embedded production API configuration.
-11. Uploads the verified archive to App Store Connect.
+12. Uploads the verified archive to App Store Connect.
 
 Only the newest `main` run is kept when several commits arrive close together.
 Older in-progress runs are cancelled so an obsolete build does not finish after
@@ -58,8 +60,9 @@ In Apple Developer **Certificates, Identifiers & Profiles**, open the existing
 
 ### 2. Create a Team App Store Connect API key
 
-Use a **team key**, not an individual key. Individual keys cannot perform all
-Certificates, Identifiers & Profiles operations needed by automatic signing.
+Use a **team key**, not an individual key. The key is used to authenticate the
+build upload; code signing uses the local certificate and profile configured in
+the next section.
 
 1. In App Store Connect, open **Users and Access > Integrations**.
 2. If the App Store Connect API is not active, the Account Holder must click
@@ -77,12 +80,32 @@ Certificates, Identifiers & Profiles operations needed by automatic signing.
 Store the downloaded key in a password manager after adding it to GitHub. Never
 commit it, paste it into a tracked file, or send it to a contributor.
 
-The workflow first tries Xcode's cloud-managed distribution signing. Ensure the
-Apple team permits Developers to use cloud-managed distribution certificates.
-If Apple rejects cloud signing for the Developer-role key, either grant the
-needed cloud-signing permission or configure the optional local distribution
-certificate described below. Do not casually replace the key with a broad Admin
-key.
+Do not casually replace the Developer-role key with a broad Admin key. A
+Developer-role team key can upload builds. The workflow avoids requiring its
+cloud-managed distribution permission by installing a matching local
+certificate and profile before the final export.
+
+### 3. Create matched local distribution-signing assets
+
+The certificate and profile are both required and must match each other.
+
+1. In Xcode, open **Xcode > Settings > Accounts**.
+2. Select the Apple Account and `DnD Solutions & Optimization LLC` team.
+3. Open **Manage Certificates** and create an **Apple Distribution**
+   certificate if no current one exists.
+4. In Keychain Access, open **login > My Certificates**. Confirm the Apple
+   Distribution certificate expands to show its private key.
+5. Export the certificate and private key as a password-protected `.p12`.
+6. Export any PerfectPPI archive from Xcode once using **App Store Connect** and
+   automatic signing. This refreshes the Xcode-managed App Store provisioning
+   profile so it includes the new certificate.
+7. Locate the profile under
+   `~/Library/Developer/Xcode/UserData/Provisioning Profiles/`. It must have:
+   production push notifications, `beta-reports-active=true`,
+   `get-task-allow=false`, and application identifier
+   `79P499H2M4.com.perfectppi.app`.
+
+Never commit the `.p12`, `.mobileprovision`, or `.p8` files.
 
 ## One-Time GitHub Setup
 
@@ -111,6 +134,9 @@ Inside the `testflight` environment, add these under **Environment secrets**:
 | `APP_STORE_CONNECT_PRIVATE_KEY` | Entire raw `.p8` file, including its `BEGIN PRIVATE KEY` and `END PRIVATE KEY` lines |
 | `IOS_SUPABASE_URL` | Production Supabase project URL |
 | `IOS_SUPABASE_ANON_KEY` | Production Supabase publishable/anonymous client key |
+| `APPLE_DISTRIBUTION_CERTIFICATE_BASE64` | Base64-encoded `.p12` containing the active Apple Distribution certificate and private key |
+| `APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD` | Password used when exporting the `.p12` |
+| `APPLE_DISTRIBUTION_PROVISIONING_PROFILE_BASE64` | Base64-encoded App Store `.mobileprovision` that includes the same distribution certificate |
 
 The Supabase key embedded in an iPhone app is necessarily public. It must be the
 publishable/anonymous key, never `SUPABASE_SERVICE_ROLE_KEY`. Supabase Row Level
@@ -127,28 +153,17 @@ IOS_API_BASE_URL=https://perfectppi.vercel.app
 Do not use `localhost`, a preview deployment, or the retired
 `perfectppi-standalone.vercel.app` address.
 
-### 4. Optional local Apple Distribution certificate
-
-Skip this section while cloud-managed signing works. It is a fallback for an
-Apple team that does not allow the API key to use cloud-managed certificates.
-
-Export an active **Apple Distribution** certificate together with its private
-key from Keychain Access as a password-protected `.p12`. Then create both of
-these `testflight` environment secrets:
-
-| Secret | Value |
-| --- | --- |
-| `APPLE_DISTRIBUTION_CERTIFICATE_BASE64` | Base64-encoded `.p12` bytes |
-| `APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD` | Password used when exporting the `.p12` |
-
-On a Mac, encode the certificate without placing it in the repository:
+On a Mac, encode each binary signing asset without placing it in the repository:
 
 ```bash
 base64 -i /absolute/path/to/apple-distribution.p12 | pbcopy
+base64 -i /absolute/path/to/perfectppi-app-store.mobileprovision | pbcopy
 ```
 
-Set both optional secrets or neither. The workflow imports the certificate into
-an ephemeral keychain and deletes it after the job.
+The workflow validates the profile's team, bundle ID, distribution
+entitlements, expiration, and certificate fingerprint before it builds. It
+imports the certificate into an ephemeral keychain, installs the profile only
+for the duration of the job, and removes both afterward.
 
 ## One-Time TestFlight Tester Setup
 
@@ -226,10 +241,20 @@ with the exact name shown above, then manually rerun the workflow.
 
 ### No signing certificate or provisioning profile
 
-Confirm the API key is a team key, the key role can upload builds, the bundle ID
-belongs to team `79P499H2M4`, and automatic signing is allowed. If the team
-cannot use cloud signing in CI, configure both optional distribution-certificate
-secrets.
+Confirm all three local-signing secrets are present. If the certificate was
+renewed, export the new `.p12`, perform one local Xcode App Store export to
+refresh the profile, and replace both binary secrets together. The workflow
+will reject an expired profile, the wrong bundle ID, or a profile that does not
+include the supplied certificate.
+
+### Cloud signing permission error
+
+The final export should not request cloud signing because a matching local
+certificate and profile are installed and the export command deliberately omits
+`-allowProvisioningUpdates`. The archive command still uses provisioning
+updates with API-key authentication; that earlier stage does not perform the
+App Store distribution export. The App Store Connect key can remain at the
+Developer role.
 
 ### Package lock mismatch
 

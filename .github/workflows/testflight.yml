@@ -102,22 +102,26 @@ jobs:
           echo "BUILD_NUMBER=$build_number" >> "$GITHUB_ENV"
           echo "TestFlight build number: $build_number"
 
-      - name: Configure optional local distribution certificate
+      - name: Configure local distribution signing
         env:
           DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
           DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          DISTRIBUTION_PROFILE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_PROVISIONING_PROFILE_BASE64 }}
         run: |
-          if [[ -z "$DISTRIBUTION_CERTIFICATE_BASE64" && -z "$DISTRIBUTION_CERTIFICATE_PASSWORD" ]]; then
-            echo "No local distribution certificate supplied; Xcode will use cloud-managed signing."
-            exit 0
-          fi
-
-          if [[ -z "$DISTRIBUTION_CERTIFICATE_BASE64" || -z "$DISTRIBUTION_CERTIFICATE_PASSWORD" ]]; then
-            echo "::error::Set both APPLE_DISTRIBUTION_CERTIFICATE_BASE64 and APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD, or neither."
+          missing=0
+          for name in DISTRIBUTION_CERTIFICATE_BASE64 DISTRIBUTION_CERTIFICATE_PASSWORD DISTRIBUTION_PROFILE_BASE64; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing local distribution-signing value: $name"
+              missing=1
+            fi
+          done
+          if [[ "$missing" -ne 0 ]]; then
             exit 1
           fi
 
           certificate_path="$RUNNER_TEMP/apple-distribution.p12"
+          profile_path="$RUNNER_TEMP/perfectppi-app-store.mobileprovision"
+          profile_plist="$RUNNER_TEMP/perfectppi-app-store-profile.plist"
           keychain_path="$RUNNER_TEMP/testflight-signing.keychain-db"
           keychain_password="$(openssl rand -hex 32)"
 
@@ -126,6 +130,10 @@ jobs:
             | tr -d '\r\n' \
             | /usr/bin/base64 --decode \
             > "$certificate_path"
+          printf '%s' "$DISTRIBUTION_PROFILE_BASE64" \
+            | tr -d '\r\n' \
+            | /usr/bin/base64 --decode \
+            > "$profile_path"
 
           security create-keychain -p "$keychain_password" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
@@ -145,8 +153,79 @@ jobs:
             "$HOME/Library/Keychains/login.keychain-db"
           security find-identity -v -p codesigning "$keychain_path"
 
+          security cms -D -i "$profile_path" -o "$profile_plist"
+          profile_name="$(plutil -extract Name raw "$profile_plist")"
+          profile_uuid="$(plutil -extract UUID raw "$profile_plist")"
+          profile_team="$(plutil -extract TeamIdentifier.0 raw "$profile_plist")"
+          profile_app_id="$(plutil -extract Entitlements.application-identifier raw "$profile_plist")"
+          profile_is_beta="$(plutil -extract Entitlements.beta-reports-active raw "$profile_plist")"
+          profile_is_debug="$(plutil -extract Entitlements.get-task-allow raw "$profile_plist")"
+          profile_expiration="$(plutil -extract ExpirationDate raw "$profile_plist")"
+
+          if [[ "$profile_team" != "$APPLE_TEAM_ID" || "$profile_app_id" != "$APPLE_TEAM_ID.$IOS_BUNDLE_ID" ]]; then
+            echo "::error::The provisioning profile belongs to an unexpected team or bundle ID."
+            exit 1
+          fi
+          if [[ "$profile_is_beta" != "true" || "$profile_is_debug" != "false" ]]; then
+            echo "::error::The provisioning profile is not an App Store distribution profile."
+            exit 1
+          fi
+
+          expiration_epoch="$(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$profile_expiration" '+%s')"
+          if (( expiration_epoch <= $(date -u '+%s') )); then
+            echo "::error::The App Store provisioning profile has expired."
+            exit 1
+          fi
+
+          profile_matches_certificate=0
+          profile_certificate_count="$(plutil -extract DeveloperCertificates raw "$profile_plist")"
+          for ((index = 0; index < profile_certificate_count; index++)); do
+            encoded_certificate="$RUNNER_TEMP/profile-certificate-$index.b64"
+            profile_certificate="$RUNNER_TEMP/profile-certificate-$index.cer"
+            plutil \
+              -extract "DeveloperCertificates.$index" \
+              raw \
+              -o "$encoded_certificate" \
+              "$profile_plist"
+            /usr/bin/base64 --decode \
+              < "$encoded_certificate" \
+              > "$profile_certificate"
+            fingerprint="$(
+              openssl x509 \
+                -inform DER \
+                -in "$profile_certificate" \
+                -noout \
+                -fingerprint \
+                -sha1 \
+                | cut -d= -f2 \
+                | tr -d ':'
+            )"
+            if security find-identity -v -p codesigning "$keychain_path" | grep -Fq "$fingerprint"; then
+              profile_matches_certificate=1
+              break
+            fi
+          done
+          if [[ "$profile_matches_certificate" -ne 1 ]]; then
+            echo "::error::The provisioning profile does not include the supplied distribution certificate."
+            exit 1
+          fi
+
+          legacy_profile_dir="$HOME/Library/MobileDevice/Provisioning Profiles"
+          xcode_profile_dir="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          install -d -m 700 "$legacy_profile_dir" "$xcode_profile_dir"
+          legacy_profile_path="$legacy_profile_dir/$profile_uuid.mobileprovision"
+          xcode_profile_path="$xcode_profile_dir/$profile_uuid.mobileprovision"
+          install -m 600 "$profile_path" "$legacy_profile_path"
+          install -m 600 "$profile_path" "$xcode_profile_path"
+
           rm -f "$certificate_path"
-          echo "SIGNING_KEYCHAIN=$keychain_path" >> "$GITHUB_ENV"
+          {
+            echo "SIGNING_KEYCHAIN=$keychain_path"
+            echo "PROVISIONING_PROFILE_NAME=$profile_name"
+            echo "PROVISIONING_PROFILE_UUID=$profile_uuid"
+            echo "LEGACY_PROVISIONING_PROFILE_PATH=$legacy_profile_path"
+            echo "XCODE_PROVISIONING_PROFILE_PATH=$xcode_profile_path"
+          } >> "$GITHUB_ENV"
 
       - name: Install XcodeGen
         run: |
@@ -274,7 +353,6 @@ jobs:
             -archivePath "$ARCHIVE_PATH" \
             -exportPath "$export_path" \
             -exportOptionsPlist mobile-app/ExportOptions-TestFlight.plist \
-            -allowProvisioningUpdates \
             -authenticationKeyPath "$AUTH_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
@@ -294,6 +372,8 @@ jobs:
             security delete-keychain "$SIGNING_KEYCHAIN" || true
           fi
           rm -f "$RUNNER_TEMP/apple-distribution.p12"
+          rm -f "${LEGACY_PROVISIONING_PROFILE_PATH:-}"
+          rm -f "${XCODE_PROVISIONING_PROFILE_PATH:-}"
           rm -rf "$RUNNER_TEMP/app-store-connect"
           rm -f mobile-app/.env
           rm -f mobile-app/PerfectPPI/Resources/AppConfig.plist
