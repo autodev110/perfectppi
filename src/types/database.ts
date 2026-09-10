@@ -679,6 +679,30 @@ export type Database = {
         }
         Relationships: []
       }
+      moderation_case_notes: {
+        Row: {
+          author_id: string | null
+          case_id: string
+          created_at: string
+          id: string
+          note: string
+        }
+        Insert: {
+          author_id?: string | null
+          case_id: string
+          created_at?: string
+          id?: string
+          note: string
+        }
+        Update: {
+          author_id?: string | null
+          case_id?: string
+          created_at?: string
+          id?: string
+          note?: string
+        }
+        Relationships: []
+      }
       moderation_cases: {
         Row: {
           assigned_moderator_id: string | null
@@ -752,7 +776,15 @@ export type Database = {
           state?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "moderation_cases_moderation_item_id_fkey"
+            columns: ["moderation_item_id"]
+            isOneToOne: false
+            referencedRelation: "moderation_items"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       moderation_evidence: {
         Row: {
@@ -937,6 +969,72 @@ export type Database = {
           next_attempt_at?: string
           payload?: Json
           status?: string
+        }
+        Relationships: []
+      }
+      moderation_role_grant_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          capability: string
+          created_at: string
+          id: string
+          profile_id: string | null
+          reason: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          capability: string
+          created_at?: string
+          id?: string
+          profile_id?: string | null
+          reason: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          capability?: string
+          created_at?: string
+          id?: string
+          profile_id?: string | null
+          reason?: string
+        }
+        Relationships: []
+      }
+      moderation_role_grants: {
+        Row: {
+          capability: string
+          granted_at: string
+          granted_by: string | null
+          id: string
+          profile_id: string
+          reason: string
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+        }
+        Insert: {
+          capability: string
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          profile_id: string
+          reason: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+        }
+        Update: {
+          capability?: string
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          profile_id?: string
+          reason?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
         }
         Relationships: []
       }
@@ -3620,9 +3718,49 @@ export type Database = {
         Args: { p_blocked: boolean; p_target_profile_id: string }
         Returns: boolean
       }
+      add_moderation_case_note: {
+        Args: { p_case_id: string; p_note: string }
+        Returns: Database["public"]["Tables"]["moderation_case_notes"]["Row"]
+      }
+      claim_moderation_case: {
+        Args: { p_case_id: string }
+        Returns: Database["public"]["Tables"]["moderation_cases"]["Row"]
+      }
       community_media_storage_status: {
         Args: Record<PropertyKey, never>
         Returns: Json
+      }
+      decide_moderation_case: {
+        Args: {
+          p_case_id: string
+          p_decision: string
+          p_enforcement?: string
+          p_enforcement_days?: number
+          p_expected_version: number
+          p_policy_category: string | null
+          p_rationale: string | null
+        }
+        Returns: Database["public"]["Tables"]["moderation_cases"]["Row"]
+      }
+      grant_moderation_capability: {
+        Args: { p_capability: string; p_profile_id: string; p_reason: string }
+        Returns: Database["public"]["Tables"]["moderation_role_grants"]["Row"]
+      }
+      moderation_current_user_has_capability: {
+        Args: { p_capability: string }
+        Returns: boolean
+      }
+      moderation_has_capability: {
+        Args: { p_capability: string; p_profile_id: string }
+        Returns: boolean
+      }
+      release_moderation_case: {
+        Args: { p_case_id: string }
+        Returns: Database["public"]["Tables"]["moderation_cases"]["Row"]
+      }
+      revoke_moderation_capability: {
+        Args: { p_capability: string; p_profile_id: string; p_reason: string }
+        Returns: boolean
       }
       set_product_feature_flag: {
         Args: {

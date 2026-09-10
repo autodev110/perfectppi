@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiRole } from "@/features/auth/api";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { hasModerationCapability } from "@/features/moderation/capabilities";
 import { getStoredObjectRange } from "@/lib/storage/r2";
 import { UPLOAD_LIMITS } from "@/config/constants";
 
@@ -21,6 +22,10 @@ export async function GET(
 ) {
   const auth = await requireApiRole(["admin"]);
   if ("response" in auth) return auth.response;
+  // Plan 18.1: evidence reads need an explicit grant, never the role alone.
+  if (!(await hasModerationCapability(auth.profile.id, "queue_read"))) {
+    return NextResponse.json({ error: "Preview unavailable" }, { status: 403, headers: NO_STORE });
+  }
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) {
     return NextResponse.json({ error: "Preview unavailable" }, { status: 404, headers: NO_STORE });
@@ -36,21 +41,28 @@ export async function GET(
     return NextResponse.json({ error: "Preview unavailable" }, { status: 404, headers: NO_STORE });
   }
 
-  if (item.status === "legal_hold") {
-    const { data: reviewer } = await admin
-      .from("moderation_legal_hold_reviewers")
-      .select("profile_id")
-      .eq("profile_id", auth.profile.id)
-      .maybeSingle();
-    if (!reviewer) {
-      return NextResponse.json({ error: "Preview unavailable" }, { status: 403, headers: NO_STORE });
-    }
+  if (item.status === "legal_hold" && !(await hasModerationCapability(auth.profile.id, "legal_hold_review"))) {
+    return NextResponse.json({ error: "Preview unavailable" }, { status: 403, headers: NO_STORE });
   }
 
   const table = item.entity_type === "vehicle_media" ? "vehicle_media" : "community_post_media";
   const { data: media } = await admin.from(table).select("url, media_type").eq("id", id).maybeSingle();
   if (!media) {
     return NextResponse.json({ error: "Media not found" }, { status: 404, headers: NO_STORE });
+  }
+
+  // A legal hold on the parent post restricts its media too, even when the
+  // media item itself was approved earlier.
+  if (item.entity_type === "community_post_media") {
+    const { data: parent } = await admin
+      .from("community_post_media")
+      .select("post:community_posts!community_post_media_post_id_fkey(moderation_status)")
+      .eq("id", id)
+      .maybeSingle();
+    const parentStatus = Array.isArray(parent?.post) ? parent?.post[0]?.moderation_status : parent?.post?.moderation_status;
+    if (parentStatus === "legal_hold" && !(await hasModerationCapability(auth.profile.id, "legal_hold_review"))) {
+      return NextResponse.json({ error: "Preview unavailable" }, { status: 403, headers: NO_STORE });
+    }
   }
 
   // Audit before serving so a failed stream still leaves a record of intent.

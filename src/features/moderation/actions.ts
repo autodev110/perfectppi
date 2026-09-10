@@ -18,6 +18,7 @@ import { UPLOAD_LIMITS } from "@/config/constants";
 import { extensionForContentType, moderateMediaBytes } from "@/lib/moderation/media-safety";
 import { recordModeration } from "@/lib/moderation";
 import { publishCommunityMedia } from "@/lib/storage/community-media";
+import { getModerationCapabilities } from "@/features/moderation/capabilities";
 import { verifyReportContext } from "@/features/moderation/report-context";
 import {
   REPORT_DETAILS_MAX_LENGTH,
@@ -196,6 +197,17 @@ export async function reviewModerationItem(formData: FormData) {
     enforcement: formData.get("enforcement") ?? "none",
   });
   if (!parsed.success) return;
+
+  // Plan 18.1: the admin role alone decides nothing. Each authority is an
+  // explicit grant, checked here and again inside the review RPC's caller.
+  const capabilities = await getModerationCapabilities(profile.id);
+  if (!capabilities.has("content_decide")) throw new Error("content_decide capability required");
+  if (parsed.data.decision === "legal_hold" && !capabilities.has("legal_hold_review")) {
+    throw new Error("legal_hold_review capability required");
+  }
+  if (parsed.data.enforcement !== "none" && !capabilities.has("account_enforce")) {
+    throw new Error("account_enforce capability required");
+  }
 
   const admin = createAdminClient();
   const { data: item } = await admin
