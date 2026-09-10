@@ -90,4 +90,24 @@ describe("compliance foundation", () => {
     assert.ok(stripe.includes('{ status: 500 }'));
     assert.ok(docuseal.includes('{ status: 500 }'));
   });
+
+  test("TestFlight uses the supplied distribution identity and production entitlements", async () => {
+    const workflow = await source(".github/workflows/testflight.yml");
+    const project = await source("mobile-app/project.yml");
+    const releaseEntitlements = await source(
+      "mobile-app/PerfectPPI/Resources/PerfectPPI-Release.entitlements",
+    );
+    const archiveStep = workflow.slice(
+      workflow.indexOf("- name: Archive the production app"),
+      workflow.indexOf("- name: Verify the archive before upload"),
+    );
+
+    assert.ok(archiveStep.includes("CODE_SIGN_STYLE=Manual"));
+    assert.ok(archiveStep.includes('CODE_SIGN_IDENTITY=\"Apple Distribution\"'));
+    assert.ok(archiveStep.includes('PROVISIONING_PROFILE_SPECIFIER=\"$PROVISIONING_PROFILE_NAME\"'));
+    assert.ok(!archiveStep.includes("-allowProvisioningUpdates"));
+    assert.ok(workflow.includes('-c "Set :signingStyle manual"'));
+    assert.ok(project.includes("Release:\n          CODE_SIGN_ENTITLEMENTS: PerfectPPI/Resources/PerfectPPI-Release.entitlements"));
+    assert.ok(releaseEntitlements.includes("<string>production</string>"));
+  });
 });

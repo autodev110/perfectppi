@@ -21,6 +21,7 @@ export default function NewVehiclePage() {
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [trim, setTrim] = useState("");
+  const [nickname, setNickname] = useState("");
   const [existingVehicle, setExistingVehicle] = useState<{
     id: string;
     year: number | null;
@@ -65,6 +66,33 @@ export default function NewVehiclePage() {
         </CardHeader>
         <CardContent>
           <form action={handleSubmit} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="nickname">Nickname</Label>
+                <Input
+                  id="nickname"
+                  name="nickname"
+                  placeholder="Blue Daily"
+                  maxLength={60}
+                  value={nickname}
+                  onChange={(event) => setNickname(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ownership_state">Garage relationship</Label>
+                <select
+                  id="ownership_state"
+                  name="ownership_state"
+                  defaultValue="owned"
+                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  <option value="owned">Owned</option>
+                  <option value="previously_owned">Previously owned</option>
+                  <option value="considering">Shopping / considering</option>
+                  <option value="project">Project</option>
+                </select>
+              </div>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="year">Year</Label>

@@ -47,11 +47,28 @@ struct Vehicle: Codable, Identifiable, Hashable {
     let make: String?
     let model: String?
     let trim: String?
+    let nickname: String?
+    let ownershipState: VehicleOwnershipState?
     let mileage: Int?
+    let mileageUpdatedAt: Date?
     let notes: String?
     let visibility: VehicleVisibility?
     let createdAt: Date?
     let vehicleMedia: [VehicleMedia]?
+    let ppiRequests: [GarageInspectionSummary]?
+    let marketplaceListings: [GarageListingSummary]?
+}
+
+struct GarageInspectionSummary: Codable, Identifiable, Hashable {
+    let id: String
+    let status: PpiRequestStatus
+    let createdAt: Date
+    let updatedAt: Date?
+}
+
+struct GarageListingSummary: Codable, Identifiable, Hashable {
+    let id: String
+    let status: ListingStatus
 }
 
 struct VehicleMedia: Codable, Identifiable, Hashable {

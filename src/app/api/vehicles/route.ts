@@ -16,6 +16,8 @@ const createSchema = z.object({
   make: z.string().min(1).max(100),
   model: z.string().min(1).max(100),
   trim: z.string().max(100).optional(),
+  nickname: z.string().trim().max(60).optional(),
+  ownership_state: z.enum(["owned", "previously_owned", "considering", "project"]).optional(),
   mileage: z.number().min(0).optional(),
   visibility: z.enum(["public", "private"]).optional(),
   notes: z.string().trim().max(5000).optional(),
@@ -76,6 +78,7 @@ export async function POST(request: Request) {
       ...vehicleFields,
       vin: normalizedVin,
       trim: parsed.data.trim || null,
+      nickname: parsed.data.nickname || null,
       owner_id: profile.id,
     })
     .select()

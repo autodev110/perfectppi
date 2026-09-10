@@ -75,7 +75,7 @@ export default async function DashboardPage() {
                 {String(vehicles.length).padStart(2, "0")}
               </h3>
               <p className="text-sm font-medium text-on-surface-variant mt-1">
-                Registered Vehicles
+                Garage Vehicles
               </p>
             </div>
             <div className="bg-secondary-container p-2 rounded-lg">

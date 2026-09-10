@@ -31,6 +31,21 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
   return (
     <form action={save} className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Nickname" name="nickname" defaultValue={vehicle.nickname ?? ""} maxLength={60} />
+        <div className="space-y-2">
+          <Label htmlFor="ownership_state">Garage relationship</Label>
+          <select
+            id="ownership_state"
+            name="ownership_state"
+            defaultValue={vehicle.ownership_state}
+            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <option value="owned">Owned</option>
+            <option value="previously_owned">Previously owned</option>
+            <option value="considering">Shopping / considering</option>
+            <option value="project">Project</option>
+          </select>
+        </div>
         <Field label="Year" name="year" type="number" defaultValue={vehicle.year ?? ""} />
         <Field label="Make *" name="make" defaultValue={vehicle.make ?? ""} required />
         <Field label="Model *" name="model" defaultValue={vehicle.model ?? ""} required />

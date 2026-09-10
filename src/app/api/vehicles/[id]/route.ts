@@ -22,6 +22,8 @@ const updateSchema = z.object({
   make: z.string().min(1).max(100).optional(),
   model: z.string().min(1).max(100).optional(),
   trim: z.string().max(100).optional(),
+  nickname: z.string().trim().max(60).nullable().optional(),
+  ownership_state: z.enum(["owned", "previously_owned", "considering", "project"]).optional(),
   mileage: z.number().min(0).optional(),
   visibility: z.enum(["public", "private"]).optional(),
   notes: z.string().trim().max(5000).nullable().optional(),
@@ -55,6 +57,7 @@ export async function PATCH(
       ? undefined
       : vehicleFields.vin.trim().toUpperCase() || null,
     trim: vehicleFields.trim === undefined ? undefined : vehicleFields.trim || null,
+    nickname: vehicleFields.nickname === undefined ? undefined : vehicleFields.nickname || null,
   };
 
   const hasVehicleUpdates = Object.values(updateData).some((value) => value !== undefined);

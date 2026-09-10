@@ -7,7 +7,7 @@ import { makeVehiclePrivate, makeVehiclePublic } from "@/features/vehicles/actio
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatMileage } from "@/lib/utils/formatting";
+import { formatDate, formatMileage } from "@/lib/utils/formatting";
 import { Car, ClipboardCheck, ExternalLink, FileText, ImagePlus, Pencil, Share2, Tag } from "lucide-react";
 import { VehiclePhotoUploader } from "./vehicle-photo-uploader";
 import { VehiclePhotoDeleteButton } from "./vehicle-photo-delete-button";
@@ -30,14 +30,20 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
   });
   const primaryMedia = gallery.find((media) => media.is_primary) ?? gallery[0] ?? null;
   const vehicleLabel = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "Vehicle";
+  const ownershipLabel = vehicle.ownership_state === "previously_owned"
+    ? "Previously owned"
+    : vehicle.ownership_state === "considering"
+      ? "Shopping / considering"
+      : vehicle.ownership_state === "project" ? "Project" : "Owned";
   const isPublic = vehicle.visibility === "public";
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-heading text-2xl font-bold">{vehicleLabel}</h1>
-          {vehicle.trim && <p className="text-muted-foreground">{vehicle.trim}</p>}
+          <h1 className="font-heading text-2xl font-bold">{vehicle.nickname || vehicleLabel}</h1>
+          <p className="text-muted-foreground">{vehicle.nickname ? vehicleLabel : vehicle.trim || ownershipLabel}</p>
+          {vehicle.nickname && vehicle.trim && <p className="text-sm text-muted-foreground">{vehicle.trim}</p>}
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={isPublic ? "default" : "secondary"}>{vehicle.visibility}</Badge>
@@ -55,8 +61,9 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       <Card>
         <CardHeader><CardTitle>Vehicle Details</CardTitle></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div><p className="text-sm text-muted-foreground">Garage relationship</p><p>{ownershipLabel}</p></div>
           {vehicle.vin && <div><p className="text-sm text-muted-foreground">VIN</p><p className="font-mono">{vehicle.vin}</p></div>}
-          {vehicle.mileage != null && <div><p className="text-sm text-muted-foreground">Mileage</p><p>{formatMileage(vehicle.mileage)} miles</p></div>}
+          {vehicle.mileage != null && <div><p className="text-sm text-muted-foreground">Mileage</p><p>{formatMileage(vehicle.mileage)} miles</p>{vehicle.mileage_updated_at && <p className="text-xs text-muted-foreground">Updated {formatDate(vehicle.mileage_updated_at)}</p>}</div>}
         </CardContent>
       </Card>
 

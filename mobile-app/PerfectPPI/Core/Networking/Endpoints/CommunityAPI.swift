@@ -7,8 +7,14 @@ enum CapabilitiesAPI {
 }
 
 enum CommunityAPI {
-    static func feed() async throws -> [CommunityPost] {
-        try await APIClient.shared.get("/api/community/posts")
+    static func feed(filter: CommunityFeedFilter = .all, page: Int = 1) async throws -> [CommunityPost] {
+        try await APIClient.shared.get(
+            "/api/community/posts",
+            query: [
+                URLQueryItem(name: "filter", value: filter.rawValue),
+                URLQueryItem(name: "page", value: String(max(page, 1)))
+            ]
+        )
     }
 
     static func mine(status: String = "active") async throws -> [CommunityPost] {

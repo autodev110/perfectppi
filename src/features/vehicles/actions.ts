@@ -32,6 +32,8 @@ const createVehicleSchema = z.object({
   make: z.string().min(1, "Make is required").max(100),
   model: z.string().min(1, "Model is required").max(100),
   trim: z.string().max(100).optional().or(z.literal("")),
+  nickname: z.string().trim().max(60).optional().or(z.literal("")),
+  ownership_state: z.enum(["owned", "previously_owned", "considering", "project"]).optional(),
   mileage: z.coerce.number().min(0).optional(),
   visibility: z.enum(["public", "private"]).optional(),
   notes: z.string().trim().max(5000).optional().or(z.literal("")),
@@ -76,7 +78,7 @@ async function getCurrentProfileId() {
 export async function createVehicle(formData: FormData) {
   const raw: Record<string, unknown> = {};
   for (const [key, value] of formData.entries()) {
-    if (value !== "" || key === "notes" || key === "vin" || key === "trim") raw[key] = value;
+    if (value !== "" || key === "notes" || key === "vin" || key === "trim" || key === "nickname") raw[key] = value;
   }
 
   const parsed = createVehicleSchema.safeParse(raw);
@@ -126,6 +128,7 @@ export async function createVehicle(formData: FormData) {
     ...vehicleFields,
     vin: normalizedVin,
     trim: parsed.data.trim || null,
+    nickname: parsed.data.nickname || null,
     owner_id: profile.id,
   };
 
@@ -169,7 +172,7 @@ export async function createVehicle(formData: FormData) {
 export async function updateVehicle(vehicleId: string, formData: FormData) {
   const raw: Record<string, unknown> = {};
   for (const [key, value] of formData.entries()) {
-    if (value !== "" || key === "notes" || key === "vin" || key === "trim") raw[key] = value;
+    if (value !== "" || key === "notes" || key === "vin" || key === "trim" || key === "nickname") raw[key] = value;
   }
 
   const parsed = updateVehicleSchema.safeParse(raw);
@@ -196,6 +199,7 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
       ? undefined
       : vehicleFields.vin.trim().toUpperCase() || null,
     trim: vehicleFields.trim === undefined ? undefined : vehicleFields.trim || null,
+    nickname: vehicleFields.nickname === undefined ? undefined : vehicleFields.nickname || null,
   };
 
   const hasVehicleUpdates = Object.values(updateData).some((value) => value !== undefined);

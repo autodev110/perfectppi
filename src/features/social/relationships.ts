@@ -22,6 +22,8 @@ export type SocialRelationshipState = {
   friends: boolean;
 };
 
+export type CommunityFeedFilter = "all" | "friends" | "my_cars";
+
 export type SafetyRelationship = {
   id: string;
   display_name: string | null;
@@ -79,6 +81,33 @@ export async function getVisibleCommunityPostIds({
   });
   if (error) {
     console.error("getVisibleCommunityPostIds failed", error);
+    return [];
+  }
+  return (data ?? []).map((row) => row.post_id);
+}
+
+export async function getFilteredCommunityPostIds({
+  viewerId,
+  filter,
+  page = 1,
+  perPage = 20,
+  includeGroupPosts = true,
+}: {
+  viewerId: string;
+  filter: CommunityFeedFilter;
+  page?: number;
+  perPage?: number;
+  includeGroupPosts?: boolean;
+}) {
+  const { data, error } = await createAdminClient().rpc("social_filtered_community_post_ids", {
+    p_viewer_id: viewerId,
+    p_filter: filter,
+    p_limit: perPage,
+    p_offset: (Math.max(page, 1) - 1) * perPage,
+    p_include_group_posts: includeGroupPosts,
+  });
+  if (error) {
+    console.error("getFilteredCommunityPostIds failed", error);
     return [];
   }
   return (data ?? []).map((row) => row.post_id);

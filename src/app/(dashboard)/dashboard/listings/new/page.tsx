@@ -30,7 +30,7 @@ export default async function NewMarketplaceListingPage({
               Marketplace listings require a public vehicle profile. Make one of your vehicles public first, then come back here.
             </p>
             <Button asChild>
-              <Link href="/dashboard/vehicles">Go to Vehicles</Link>
+              <Link href="/dashboard/vehicles">Go to Garage</Link>
             </Button>
           </CardContent>
         </Card>

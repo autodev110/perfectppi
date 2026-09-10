@@ -15,6 +15,7 @@ import { CommunityReportControl } from "@/components/shared/community-report-con
 import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-control";
 import { CommunityLikeButton } from "@/components/shared/community-like-button";
 import { getFeatureFlags, toClientCapabilities } from "@/lib/feature-flags";
+import type { CommunityFeedFilter } from "@/features/social/relationships";
 
 export const metadata = {
   title: "Community — PerfectPPI",
@@ -27,14 +28,51 @@ function getVehicleName(vehicle: { year: number | null; make: string | null; mod
   return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ");
 }
 
-export default async function CommunityPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+const feedFilters: Array<{ value: CommunityFeedFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "friends", label: "Friends" },
+  { value: "my_cars", label: "My Cars" },
+];
+
+function parseFeedFilter(value?: string): CommunityFeedFilter {
+  return feedFilters.some((filter) => filter.value === value)
+    ? (value as CommunityFeedFilter)
+    : "all";
+}
+
+function feedHref(filter: CommunityFeedFilter, page = 1) {
+  const params = new URLSearchParams();
+  if (filter !== "all") params.set("filter", filter);
+  if (page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return query ? `/community?${query}` : "/community";
+}
+
+export default async function CommunityPage({ searchParams }: { searchParams: Promise<{ filter?: string; page?: string }> }) {
   const viewer = await requireRole(["consumer", "technician", "org_manager", "admin"]);
-  const requestedPage = Number((await searchParams).page ?? "1");
+  const params = await searchParams;
+  const filter = parseFeedFilter(params.filter);
+  const requestedPage = Number(params.page ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const [posts, capabilities] = await Promise.all([
-    getCommunityPosts(page, 20),
+    getCommunityPosts(page, 20, filter),
     getFeatureFlags().then(toClientCapabilities),
   ]);
+
+  const emptyCopy = filter === "friends"
+    ? {
+        title: "No posts from friends yet",
+        message: "Posts shared by people you are friends with will appear here.",
+      }
+    : filter === "my_cars"
+      ? {
+          title: "No posts for your Garage yet",
+          message: "Posts about the makes and models in your Garage will appear here.",
+        }
+      : {
+          title: "No community posts yet",
+          message: "Posts will appear here once users share public vehicles, active listings, or inspection conversations.",
+        };
 
   return (
     <div className="min-h-screen bg-surface">
@@ -81,14 +119,36 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
 
       <section className="px-8 pb-20">
         <div className="mx-auto max-w-3xl space-y-5">
+          <nav
+            aria-label="Community feed"
+            className="flex w-full gap-1 rounded-2xl bg-surface-container-low p-1.5 ghost-border sm:w-fit"
+          >
+            {feedFilters.map((option) => {
+              const active = filter === option.value;
+              return (
+                <Link
+                  key={option.value}
+                  href={feedHref(option.value)}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex-1 rounded-xl px-5 py-2.5 text-center text-sm font-bold transition-colors sm:flex-none ${
+                    active
+                      ? "bg-surface-container-lowest text-on-surface shadow-sm"
+                      : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                  }`}
+                >
+                  {option.label}
+                </Link>
+              );
+            })}
+          </nav>
           {posts.length === 0 ? (
             <div className="rounded-[1.75rem] bg-surface-container-lowest p-12 text-center shadow-sm ghost-border">
               <Users className="mx-auto mb-4 h-12 w-12 text-on-surface-variant/30" />
               <h2 className="mb-2 font-heading text-xl font-extrabold tracking-tight text-on-surface">
-                No community posts yet
+                {emptyCopy.title}
               </h2>
               <p className="mx-auto mb-6 max-w-md text-sm text-on-surface-variant">
-                Posts will appear here once users share public vehicles, active listings, or inspection conversations.
+                {emptyCopy.message}
               </p>
               <Button asChild>
                 <Link href="/dashboard/posts/new">Create the first post</Link>
@@ -252,8 +312,8 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
             })
           )}
           <nav className="flex items-center justify-between pt-3" aria-label="Community pagination">
-            {page > 1 ? <Button asChild variant="outline"><Link href={`/community?page=${page - 1}`}>Previous</Link></Button> : <span />}
-            {posts.length === 20 ? <Button asChild variant="outline"><Link href={`/community?page=${page + 1}`}>Next</Link></Button> : <span />}
+            {page > 1 ? <Button asChild variant="outline"><Link href={feedHref(filter, page - 1)}>Previous</Link></Button> : <span />}
+            {posts.length === 20 ? <Button asChild variant="outline"><Link href={feedHref(filter, page + 1)}>Next</Link></Button> : <span />}
           </nav>
         </div>
       </section>

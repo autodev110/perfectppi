@@ -6,65 +6,205 @@ import SwiftUI
 struct VehiclesListView: View {
     @State private var presentNew = false
     @State private var reloadToken = UUID()
+    @State private var garageFilter: GarageFilter = .all
 
     var body: some View {
         AsyncContent(
             load: { try await VehiclesAPI.list() },
-            loaded: { vehicles in
-                List {
-                    if vehicles.isEmpty {
-                        EmptyStateCard(
-                            title: "No vehicles yet",
-                            message: "Add a vehicle to start an inspection.",
-                            systemImage: "car"
-                        )
-                        .listRowBackground(Color.clear)
-                    } else {
-                        ForEach(vehicles) { v in
-                            NavigationLink {
-                                VehicleDetailView(vehicleId: v.id) {
-                                    reloadToken = UUID()
-                                }
-                            } label: {
-                                VStack(alignment: .leading) {
-                                    Text(vehicleName(v))
-                                        .font(.headline)
-                                    if let vin = v.vin {
-                                        Text(vin).font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                            }
-                        }
-                    }
-                }
-                .listStyle(.insetGrouped)
-                .navigationTitle("Vehicles")
-                .toolbar {
-                    Button {
-                        presentNew = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-                .sheet(isPresented: $presentNew) {
-                    NewVehicleView { _ in
-                        reloadToken = UUID()
-                    }
-                }
-            },
+            loaded: { vehicles in garageList(vehicles) },
             failure: { error, retry in
                 ErrorView(message: error.localizedDescription, retry: retry)
             }
         )
         .id(reloadToken)
+        .navigationTitle("Garage")
+        .toolbar {
+            Button {
+                presentNew = true
+            } label: {
+                Image(systemName: "plus")
+            }
+            .accessibilityLabel("Add vehicle")
+        }
+        .sheet(isPresented: $presentNew) {
+            NewVehicleView { _ in
+                reloadToken = UUID()
+            }
+        }
     }
 
-    private func vehicleName(_ vehicle: Vehicle) -> String {
+    @ViewBuilder
+    private func garageList(_ vehicles: [Vehicle]) -> some View {
+        let filteredVehicles = vehicles.filter(matchesFilter)
+
+        List {
+            if !vehicles.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(GarageFilter.allCases) { filter in
+                            Button(filter.label) { garageFilter = filter }
+                                .buttonStyle(.bordered)
+                                .buttonBorderShape(.capsule)
+                                .tint(garageFilter == filter ? Theme.Palette.primary : .secondary)
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+            }
+
+            if vehicles.isEmpty {
+                EmptyStateCard(
+                    title: "No vehicles yet",
+                    message: "Add a vehicle to start an inspection.",
+                    systemImage: "car"
+                )
+                .listRowBackground(Color.clear)
+            } else if filteredVehicles.isEmpty {
+                EmptyStateCard(
+                    title: "No vehicles match this filter",
+                    message: "Choose All to see every vehicle in your Garage.",
+                    systemImage: "line.3.horizontal.decrease.circle"
+                )
+                .listRowBackground(Color.clear)
+            } else {
+                ForEach(filteredVehicles) { vehicle in
+                    NavigationLink {
+                        VehicleDetailView(vehicleId: vehicle.id) {
+                            reloadToken = UUID()
+                        }
+                    } label: {
+                        GarageVehicleRow(vehicle: vehicle)
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    private func matchesFilter(_ vehicle: Vehicle) -> Bool {
+        switch garageFilter {
+        case .all: true
+        case .owned: vehicle.ownershipState == nil || vehicle.ownershipState == .owned
+        case .previouslyOwned: vehicle.ownershipState == .previouslyOwned
+        case .considering: vehicle.ownershipState == .considering
+        case .project: vehicle.ownershipState == .project
+        case .listed: vehicle.marketplaceListings?.contains { $0.status == .active } == true
+        }
+    }
+}
+
+private enum GarageFilter: String, CaseIterable, Identifiable {
+    case all
+    case owned
+    case previouslyOwned
+    case considering
+    case project
+    case listed
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .all: "All"
+        case .owned: "Owned"
+        case .previouslyOwned: "Previously owned"
+        case .considering: "Shopping"
+        case .project: "Projects"
+        case .listed: "Listed"
+        }
+    }
+}
+
+private struct GarageVehicleRow: View {
+    let vehicle: Vehicle
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            vehiclePhoto
+                .frame(width: 82, height: 66)
+                .background(Theme.Palette.subtle)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(vehicle.nickname?.isEmpty == false ? (vehicle.nickname ?? vehicleName) : vehicleName)
+                    .font(.headline)
+                    .lineLimit(1)
+                if vehicle.nickname?.isEmpty == false {
+                    Text(vehicleName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                if let mileage = vehicle.mileage {
+                    HStack(spacing: 4) {
+                        Text("\(mileage.formatted()) mi")
+                        if let updatedAt = vehicle.mileageUpdatedAt {
+                            Text("· Updated \(updatedAt, style: .date)")
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 8) {
+                    Label((vehicle.ownershipState ?? .owned).label, systemImage: "key")
+                    if let inspection = latestInspection {
+                        Label(inspectionLabel(inspection.status), systemImage: "checkmark.seal")
+                    }
+                    if vehicle.marketplaceListings?.contains(where: { $0.status == .active }) == true {
+                        Label("Listed", systemImage: "tag")
+                    }
+                }
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 5)
+    }
+
+    @ViewBuilder
+    private var vehiclePhoto: some View {
+        if let media = primaryPhoto, let url = URL(string: media.url) {
+            AsyncImage(url: url) { phase in
+                if case .success(let image) = phase {
+                    image.resizable().scaledToFill()
+                } else if case .failure = phase {
+                    Image(systemName: "car").foregroundStyle(.secondary)
+                } else {
+                    ProgressView()
+                }
+            }
+            .clipped()
+        } else {
+            Image(systemName: "car").foregroundStyle(.secondary)
+        }
+    }
+
+    private var primaryPhoto: VehicleMedia? {
+        let photos = vehicle.vehicleMedia?.filter { $0.mediaType == .image } ?? []
+        return photos.first(where: { $0.isPrimary == true }) ?? photos.first
+    }
+
+    private var latestInspection: GarageInspectionSummary? {
+        vehicle.ppiRequests?.max { $0.createdAt < $1.createdAt }
+    }
+
+    private var vehicleName: String {
         let label = [vehicle.year.map(String.init), vehicle.make, vehicle.model, vehicle.trim]
             .compactMap { $0 }
             .joined(separator: " ")
         return label.isEmpty ? "Unnamed Vehicle" : label
+    }
+
+    private func inspectionLabel(_ status: PpiRequestStatus) -> String {
+        switch status {
+        case .submitted, .completed: "Report"
+        case .inProgress: "In progress"
+        case .needsRevision: "Needs revision"
+        default: status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized
+        }
     }
 }
 
@@ -118,12 +258,27 @@ struct VehicleDetailView: View {
                     }
 
                     Section("Details") {
+                        if let nickname = vehicle.nickname {
+                            LabeledContent("Nickname", value: nickname)
+                        }
                         LabeledContent("Vehicle", value: vehicleName(vehicle))
+                        LabeledContent("Garage relationship", value: (vehicle.ownershipState ?? .owned).label)
                         if let vin = vehicle.vin {
                             LabeledContent("VIN", value: vin)
                         }
                         if let mileage = vehicle.mileage {
-                            LabeledContent("Mileage", value: "\(mileage) mi")
+                            LabeledContent {
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text("\(mileage.formatted()) mi")
+                                    if let updatedAt = vehicle.mileageUpdatedAt {
+                                        Text("Updated \(updatedAt, style: .date)")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            } label: {
+                                Text("Mileage")
+                            }
                         }
                         LabeledContent("Visibility", value: vehicle.visibility?.rawValue.capitalized ?? "—")
                         Button("Edit Vehicle", systemImage: "pencil") {
@@ -541,6 +696,8 @@ private struct EditVehicleView: View {
     @State private var make: String
     @State private var model: String
     @State private var trim: String
+    @State private var nickname: String
+    @State private var ownershipState: VehicleOwnershipState
     @State private var year: String
     @State private var mileage: String
     @State private var saving = false
@@ -553,6 +710,8 @@ private struct EditVehicleView: View {
         _make = State(initialValue: vehicle.make ?? "")
         _model = State(initialValue: vehicle.model ?? "")
         _trim = State(initialValue: vehicle.trim ?? "")
+        _nickname = State(initialValue: vehicle.nickname ?? "")
+        _ownershipState = State(initialValue: vehicle.ownershipState ?? .owned)
         _year = State(initialValue: vehicle.year.map(String.init) ?? "")
         _mileage = State(initialValue: vehicle.mileage.map(String.init) ?? "")
     }
@@ -560,6 +719,15 @@ private struct EditVehicleView: View {
     var body: some View {
         NavigationStack {
             Form {
+                TextField("Nickname", text: $nickname)
+                    .onChange(of: nickname) { _, value in
+                        nickname = String(value.prefix(60))
+                    }
+                Picker("Garage relationship", selection: $ownershipState) {
+                    ForEach(VehicleOwnershipState.allCases) { state in
+                        Text(state.label).tag(state)
+                    }
+                }
                 TextField("VIN", text: $vin).textInputAutocapitalization(.characters)
                 TextField("Make", text: $make)
                 TextField("Model", text: $model)
@@ -574,7 +742,11 @@ private struct EditVehicleView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(saving ? "Saving..." : "Save") { Task { await save() } }
-                        .disabled(saving || make.trimmingCharacters(in: .whitespaces).isEmpty || model.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(
+                            saving || nickname.count > 60 ||
+                            make.trimmingCharacters(in: .whitespaces).isEmpty ||
+                            model.trimmingCharacters(in: .whitespaces).isEmpty
+                        )
                 }
             }
         }
@@ -595,7 +767,9 @@ private struct EditVehicleView: View {
                     trim: trim.trimmingCharacters(in: .whitespacesAndNewlines),
                     mileage: Int(mileage),
                     visibility: nil,
-                    notes: nil
+                    notes: nil,
+                    nickname: nickname.trimmingCharacters(in: .whitespacesAndNewlines),
+                    ownershipState: ownershipState
                 )
             )
             onSaved()
@@ -620,6 +794,8 @@ struct NewVehicleView: View {
     @State private var year = ""
     @State private var mileage = ""
     @State private var trim = ""
+    @State private var nickname = ""
+    @State private var ownershipState: VehicleOwnershipState = .owned
     @State private var saving = false
     @State private var error: String?
     @State private var showVINScanner = false
@@ -628,6 +804,17 @@ struct NewVehicleView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Garage") {
+                    TextField("Nickname (optional)", text: $nickname)
+                        .onChange(of: nickname) { _, value in
+                            nickname = String(value.prefix(60))
+                        }
+                    Picker("Relationship", selection: $ownershipState) {
+                        ForEach(VehicleOwnershipState.allCases) { state in
+                            Text(state.label).tag(state)
+                        }
+                    }
+                }
                 Section("Vehicle") {
                     TextField("VIN", text: $vin)
                         .textInputAutocapitalization(.characters)
@@ -702,6 +889,7 @@ struct NewVehicleView: View {
 
         return !make.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        nickname.count <= 60 &&
         trimmedVin.count <= 17 &&
         yearIsValid &&
         mileageIsValid
@@ -728,7 +916,9 @@ struct NewVehicleView: View {
                     make: trimmedMake,
                     model: trimmedModel,
                     trim: trimmedTrim.isEmpty ? nil : trimmedTrim,
-                    mileage: parsedMileage
+                    mileage: parsedMileage,
+                    nickname: nickname.trimmingCharacters(in: .whitespacesAndNewlines),
+                    ownershipState: ownershipState
                 )
             )
             onSave(created)

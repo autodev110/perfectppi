@@ -28,7 +28,12 @@ export async function getMyVehicles() {
 
   const { data } = await supabase
     .from("vehicles")
-    .select("*, vehicle_media(*)")
+    .select(`
+      *,
+      vehicle_media(*),
+      ppi_requests(id, status, created_at, updated_at),
+      marketplace_listings(id, status)
+    `)
     .eq("owner_id", profile.id)
     .order("created_at", { ascending: false });
 

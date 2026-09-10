@@ -162,6 +162,7 @@ jobs:
           profile_app_id="$(plutil -extract Entitlements.application-identifier raw "$profile_plist")"
           profile_is_beta="$(plutil -extract Entitlements.beta-reports-active raw "$profile_plist")"
           profile_is_debug="$(plutil -extract Entitlements.get-task-allow raw "$profile_plist")"
+          profile_push_environment="$(plutil -extract Entitlements.aps-environment raw "$profile_plist" 2>/dev/null || true)"
           profile_expiration="$(plutil -extract ExpirationDate raw "$profile_plist")"
 
           if [[ "$profile_team" != "$APPLE_TEAM_ID" || "$profile_app_id" != "$APPLE_TEAM_ID.$IOS_BUNDLE_ID" ]]; then
@@ -170,6 +171,10 @@ jobs:
           fi
           if [[ "$profile_is_beta" != "true" || "$profile_is_debug" != "false" ]]; then
             echo "::error::The provisioning profile is not an App Store distribution profile."
+            exit 1
+          fi
+          if [[ "$profile_push_environment" != "production" ]]; then
+            echo "::error::The App Store provisioning profile must include the production push-notification entitlement."
             exit 1
           fi
 
@@ -311,13 +316,12 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$archive_path" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$AUTH_KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_NAME" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $SIGNING_KEYCHAIN" \
             clean archive
 
       - name: Verify the archive before upload
@@ -350,11 +354,19 @@ jobs:
       - name: Upload to App Store Connect
         run: |
           export_path="$RUNNER_TEMP/TestFlightExport"
+          export_options="$RUNNER_TEMP/ExportOptions-TestFlight.plist"
+          cp mobile-app/ExportOptions-TestFlight.plist "$export_options"
+          /usr/libexec/PlistBuddy \
+            -c "Set :signingStyle manual" \
+            -c "Add :provisioningProfiles dict" \
+            -c "Add :provisioningProfiles:$IOS_BUNDLE_ID string $PROVISIONING_PROFILE_NAME" \
+            "$export_options"
+
           xcodebuild \
             -exportArchive \
             -archivePath "$ARCHIVE_PATH" \
             -exportPath "$export_path" \
-            -exportOptionsPlist mobile-app/ExportOptions-TestFlight.plist \
+            -exportOptionsPlist "$export_options" \
             -authenticationKeyPath "$AUTH_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"

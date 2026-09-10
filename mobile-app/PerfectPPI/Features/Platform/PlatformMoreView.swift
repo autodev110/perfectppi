@@ -13,15 +13,17 @@ struct PlatformMoreView: View {
                 }
 
                 NavigationLink {
-                    CommunityFeedView()
-                } label: {
-                    Label("Community", systemImage: "text.bubble")
-                }
-
-                NavigationLink {
                     TechnicianDirectoryView()
                 } label: {
                     Label("Technicians", systemImage: "wrench.and.screwdriver")
+                }
+            }
+
+            Section("Your vehicles") {
+                NavigationLink {
+                    WarrantyListView()
+                } label: {
+                    Label("Warranty", systemImage: "shield")
                 }
             }
 

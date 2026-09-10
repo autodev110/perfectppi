@@ -52,6 +52,23 @@ enum UserRole: String, Codable, CaseIterable {
 
 enum MediaType: String, Codable { case image, video }
 enum VehicleVisibility: String, Codable { case `public`, `private` }
+enum VehicleOwnershipState: String, Codable, CaseIterable, Identifiable {
+    case owned
+    case previouslyOwned = "previously_owned"
+    case considering
+    case project
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .owned: "Owned"
+        case .previouslyOwned: "Previously owned"
+        case .considering: "Shopping / considering"
+        case .project: "Project"
+        }
+    }
+}
 
 enum WhoseCar: String, Codable { case own, other }
 enum RequesterRole: String, Codable { case buying, selling, documenting }
@@ -193,6 +210,22 @@ enum CommunityContentStatus: String, Codable {
 enum CommunityPostType: String, Codable, CaseIterable {
     case general
     case question
+}
+
+enum CommunityFeedFilter: String, CaseIterable, Identifiable {
+    case all
+    case friends
+    case myCars = "my_cars"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .all: "All"
+        case .friends: "Friends"
+        case .myCars: "My Cars"
+        }
+    }
 }
 
 enum CommunityPostAudience: String, Codable, CaseIterable, Identifiable {

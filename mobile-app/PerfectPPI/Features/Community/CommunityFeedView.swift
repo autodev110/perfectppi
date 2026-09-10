@@ -10,85 +10,122 @@ struct CommunityFeedView: View {
     @State private var showingMyPosts = false
     @State private var showingGuidelines = false
     @State private var showingGroups = false
+    @State private var feedFilter: CommunityFeedFilter = .all
 
     var body: some View {
         AsyncContent(
-            load: { try await CommunityAPI.feed() },
-            loaded: { posts in
-                Group {
-                    if posts.isEmpty {
-                        EmptyStateCard(
-                            title: "Community is quiet",
-                            message: "Share a public vehicle, listing, or inspection thought to start the feed.",
-                            systemImage: "text.bubble"
-                        )
-                        .padding()
-                    } else {
-                        List(posts) { post in
-                            NavigationLink {
-                                CommunityPostDetailView(post: post) {
-                                    reloadToken = UUID()
-                                }
-                            } label: {
-                                CommunityPostRow(post: post) {
-                                    reloadToken = UUID()
-                                }
-                            }
-                        }
-                        .listStyle(.insetGrouped)
-                    }
-                }
-                .navigationTitle("Community")
-                .toolbar {
-                    Menu {
-                        if auth.capabilities.capabilities.groups {
-                            Button {
-                                showingGroups = true
-                            } label: {
-                                Label("Groups", systemImage: "person.3")
-                            }
-                        }
-                        Button {
-                            showingComposer = true
-                        } label: {
-                            Label("New Post", systemImage: "plus.bubble")
-                        }
-                        Button {
-                            showingMyPosts = true
-                        } label: {
-                            Label("My Posts and Reviews", systemImage: "person.crop.rectangle.stack")
-                        }
-                        Button {
-                            showingGuidelines = true
-                        } label: {
-                            Label("Community Guidelines", systemImage: "checklist")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                }
-                .sheet(isPresented: $showingGuidelines) {
-                    SafariWebView(url: PolicyPage.communityGuidelines.url)
-                }
-                .sheet(isPresented: $showingGroups) {
-                    CommunityGroupsView()
-                }
-                .sheet(isPresented: $showingComposer) {
-                    NewCommunityPostView {
-                        reloadToken = UUID()
-                    }
-                }
-                .sheet(isPresented: $showingMyPosts) {
-                    ModeratedPostsView {
-                        reloadToken = UUID()
-                    }
-                }
-            },
+            load: { try await CommunityAPI.feed(filter: feedFilter) },
+            loaded: { posts in feedContent(posts) },
             failure: { error, retry in
                 ErrorView(message: error.localizedDescription, retry: retry)
             }
         )
-        .id(reloadToken)
+        .id("\(reloadToken.uuidString)-\(feedFilter.rawValue)")
+        .navigationTitle("Community")
+        .toolbar { communityToolbar }
+        .sheet(isPresented: $showingGuidelines) {
+            SafariWebView(url: PolicyPage.communityGuidelines.url)
+        }
+        .sheet(isPresented: $showingGroups) {
+            CommunityGroupsView()
+        }
+        .sheet(isPresented: $showingComposer) {
+            NewCommunityPostView {
+                reloadToken = UUID()
+            }
+        }
+        .sheet(isPresented: $showingMyPosts) {
+            ModeratedPostsView {
+                reloadToken = UUID()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func feedContent(_ posts: [CommunityPost]) -> some View {
+        VStack(spacing: 0) {
+            Picker("Community feed", selection: $feedFilter) {
+                ForEach(CommunityFeedFilter.allCases) { filter in
+                    Text(filter.label).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+
+            if posts.isEmpty {
+                EmptyStateCard(
+                    title: emptyTitle,
+                    message: emptyMessage,
+                    systemImage: "text.bubble"
+                )
+                .padding()
+                Spacer()
+            } else {
+                List(posts) { post in
+                    NavigationLink {
+                        CommunityPostDetailView(post: post) {
+                            reloadToken = UUID()
+                        }
+                    } label: {
+                        CommunityPostRow(post: post) {
+                            reloadToken = UUID()
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var communityToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            Button {
+                showingComposer = true
+            } label: {
+                Image(systemName: "plus")
+            }
+            .accessibilityLabel("New Post")
+
+            Menu {
+                if auth.capabilities.capabilities.groups {
+                    Button {
+                        showingGroups = true
+                    } label: {
+                        Label("Groups", systemImage: "person.3")
+                    }
+                }
+                Button {
+                    showingMyPosts = true
+                } label: {
+                    Label("My Posts and Reviews", systemImage: "person.crop.rectangle.stack")
+                }
+                Button {
+                    showingGuidelines = true
+                } label: {
+                    Label("Community Guidelines", systemImage: "checklist")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+        }
+    }
+
+    private var emptyTitle: String {
+        switch feedFilter {
+        case .all: "Community is quiet"
+        case .friends: "No posts from friends yet"
+        case .myCars: "No posts for your Garage yet"
+        }
+    }
+
+    private var emptyMessage: String {
+        switch feedFilter {
+        case .all: "Share a public vehicle, listing, or inspection thought to start the feed."
+        case .friends: "Posts shared by people you are friends with will appear here."
+        case .myCars: "Posts about the makes and models in your Garage will appear here."
+        }
     }
 }
 

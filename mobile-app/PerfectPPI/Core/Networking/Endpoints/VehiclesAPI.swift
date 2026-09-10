@@ -32,6 +32,8 @@ enum VehiclesAPI {
         let trim: String?
         let mileage: Int?
         let notes: String?
+        let nickname: String?
+        let ownershipState: VehicleOwnershipState?
 
         init(
             vin: String?,
@@ -40,7 +42,9 @@ enum VehiclesAPI {
             model: String?,
             trim: String?,
             mileage: Int?,
-            notes: String? = nil
+            notes: String? = nil,
+            nickname: String? = nil,
+            ownershipState: VehicleOwnershipState? = nil
         ) {
             self.vin = vin
             self.year = year
@@ -49,6 +53,8 @@ enum VehiclesAPI {
             self.trim = trim
             self.mileage = mileage
             self.notes = notes
+            self.nickname = nickname
+            self.ownershipState = ownershipState
         }
     }
 
@@ -69,6 +75,8 @@ enum VehiclesAPI {
         let mileage: Int?
         let visibility: VehicleVisibility?
         let notes: String?
+        let nickname: String?
+        let ownershipState: VehicleOwnershipState?
 
         init(
             vin: String?,
@@ -78,7 +86,9 @@ enum VehiclesAPI {
             trim: String?,
             mileage: Int?,
             visibility: VehicleVisibility?,
-            notes: String? = nil
+            notes: String? = nil,
+            nickname: String? = nil,
+            ownershipState: VehicleOwnershipState? = nil
         ) {
             self.vin = vin
             self.year = year
@@ -88,6 +98,8 @@ enum VehiclesAPI {
             self.mileage = mileage
             self.visibility = visibility
             self.notes = notes
+            self.nickname = nickname
+            self.ownershipState = ownershipState
         }
     }
 

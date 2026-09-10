@@ -9,13 +9,13 @@ struct ConsumerTabs: View {
                 .tabItem { Label("Home", systemImage: "house") }
 
             NavigationStack { VehiclesListView() }
-                .tabItem { Label("Vehicles", systemImage: "car") }
+                .tabItem { Label("Garage", systemImage: "car") }
 
             NavigationStack { ConsumerPpiListView() }
                 .tabItem { Label("Inspections", systemImage: "checkmark.seal") }
 
-            NavigationStack { WarrantyListView() }
-                .tabItem { Label("Warranty", systemImage: "shield") }
+            NavigationStack { CommunityFeedView() }
+                .tabItem { Label("Community", systemImage: "text.bubble") }
 
             NavigationStack { PlatformMoreView(profile: profile) }
                 .tabItem { Label("More", systemImage: "ellipsis.circle") }

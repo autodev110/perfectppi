@@ -14,7 +14,7 @@ export const navConfig = {
   ],
   dashboard: [
     { label: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
-    { label: "Vehicles", href: "/dashboard/vehicles", icon: "Car" },
+    { label: "Garage", href: "/dashboard/vehicles", icon: "Car" },
     { label: "Listings", href: "/dashboard/listings", icon: "Tag" },
     { label: "Posts", href: "/dashboard/posts", icon: "Newspaper" },
     { label: "Friends", href: "/dashboard/friends", icon: "Users" },

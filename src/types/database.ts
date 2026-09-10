@@ -3675,8 +3675,11 @@ export type Database = {
           id: string
           make: string | null
           mileage: number | null
+          mileage_updated_at: string | null
           model: string | null
+          nickname: string | null
           organization_id: string | null
+          ownership_state: Database["public"]["Enums"]["vehicle_ownership_state"]
           owner_id: string | null
           trim: string | null
           updated_at: string
@@ -3689,8 +3692,11 @@ export type Database = {
           id?: string
           make?: string | null
           mileage?: number | null
+          mileage_updated_at?: string | null
           model?: string | null
+          nickname?: string | null
           organization_id?: string | null
+          ownership_state?: Database["public"]["Enums"]["vehicle_ownership_state"]
           owner_id?: string | null
           trim?: string | null
           updated_at?: string
@@ -3703,8 +3709,11 @@ export type Database = {
           id?: string
           make?: string | null
           mileage?: number | null
+          mileage_updated_at?: string | null
           model?: string | null
+          nickname?: string | null
           organization_id?: string | null
+          ownership_state?: Database["public"]["Enums"]["vehicle_ownership_state"]
           owner_id?: string | null
           trim?: string | null
           updated_at?: string
@@ -4440,6 +4449,16 @@ export type Database = {
         }
         Returns: { post_id: string }[]
       }
+      social_filtered_community_post_ids: {
+        Args: {
+          p_filter?: Database["public"]["Enums"]["community_feed_filter"]
+          p_limit?: number
+          p_offset?: number
+          p_viewer_id: string
+          p_include_group_posts?: boolean
+        }
+        Returns: { post_id: string }[]
+      }
       social_visible_community_group_post_ids: {
         Args: {
           p_group_id: string
@@ -4659,6 +4678,7 @@ export type Database = {
         | "submission_resubmitted"
       certification_level: "none" | "ase" | "master" | "oem_qualified"
       community_content_status: "active" | "hidden" | "archived"
+      community_feed_filter: "all" | "friends" | "my_cars"
       community_group_join_policy: "open" | "request_approval" | "invite_only"
       community_group_membership_status: "active" | "left" | "removed" | "banned"
       community_group_post_status: "active" | "group_removed"
@@ -4735,6 +4755,7 @@ export type Database = {
         | "admin"
         | "developer"
       vehicle_visibility: "public" | "private"
+      vehicle_ownership_state: "owned" | "previously_owned" | "considering" | "project"
       warranty_status:
         | "not_offered"
         | "offered"
@@ -4884,6 +4905,7 @@ export const Constants = {
       ],
       certification_level: ["none", "ase", "master", "oem_qualified"],
       community_content_status: ["active", "hidden", "archived"],
+      community_feed_filter: ["all", "friends", "my_cars"],
       community_post_audience: ["public", "friends"],
       community_post_assembly_state: ["assembling", "submitted", "finalized"],
       community_post_type: ["general", "question"],
@@ -4959,6 +4981,7 @@ export const Constants = {
         "developer",
       ],
       vehicle_visibility: ["public", "private"],
+      vehicle_ownership_state: ["owned", "previously_owned", "considering", "project"],
       warranty_status: [
         "not_offered",
         "offered",

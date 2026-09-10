@@ -2,10 +2,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 import {
+  getFilteredCommunityPostIds,
   getBlockedProfileIds,
   getVisibleCommunityGroupPostIds,
   getVisibleCommunityPostIds,
 } from "@/features/social/relationships";
+import type { CommunityFeedFilter } from "@/features/social/relationships";
 import { createReportContext } from "@/features/moderation/report-context";
 import { communityMediaDeliveryPath } from "@/lib/storage/community-media";
 import { buildSafetyNotice, type SafetyNotice } from "@/lib/moderation/safety-notice";
@@ -332,14 +334,19 @@ async function getCommunityViewerId() {
   return profile?.username_state === "claimed" ? profile.id : null;
 }
 
-export async function getCommunityPosts(page = 1, perPage = 20) {
+export async function getCommunityPosts(
+  page = 1,
+  perPage = 20,
+  filter: CommunityFeedFilter = "all",
+) {
   const viewerId = await getCommunityViewerId();
   if (!viewerId) return [];
 
   const admin = createAdminClient();
   const flags = await getFeatureFlags();
-  const postIds = await getVisibleCommunityPostIds({
+  const postIds = await getFilteredCommunityPostIds({
     viewerId,
+    filter,
     page,
     perPage,
     includeGroupPosts: flags.flags.groups,
