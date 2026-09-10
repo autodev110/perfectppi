@@ -385,7 +385,6 @@ private struct EditProfileView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var displayName: String
-    @State private var username: String
     @State private var bio: String
     @State private var isPublic: Bool
     @State private var saving = false
@@ -395,7 +394,6 @@ private struct EditProfileView: View {
         self.profile = profile
         self.onSave = onSave
         _displayName = State(initialValue: profile.displayName ?? "")
-        _username = State(initialValue: profile.username ?? "")
         _bio = State(initialValue: profile.bio ?? "")
         _isPublic = State(initialValue: profile.isPublic ?? true)
     }
@@ -404,9 +402,12 @@ private struct EditProfileView: View {
         Form {
             Section("Public Profile") {
                 TextField("Display name", text: $displayName)
-                TextField("Username", text: $username)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                if let username = profile.username {
+                    LabeledContent("Username", value: "@\(username)")
+                    Text("Usernames cannot be changed yet.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 TextField("Bio", text: $bio, axis: .vertical)
                     .lineLimit(3...6)
                 Toggle("Public profile", isOn: $isPublic)
@@ -429,19 +430,12 @@ private struct EditProfileView: View {
     }
 
     private var canSave: Bool {
-        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedUsername.isEmpty else { return true }
-        guard (3...30).contains(trimmedUsername.count) else { return false }
-        return trimmedUsername.range(
-            of: "^[A-Za-z0-9_-]+$",
-            options: .regularExpression
-        ) != nil
+        !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func save() async {
         guard !saving, canSave else { return }
         let trimmedDisplayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedBio = bio.trimmingCharacters(in: .whitespacesAndNewlines)
 
         saving = true
@@ -450,7 +444,6 @@ private struct EditProfileView: View {
             let updated = try await ProfilesAPI.updateMe(
                 .init(
                     displayName: trimmedDisplayName.isEmpty ? nil : trimmedDisplayName,
-                    username: trimmedUsername.isEmpty ? nil : trimmedUsername,
                     bio: trimmedBio.isEmpty ? nil : trimmedBio,
                     avatarUrl: nil,
                     isPublic: isPublic

@@ -16,10 +16,11 @@ async function acceptTerms(formData: FormData) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role")
+    .select("id, role, username_state")
     .eq("auth_user_id", user.id)
     .single();
   if (!profile) redirect("/account-unavailable");
+  if (profile.username_state !== "claimed") redirect("/onboarding/username?next=/legal/accept");
 
   await recordTermsAcceptance({ profileId: profile.id, source: "web_oauth", headers: await headers() });
   redirect(getRoleHomePath(profile.role));
@@ -32,10 +33,11 @@ export default async function AcceptTermsPage({ searchParams }: { searchParams: 
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role")
+    .select("id, role, username_state")
     .eq("auth_user_id", user.id)
     .single();
   if (!profile) redirect("/account-unavailable");
+  if (profile.username_state !== "claimed") redirect("/onboarding/username?next=/legal/accept");
 
   const { data: accepted } = await supabase
     .from("legal_acceptances")

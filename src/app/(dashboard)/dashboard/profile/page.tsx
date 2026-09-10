@@ -85,13 +85,11 @@ export default function ProfilePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                name="username"
-                defaultValue={profile?.username ?? ""}
-                placeholder="unique-username"
-              />
+              <Label>Username</Label>
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                @{profile?.username}
+              </div>
+              <p className="text-xs text-muted-foreground">Usernames cannot be changed yet.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="bio">Bio</Label>

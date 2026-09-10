@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate, formatMileage, getInitials } from "@/lib/utils/formatting";
 import { Car, Flag, MessageSquare, Plus, Tag, Users } from "lucide-react";
 import { PostMediaCarousel } from "@/components/shared/post-media-carousel";
-import { createClient } from "@/lib/supabase/server";
+import { requireRole } from "@/features/auth/guards";
 
 export const metadata = {
   title: "Community — PerfectPPI",
@@ -23,13 +23,10 @@ function getVehicleName(vehicle: { year: number | null; make: string | null; mod
 }
 
 export default async function CommunityPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+  await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const requestedPage = Number((await searchParams).page ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const supabase = await createClient();
-  const [{ data: { user } }, posts] = await Promise.all([
-    supabase.auth.getUser(),
-    getCommunityPosts(page, 20),
-  ]);
+  const posts = await getCommunityPosts(page, 20);
 
   return (
     <div className="min-h-screen bg-surface">
@@ -96,7 +93,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="rounded-full">Discussion</Badge>
-                        <ReportControl entityType="community_post" entityId={post.id} authenticated={!!user} />
+                        <ReportControl entityType="community_post" entityId={post.id} />
                       </div>
                     </div>
 
@@ -166,7 +163,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                               </p>
                               <div className="flex items-center gap-2">
                                 <p className="text-[10px] text-on-surface-variant">{formatDate(comment.created_at)}</p>
-                                <ReportControl entityType="community_comment" entityId={comment.id} compact authenticated={!!user} />
+                                <ReportControl entityType="community_comment" entityId={comment.id} compact />
                               </div>
                             </div>
                             <p className="whitespace-pre-wrap text-sm text-on-surface-variant">{comment.content}</p>
@@ -175,11 +172,11 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                       </div>
                     )}
 
-                    {user ? <form action={createCommunityComment} className="space-y-3">
+                    <form action={createCommunityComment} className="space-y-3">
                       <input type="hidden" name="post_id" value={post.id} />
                       <Textarea name="content" placeholder="Add a factual question or comment..." rows={3} maxLength={600} />
                       <Button type="submit" size="sm">Comment</Button>
-                    </form> : <Button asChild size="sm" variant="outline"><Link href="/login">Sign in to comment</Link></Button>}
+                    </form>
                   </div>
                 </article>
               );
@@ -199,16 +196,11 @@ function ReportControl({
   entityType,
   entityId,
   compact = false,
-  authenticated,
 }: {
   entityType: "community_post" | "community_comment";
   entityId: string;
   compact?: boolean;
-  authenticated: boolean;
 }) {
-  if (!authenticated) {
-    return <Link href="/login" aria-label="Sign in to report content" className="rounded-full p-1.5 text-on-surface-variant hover:bg-surface-container-high"><Flag className={compact ? "h-3 w-3" : "h-4 w-4"} /></Link>;
-  }
   return (
     <details className="relative">
       <summary className="cursor-pointer list-none rounded-full p-1.5 text-on-surface-variant hover:bg-surface-container-high" aria-label="Report content">

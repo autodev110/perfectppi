@@ -92,8 +92,24 @@ final class AuthStore: ObservableObject {
         await loadProfile()
     }
 
-    func signUpWithEmail(_ email: String, password: String) async throws {
-        let response = try await client.auth.signUp(email: email, password: password)
+    func signUpWithEmail(_ email: String, password: String, username: String) async throws {
+        let availability = try await ProfilesAPI.usernameAvailability(username)
+        guard availability.available else { throw AuthError.usernameUnavailable }
+
+        let response: AuthResponse
+        do {
+            response = try await client.auth.signUp(
+                email: email,
+                password: password,
+                data: ["username": .string(username)]
+            )
+        } catch {
+            let message = error.localizedDescription.lowercased()
+            if message.contains("username") || message.contains("database error saving new user") {
+                throw AuthError.usernameUnavailable
+            }
+            throw error
+        }
         // If Supabase has email confirmation enabled, signUp returns a user
         // but no session — there's nothing to load yet. Surface this so the
         // UI can show "check your email" instead of cycling through a
@@ -107,11 +123,14 @@ final class AuthStore: ObservableObject {
 
     enum AuthError: LocalizedError {
         case emailConfirmationRequired
+        case usernameUnavailable
 
         var errorDescription: String? {
             switch self {
             case .emailConfirmationRequired:
                 return "Check your email to confirm your account, then sign in."
+            case .usernameUnavailable:
+                return "That username was just taken. Try another one."
             }
         }
     }

@@ -8,12 +8,6 @@ import { getUniqueOrganizationSlug } from "@/features/organizations/slug";
 
 const updateProfileSchema = z.object({
   display_name: z.string().min(1).max(100).optional(),
-  username: z
-    .string()
-    .min(3)
-    .max(30)
-    .regex(/^[a-zA-Z0-9_-]+$/, "Only letters, numbers, hyphens, underscores")
-    .optional(),
   bio: z.string().max(500).optional(),
   avatar_url: z.string().url().optional().or(z.literal("")),
   is_public: z.boolean().optional(),
@@ -102,9 +96,6 @@ export async function updateProfile(formData: FormData) {
     .eq("auth_user_id", user.id);
 
   if (error) {
-    if (error.code === "23505" && error.message.includes("username")) {
-      return { error: "Username is already taken" };
-    }
     return { error: error.message };
   }
 

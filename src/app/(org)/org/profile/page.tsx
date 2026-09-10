@@ -130,12 +130,11 @@ export default function OrgProfilePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                name="username"
-                defaultValue={profile?.username ?? ""}
-              />
+              <Label>Username</Label>
+              <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm">
+                {profile?.username ? `@${profile.username}` : "Not assigned"}
+              </div>
+              <p className="text-xs text-muted-foreground">Usernames cannot be changed yet.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="bio">Bio</Label>

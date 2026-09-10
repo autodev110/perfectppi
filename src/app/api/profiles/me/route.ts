@@ -27,12 +27,6 @@ export async function GET() {
 
 const updateSchema = z.object({
   display_name: z.string().min(1).max(100).optional(),
-  username: z
-    .string()
-    .min(3)
-    .max(30)
-    .regex(/^[a-zA-Z0-9_-]+$/)
-    .optional(),
   bio: z.string().max(500).optional(),
   avatar_url: z.string().url().optional().or(z.literal("")),
   is_public: z.boolean().optional(),
@@ -57,6 +51,21 @@ export async function PATCH(request: Request) {
     );
   }
 
+  const { data: currentProfile } = await supabase
+    .from("profiles")
+    .select("username_state")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!currentProfile) {
+    return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+  }
+  if (currentProfile.username_state !== "claimed") {
+    return NextResponse.json(
+      { error: "Choose a username before continuing", code: "username_required" },
+      { status: 428 },
+    );
+  }
+
   const { data, error } = await supabase
     .from("profiles")
     .update(parsed.data)
@@ -65,12 +74,6 @@ export async function PATCH(request: Request) {
     .single();
 
   if (error) {
-    if (error.code === "23505") {
-      return NextResponse.json(
-        { error: "Username already taken" },
-        { status: 409 }
-      );
-    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

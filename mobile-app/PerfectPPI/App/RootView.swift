@@ -36,7 +36,9 @@ private struct SignedInContainer: View {
 
     var body: some View {
         Group {
-            if hasAcceptedCurrentTerms == true {
+            if profile.needsUsername {
+                UsernameCompletionView()
+            } else if hasAcceptedCurrentTerms == true {
                 roleContent
             } else if hasAcceptedCurrentTerms == false {
                 LegalAcceptanceView {
@@ -55,8 +57,10 @@ private struct SignedInContainer: View {
                 ProgressView("Checking account terms…")
             }
         }
-        .task {
-            await checkTerms()
+        .task(id: profile.usernameState) {
+            if !profile.needsUsername {
+                await checkTerms()
+            }
         }
     }
 
@@ -89,6 +93,116 @@ private struct SignedInContainer: View {
             }
         } catch {
             termsError = error.localizedDescription
+        }
+    }
+}
+
+private struct UsernameCompletionView: View {
+    @EnvironmentObject private var auth: AuthStore
+    @State private var username = ""
+    @State private var availability: Availability = .idle
+    @State private var saving = false
+    @State private var error: String?
+
+    private enum Availability {
+        case idle, checking, available, unavailable
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Image(systemName: "at.circle.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(Theme.Palette.primary)
+                    Text("Choose your username")
+                        .font(.largeTitle.bold())
+                    Text("This is how other PerfectPPI members will recognize you. We never create it from your email or legal name.")
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 8) {
+                        Text("@").font(.headline).foregroundStyle(.secondary)
+                        TextField("driver_name", text: $username)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .textContentType(.username)
+                            .accessibilityLabel("Username")
+                        if availability == .checking { ProgressView().controlSize(.small) }
+                        if availability == .available {
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        }
+                    }
+                    .padding(16)
+                    .background(Theme.Palette.subtle)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+
+                    Text("4–16 characters. Letters, numbers, and underscores only. Usernames cannot be changed yet.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if usernameIsValid && availability == .unavailable {
+                        Text("Username is unavailable.")
+                            .font(.callout)
+                            .foregroundStyle(Theme.Palette.danger)
+                    }
+                    if let error {
+                        Text(error).foregroundStyle(Theme.Palette.danger)
+                    }
+
+                    Button(saving ? "Saving…" : "Continue") {
+                        Task { await save() }
+                    }
+                    .buttonStyle(PrimaryButtonStyle(isLoading: saving))
+                    .disabled(saving || !usernameIsValid)
+
+                    Button("Sign Out", role: .destructive) {
+                        Task { await auth.signOut() }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .padding(28)
+            }
+            .task(id: username) { await checkAvailability() }
+        }
+    }
+
+    private var usernameIsValid: Bool {
+        let value = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (4...16).contains(value.count) else { return false }
+        return value.range(of: "^[A-Za-z0-9_]+$", options: .regularExpression) != nil
+    }
+
+    private func checkAvailability() async {
+        availability = .idle
+        guard usernameIsValid else { return }
+        do {
+            try await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            availability = .checking
+            let result = try await ProfilesAPI.usernameAvailability(
+                username.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            availability = result.available ? .available : .unavailable
+        } catch is CancellationError {
+            return
+        } catch {
+            availability = .idle
+        }
+    }
+
+    private func save() async {
+        guard !saving, usernameIsValid else { return }
+        saving = true
+        error = nil
+        defer { saving = false }
+        do {
+            let profile = try await ProfilesAPI.claimUsername(
+                username.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            auth.applyProfile(profile)
+        } catch {
+            self.error = error.localizedDescription
+            availability = .unavailable
         }
     }
 }

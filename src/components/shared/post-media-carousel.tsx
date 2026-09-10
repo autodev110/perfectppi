@@ -2,7 +2,10 @@
 
 import type { Database } from "@/types/database";
 
-type PostMedia = Database["public"]["Tables"]["community_post_media"]["Row"];
+type PostMedia = Pick<
+  Database["public"]["Tables"]["community_post_media"]["Row"],
+  "id" | "url" | "media_type"
+>;
 
 export function PostMediaCarousel({ media }: { media: PostMedia[] }) {
   if (media.length === 0) return null;

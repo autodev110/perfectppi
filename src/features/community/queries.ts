@@ -16,6 +16,39 @@ type CommunityPostRow = Database["public"]["Tables"]["community_posts"]["Row"];
 type CommunityPostMediaRow = Database["public"]["Tables"]["community_post_media"]["Row"];
 type CommunityCommentRow = Database["public"]["Tables"]["community_comments"]["Row"];
 
+type CommunityFeedProfile = Pick<Profile, "id" | "display_name" | "username" | "avatar_url">;
+type CommunityFeedVehicleMedia = Pick<
+  VehicleMedia,
+  "id" | "vehicle_id" | "url" | "media_type" | "is_primary" | "sort_order" | "uploaded_at"
+>;
+type CommunityFeedVehicle = Pick<
+  Database["public"]["Tables"]["vehicles"]["Row"],
+  "id" | "year" | "make" | "model" | "trim" | "mileage" | "visibility"
+> & { vehicle_media: CommunityFeedVehicleMedia[] };
+type CommunityFeedListing = Pick<
+  Listing,
+  "id" | "vehicle_id" | "seller_id" | "title" | "asking_price_cents" | "location" | "status" | "created_at" | "updated_at"
+>;
+type CommunityFeedMedia = Pick<
+  CommunityPostMediaRow,
+  "id" | "post_id" | "url" | "media_type" | "content_type" | "sort_order" | "created_at"
+>;
+type CommunityFeedComment = Pick<
+  CommunityCommentRow,
+  "id" | "post_id" | "author_id" | "content" | "status" | "created_at" | "updated_at"
+> & { author: CommunityFeedProfile | null };
+
+export type CommunityFeedPost = Pick<
+  CommunityPostRow,
+  "id" | "author_id" | "vehicle_id" | "marketplace_listing_id" | "content" | "status" | "created_at" | "updated_at"
+> & {
+  author: CommunityFeedProfile | null;
+  vehicle: CommunityFeedVehicle | null;
+  marketplace_listing: CommunityFeedListing | null;
+  media: CommunityFeedMedia[];
+  comments: CommunityFeedComment[];
+};
+
 export type CommunityComment = CommunityCommentRow & {
   author: Profile | null;
 };
@@ -52,6 +85,28 @@ const COMMUNITY_POST_SELECT = `
   )
 `;
 
+// Ordinary clients receive a deliberately small projection. Moderation fields
+// are selected only where the server needs them to filter nested rows, then
+// removed before serialization.
+const COMMUNITY_FEED_SELECT = `
+  id, author_id, vehicle_id, marketplace_listing_id, content, status, created_at, updated_at,
+  author:profiles!community_posts_author_id_fkey(id, display_name, username, avatar_url, is_public),
+  vehicle:vehicles!community_posts_vehicle_id_fkey(
+    id, year, make, model, trim, mileage, visibility,
+    vehicle_media(id, vehicle_id, url, media_type, is_primary, sort_order, uploaded_at, moderation_status)
+  ),
+  marketplace_listing:marketplace_listings!community_posts_marketplace_listing_id_fkey(
+    id, vehicle_id, seller_id, title, asking_price_cents, location, status, created_at, updated_at
+  ),
+  media:community_post_media!community_post_media_post_id_fkey(
+    id, post_id, url, media_type, content_type, sort_order, created_at, moderation_status
+  ),
+  comments:community_comments!community_comments_post_id_fkey(
+    id, post_id, author_id, content, status, created_at, updated_at, moderation_status,
+    author:profiles!community_comments_author_id_fkey(id, display_name, username, avatar_url, is_public)
+  )
+`;
+
 function getProfileIdFromAuthUserId(authUserId: string) {
   const admin = createAdminClient();
   return admin
@@ -77,20 +132,141 @@ function cleanPosts(posts: CommunityPost[], includeModerated = false) {
   }));
 }
 
+function toCommunityFeedPost(post: CommunityPost): CommunityFeedPost {
+  const vehicle = post.vehicle?.visibility === "public"
+    ? {
+        id: post.vehicle.id,
+        year: post.vehicle.year,
+        make: post.vehicle.make,
+        model: post.vehicle.model,
+        trim: post.vehicle.trim,
+        mileage: post.vehicle.mileage,
+        visibility: post.vehicle.visibility,
+        vehicle_media: (post.vehicle.vehicle_media ?? [])
+          .filter((item) => item.moderation_status === "active")
+          .map((item) => ({
+            id: item.id,
+            vehicle_id: item.vehicle_id,
+            url: item.url,
+            media_type: item.media_type,
+            is_primary: item.is_primary,
+            sort_order: item.sort_order,
+            uploaded_at: item.uploaded_at,
+          })),
+      }
+    : null;
+
+  return {
+    id: post.id,
+    author_id: post.author_id,
+    vehicle_id: vehicle ? post.vehicle_id : null,
+    marketplace_listing_id:
+      vehicle && post.marketplace_listing?.status === "active"
+        ? post.marketplace_listing_id
+        : null,
+    content: post.content,
+    status: post.status,
+    created_at: post.created_at,
+    updated_at: post.updated_at,
+    author: post.author ? {
+      id: post.author.id,
+      display_name: post.author.display_name,
+      username: post.author.username,
+      avatar_url: post.author.avatar_url,
+    } : null,
+    vehicle,
+    marketplace_listing:
+      vehicle && post.marketplace_listing?.status === "active"
+        ? {
+            id: post.marketplace_listing.id,
+            vehicle_id: post.marketplace_listing.vehicle_id,
+            seller_id: post.marketplace_listing.seller_id,
+            title: post.marketplace_listing.title,
+            asking_price_cents: post.marketplace_listing.asking_price_cents,
+            location: post.marketplace_listing.location,
+            status: post.marketplace_listing.status,
+            created_at: post.marketplace_listing.created_at,
+            updated_at: post.marketplace_listing.updated_at,
+          }
+        : null,
+    media: (post.media ?? [])
+      .filter((item) => item.moderation_status === "active")
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((item) => ({
+        id: item.id,
+        post_id: item.post_id,
+        url: item.url,
+        media_type: item.media_type,
+        content_type: item.content_type,
+        sort_order: item.sort_order,
+        created_at: item.created_at,
+      })),
+    comments: (post.comments ?? [])
+      .filter((comment) => comment.status === "active" && comment.moderation_status === "active")
+      .map((comment) => ({
+        id: comment.id,
+        post_id: comment.post_id,
+        author_id: comment.author_id,
+        content: comment.content,
+        status: comment.status,
+        created_at: comment.created_at,
+        updated_at: comment.updated_at,
+        author: comment.author ? {
+          id: comment.author.id,
+          display_name: comment.author.display_name,
+          username: comment.author.username,
+          avatar_url: comment.author.avatar_url,
+        } : null,
+      })),
+  };
+}
+
+async function hasCommunityViewer() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("username_state")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  return profile?.username_state === "claimed";
+}
+
 export async function getCommunityPosts(page = 1, perPage = 20) {
+  if (!await hasCommunityViewer()) return [];
+
   const admin = createAdminClient();
   const from = (Math.max(page, 1) - 1) * perPage;
   const { data } = await admin
     .from("community_posts")
-    .select(COMMUNITY_POST_SELECT)
+    .select(COMMUNITY_FEED_SELECT)
     .eq("status", "active")
     .eq("moderation_status", "active")
     .order("created_at", { ascending: false })
     .order("created_at", { ascending: true, referencedTable: "community_comments" })
     .range(from, from + perPage - 1);
 
-  const posts = cleanPosts((data ?? []) as CommunityPost[]);
-  return posts.filter((post) => !post.vehicle || post.vehicle.visibility === "public");
+  return ((data ?? []) as unknown as CommunityPost[])
+    .filter((post) => !post.vehicle || post.vehicle.visibility === "public")
+    .map(toCommunityFeedPost);
+}
+
+export async function getCommunityPostById(id: string) {
+  if (!await hasCommunityViewer()) return null;
+
+  const { data } = await createAdminClient()
+    .from("community_posts")
+    .select(COMMUNITY_FEED_SELECT)
+    .eq("id", id)
+    .eq("status", "active")
+    .eq("moderation_status", "active")
+    .maybeSingle();
+
+  const post = data as unknown as CommunityPost | null;
+  if (!post || (post.vehicle && post.vehicle.visibility !== "public")) return null;
+  return toCommunityFeedPost(post);
 }
 
 const ARCHIVE_EXPIRY_DAYS = 30;
@@ -204,15 +380,19 @@ export async function getCommunityPostOptions() {
 }
 
 export async function getVehicleDiscussionPosts(vehicleId: string) {
+  if (!await hasCommunityViewer()) return [];
+
   const admin = createAdminClient();
   const { data } = await admin
     .from("community_posts")
-    .select(COMMUNITY_POST_SELECT)
+    .select(COMMUNITY_FEED_SELECT)
     .eq("status", "active")
     .eq("moderation_status", "active")
     .eq("vehicle_id", vehicleId)
     .order("created_at", { ascending: false })
     .order("created_at", { ascending: true, referencedTable: "community_comments" });
 
-  return cleanPosts((data ?? []) as CommunityPost[]);
+  return ((data ?? []) as unknown as CommunityPost[])
+    .filter((post) => !post.vehicle || post.vehicle.visibility === "public")
+    .map(toCommunityFeedPost);
 }

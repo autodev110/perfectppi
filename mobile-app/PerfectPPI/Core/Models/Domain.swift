@@ -18,6 +18,7 @@ struct Profile: Codable, Identifiable, Hashable {
     let email: String?
     let displayName: String?
     let username: String?
+    let usernameState: String?
     let avatarUrl: String?
     let bio: String?
     let isPublic: Bool?
@@ -27,6 +28,10 @@ struct Profile: Codable, Identifiable, Hashable {
     var fullName: String? { displayName }
 
     var canSwitchRoles: Bool { isDeveloper == true }
+
+    var needsUsername: Bool {
+        usernameState != "claimed" || username?.isEmpty != false
+    }
 }
 
 // MARK: - Vehicle
@@ -122,7 +127,7 @@ struct CommunityPost: Codable, Identifiable, Hashable {
 struct CommunityPostMedia: Codable, Identifiable, Hashable {
     let id: String
     let postId: String
-    let uploaderId: String
+    let uploaderId: String?
     let url: String
     let mediaType: String
     let contentType: String

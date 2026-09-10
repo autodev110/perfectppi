@@ -4,10 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { signUp, signInWithGoogle } from "@/features/auth/actions";
 import { Mail, Lock, User } from "lucide-react";
+import { UsernameInput } from "@/components/shared/username-input";
 
 export default function SignUpPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [username, setUsername] = useState("");
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -61,6 +63,13 @@ export default function SignUpPage() {
 
         {/* Form */}
         <form action={handleSubmit} className="space-y-5">
+          <div className="space-y-1.5">
+            <label htmlFor="username" className="ml-1 text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+              Username
+            </label>
+            <UsernameInput value={username} onChange={setUsername} />
+          </div>
+
           <div className="space-y-1.5">
             <label
               htmlFor="displayName"

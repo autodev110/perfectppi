@@ -26,6 +26,32 @@ const PUBLIC_ROUTES = [
 ];
 const AUTH_ROUTES = ["/login", "/signup"];
 
+function matchesRoute(pathname: string, route: string) {
+  return pathname === route || pathname.startsWith(`${route}/`);
+}
+
+const USERNAME_PENDING_ROUTES = [
+  "/onboarding/username",
+  "/account-unavailable",
+  "/callback",
+  "/legal/accept",
+  "/terms",
+  "/privacy",
+  "/privacy-choices",
+  "/notice-at-collection",
+  "/community-guidelines",
+  "/ai-disclosure",
+  "/accessibility",
+  "/copyright",
+  "/warranty-disclosure",
+  "/support",
+  "/api/auth",
+  "/api/profiles/me",
+  "/api/profiles/username",
+  "/api/legal/accept",
+  "/api/privacy",
+];
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -34,7 +60,44 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const { supabaseResponse, user } = await updateSession(request);
+  const { supabaseResponse, user, supabase } = await updateSession(request);
+
+  // Pending OAuth accounts may only finish identity/legal setup or exercise
+  // privacy rights. Gate public-looking product pages too; otherwise a signed-in
+  // pending account could browse them as if it were an anonymous visitor.
+  if (user) {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("username_state")
+      .eq("auth_user_id", user.id)
+      .maybeSingle();
+    const pendingRouteAllowed = USERNAME_PENDING_ROUTES.some((route) =>
+      matchesRoute(pathname, route)
+    );
+
+    if ((profileError || !profile) && !pendingRouteAllowed) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "Account profile is temporarily unavailable", code: "profile_unavailable" },
+          { status: 503 },
+        );
+      }
+      return NextResponse.redirect(new URL("/account-unavailable", request.url));
+    }
+
+    if (profile?.username_state !== "claimed" && !pendingRouteAllowed) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "Choose a username before continuing", code: "username_required" },
+          { status: 428 },
+        );
+      }
+
+      const destination = new URL("/onboarding/username", request.url);
+      destination.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+      return NextResponse.redirect(destination);
+    }
+  }
 
   // Public routes — always accessible
   if (

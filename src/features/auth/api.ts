@@ -7,6 +7,7 @@ type ApiRoleResult =
       profile: {
         id: string;
         role: UserRole;
+        username_state: string;
       };
       supabase: Awaited<ReturnType<typeof createClient>>;
     }
@@ -33,7 +34,7 @@ export async function requireApiRole(
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role")
+    .select("id, role, username_state")
     .eq("auth_user_id", user.id)
     .single();
 
@@ -49,6 +50,15 @@ export async function requireApiRole(
   if (!allowedRoles.includes(profile.role)) {
     return {
       response: NextResponse.json({ error: "Not authorized" }, { status: 403 }),
+    };
+  }
+
+  if (profile.username_state !== "claimed") {
+    return {
+      response: NextResponse.json(
+        { error: "Choose a username before continuing", code: "username_required" },
+        { status: 428 },
+      ),
     };
   }
 

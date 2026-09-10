@@ -24,7 +24,7 @@ export async function getPublicProfile(username: string) {
   const { data } = await supabase
     .from("profiles")
     .select("*")
-    .eq("username", username)
+    .eq("username_normalized", username.trim().toLowerCase())
     .eq("is_public", true)
     .single();
 

@@ -4,6 +4,9 @@ import { createCommunityPostFromInput } from "@/features/community/actions";
 import { getCommunityPosts } from "@/features/community/queries";
 
 export async function GET() {
+  const auth = await requireApiRole(["consumer", "technician", "org_manager", "admin"]);
+  if ("response" in auth) return auth.response;
+
   const data = await getCommunityPosts();
   return NextResponse.json({ data });
 }

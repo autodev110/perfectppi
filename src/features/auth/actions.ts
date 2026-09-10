@@ -8,11 +8,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { recordTermsAcceptance } from "@/lib/legal/server";
 import { headers } from "next/headers";
 import { CANONICAL_ORIGIN, TERMS_VERSION } from "@/lib/legal/constants";
+import { usernameSchema } from "@/features/profiles/username";
 
 const signUpSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   displayName: z.string().min(1, "Name is required").max(100),
+  username: usernameSchema,
   acceptTerms: z.literal("on", {
     errorMap: () => ({ message: "You must agree to the Terms of Service" }),
   }),
@@ -28,12 +30,25 @@ export async function signUp(formData: FormData) {
     email: formData.get("email") as string,
     password: formData.get("password") as string,
     displayName: formData.get("displayName") as string,
+    username: formData.get("username") as string,
     acceptTerms: formData.get("acceptTerms") as string,
   };
 
   const parsed = signUpSchema.safeParse(raw);
   if (!parsed.success) {
     return { error: parsed.error.errors[0].message };
+  }
+
+  const admin = createAdminClient();
+  const { data: usernameAvailable, error: availabilityError } = await admin.rpc(
+    "is_username_available",
+    { p_username: parsed.data.username },
+  );
+  if (availabilityError) {
+    return { error: "Username availability is temporarily unavailable. Please try again." };
+  }
+  if (!usernameAvailable) {
+    return { error: "That username is unavailable. Try another one." };
   }
 
   const supabase = await createClient();
@@ -43,23 +58,28 @@ export async function signUp(formData: FormData) {
     options: {
       data: {
         full_name: parsed.data.displayName,
+        username: parsed.data.username,
       },
     },
   });
 
   if (error) {
+    const message = error.message.toLowerCase();
+    if (message.includes("username") || message.includes("database error saving new user")) {
+      return { error: "That username was just taken. Try another one." };
+    }
     return { error: error.message };
   }
 
   if (!signUpData.user) return { error: "Account creation did not return a user" };
 
-  const { data: createdProfile, error: profileError } = await createAdminClient()
+  const { data: createdProfile, error: profileError } = await admin
     .from("profiles")
-    .select("id, role")
+    .select("id, role, username_state")
     .eq("auth_user_id", signUpData.user.id)
     .single();
-  if (profileError || !createdProfile) {
-    await createAdminClient().auth.admin.deleteUser(signUpData.user.id).catch(() => undefined);
+  if (profileError || !createdProfile || createdProfile.username_state !== "claimed") {
+    await admin.auth.admin.deleteUser(signUpData.user.id).catch(() => undefined);
     return { error: "Your account was created, but setup could not be completed. Contact support." };
   }
 
@@ -70,7 +90,7 @@ export async function signUp(formData: FormData) {
       headers: await headers(),
     });
   } catch {
-    await createAdminClient().auth.admin.deleteUser(signUpData.user.id).catch(() => undefined);
+    await admin.auth.admin.deleteUser(signUpData.user.id).catch(() => undefined);
     return { error: "Your account was created, but Terms acceptance could not be recorded. Contact support." };
   }
 
@@ -110,11 +130,12 @@ export async function signIn(formData: FormData) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role")
+    .select("id, role, username_state")
     .eq("auth_user_id", data.user.id)
     .single();
 
   if (profile) {
+    if (profile.username_state !== "claimed") redirect("/onboarding/username");
     const { data: acceptance } = await supabase
       .from("legal_acceptances")
       .select("id")

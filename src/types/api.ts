@@ -23,6 +23,7 @@ export interface SignUpRequest {
   email: string;
   password: string;
   displayName?: string;
+  username: string;
 }
 
 export interface SignInRequest {
@@ -33,7 +34,6 @@ export interface SignInRequest {
 // --- Profiles ---
 export interface UpdateProfileRequest {
   display_name?: string;
-  username?: string;
   bio?: string;
   avatar_url?: string;
   is_public?: boolean;
@@ -43,6 +43,8 @@ export interface ProfileResponse {
   id: string;
   auth_user_id: string;
   username: string | null;
+  username_normalized: string | null;
+  username_state: "pending" | "claimed";
   display_name: string | null;
   avatar_url: string | null;
   bio: string | null;

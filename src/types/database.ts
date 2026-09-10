@@ -2337,6 +2337,8 @@ export type Database = {
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
           username: string | null
+          username_normalized: string | null
+          username_state: string
         }
         Insert: {
           auth_user_id: string
@@ -2350,6 +2352,8 @@ export type Database = {
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
           username?: string | null
+          username_normalized?: string | null
+          username_state?: string
         }
         Update: {
           auth_user_id?: string
@@ -2363,8 +2367,87 @@ export type Database = {
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
           username?: string | null
+          username_normalized?: string | null
+          username_state?: string
         }
         Relationships: []
+      }
+      username_correction_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          id: string
+          new_username: string
+          previous_username: string
+          profile_id: string | null
+          reason: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          new_username: string
+          previous_username: string
+          profile_id?: string | null
+          reason: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          new_username?: string
+          previous_username?: string
+          profile_id?: string | null
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "username_correction_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "username_correction_events_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      username_reservations: {
+        Row: {
+          created_at: string
+          display_username: string
+          normalized_username: string
+          profile_id: string | null
+          reason: string
+        }
+        Insert: {
+          created_at?: string
+          display_username: string
+          normalized_username: string
+          profile_id?: string | null
+          reason: string
+        }
+        Update: {
+          created_at?: string
+          display_username?: string
+          normalized_username?: string
+          profile_id?: string | null
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "username_reservations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       share_links: {
         Row: {
@@ -2927,6 +3010,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_correct_username: {
+        Args: { p_profile_id: string; p_reason: string; p_username: string }
+        Returns: Database["public"]["Tables"]["profiles"]["Row"]
+      }
       apply_moderation_review: {
         Args: {
           p_enforcement: string
@@ -2962,6 +3049,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      claim_own_username: {
+        Args: { p_username: string }
+        Returns: Database["public"]["Tables"]["profiles"]["Row"]
       }
       claim_outbound_events: {
         Args: {
@@ -3060,6 +3151,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      is_username_available: {
+        Args: { p_username: string }
+        Returns: boolean
       }
       open_moderation_appeal: {
         Args: {

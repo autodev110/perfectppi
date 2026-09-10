@@ -10,6 +10,7 @@ const ACCOUNT_UNAVAILABLE_PATH = "/account-unavailable";
 type SessionState =
   | { status: "anonymous" }
   | { status: "unusable" }
+  | { status: "username_required" }
   | {
       status: "ok";
       profile: NonNullable<Awaited<ReturnType<typeof getAuthProfile>>>;
@@ -44,6 +45,8 @@ async function resolveSession(): Promise<SessionState> {
     .maybeSingle();
 
   if (error || !profile) return { status: "unusable" };
+
+  if (profile.username_state !== "claimed") return { status: "username_required" };
 
   return { status: "ok", profile };
 }
@@ -92,6 +95,10 @@ export async function requireRole(allowedRoles: UserRole[]) {
     redirect(ACCOUNT_UNAVAILABLE_PATH);
   }
 
+  if (session.status === "username_required") {
+    redirect("/onboarding/username");
+  }
+
   const { profile } = session;
 
   if (!allowedRoles.includes(profile.role)) {
@@ -113,6 +120,10 @@ export async function requireDeveloper() {
 
   if (session.status === "unusable") {
     redirect(ACCOUNT_UNAVAILABLE_PATH);
+  }
+
+  if (session.status === "username_required") {
+    redirect("/onboarding/username");
   }
 
   const { profile } = session;
