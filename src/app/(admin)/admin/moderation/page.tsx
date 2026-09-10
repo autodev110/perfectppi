@@ -8,6 +8,7 @@ import {
   getModerationQueueCases,
   type QueueTab,
 } from "@/features/moderation/case-queries";
+import { getModerationOperationsStatus } from "@/features/moderation/outbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,10 +28,13 @@ export default async function ModerationPage({ searchParams }: PageProps) {
     ? (params.tab as QueueTab)
     : params.tab === MEDIA_TAB ? MEDIA_TAB : "new";
 
-  const [cases, mediaItems] = await Promise.all([
+  const [cases, mediaItems, ops] = await Promise.all([
     tab === MEDIA_TAB ? Promise.resolve([]) : getModerationQueueCases(tab as QueueTab),
     tab === MEDIA_TAB ? getModerationQueue("pending_review") : Promise.resolve([]),
+    getModerationOperationsStatus(),
   ]);
+  const opsAlarm = (ops.casesOverdue ?? 0) > 0 || (ops.urgentUnacknowledged ?? 0) > 0
+    || (ops.outboxDeadLettered ?? 0) > 0 || (ops.casesOpen ?? 0) > 25 || (ops.casesOver24hShare ?? 0) > 20;
   const canDecide = capabilities.has("content_decide");
   const canEnforce = capabilities.has("account_enforce");
   const canLegalHold = capabilities.has("legal_hold_review");
@@ -51,6 +55,21 @@ export default async function ModerationPage({ searchParams }: PageProps) {
           <Button size="sm" variant="outline" asChild><Link href="/admin/moderation/access">Access</Link></Button>
         </div>
       </div>
+
+      <Card className={opsAlarm ? "border-destructive/40" : undefined}>
+        <CardContent className="flex flex-wrap gap-x-6 gap-y-2 p-4 text-sm">
+          <span><strong>{ops.casesOpen ?? 0}</strong> open</span>
+          <span className={(ops.casesOverdue ?? 0) > 0 ? "text-destructive" : undefined}><strong>{ops.casesOverdue ?? 0}</strong> overdue</span>
+          <span><strong>{ops.casesDueWithin2h ?? 0}</strong> due within 2h</span>
+          <span className={(ops.urgentUnacknowledged ?? 0) > 0 ? "text-destructive" : undefined}><strong>{ops.urgentUnacknowledged ?? 0}</strong> urgent unacknowledged (15m)</span>
+          <span className={(ops.casesOver24hShare ?? 0) > 20 ? "text-destructive" : undefined}><strong>{ops.casesOver24hShare ?? 0}%</strong> older than 24h</span>
+          <span>notifications: <strong>{ops.outboxPending ?? 0}</strong> pending · <strong>{ops.outboxProcessing ?? 0}</strong> processing ·{" "}
+            <span className={(ops.outboxDeadLettered ?? 0) > 0 ? "text-destructive" : undefined}><strong>{ops.outboxDeadLettered ?? 0}</strong> dead-lettered</span>
+            {(ops.outboxOldestPendingMinutes ?? 0) > 15 ? ` · oldest ${ops.outboxOldestPendingMinutes}m` : ""}
+          </span>
+          {opsAlarm ? <span className="text-destructive">Guardrail exceeded — see plan 18.5 / 20.3.</span> : null}
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap gap-2 border-b pb-3">
         {QUEUE_TABS.map((entry) => (

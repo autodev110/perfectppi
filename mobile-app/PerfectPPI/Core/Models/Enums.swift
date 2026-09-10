@@ -167,6 +167,17 @@ enum NotificationType: String, Codable {
     case warrantyAvailable = "warranty_available"
     case paymentCompleted = "payment_completed"
     case messageReceived = "message_received"
+    case moderationDecision = "moderation_decision"
+    case moderationCase = "moderation_case"
+    case reportReceived = "report_received"
+    /// Server-side categories grow over time (plan 22.1); an unrecognized
+    /// value must not fail decoding of the whole inbox on an older build.
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = NotificationType(rawValue: raw) ?? .unknown
+    }
 }
 
 enum ListingStatus: String, Codable {

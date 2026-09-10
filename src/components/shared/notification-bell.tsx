@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, CheckCheck, MessageSquare, ShieldCheck, CreditCard, FileText, Wrench } from "lucide-react";
+import { Bell, CheckCheck, MessageSquare, ShieldCheck, CreditCard, FileText, Wrench, Flag, Gavel } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils/formatting";
 import type { Database } from "@/types/database";
 
@@ -30,6 +30,9 @@ const typeStyle: Record<
   inspection_updated: { icon: FileText, color: "text-amber-600", bg: "bg-amber-50" },
   warranty_available: { icon: ShieldCheck, color: "text-violet-600", bg: "bg-violet-50" },
   payment_completed: { icon: CreditCard, color: "text-emerald-600", bg: "bg-emerald-50" },
+  moderation_decision: { icon: Gavel, color: "text-rose-600", bg: "bg-rose-50" },
+  moderation_case: { icon: ShieldCheck, color: "text-rose-600", bg: "bg-rose-50" },
+  report_received: { icon: Flag, color: "text-slate-600", bg: "bg-slate-50" },
 };
 
 export function NotificationBell({ messagesBase }: { messagesBase: string }) {
@@ -76,6 +79,13 @@ export function NotificationBell({ messagesBase }: { messagesBase: string }) {
       }
       return base;
     }
+    // Moderation notices deep-link to permission-checked destinations only
+    // (plan 22.1): the author's own posts, the moderator queue, or nothing.
+    if (n.type === "moderation_decision") return "/dashboard/posts?tab=review";
+    if (n.type === "moderation_case" && typeof data.caseId === "string") {
+      return `/admin/moderation/cases/${data.caseId}`;
+    }
+    if (n.type === "moderation_case") return "/admin/moderation";
     return null;
   }
 

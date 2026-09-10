@@ -932,6 +932,8 @@ export type Database = {
       }
       moderation_outbox: {
         Row: {
+          dead_lettered_at: string | null
+          locked_by: string | null
           attempt_count: number
           case_id: string
           completed_at: string | null
@@ -945,6 +947,8 @@ export type Database = {
           status: string
         }
         Insert: {
+          dead_lettered_at?: string | null
+          locked_by?: string | null
           attempt_count?: number
           case_id: string
           completed_at?: string | null
@@ -958,6 +962,8 @@ export type Database = {
           status?: string
         }
         Update: {
+          dead_lettered_at?: string | null
+          locked_by?: string | null
           attempt_count?: number
           case_id?: string
           completed_at?: string | null
@@ -3801,6 +3807,10 @@ export type Database = {
         Args: { p_role: Database["public"]["Enums"]["user_role"] }
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      claim_moderation_outbox: {
+        Args: { p_limit: number; p_worker: string }
+        Returns: Database["public"]["Tables"]["moderation_outbox"]["Row"][]
+      }
       clear_moderation_retention_policy: {
         Args: { p_basis: string; p_reason: string }
         Returns: boolean
@@ -3837,6 +3847,10 @@ export type Database = {
         Args: { p_case_id: string }
         Returns: Database["public"]["Tables"]["moderation_cases"]["Row"]
       }
+      complete_moderation_outbox: {
+        Args: { p_error?: string | null; p_id: string; p_success: boolean }
+        Returns: Database["public"]["Tables"]["moderation_outbox"]["Row"]
+      }
       community_media_storage_status: {
         Args: Record<PropertyKey, never>
         Returns: Json
@@ -3853,6 +3867,10 @@ export type Database = {
         }
         Returns: Database["public"]["Tables"]["moderation_cases"]["Row"]
       }
+      enqueue_moderation_sla_alerts: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       grant_moderation_capability: {
         Args: { p_capability: string; p_profile_id: string; p_reason: string }
         Returns: Database["public"]["Tables"]["moderation_role_grants"]["Row"]
@@ -3860,6 +3878,10 @@ export type Database = {
       moderation_current_user_has_capability: {
         Args: { p_capability: string }
         Returns: boolean
+      }
+      moderation_operations_status: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       moderation_has_capability: {
         Args: { p_capability: string; p_profile_id: string }
@@ -4156,6 +4178,9 @@ export type Database = {
       media_type: "image" | "video"
       message_status: "unread" | "read" | "archived"
       notification_type:
+        | "moderation_decision"
+        | "moderation_case"
+        | "report_received"
         | "tech_request_new"
         | "tech_request_accepted"
         | "inspection_submitted"

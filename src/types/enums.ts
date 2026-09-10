@@ -125,6 +125,9 @@ export type OrgMemberRole = "technician" | "manager";
 
 // Domain G: Notifications
 export type NotificationType =
+  | "moderation_decision"
+  | "moderation_case"
+  | "report_received"
   | "tech_request_new"
   | "tech_request_accepted"
   | "inspection_submitted"

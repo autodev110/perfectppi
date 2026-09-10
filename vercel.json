@@ -20,6 +20,10 @@
     {
       "path": "/api/internal/workers/retention-purge",
       "schedule": "20 3 * * *"
+    },
+    {
+      "path": "/api/internal/workers/moderation-outbox",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
