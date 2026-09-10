@@ -82,6 +82,8 @@ targets:
       path: PerfectPPI/Resources/PerfectPPI.entitlements
       properties:
         aps-environment: development
+        com.apple.developer.applesignin:
+          - Default
         com.apple.developer.associated-domains:
           - applinks:perfectppi.com
           - applinks:www.perfectppi.com

@@ -36,6 +36,14 @@ client_id = "env(GOOGLE_CLIENT_ID)"
 secret = "env(GOOGLE_CLIENT_SECRET)"
 redirect_uri = "http://localhost:54321/auth/v1/callback"
 
+# Native iOS Sign in with Apple (id_token grant). The client_id is the app's
+# bundle identifier; the secret is only used by the web OAuth flow, which is
+# not enabled. Mirror this in the hosted project's Auth providers.
+[auth.external.apple]
+enabled = true
+client_id = "env(APPLE_SIGN_IN_CLIENT_ID)"
+secret = "env(APPLE_SIGN_IN_WEB_SECRET)"
+
 [storage]
 enabled = true
 file_size_limit = "50MiB"

@@ -151,6 +151,38 @@ final class AuthStore: ObservableObject {
         await loadProfile()
     }
 
+    /// Completes a native Sign in with Apple. The username completion gate
+    /// applies exactly as it does for Google: the profile is created pending
+    /// and RootView holds the user on the username screen.
+    func signInWithApple(_ result: AppleSignIn.Result) async throws {
+        _ = try await client.auth.signInWithIdToken(
+            credentials: OpenIDConnectCredentials(
+                provider: .apple,
+                idToken: result.identityToken,
+                nonce: result.rawNonce
+            )
+        )
+        await loadProfile()
+
+        // Apple shares the name only once; persist it if the profile has none.
+        if let name = result.fullName, let current = profile,
+           (current.displayName ?? "").trimmingCharacters(in: .whitespaces).isEmpty {
+            if let updated: Profile = try? await ProfilesAPI.updateMe(
+                .init(displayName: name, bio: nil, avatarUrl: nil, isPublic: nil,
+                      defaultPostAudience: nil, discoverable: nil, allowExactUsernameLookup: nil)
+            ) {
+                state = .signedIn(updated)
+            }
+        }
+
+        // Hand the single-use authorization code to the server so the Apple
+        // refresh token can be revoked at account deletion (App Store
+        // 5.1.1(v)). Best-effort: a custody failure must not block sign-in.
+        if let code = result.authorizationCode {
+            await AuthAPI.linkAppleAuthorization(code: code)
+        }
+    }
+
     func exchangeCode(from url: URL) async {
         do {
             try await client.auth.session(from: url)

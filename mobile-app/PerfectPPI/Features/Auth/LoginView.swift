@@ -1,8 +1,11 @@
+import AuthenticationServices
 import SwiftUI
 import Supabase
 
 struct LoginView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var auth: AuthStore
+    @State private var appleNonce: String = AppleSignIn.makeRawNonce()
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var username: String = ""
@@ -116,6 +119,21 @@ struct LoginView: View {
                         }
                         .padding(.vertical, 2)
 
+                        // Sign in with Apple ships alongside Google (App Store
+                        // Review Guideline 4.8); both land on the same username
+                        // completion gate.
+                        SignInWithAppleButton(mode == .signIn ? .signIn : .signUp) { request in
+                            request.requestedScopes = [.fullName, .email]
+                            request.nonce = AppleSignIn.sha256Hex(appleNonce)
+                        } onCompletion: { outcome in
+                            Task { await handleApple(outcome) }
+                        }
+                        .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                        .frame(height: 50)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                        .disabled(isWorking)
+                        .accessibilityIdentifier("auth.signInWithApple")
+
                         Button {
                             Task { await oauth(.google) }
                         } label: {
@@ -213,6 +231,26 @@ struct LoginView: View {
             return
         } catch {
             usernameAvailability = .idle
+        }
+    }
+
+    private func handleApple(_ outcome: Result<ASAuthorization, Error>) async {
+        guard !isWorking else { return }
+        isWorking = true
+        errorMessage = nil
+        defer {
+            isWorking = false
+            // Every attempt uses a fresh nonce.
+            appleNonce = AppleSignIn.makeRawNonce()
+        }
+        do {
+            let authorization = try outcome.get()
+            let result = try AppleSignIn.result(from: authorization, rawNonce: appleNonce)
+            try await auth.signInWithApple(result)
+        } catch let error as ASAuthorizationError where error.code == .canceled {
+            // The user dismissed the sheet; nothing to report.
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

@@ -16,6 +16,39 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      apple_sign_in_tokens: {
+        Row: {
+          apple_user_id: string
+          last_error: string | null
+          linked_at: string
+          profile_id: string
+          refresh_token_ciphertext: string
+          revoke_attempted_at: string | null
+          revoke_outcome: string | null
+          updated_at: string
+        }
+        Insert: {
+          apple_user_id: string
+          last_error?: string | null
+          linked_at?: string
+          profile_id: string
+          refresh_token_ciphertext: string
+          revoke_attempted_at?: string | null
+          revoke_outcome?: string | null
+          updated_at?: string
+        }
+        Update: {
+          apple_user_id?: string
+          last_error?: string | null
+          linked_at?: string
+          profile_id?: string
+          refresh_token_ciphertext?: string
+          revoke_attempted_at?: string | null
+          revoke_outcome?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: Database["public"]["Enums"]["audit_action"]

@@ -1,6 +1,7 @@
 import type { Json } from "@/types/database";
 import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { decryptAppleToken, readAppleSignInConfig, revokeAppleRefreshToken } from "@/lib/auth/apple";
 import { buildAccountDataExport } from "@/lib/privacy/export";
 import { privacyRecordExpiry } from "@/lib/privacy/identity";
 import { isManagedUploadUrl } from "@/features/uploads/url";
@@ -13,6 +14,7 @@ type DeletionMetadata = {
   profileId?: string;
   storageReferences?: string[];
   retainedReferences?: string[];
+  appleRevocation?: AppleRevocationRecord;
 };
 
 function metadata(value: Json): DeletionMetadata {
@@ -26,7 +28,49 @@ function metadata(value: Json): DeletionMetadata {
     retainedReferences: Array.isArray(record.retainedReferences)
       ? record.retainedReferences.filter((item): item is string => typeof item === "string")
       : undefined,
+    appleRevocation: record.appleRevocation === "revoked" || record.appleRevocation === "already_invalid"
+      || record.appleRevocation === "not_linked" || record.appleRevocation === "not_configured"
+      ? record.appleRevocation
+      : undefined,
   };
+}
+
+type AppleRevocationRecord = "revoked" | "already_invalid" | "not_linked" | "not_configured";
+
+async function revokeAppleTokenForProfile(profileId: string): Promise<AppleRevocationRecord> {
+  const admin = createAdminClient();
+  const { data: link } = await admin
+    .from("apple_sign_in_tokens")
+    .select("refresh_token_ciphertext, revoke_outcome")
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (!link) return "not_linked";
+  if (link.revoke_outcome === "revoked" || link.revoke_outcome === "already_invalid") return link.revoke_outcome;
+
+  const config = readAppleSignInConfig();
+  if (!config) {
+    // Token custody was configured when the user linked, but revocation
+    // cannot run now: record it rather than pretend it happened.
+    await admin.from("apple_sign_in_tokens").update({
+      revoke_attempted_at: new Date().toISOString(), revoke_outcome: "failed", last_error: "Apple sign-in not configured",
+    }).eq("profile_id", profileId);
+    console.error("[privacy] Apple token revocation skipped: not configured", { profileId });
+    return "not_configured";
+  }
+
+  try {
+    const outcome = await revokeAppleRefreshToken(decryptAppleToken(link.refresh_token_ciphertext), config);
+    await admin.from("apple_sign_in_tokens").update({
+      revoke_attempted_at: new Date().toISOString(), revoke_outcome: outcome, last_error: null,
+    }).eq("profile_id", profileId);
+    return outcome;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "revocation failed";
+    await admin.from("apple_sign_in_tokens").update({
+      revoke_attempted_at: new Date().toISOString(), revoke_outcome: "failed", last_error: message.slice(0, 1000),
+    }).eq("profile_id", profileId);
+    throw new Error(`Apple token revocation failed; deletion will retry: ${message}`);
+  }
 }
 
 function collectStorageReferences(value: unknown, references = new Set<string>()): Set<string> {
@@ -75,6 +119,7 @@ async function fulfillDeletion(request: {
   // severed by the cascade) and checkpointed with the request.
   let retainedReferences = stored.retainedReferences ?? [];
   let accountDeletedAt = request.account_deleted_at;
+  let appleRevocation: AppleRevocationRecord = stored.appleRevocation ?? "not_linked";
 
   if (!accountDeletedAt) {
     const { count, error: holdError } = await admin
@@ -131,6 +176,11 @@ async function fulfillDeletion(request: {
     }).eq("auth_user_id", authUserId!).neq("id", request.id);
     if (relatedIdentityError) throw new Error(relatedIdentityError.message);
 
+    // Sign in with Apple: revoke Apple's refresh token before the account
+    // disappears (App Store 5.1.1(v)). A transient Apple failure throws so the
+    // request retries; an already-invalid token counts as revoked.
+    appleRevocation = await revokeAppleTokenForProfile(profileId);
+
     if (userData.user) {
       const { error: deleteError } = await admin.auth.admin.deleteUser(authUserId!, false);
       if (deleteError && !isMissingAuthUser(deleteError.message)) throw deleteError;
@@ -141,7 +191,7 @@ async function fulfillDeletion(request: {
       account_deleted_at: accountDeletedAt,
       auth_user_id: null,
       details: null,
-      result_metadata: { profileId, storageReferences, retainedReferences },
+      result_metadata: { profileId, storageReferences, retainedReferences, appleRevocation },
     }).eq("id", request.id);
     if (checkpointError) throw new Error(checkpointError.message);
   }
@@ -159,6 +209,7 @@ async function fulfillDeletion(request: {
       storageObjectsDeleted: deletedObjects,
       storageCleanupCompletedAt: completedAt,
       retainedEvidenceObjects: retainedReferences.length,
+      appleRevocation,
     },
     retention_expires_at: privacyRecordExpiry(),
     locked_at: null,

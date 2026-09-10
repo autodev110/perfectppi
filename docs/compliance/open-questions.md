@@ -32,6 +32,7 @@ Do not treat the legal drafts or product as approved for nationwide launch until
 ## Identity and stores
 
 - [ ] Configure Sign in with Apple: Team ID, bundle/App ID, Services ID, entitlement, Supabase client IDs, key/JWT rotation, relay email, revocation and test accounts. Google login on iOS makes this an App Store launch blocker under current review rules.
+  - Implemented (Sep 10, 2026): native iOS Sign in with Apple through Supabase's id_token grant with a per-attempt nonce; the `com.apple.developer.applesignin` entitlement; server-side custody of the Apple refresh token (`/api/auth/apple/link`, encrypted at rest) and revocation before account deletion. Still operational: enable the Apple provider on the hosted Supabase project with the bundle ID as client ID, create the Sign in with Apple key, set `APPLE_SIGN_IN_*` in production, decide the private relay email handling, and verify with a review test account.
 - [ ] Decide first-party handling for Apple account/consent/email-change notifications if Supabase does not support the required server-to-server endpoint.
 - [ ] Verify Google Cloud/Supabase production dashboard values, consent branding, Search Console ownership, authorized origin, callback, audience and exact basic scopes.
 - [ ] Complete App Store privacy questionnaire from the final data inventory and validate `PrivacyInfo.xcprivacy` with archive tooling.

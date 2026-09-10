@@ -1,5 +1,23 @@
 import Foundation
 
+enum AuthAPI {
+    private struct AppleLinkPayload: Encodable {
+        let authorizationCode: String
+    }
+
+    /// Best-effort custody hand-off after a native Apple sign-in.
+    static func linkAppleAuthorization(code: String) async {
+        do {
+            let _: Empty = try await APIClient.shared.postCamel(
+                "/api/auth/apple/link",
+                body: AppleLinkPayload(authorizationCode: code)
+            )
+        } catch {
+            // The server records custody failures; sign-in itself succeeded.
+        }
+    }
+}
+
 enum ProfilesAPI {
     static func me() async throws -> Profile {
         try await APIClient.shared.get("/api/profiles/me")

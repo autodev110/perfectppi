@@ -158,7 +158,9 @@ export function NotificationBell({ messagesBase }: { messagesBase: string }) {
           ) : (
             <ul className="py-1">
               {sorted.map((n) => {
-                const cfg = typeStyle[n.type];
+                // Server-side categories grow over time; never let an
+                // unrecognized one take the whole dropdown down.
+                const cfg = typeStyle[n.type] ?? { icon: Bell, color: "text-muted-foreground", bg: "bg-muted" };
                 const Icon = cfg.icon;
                 const unread = !n.read_at;
 
