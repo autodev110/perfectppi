@@ -2594,6 +2594,75 @@ export type Database = {
         }
         Relationships: []
       }
+      product_feature_flag_changes: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          environment: string
+          flag_code: string
+          id: string
+          next_enabled: boolean
+          previous_enabled: boolean | null
+          reason: string
+          version: number
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          environment: string
+          flag_code: string
+          id?: string
+          next_enabled: boolean
+          previous_enabled?: boolean | null
+          reason: string
+          version: number
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          environment?: string
+          flag_code?: string
+          id?: string
+          next_enabled?: boolean
+          previous_enabled?: boolean | null
+          reason?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      product_feature_flags: {
+        Row: {
+          enabled: boolean
+          environment: string
+          flag_code: string
+          reason: string
+          rollout_scope: Json
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          enabled: boolean
+          environment: string
+          flag_code: string
+          reason: string
+          rollout_scope?: Json
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          enabled?: boolean
+          environment?: string
+          flag_code?: string
+          reason?: string
+          rollout_scope?: Json
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
       profile_blocks: {
         Row: { blocked_id: string; blocker_id: string; created_at: string }
         Insert: { blocked_id: string; blocker_id: string; created_at?: string }
@@ -3538,6 +3607,24 @@ export type Database = {
       set_own_profile_block: {
         Args: { p_blocked: boolean; p_target_profile_id: string }
         Returns: boolean
+      }
+      set_product_feature_flag: {
+        Args: {
+          p_enabled: boolean
+          p_environment: string
+          p_flag_code: string
+          p_reason: string
+        }
+        Returns: {
+          enabled: boolean
+          environment: string
+          flag_code: string
+          reason: string
+          rollout_scope: Json
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
       }
       set_own_profile_mute: {
         Args: { p_muted: boolean; p_target_profile_id: string }

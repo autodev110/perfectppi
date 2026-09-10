@@ -1,6 +1,9 @@
 import { getCommunityPostOptions } from "@/features/community/queries";
+import { getFeatureFlags, toClientCapabilities } from "@/lib/feature-flags";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NewPostForm } from "./new-post-form";
+
+export const dynamic = "force-dynamic";
 
 export default async function NewDashboardPostPage({
   searchParams,
@@ -8,7 +11,11 @@ export default async function NewDashboardPostPage({
   searchParams: Promise<{ vehicle?: string }>;
 }) {
   const { vehicle: requestedVehicleId } = await searchParams;
-  const { vehicles, listings, defaultAudience, canPostPublic } = await getCommunityPostOptions();
+  const [{ vehicles, listings, defaultAudience, canPostPublic }, flags] = await Promise.all([
+    getCommunityPostOptions(),
+    getFeatureFlags(),
+  ]);
+  const { capabilities } = toClientCapabilities(flags);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -23,13 +30,20 @@ export default async function NewDashboardPostPage({
           <CardTitle>Post Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <NewPostForm
-            vehicles={vehicles}
-            listings={listings}
-            selectedVehicleId={requestedVehicleId}
-            defaultAudience={defaultAudience}
-            canPostPublic={canPostPublic}
-          />
+          {capabilities.communityTextPosts ? (
+            <NewPostForm
+              vehicles={vehicles}
+              listings={listings}
+              selectedVehicleId={requestedVehicleId}
+              defaultAudience={defaultAudience}
+              canPostPublic={canPostPublic}
+              capabilities={capabilities}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Community posting is temporarily unavailable. Please try again later.
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

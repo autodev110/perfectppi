@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 import { UPLOAD_LIMITS } from "@/config/constants";
 import { canUploadToTarget } from "@/features/uploads/access";
+import { communityUploadRefusal } from "@/features/uploads/community-policy";
 
 const uploadSchema = z.object({
   entity: z.enum([
@@ -80,6 +81,8 @@ export async function POST(request: Request) {
 
   const isImage = allowedImageTypes.includes(file.type);
   const isVideo = allowedVideoTypes.includes(file.type);
+  const refusal = await communityUploadRefusal(parsed.data.entity, isVideo);
+  if (refusal) return refusal;
   const maxBytes = isImage
     ? UPLOAD_LIMITS.maxImageSize
     : isVideo

@@ -7,6 +7,7 @@ struct PerfectPPIApp: App {
     @StateObject private var router = URLRouter.shared
     @StateObject private var offline = OfflineQueue.shared
     @AppStorage(AppAppearance.storageKey) private var appearanceRaw = AppAppearance.system.rawValue
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -17,6 +18,10 @@ struct PerfectPPIApp: App {
                 .environmentObject(offline)
                 .task {
                     await auth.bootstrap()
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active else { return }
+                    Task { await auth.refreshCapabilities() }
                 }
                 .onOpenURL { url in
                     Task { await router.handle(url, authStore: auth) }

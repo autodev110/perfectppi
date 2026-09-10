@@ -26,6 +26,7 @@ import {
   Star,
   Plug,
   Code2,
+  ToggleLeft,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useSignOut } from "@/features/auth/hooks";
@@ -52,6 +53,7 @@ const iconMap: Record<string, ComponentType<{ className?: string }>> = {
   Star,
   Plug,
   Code2,
+  ToggleLeft,
 };
 
 interface SidebarItem {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiRole } from "@/features/auth/api";
 import { createCommunityCommentFromInput } from "@/features/community/actions";
+import { PUBLICATION_OUTCOME_STATUS } from "@/lib/moderation/launch-policy";
 
 const commentSchema = z.object({
   content: z.string().trim().min(1).max(600),
@@ -26,8 +27,11 @@ export async function POST(
     content: parsed.data.content,
   });
 
-  if ("error" in result) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+  if (result.error !== undefined) {
+    return NextResponse.json(
+      { error: result.error, code: result.code ?? null },
+      { status: result.code ? PUBLICATION_OUTCOME_STATUS[result.code] : 400 },
+    );
   }
 
   return NextResponse.json({ data: result.data }, { status: 201 });

@@ -3,7 +3,7 @@ import type { Json } from "@/types/database";
 import type { ModerationEntityType, ModerationResult } from "./types";
 import { statusForDecision } from "./types";
 
-export { moderateImage, moderateText, moderateVideo } from "./policy";
+export { moderateImage, moderateImageLaunchMode, moderateText, moderateVideo } from "./policy";
 export { moderationUserMessage, publicStatusForDecision, statusForDecision } from "./types";
 export type { ModerationDecision, ModerationEntityType, ModerationResult, ModerationStatus } from "./types";
 

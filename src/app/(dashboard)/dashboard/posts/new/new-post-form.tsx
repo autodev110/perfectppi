@@ -19,13 +19,24 @@ type NewPostFormProps = {
   selectedVehicleId?: string;
   defaultAudience: "public" | "friends";
   canPostPublic: boolean;
+  /** Server capabilities (plan 30.2); presentation only, the API re-checks. */
+  capabilities: {
+    communityTextPosts: boolean;
+    communityPhotoUploads: boolean;
+    communityVideoUploads: boolean;
+  };
 };
 
 function vehicleLabel(vehicle: CommunityPostOptionVehicle | null) {
   return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ") || "Vehicle";
 }
 
-export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudience, canPostPublic }: NewPostFormProps) {
+export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudience, canPostPublic, capabilities }: NewPostFormProps) {
+  const videoAllowed = capabilities.communityVideoUploads;
+  const mediaAllowed = capabilities.communityPhotoUploads;
+  const acceptTypes = videoAllowed
+    ? "image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime"
+    : "image/jpeg,image/png,image/webp,image/heic,image/heif";
   const router = useRouter();
   const requestedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
   const [attachmentType, setAttachmentType] = useState(requestedVehicle ? "vehicle" : "none");
@@ -49,14 +60,14 @@ export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudi
     let postId = createdPostId.current;
     if (!postId) {
       const result = await createCommunityPost(formData);
-      if (result?.error) {
+      if (result.error !== undefined) {
         setError(result.error);
         setLoading(false);
         return;
       }
-      postId = result.data?.id ?? null;
+      postId = result.data.id;
       createdPostId.current = postId;
-      createdModerationStatus.current = result.data?.moderationStatus ?? null;
+      createdModerationStatus.current = result.data.moderationStatus;
     }
 
     if (postId && media.length > 0) {
@@ -100,12 +111,16 @@ export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudi
 
   function addMedia(files: FileList | null) {
     if (!files) return;
-    const selected = Array.from(files).filter(
-      (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
+    const chosen = Array.from(files);
+    if (!videoAllowed && chosen.some((file) => file.type.startsWith("video/"))) {
+      setError("Video posts are coming later. Please choose photos only.");
+    }
+    const selected = chosen.filter(
+      (file) => file.type.startsWith("image/") || (videoAllowed && file.type.startsWith("video/")),
     );
     const available = Math.max(0, MAX_MEDIA - media.length);
     if (selected.length > available) {
-      setError(`Posts can include up to ${MAX_MEDIA} photos or videos`);
+      setError(`Posts can include up to ${MAX_MEDIA} ${videoAllowed ? "photos or videos" : "photos"}`);
     }
     setMedia((current) => [...current, ...selected.slice(0, available)]);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -146,11 +161,11 @@ export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudi
         </p>
       </div>
 
-      <div className="space-y-3">
+      {mediaAllowed ? <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <Label htmlFor="post-media">Photos and videos</Label>
-            <p className="text-xs text-muted-foreground">Add up to 10 items. Their order becomes the carousel order.</p>
+            <Label htmlFor="post-media">{videoAllowed ? "Photos and videos" : "Photos"}</Label>
+            <p className="text-xs text-muted-foreground">Add up to 10 photos. Their order becomes the carousel order.</p>
           </div>
           <span className="text-xs font-semibold text-muted-foreground">{media.length}/{MAX_MEDIA}</span>
         </div>
@@ -158,7 +173,7 @@ export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudi
           ref={fileInputRef}
           id="post-media"
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime"
+          accept={acceptTypes}
           multiple
           className="sr-only"
           onChange={(event) => addMedia(event.target.files)}
@@ -171,7 +186,7 @@ export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudi
             disabled={loading || media.length >= MAX_MEDIA}
           >
             <ImagePlus className="mr-2 h-4 w-4" />
-            Add Media
+            {videoAllowed ? "Add Media" : "Add Photos"}
           </Button>
           {uploading ? (
             <span className="text-xs font-medium text-muted-foreground">
@@ -192,7 +207,9 @@ export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudi
             ))}
           </div>
         ) : null}
-      </div>
+      </div> : (
+        <p className="text-xs text-muted-foreground">Photo uploads are temporarily unavailable. You can still post text.</p>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="attachment_type">Attach context</Label>

@@ -96,6 +96,62 @@ export async function moderateImage(bytes: Uint8Array, contentType: string): Pro
   }
 }
 
+/**
+ * Launch-mode still-photo gate (plan 21.2 / 3.6): the specialist
+ * known-illegal-image safeguard is the only publication gate; the
+ * general-purpose classifier is not consulted. A match, an uncertain result,
+ * or an unavailable safeguard does not publish. With the safeguard flag off
+ * (a recorded product decision), the photo still passes format validation.
+ */
+export async function moderateImageLaunchMode(
+  bytes: Uint8Array,
+  contentType: string,
+  options: { safeguardRequired: boolean },
+): Promise<ModerationResult> {
+  if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(contentType)) {
+    return {
+      decision: "review",
+      riskLevel: "medium",
+      reasonCodes: ["manual_format_review"],
+      provider: "native_rules",
+      modelName: null,
+      modelVersion: POLICY_VERSION,
+      rawResult: { contentType, launchMode: true },
+    };
+  }
+
+  if (!options.safeguardRequired) {
+    return {
+      decision: "allow",
+      riskLevel: "none",
+      reasonCodes: ["launch_autopublish", "specialist_safeguard_disabled_by_flag"],
+      provider: "launch_policy",
+      modelName: null,
+      modelVersion: POLICY_VERSION,
+      rawResult: { launchMode: true, specialistScan: null },
+    };
+  }
+
+  let specialist: ModerationResult;
+  try {
+    specialist = await scanForKnownIllegalContent(bytes, contentType);
+  } catch (error) {
+    const unavailable = specialistUnavailable(error);
+    return {
+      ...unavailable,
+      reasonCodes: ["media_safety_unavailable", ...unavailable.reasonCodes],
+      rawResult: { ...unavailable.rawResult, launchMode: true },
+    };
+  }
+  if (specialist.decision !== "allow") return specialist;
+
+  return {
+    ...specialist,
+    reasonCodes: ["launch_autopublish", ...specialist.reasonCodes],
+    rawResult: { launchMode: true, specialistScan: specialist.rawResult },
+  };
+}
+
 export async function moderateVideo(bytes: Uint8Array, contentType: string): Promise<ModerationResult> {
   let specialist: ModerationResult;
   try {

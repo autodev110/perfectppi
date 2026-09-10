@@ -371,7 +371,7 @@ private struct CommunityPostDetailView: View {
             isPresented: $showingPhotoPicker,
             selection: $pickerItems,
             maxSelectionCount: max(1, 10 - media.count),
-            matching: .any(of: [.images, .videos])
+            matching: auth.capabilities.capabilities.communityVideoUploads ? .any(of: [.images, .videos]) : .images
         )
         .onChange(of: pickerItems) { _, items in
             Task { await addMedia(items) }
@@ -453,7 +453,7 @@ private struct CommunityPostDetailView: View {
     }
 
     private var mediaManagementSection: some View {
-        Section("Photos and videos (\(media.count)/10)") {
+        Section("\(auth.capabilities.capabilities.communityVideoUploads ? "Photos and videos" : "Photos") (\(media.count)/10)") {
             ForEach(media) { item in
                 HStack {
                     Image(systemName: item.mediaType == "video" ? "video.fill" : "photo.fill")
@@ -473,7 +473,10 @@ private struct CommunityPostDetailView: View {
             Button {
                 Task { await openPhotoLibrary() }
             } label: {
-                Label(media.isEmpty ? "Add Photos or Videos" : "Add More", systemImage: "photo.on.rectangle.angled")
+                Label(media.isEmpty
+                      ? (auth.capabilities.capabilities.communityVideoUploads ? "Add Photos or Videos" : "Add Photos")
+                      : "Add More",
+                      systemImage: "photo.on.rectangle.angled")
             }
             .disabled(media.count >= 10 || uploadProgress.isUploading || removingMediaId != nil)
 
@@ -546,8 +549,14 @@ private struct CommunityPostDetailView: View {
 
         do {
             var payload: [CommunityAPI.MediaItemPayload] = []
+            var skippedVideo = false
             for (index, item) in selected.enumerated() {
                 let picked = try await AttachmentPickerSupport.load(item)
+                if picked.kind == .video, !auth.capabilities.capabilities.communityVideoUploads {
+                    skippedVideo = true
+                    uploadProgress.finishItem()
+                    continue
+                }
                 let url = try await R2Uploader.upload(
                     data: picked.data,
                     filename: picked.filename,
@@ -564,11 +573,17 @@ private struct CommunityPostDetailView: View {
                     sortOrder: index
                 ))
             }
+            if payload.isEmpty {
+                if skippedVideo { self.error = "Video posts are coming later. Please choose photos only." }
+                return
+            }
             let created = try await CommunityAPI.addMedia(postId: post.id, items: payload)
             let approved = created.filter { $0.moderationStatus == "active" }
             media = (media + approved).sorted { $0.sortOrder < $1.sortOrder }
             if approved.count != created.count {
                 self.error = "Some media is being reviewed and is not public yet."
+            } else if skippedVideo {
+                self.error = "Video posts are coming later. Photos were added."
             }
             onChanged()
         } catch {
@@ -798,7 +813,11 @@ private struct CommunityReportSheet: View {
 
 struct NewCommunityPostView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var auth: AuthStore
     let onCreated: () -> Void
+
+    private var caps: ClientCapabilities.Capabilities { auth.capabilities.capabilities }
+    private var pickerFilter: PHPickerFilter { caps.communityVideoUploads ? .any(of: [.images, .videos]) : .images }
 
     @State private var content = ""
     @State private var audience: CommunityPostAudience = .friends
@@ -830,9 +849,19 @@ struct NewCommunityPostView: View {
                 load: { try await CommunityAPI.options() },
                 loaded: { options in
                     Form {
+                        if !caps.communityTextPosts {
+                            Section {
+                                Label("Community posting is temporarily unavailable. Please try again later.",
+                                      systemImage: "pause.circle")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
                         Section("Post") {
                             TextEditor(text: $content)
                                 .frame(minHeight: 140)
+                                .disabled(!caps.communityTextPosts)
                         }
 
                         Section("Audience") {
@@ -865,11 +894,19 @@ struct NewCommunityPostView: View {
                             }
                         }
 
-                        Section("Photos and videos (\(media.count)/10)") {
+                        if !caps.communityPhotoUploads {
+                            Section("Photos") {
+                                Text("Photo uploads are temporarily unavailable. You can still post text.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                        Section("\(caps.communityVideoUploads ? "Photos and videos" : "Photos") (\(media.count)/10)") {
                             Button {
                                 Task { await openPhotoLibrary() }
                             } label: {
-                                Label("Choose Photos or Videos", systemImage: "photo.on.rectangle.angled")
+                                Label(caps.communityVideoUploads ? "Choose Photos or Videos" : "Choose Photos",
+                                      systemImage: "photo.on.rectangle.angled")
                             }
                             .disabled(media.count >= 10)
 
@@ -893,6 +930,7 @@ struct NewCommunityPostView: View {
                                     }
                                 }
                             }
+                        }
                         }
 
                         if let label = uploadProgress.label {
@@ -934,18 +972,20 @@ struct NewCommunityPostView: View {
                     Button(saving ? "Posting..." : "Post") {
                         Task { await save() }
                     }
-                    .disabled(saving || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(saving || !caps.communityTextPosts
+                              || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .photosPicker(
                 isPresented: $showingPhotoPicker,
                 selection: $pickerItems,
                 maxSelectionCount: max(1, 10 - media.count),
-                matching: .any(of: [.images, .videos])
+                matching: pickerFilter
             )
             .onChange(of: pickerItems) { _, items in
                 Task { await loadPickerItems(items) }
             }
+            .task { await auth.refreshCapabilities() }
             .fullScreenCover(isPresented: $showingCamera) {
                 CameraCaptureView(
                     prompt: "Add a photo to your post",
@@ -979,7 +1019,14 @@ struct NewCommunityPostView: View {
         defer { pickerItems = [] }
         for item in items.prefix(max(0, 10 - media.count)) {
             do {
-                media.append(try await AttachmentPickerSupport.load(item))
+                let picked = try await AttachmentPickerSupport.load(item)
+                if picked.kind == .video, !caps.communityVideoUploads {
+                    // Legacy entry point copy (plan 21.3); the server refuses
+                    // video reservations regardless.
+                    self.error = "Video posts are coming later. Please choose photos only."
+                    continue
+                }
+                media.append(picked)
                 photoAccessBlocked = false
             } catch {
                 self.error = "One selected item could not be loaded."

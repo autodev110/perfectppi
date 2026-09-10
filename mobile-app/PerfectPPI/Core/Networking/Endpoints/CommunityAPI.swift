@@ -1,5 +1,11 @@
 import Foundation
 
+enum CapabilitiesAPI {
+    static func fetch() async throws -> ClientCapabilities {
+        try await APIClient.shared.get("/api/capabilities")
+    }
+}
+
 enum CommunityAPI {
     static func feed() async throws -> [CommunityPost] {
         try await APIClient.shared.get("/api/community/posts")

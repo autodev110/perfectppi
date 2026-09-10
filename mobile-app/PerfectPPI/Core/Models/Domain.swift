@@ -175,6 +175,47 @@ struct CommunityComment: Codable, Identifiable, Hashable {
     let reportContext: String?
 }
 
+// MARK: - Capabilities
+
+/// Read-only launch capabilities from `/api/capabilities` (plan 30.2). The
+/// app uses these to hide or explain unavailable UI; every server mutation
+/// re-checks the flag itself, so this is never treated as authorization.
+struct ClientCapabilities: Codable, Hashable {
+    struct Capabilities: Codable, Hashable {
+        let socialProfiles: Bool
+        let friendsDiscovery: Bool
+        let groups: Bool
+        let groupCreation: Bool
+        let communityTextPosts: Bool
+        let communityPhotoUploads: Bool
+        let communityVideoUploads: Bool
+        let events: Bool
+    }
+
+    let version: Int
+    let environment: String
+    let refreshAfterSeconds: Int
+    let capabilities: Capabilities
+
+    /// Safe presentation defaults before the first successful fetch: creation
+    /// paths hidden, video always off.
+    static let conservative = ClientCapabilities(
+        version: 0,
+        environment: "unknown",
+        refreshAfterSeconds: 30,
+        capabilities: .init(
+            socialProfiles: true,
+            friendsDiscovery: false,
+            groups: false,
+            groupCreation: false,
+            communityTextPosts: true,
+            communityPhotoUploads: true,
+            communityVideoUploads: false,
+            events: false
+        )
+    )
+}
+
 struct CommunityPostOptions: Codable, Hashable {
     let vehicles: [CommunityPostOptionVehicle]
     let listings: [CommunityPostOptionListing]

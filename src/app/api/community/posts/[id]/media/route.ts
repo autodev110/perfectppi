@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
 import { addCommunityPostMedia } from "@/features/community/actions";
+import { PUBLICATION_OUTCOME_STATUS } from "@/lib/moderation/launch-policy";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -20,7 +21,11 @@ export async function POST(
   });
 
   if ("error" in result) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    const code = "code" in result ? result.code : undefined;
+    return NextResponse.json(
+      { error: result.error, code: code ?? null },
+      { status: code ? PUBLICATION_OUTCOME_STATUS[code] : 400 },
+    );
   }
 
   return NextResponse.json({ data: result.data }, { status: 201 });

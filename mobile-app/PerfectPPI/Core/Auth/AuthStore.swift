@@ -24,6 +24,11 @@ final class AuthStore: ObservableObject {
 
     @Published private(set) var state: State = .loading
 
+    /// Server-authoritative launch capabilities (plan 30.2). Refreshed after
+    /// sign-in, on foreground, and after `refreshAfterSeconds`.
+    @Published private(set) var capabilities: ClientCapabilities = .conservative
+    private var capabilitiesFetchedAt: Date?
+
     /// The signed-in profile, if any. Convenience for views that need the
     /// current user (e.g. optimistic UI) without switching on `state`.
     var profile: Profile? {
@@ -166,6 +171,7 @@ final class AuthStore: ObservableObject {
     /// is what swaps the tab bar over to the new role's screens.
     func applyProfile(_ profile: Profile) {
         state = .signedIn(profile)
+        Task { await refreshCapabilities(force: true) }
     }
 
     func retryProfileLoad() async {
@@ -183,10 +189,27 @@ final class AuthStore: ObservableObject {
         }
     }
 
+    /// Fetches capabilities when stale. Failures keep the last known value:
+    /// the server enforces every flag on write, so presentation may lag.
+    func refreshCapabilities(force: Bool = false) async {
+        guard profile != nil, profile?.needsUsername == false else { return }
+        if !force, let fetchedAt = capabilitiesFetchedAt,
+           Date().timeIntervalSince(fetchedAt) < Double(capabilities.refreshAfterSeconds) {
+            return
+        }
+        do {
+            capabilities = try await CapabilitiesAPI.fetch()
+            capabilitiesFetchedAt = Date()
+        } catch {
+            // Keep the previous snapshot.
+        }
+    }
+
     private func loadProfile() async {
         do {
             let profile: Profile = try await APIClient.shared.get("/api/profiles/me")
             state = .signedIn(profile)
+            await refreshCapabilities(force: true)
         } catch {
             // Preserve the keychain session during transient API/network failures.
             // Let the user retry without creating a second authentication session.

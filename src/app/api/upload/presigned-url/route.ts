@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 import { UPLOAD_LIMITS } from "@/config/constants";
 import { canUploadToTarget } from "@/features/uploads/access";
+import { communityUploadRefusal } from "@/features/uploads/community-policy";
 
 const presignSchema = z.object({
   filename: z.string().min(1),
@@ -71,6 +72,8 @@ export async function POST(request: Request) {
 
   const isImage = (UPLOAD_LIMITS.allowedImageTypes as readonly string[]).includes(parsed.data.contentType);
   const isVideo = (UPLOAD_LIMITS.allowedVideoTypes as readonly string[]).includes(parsed.data.contentType);
+  const refusal = await communityUploadRefusal(parsed.data.entity, isVideo);
+  if (refusal) return refusal;
   const maxBytes = isImage
     ? UPLOAD_LIMITS.maxImageSize
     : isVideo ? UPLOAD_LIMITS.maxVideoSize : UPLOAD_LIMITS.maxFileSize;

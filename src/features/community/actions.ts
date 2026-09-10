@@ -12,6 +12,7 @@ import {
   getActivePostingRestriction,
   isCommunityRateLimited,
   moderateImage,
+  moderateImageLaunchMode,
   moderateText,
   moderateVideo,
   moderationUserMessage,
@@ -19,7 +20,7 @@ import {
   recordModeration,
   statusForDecision,
 } from "@/lib/moderation";
-import type { ModerationResult } from "@/lib/moderation";
+import type { ModerationResult, ModerationStatus } from "@/lib/moderation";
 import {
   blockedMediaResult,
   extensionForContentType,
@@ -31,6 +32,14 @@ import {
   getObjectFromStoredUrl,
   promoteQuarantinedObject,
 } from "@/lib/storage/r2";
+import {
+  LAUNCH_POLICY_VERSION,
+  PUBLICATION_OUTCOME_MESSAGES,
+  evaluateDuplicates,
+  evaluateTextForPublication,
+  type PublicationOutcome,
+} from "@/lib/moderation/launch-policy";
+import { FEATURE_UNAVAILABLE_MESSAGE, getFeatureFlags } from "@/lib/feature-flags";
 
 const postSchema = z.object({
   content: z.string().trim().min(1, "Write something before posting").max(1200),
@@ -95,6 +104,52 @@ function nullableUuid(value: FormDataEntryValue | null) {
   return text.length > 0 ? text : null;
 }
 
+// Stable outcome + recovery copy (plan 21.1). Clients branch on `code`; the
+// message is display-only and never carries the private rule that matched.
+export type CommunityActionResult<T> =
+  | { data: T; error?: undefined; code?: undefined }
+  | { data?: undefined; error: string; code?: PublicationOutcome };
+
+export type CommunityPublishData = {
+  id: string;
+  moderationStatus: ModerationStatus;
+  moderationMessage: string | null;
+};
+
+function rejected(code: PublicationOutcome, message?: string): CommunityActionResult<never> {
+  return { error: message ?? PUBLICATION_OUTCOME_MESSAGES[code], code };
+}
+
+// Launch mode records the deterministic allow decision for audit without any
+// provider dependency (plan 6.2 / 21.1).
+function launchAllowResult(details: Record<string, unknown>): ModerationResult {
+  return {
+    decision: "allow",
+    riskLevel: "none",
+    reasonCodes: ["launch_autopublish"],
+    provider: "launch_policy",
+    modelName: null,
+    modelVersion: LAUNCH_POLICY_VERSION,
+    rawResult: { policyVersion: LAUNCH_POLICY_VERSION, ...details },
+  };
+}
+
+async function recentAuthorContent(
+  table: "community_posts" | "community_comments",
+  authorId: string,
+  windowMs: number,
+) {
+  const since = new Date(Date.now() - windowMs).toISOString();
+  const { data } = await createAdminClient()
+    .from(table)
+    .select("content, created_at")
+    .eq("author_id", authorId)
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(25);
+  return data ?? [];
+}
+
 export async function createCommunityPost(formData: FormData) {
   return createCommunityPostFromInput({
     content: formData.get("content"),
@@ -104,28 +159,51 @@ export async function createCommunityPost(formData: FormData) {
   });
 }
 
-export async function createCommunityPostFromInput(input: unknown) {
+export async function createCommunityPostFromInput(
+  input: unknown,
+): Promise<CommunityActionResult<CommunityPublishData>> {
   const parsed = postSchema.safeParse(input);
-  if (!parsed.success) return { error: parsed.error.errors[0].message };
+  if (!parsed.success) return rejected("validation_failed", parsed.error.errors[0].message);
 
   const profile = await getCurrentProfileId();
-  if ("error" in profile) return { error: profile.error };
+  if (profile.error !== undefined) return { error: profile.error };
+
+  // Server-authoritative kill switch (plan 20.3 / 30.2); old clients get the
+  // same answer as new ones.
+  const flags = await getFeatureFlags();
+  if (!flags.flags.community_text_posts) {
+    return rejected("posting_unavailable", FEATURE_UNAVAILABLE_MESSAGE.community_text_posts);
+  }
 
   const restriction = await getActivePostingRestriction(profile.profileId);
   if (restriction) {
-    return { error: restriction.ends_at
+    return rejected("posting_restricted", restriction.ends_at
       ? `Community posting is unavailable until ${new Date(restriction.ends_at).toLocaleString()}`
-      : "Community posting is unavailable for this account" };
+      : undefined);
   }
   if (await isCommunityRateLimited(profile.profileId, "post")) {
-    return { error: "You are posting too quickly. Please wait a few minutes and try again." };
+    return rejected("rate_limited");
   }
 
   const admin = createAdminClient();
   const audience = parsed.data.audience ?? profile.default_post_audience;
   if (audience === "public" && !profile.is_public) {
-    return { error: "Make your profile public before publishing a Public post" };
+    return rejected("unauthorized_audience", "Make your profile public before publishing a Public post");
   }
+
+  // Deterministic safety layer (plan 21.1): control characters, link volume
+  // and schemes, high-confidence policy patterns, then duplicate throttling.
+  const evaluated = evaluateTextForPublication(parsed.data.content, "post");
+  if (!evaluated.ok) {
+    console.warn("community post rejected by launch policy", { ruleId: evaluated.ruleId });
+    return rejected(evaluated.outcome);
+  }
+  const duplicates = evaluateDuplicates(
+    evaluated.fingerprint,
+    await recentAuthorContent("community_posts", profile.profileId, 10 * 60 * 1000),
+  );
+  if (!duplicates.ok) return rejected(duplicates.outcome);
+
   let vehicleId = parsed.data.vehicleId ?? null;
   const listingId = parsed.data.listingId ?? null;
 
@@ -155,25 +233,52 @@ export async function createCommunityPostFromInput(input: unknown) {
     }
   }
 
+  const launchMode = !flags.flags.automated_post_moderation;
   const { data, error } = await admin.from("community_posts").insert({
     author_id: profile.profileId,
     audience,
     vehicle_id: vehicleId,
     marketplace_listing_id: listingId,
-    content: parsed.data.content,
-    status: "hidden",
-    moderation_status: "pending_scan",
+    content: evaluated.text,
+    // Launch mode (plan 3.3): the row is active in the same request. The
+    // legacy AI-gated path stays behind automated_post_moderation.
+    status: launchMode ? "active" : "hidden",
+    moderation_status: launchMode ? "active" : "pending_scan",
+    ...(launchMode ? {
+      moderation_reason: null,
+      moderation_checked_at: new Date().toISOString(),
+      moderation_version: LAUNCH_POLICY_VERSION,
+    } : {}),
   }).select("id").single();
 
   if (error || !data) return { error: error?.message ?? "Could not create post" };
 
-  const result = await moderateText(parsed.data.content);
+  if (launchMode) {
+    // The content row is the visibility source of truth; the moderation item
+    // is the compatibility aggregate (plan 29.7), so a recording failure is
+    // logged rather than turned into a failed publish.
+    await recordModeration({
+      entityType: "community_post",
+      entityId: data.id,
+      authorId: profile.profileId,
+      contentPreview: evaluated.text,
+      result: launchAllowResult({ linkCount: evaluated.linkCount, fingerprint: evaluated.fingerprint }),
+    }).catch((recordError) => console.error("launch moderation record failed", recordError));
+
+    revalidatePath("/community");
+    revalidatePath("/dashboard/posts");
+    revalidatePath("/admin/community");
+    revalidatePath("/admin/moderation");
+    return { data: { ...data, moderationStatus: "active" as const, moderationMessage: null } };
+  }
+
+  const result = await moderateText(evaluated.text);
   try {
     await recordModeration({
       entityType: "community_post",
       entityId: data.id,
       authorId: profile.profileId,
-      contentPreview: parsed.data.content,
+      contentPreview: evaluated.text,
       result,
     });
     const { error: updateError } = await admin
@@ -213,8 +318,21 @@ export async function addCommunityPostMedia(input: unknown) {
   const profile = await getCurrentProfileId();
   if ("error" in profile) return { error: profile.error };
 
+  // Plan 21.3: Community video is rejected at attachment time even when an
+  // older client still offers it. Photos have their own kill switch.
+  const flags = await getFeatureFlags();
+  const includesVideo = parsed.data.items.some((item) =>
+    item.mediaType === "video" || item.contentType.startsWith("video/"),
+  );
+  if (includesVideo && !flags.flags.community_video_uploads) {
+    return rejected("unsupported_media");
+  }
+  if (!flags.flags.community_photo_uploads) {
+    return rejected("posting_unavailable", FEATURE_UNAVAILABLE_MESSAGE.community_photo_uploads);
+  }
+
   if (await getActivePostingRestriction(profile.profileId, true)) {
-    return { error: "Media uploads are unavailable for this account" };
+    return rejected("posting_restricted", "Media uploads are unavailable for this account");
   }
 
   const admin = createAdminClient();
@@ -263,7 +381,7 @@ export async function addCommunityPostMedia(input: unknown) {
 
   const existing = count ?? 0;
   if (existing + parsed.data.items.length > MAX_POST_MEDIA) {
-    return { error: `Posts can include up to ${MAX_POST_MEDIA} photos or videos` };
+    return { error: `Posts can include up to ${MAX_POST_MEDIA} photos` };
   }
 
   const claimedReservationIds: string[] = [];
@@ -345,7 +463,14 @@ export async function addCommunityPostMedia(input: unknown) {
             : blockedMediaResult("blocked_duplicate")
           : media.media_type === "video"
             ? await moderateVideo(bytes, media.content_type)
-            : await moderateImage(bytes, media.content_type);
+            : flags.flags.automated_post_moderation
+              // Legacy: specialist safeguard, then the general AI classifier.
+              ? await moderateImage(bytes, media.content_type)
+              // Launch mode (plan 21.2): the specialist safeguard is the only
+              // gate. Unavailable means not published, never bypassed.
+              : await moderateImageLaunchMode(bytes, media.content_type, {
+                  safeguardRequired: flags.flags.specialist_image_safeguard,
+                });
       }
 
       await recordModeration({
@@ -523,19 +648,36 @@ export async function createCommunityComment(formData: FormData) {
   }
 }
 
-export async function createCommunityCommentFromInput(input: unknown) {
+export async function createCommunityCommentFromInput(
+  input: unknown,
+): Promise<CommunityActionResult<CommunityPublishData>> {
   const parsed = commentSchema.safeParse(input);
-  if (!parsed.success) return { error: "Invalid comment" };
+  if (!parsed.success) return rejected("validation_failed", "Invalid comment");
 
   const profile = await getCurrentProfileId();
-  if ("error" in profile) return { error: profile.error };
+  if (profile.error !== undefined) return { error: profile.error };
 
+  const flags = await getFeatureFlags();
+  if (!flags.flags.community_text_posts) {
+    return rejected("posting_unavailable", FEATURE_UNAVAILABLE_MESSAGE.community_text_posts);
+  }
   if (await getActivePostingRestriction(profile.profileId)) {
-    return { error: "Community commenting is unavailable for this account" };
+    return rejected("posting_restricted", "Community commenting is unavailable for this account");
   }
   if (await isCommunityRateLimited(profile.profileId, "comment")) {
-    return { error: "You are commenting too quickly. Please wait a few minutes and try again." };
+    return rejected("rate_limited", "You are commenting too quickly. Please wait a few minutes and try again.");
   }
+
+  const evaluated = evaluateTextForPublication(parsed.data.content, "comment");
+  if (!evaluated.ok) {
+    console.warn("community comment rejected by launch policy", { ruleId: evaluated.ruleId });
+    return rejected(evaluated.outcome);
+  }
+  const duplicates = evaluateDuplicates(
+    evaluated.fingerprint,
+    await recentAuthorContent("community_comments", profile.profileId, 10 * 60 * 1000),
+  );
+  if (!duplicates.ok) return rejected(duplicates.outcome);
 
   const admin = createAdminClient();
   const { data: post } = await admin
@@ -553,23 +695,44 @@ export async function createCommunityCommentFromInput(input: unknown) {
   });
   if (!canView) return { error: "Post not found" };
 
+  const launchMode = !flags.flags.automated_post_moderation;
   const { data, error } = await admin.from("community_comments").insert({
     post_id: post.id,
     author_id: profile.profileId,
-    content: parsed.data.content,
-    status: "hidden",
-    moderation_status: "pending_scan",
+    content: evaluated.text,
+    status: launchMode ? "active" : "hidden",
+    moderation_status: launchMode ? "active" : "pending_scan",
+    ...(launchMode ? {
+      moderation_reason: null,
+      moderation_checked_at: new Date().toISOString(),
+      moderation_version: LAUNCH_POLICY_VERSION,
+    } : {}),
   }).select("id").single();
 
   if (error) return { error: error.message };
 
-  const moderation = await moderateText(parsed.data.content);
+  if (launchMode) {
+    await recordModeration({
+      entityType: "community_comment",
+      entityId: data.id,
+      authorId: profile.profileId,
+      contentPreview: evaluated.text,
+      result: launchAllowResult({ linkCount: evaluated.linkCount, fingerprint: evaluated.fingerprint }),
+    }).catch((recordError) => console.error("launch moderation record failed", recordError));
+
+    revalidatePath("/community");
+    revalidatePath("/admin/community");
+    revalidatePath("/admin/moderation");
+    return { data: { ...data, moderationStatus: "active" as const, moderationMessage: null } };
+  }
+
+  const moderation = await moderateText(evaluated.text);
   try {
     await recordModeration({
       entityType: "community_comment",
       entityId: data.id,
       authorId: profile.profileId,
-      contentPreview: parsed.data.content,
+      contentPreview: evaluated.text,
       result: moderation,
     });
     const { error: updateError } = await admin.from("community_comments").update({
