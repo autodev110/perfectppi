@@ -6,6 +6,7 @@ import { getStoredObjectRange, isPrivateStorageReference } from "@/lib/storage/r
 import {
   COMMUNITY_MEDIA_DISPLAY_VARIANTS,
   isApprovedCommunityReference,
+  isLegacyPublicCommunityUrl,
 } from "@/lib/storage/community-media";
 import { UPLOAD_LIMITS } from "@/config/constants";
 
@@ -67,10 +68,15 @@ export async function GET(
   }
 
   // Which object to stream: the metadata-stripped display variant for images;
-  // the original for legacy videos (no variant exists). A legacy public URL
-  // that has not been migrated yet is still served only through this endpoint.
+  // the original for legacy videos (no variant exists). Until the retirement
+  // worker has processed a legacy public-URL image it has no variant, so its
+  // original is served here (it is already public at that URL); the uploader
+  // may also see their own not-yet-approved original.
   const reference = media.media_type === "image"
-    ? (media.display_reference ?? (viewerIsUploader && !isApprovedCommunityReference(media.url) ? media.url : null))
+    ? (media.display_reference
+      ?? (isLegacyPublicCommunityUrl(media.url) || (viewerIsUploader && !isApprovedCommunityReference(media.url))
+        ? media.url
+        : null))
     : media.url;
   if (!reference) return unavailable();
   if (!isPrivateStorageReference(reference) && !/^https:\/\//.test(reference)) return unavailable();

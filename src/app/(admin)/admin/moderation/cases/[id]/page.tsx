@@ -260,7 +260,9 @@ export default async function ModerationCasePage({ params, searchParams }: PageP
                     </>
                   )}
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" name="decision" value="restore">Restore Post</Button>
+                    <Button size="sm" name="decision" value="restore">
+                      {moderationCase.entity_type === "community_comment" ? "Restore Comment" : "Restore Post"}
+                    </Button>
                     <Button size="sm" variant="destructive" name="decision" value="remove">Remove from Community</Button>
                     {canLegalHold && moderationCase.state !== "escalated" ? (
                       <Button size="sm" variant="outline" name="decision" value="escalate">Preserve and Escalate</Button>

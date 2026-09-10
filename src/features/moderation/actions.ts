@@ -334,7 +334,9 @@ export async function reviewModerationItem(formData: FormData) {
       .eq("id", item.entity_id);
     if (variantError) throw new Error(variantError.message);
   }
-  if (sourceUrl) await deleteOrQueue(sourceUrl, "approved_media_promoted");
+  // A migrated original already sits at its immutable key, so "promotion"
+  // resolves to the same reference; never delete the object we just kept.
+  if (sourceUrl && sourceUrl !== promotedUrl) await deleteOrQueue(sourceUrl, "approved_media_promoted");
 
   revalidateModerationPaths();
 }

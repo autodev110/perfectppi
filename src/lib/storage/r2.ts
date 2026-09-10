@@ -301,7 +301,11 @@ export async function deleteStoredObject(storedValue: string): Promise<void> {
   await getS3Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
-async function deleteBucketPrefix(bucket: string, prefix: string): Promise<number> {
+async function deleteBucketPrefix(
+  bucket: string,
+  prefix: string,
+  retainKeys: ReadonlySet<string> = new Set(),
+): Promise<number> {
   let continuationToken: string | undefined;
   let deleted = 0;
 
@@ -312,7 +316,9 @@ async function deleteBucketPrefix(bucket: string, prefix: string): Promise<numbe
       ContinuationToken: continuationToken,
       MaxKeys: 1000,
     }));
-    const keys = (listed.Contents ?? []).flatMap((object) => object.Key ? [object.Key] : []);
+    const keys = (listed.Contents ?? [])
+      .flatMap((object) => object.Key ? [object.Key] : [])
+      .filter((key) => !retainKeys.has(key));
     if (keys.length > 0) {
       const result = await getS3Client().send(new DeleteObjectsCommand({
         Bucket: bucket,
@@ -329,15 +335,32 @@ async function deleteBucketPrefix(bucket: string, prefix: string): Promise<numbe
   return deleted;
 }
 
-/** Removes every object created through an owner-scoped upload path. */
+/**
+ * Removes every object created through an owner-scoped upload path.
+ * `retainReferences` names objects a not-yet-purged moderation case still
+ * relies on (plan 19.4); they survive here and are disposed of by the
+ * retention worker when that case is purged.
+ */
 export async function deleteOwnerStoredObjects(
   ownerId: string,
   additionalReferences: string[] = [],
+  retainReferences: string[] = [],
 ): Promise<number> {
+  const retainPrivateKeys = new Set<string>();
+  const retainPublicKeys = new Set<string>();
+  const retained = new Set(retainReferences);
+  for (const reference of retained) {
+    if (isPrivateStorageReference(reference)) {
+      retainPrivateKeys.add(reference.slice(PRIVATE_STORAGE_PREFIX.length).replace(/^\/+/, ""));
+    } else {
+      retainPublicKeys.add(extractKeyFromStoredUrl(reference));
+    }
+  }
+
   let deleted = 0;
   if (isR2Configured()) {
     for (const entity of OWNER_STORAGE_ENTITIES) {
-      deleted += await deleteBucketPrefix(process.env.R2_BUCKET_NAME!, `${entity}/${ownerId}/`);
+      deleted += await deleteBucketPrefix(process.env.R2_BUCKET_NAME!, `${entity}/${ownerId}/`, retainPublicKeys);
     }
   }
   if (isPrivateR2Configured()) {
@@ -345,19 +368,23 @@ export async function deleteOwnerStoredObjects(
       deleted += await deleteBucketPrefix(
         process.env.R2_PRIVATE_BUCKET_NAME!,
         `${entity}/${ownerId}/`,
+        retainPrivateKeys,
       );
       deleted += await deleteBucketPrefix(
         process.env.R2_PRIVATE_BUCKET_NAME!,
         `quarantine/${entity}/${ownerId}/`,
+        retainPrivateKeys,
       );
     }
     deleted += await deleteBucketPrefix(
       process.env.R2_PRIVATE_BUCKET_NAME!,
       `integration_artifacts/${ownerId}/`,
+      retainPrivateKeys,
     );
   }
 
   for (const reference of new Set(additionalReferences)) {
+    if (retained.has(reference)) continue;
     if (isPrivateStorageReference(reference) && !isPrivateR2Configured()) {
       throw new Error("Private R2 is not configured for account deletion");
     }

@@ -12,6 +12,7 @@ import {
 type DeletionMetadata = {
   profileId?: string;
   storageReferences?: string[];
+  retainedReferences?: string[];
 };
 
 function metadata(value: Json): DeletionMetadata {
@@ -21,6 +22,9 @@ function metadata(value: Json): DeletionMetadata {
     profileId: typeof record.profileId === "string" ? record.profileId : undefined,
     storageReferences: Array.isArray(record.storageReferences)
       ? record.storageReferences.filter((item): item is string => typeof item === "string")
+      : undefined,
+    retainedReferences: Array.isArray(record.retainedReferences)
+      ? record.retainedReferences.filter((item): item is string => typeof item === "string")
       : undefined,
   };
 }
@@ -66,6 +70,10 @@ async function fulfillDeletion(request: {
   }
 
   let storageReferences = stored.storageReferences ?? [];
+  // Objects a not-yet-purged moderation case still needs (plan 19.4). They
+  // are resolved before the profile disappears (the case->author link is
+  // severed by the cascade) and checkpointed with the request.
+  let retainedReferences = stored.retainedReferences ?? [];
   let accountDeletedAt = request.account_deleted_at;
 
   if (!accountDeletedAt) {
@@ -95,14 +103,19 @@ async function fulfillDeletion(request: {
     if (userData.user) {
       const exportData = await buildAccountDataExport(profileId, userData.user);
       storageReferences = [...collectStorageReferences(exportData)];
+      const { data: retained, error: retainedError } = await admin.rpc(
+        "retained_evidence_references_for_profile",
+        { p_profile_id: profileId },
+      );
+      if (retainedError) throw new Error(retainedError.message);
+      retainedReferences = retained ?? [];
       const { error: metadataError } = await admin.from("privacy_requests").update({
         status: "in_progress",
         acknowledged_at: new Date().toISOString(),
-        result_metadata: { profileId, storageReferences },
+        result_metadata: { profileId, storageReferences, retainedReferences },
         last_error: null,
       }).eq("id", request.id);
       if (metadataError) throw new Error(metadataError.message);
-
     }
 
     // Minimize every related request before deleting the profile. Keep the
@@ -128,21 +141,24 @@ async function fulfillDeletion(request: {
       account_deleted_at: accountDeletedAt,
       auth_user_id: null,
       details: null,
-      result_metadata: { profileId, storageReferences },
+      result_metadata: { profileId, storageReferences, retainedReferences },
     }).eq("id", request.id);
     if (checkpointError) throw new Error(checkpointError.message);
   }
 
-  const deletedObjects = await deleteOwnerStoredObjects(profileId, storageReferences);
+  const deletedObjects = await deleteOwnerStoredObjects(profileId, storageReferences, retainedReferences);
   const completedAt = new Date().toISOString();
   const { error: completeError } = await admin.from("privacy_requests").update({
     status: "completed",
     completed_at: completedAt,
     last_error: null,
-    resolution_summary: "Account, profile-owned application data, sessions, device registrations, share links, partner links, and managed media were deleted.",
+    resolution_summary: retainedReferences.length > 0
+      ? `Account, profile-owned application data, sessions, device registrations, share links, partner links, and managed media were deleted. ${retainedReferences.length} media object(s) referenced by a retained moderation case remain restricted until that case's approved retention period ends.`
+      : "Account, profile-owned application data, sessions, device registrations, share links, partner links, and managed media were deleted.",
     result_metadata: {
       storageObjectsDeleted: deletedObjects,
       storageCleanupCompletedAt: completedAt,
+      retainedEvidenceObjects: retainedReferences.length,
     },
     retention_expires_at: privacyRecordExpiry(),
     locked_at: null,

@@ -972,6 +972,63 @@ export type Database = {
         }
         Relationships: []
       }
+      moderation_retention_policies: {
+        Row: {
+          approval_reference: string
+          approved_at: string
+          approved_by: string | null
+          basis: string
+          retention_days: number
+          updated_at: string
+        }
+        Insert: {
+          approval_reference: string
+          approved_at?: string
+          approved_by?: string | null
+          basis: string
+          retention_days: number
+          updated_at?: string
+        }
+        Update: {
+          approval_reference?: string
+          approved_at?: string
+          approved_by?: string | null
+          basis?: string
+          retention_days?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      moderation_retention_policy_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          approval_reference: string
+          basis: string
+          created_at: string
+          id: string
+          retention_days: number | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          approval_reference: string
+          basis: string
+          created_at?: string
+          id?: string
+          retention_days?: number | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          approval_reference?: string
+          basis?: string
+          created_at?: string
+          id?: string
+          retention_days?: number | null
+        }
+        Relationships: []
+      }
       moderation_role_grant_events: {
         Row: {
           action: string
@@ -1084,6 +1141,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      retention_purge_events: {
+        Row: {
+          basis: string
+          case_id: string | null
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          summary: Json
+        }
+        Insert: {
+          basis: string
+          case_id?: string | null
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          summary?: Json
+        }
+        Update: {
+          basis?: string
+          case_id?: string | null
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          summary?: Json
+        }
+        Relationships: []
       }
       storage_cleanup_jobs: {
         Row: {
@@ -3713,6 +3800,30 @@ export type Database = {
       set_own_role: {
         Args: { p_role: Database["public"]["Enums"]["user_role"] }
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      clear_moderation_retention_policy: {
+        Args: { p_basis: string; p_reason: string }
+        Returns: boolean
+      }
+      purge_archived_community_post: {
+        Args: { p_post_id: string }
+        Returns: Json
+      }
+      purge_moderation_case: {
+        Args: { p_case_id: string }
+        Returns: Json
+      }
+      retained_evidence_references_for_profile: {
+        Args: { p_profile_id: string }
+        Returns: string[]
+      }
+      retention_purge_status: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      set_moderation_retention_policy: {
+        Args: { p_approval_reference: string; p_basis: string; p_retention_days: number }
+        Returns: Database["public"]["Tables"]["moderation_retention_policies"]["Row"]
       }
       set_own_profile_block: {
         Args: { p_blocked: boolean; p_target_profile_id: string }
