@@ -81,7 +81,7 @@ export async function POST(request: Request) {
 
   const isImage = allowedImageTypes.includes(file.type);
   const isVideo = allowedVideoTypes.includes(file.type);
-  const refusal = await communityUploadRefusal(parsed.data.entity, isVideo);
+  const refusal = await communityUploadRefusal(parsed.data.entity, isVideo, profile.id);
   if (refusal) return refusal;
   const maxBytes = isImage
     ? UPLOAD_LIMITS.maxImageSize

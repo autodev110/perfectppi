@@ -41,16 +41,24 @@ import { FEATURE_UNAVAILABLE_MESSAGE, getFeatureFlags } from "@/lib/feature-flag
 
 const postSchema = z.object({
   content: z.string().trim().min(1, "Write something before posting").max(1200),
+  postType: z.enum(["general", "question"]).default("general"),
   audience: z.enum(["public", "friends"]).optional(),
   vehicleId: z.string().uuid().optional().nullable(),
   listingId: z.string().uuid().optional().nullable(),
   groupId: z.string().uuid().optional().nullable(),
+  expectedMediaCount: z.coerce.number().int().min(0).max(10).default(0),
+  creationToken: z.string().uuid().optional().nullable(),
+}).superRefine((value, context) => {
+  if (value.expectedMediaCount > 0 && !value.creationToken) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["creationToken"], message: "Post retry token is required" });
+  }
 });
 
 const MAX_POST_MEDIA = 10;
 
 const postMediaSchema = z.object({
   postId: z.string().uuid(),
+  creationToken: z.string().uuid().optional().nullable(),
   items: z.array(z.object({
     url: communityUploadReferenceSchema,
     mediaType: z.enum(["image", "video"]),
@@ -115,6 +123,9 @@ export type CommunityPublishData = {
   moderationMessage: string | null;
 };
 
+export type CommunityFinalizeData = CommunityPublishData & { published: boolean };
+export type CommunityLikeData = { postId: string; liked: boolean; likeCount: number };
+
 function rejected(code: PublicationOutcome, message?: string): CommunityActionResult<never> {
   return { error: message ?? PUBLICATION_OUTCOME_MESSAGES[code], code };
 }
@@ -152,10 +163,13 @@ async function recentAuthorContent(
 export async function createCommunityPost(formData: FormData) {
   return createCommunityPostFromInput({
     content: formData.get("content"),
+    postType: formData.get("post_type") || "general",
     audience: formData.get("audience") || undefined,
     vehicleId: nullableUuid(formData.get("vehicle_id")),
     listingId: nullableUuid(formData.get("listing_id")),
     groupId: nullableUuid(formData.get("group_id")),
+    expectedMediaCount: formData.get("expected_media_count") || 0,
+    creationToken: nullableUuid(formData.get("creation_token")),
   });
 }
 
@@ -181,11 +195,37 @@ export async function createCommunityPostFromInput(
       ? `Community posting is unavailable until ${new Date(restriction.ends_at).toLocaleString()}`
       : undefined);
   }
+
+  const admin = createAdminClient();
+  if (parsed.data.expectedMediaCount > 0 && parsed.data.creationToken) {
+    const { data: existingAssembly } = await admin
+      .from("community_post_assemblies")
+      .select("post_id")
+      .eq("owner_id", profile.profileId)
+      .eq("creation_token", parsed.data.creationToken)
+      .maybeSingle();
+    if (existingAssembly) {
+      const { data: existingPost } = await admin
+        .from("community_posts")
+        .select("id, moderation_status")
+        .eq("id", existingAssembly.post_id)
+        .single();
+      if (!existingPost) return { error: "Post draft is no longer available." };
+      const moderationStatus = existingPost.moderation_status as ModerationStatus;
+      return { data: {
+        id: existingPost.id,
+        moderationStatus,
+        moderationMessage: moderationUserMessage(
+          moderationStatus === "active" ? "allow" : moderationStatus === "rejected" ? "block" : "review",
+        ),
+      } };
+    }
+  }
+
   if (await isCommunityRateLimited(profile.profileId, "post")) {
     return rejected("rate_limited");
   }
 
-  const admin = createAdminClient();
   const groupId = parsed.data.groupId ?? null;
   if (groupId && !flags.flags.groups) {
     return rejected("posting_unavailable", FEATURE_UNAVAILABLE_MESSAGE.groups);
@@ -260,25 +300,52 @@ export async function createCommunityPostFromInput(
   }
 
   const launchMode = !flags.flags.automated_post_moderation;
-  const { data, error } = await admin.from("community_posts").insert({
-    author_id: profile.profileId,
-    audience,
-    vehicle_id: vehicleId,
-    marketplace_listing_id: listingId,
-    group_id: groupId,
-    content: evaluated.text,
-    // Launch mode (plan 3.3): the row is active in the same request. The
-    // legacy AI-gated path stays behind automated_post_moderation.
-    status: launchMode ? "active" : "hidden",
-    moderation_status: launchMode ? "active" : "pending_scan",
-    ...(launchMode ? {
-      moderation_reason: null,
-      moderation_checked_at: new Date().toISOString(),
-      moderation_version: LAUNCH_POLICY_VERSION,
-    } : {}),
-  }).select("id").single();
+  const hasMediaAssembly = parsed.data.expectedMediaCount > 0;
+  const initialModerationStatus = launchMode ? "active" : "pending_scan";
+  let data: { id: string } | null = null;
+  let createError: { message: string } | null = null;
 
-  if (error || !data) return { error: error?.message ?? "Could not create post" };
+  if (hasMediaAssembly && parsed.data.creationToken) {
+    const assembled = await admin.rpc("create_community_post_assembly", {
+      p_author_id: profile.profileId,
+      p_creation_token: parsed.data.creationToken,
+      p_expected_media_count: parsed.data.expectedMediaCount,
+      p_audience: audience,
+      p_vehicle_id: vehicleId,
+      p_marketplace_listing_id: listingId,
+      p_group_id: groupId,
+      p_post_type: parsed.data.postType,
+      p_content: evaluated.text,
+      p_moderation_status: initialModerationStatus,
+      p_moderation_reason: null,
+      p_moderation_checked_at: launchMode ? new Date().toISOString() : null,
+      p_moderation_version: launchMode ? LAUNCH_POLICY_VERSION : null,
+    });
+    data = assembled.data ? { id: assembled.data } : null;
+    createError = assembled.error;
+  } else {
+    const created = await admin.from("community_posts").insert({
+      author_id: profile.profileId,
+      audience,
+      vehicle_id: vehicleId,
+      marketplace_listing_id: listingId,
+      group_id: groupId,
+      post_type: parsed.data.postType,
+      content: evaluated.text,
+      // Text-only posts preserve the launch-mode immediate publication path.
+      status: launchMode ? "active" : "hidden",
+      moderation_status: initialModerationStatus,
+      ...(launchMode ? {
+        moderation_reason: null,
+        moderation_checked_at: new Date().toISOString(),
+        moderation_version: LAUNCH_POLICY_VERSION,
+      } : {}),
+    }).select("id").single();
+    data = created.data;
+    createError = created.error;
+  }
+
+  if (createError || !data) return { error: createError?.message ?? "Could not create post" };
 
   if (launchMode) {
     // The content row is the visibility source of truth; the moderation item
@@ -292,9 +359,11 @@ export async function createCommunityPostFromInput(
       result: launchAllowResult({ linkCount: evaluated.linkCount, fingerprint: evaluated.fingerprint }),
     }).catch((recordError) => console.error("launch moderation record failed", recordError));
 
-    revalidatePath("/community");
-    if (groupId) revalidatePath("/community/groups");
-    revalidatePath("/dashboard/posts");
+    if (!hasMediaAssembly) {
+      revalidatePath("/community");
+      if (groupId) revalidatePath("/community/groups");
+      revalidatePath("/dashboard/posts");
+    }
     revalidatePath("/admin/community");
     revalidatePath("/admin/moderation");
     return { data: { ...data, moderationStatus: "active" as const, moderationMessage: null } };
@@ -312,7 +381,7 @@ export async function createCommunityPostFromInput(
     const { error: updateError } = await admin
       .from("community_posts")
       .update({
-        status: publicStatusForDecision(result.decision),
+        status: hasMediaAssembly ? "hidden" : publicStatusForDecision(result.decision),
         moderation_status: statusForDecision(result.decision),
         moderation_reason: result.reasonCodes[0] ?? null,
         moderation_checked_at: new Date().toISOString(),
@@ -338,6 +407,90 @@ export async function createCommunityPostFromInput(
       moderationMessage: moderationUserMessage(result.decision),
     },
   };
+}
+
+const finalizePostAssemblySchema = z.object({ postId: z.string().uuid() });
+const finalizePostAssemblyResultSchema = z.object({
+  postId: z.string().uuid(),
+  published: z.boolean(),
+  moderationStatus: z.enum(["pending_scan", "active", "pending_review", "rejected", "legal_hold"]),
+});
+
+export async function finalizeCommunityPostAssembly(
+  input: unknown,
+): Promise<CommunityActionResult<CommunityFinalizeData>> {
+  const parsed = finalizePostAssemblySchema.safeParse(input);
+  if (!parsed.success) return rejected("validation_failed", "Invalid post draft");
+  const profile = await getCurrentProfileId();
+  if (profile.error !== undefined) return { error: profile.error };
+
+  const { data, error } = await createAdminClient().rpc("finalize_community_post_assembly", {
+    p_actor_profile_id: profile.profileId,
+    p_post_id: parsed.data.postId,
+  });
+  if (error) return { error: "The photo upload is incomplete. Please retry the upload." };
+  const result = finalizePostAssemblyResultSchema.safeParse(data);
+  if (!result.success) return { error: "The post could not be finalized." };
+
+  if (result.data.published) {
+    revalidatePath("/community");
+    revalidatePath("/community/groups");
+    revalidatePath("/dashboard/posts");
+  }
+  revalidatePath("/admin/community");
+  revalidatePath("/admin/moderation");
+  return { data: {
+    id: result.data.postId,
+    published: result.data.published,
+    moderationStatus: result.data.moderationStatus,
+    moderationMessage: moderationUserMessage(
+      result.data.moderationStatus === "active"
+        ? "allow"
+        : result.data.moderationStatus === "rejected"
+          ? "block"
+          : result.data.moderationStatus === "legal_hold"
+            ? "legal_hold"
+            : "review",
+    ),
+  } };
+}
+
+const postLikeSchema = z.object({
+  postId: z.string().uuid(),
+  liked: z.boolean(),
+});
+const postLikeResultSchema = z.object({
+  postId: z.string().uuid(),
+  liked: z.boolean(),
+  likeCount: z.number().int().nonnegative(),
+});
+
+export async function setCommunityPostLike(
+  input: unknown,
+): Promise<CommunityActionResult<CommunityLikeData>> {
+  const parsed = postLikeSchema.safeParse(input);
+  if (!parsed.success) return rejected("validation_failed", "Invalid post reaction");
+  const profile = await getCurrentProfileId();
+  if (profile.error !== undefined) return { error: profile.error };
+
+  const { data, error } = await createAdminClient().rpc("set_community_post_like", {
+    p_actor_profile_id: profile.profileId,
+    p_post_id: parsed.data.postId,
+    p_liked: parsed.data.liked,
+  });
+  if (error) {
+    return {
+      error: error.message.includes("authors cannot")
+        ? "You cannot like your own post."
+        : "This post is no longer available.",
+    };
+  }
+  const result = postLikeResultSchema.safeParse(data);
+  if (!result.success) return { error: "The reaction could not be updated." };
+
+  revalidatePath("/community");
+  revalidatePath("/community/groups");
+  return { data: result.data };
 }
 
 export async function addCommunityPostMedia(input: unknown) {
@@ -371,14 +524,51 @@ export async function addCommunityPostMedia(input: unknown) {
     .eq("id", parsed.data.postId)
     .maybeSingle();
 
+  const { data: assembly } = post ? await admin
+    .from("community_post_assemblies")
+    .select("state, expected_media_count, creation_token")
+    .eq("post_id", post.id)
+    .maybeSingle() : { data: null };
+  const requestedAssembly = parsed.data.creationToken
+    && assembly?.creation_token === parsed.data.creationToken ? assembly : null;
+  const openAssembly = requestedAssembly?.state === "finalized" ? null : requestedAssembly;
+  const editablePublishedPost = post?.status === "active" && post.moderation_status === "active";
+  // The media trigger can mark a complete assembly submitted before the
+  // client receives its response. Matching-token retries may read it back;
+  // the expected-count check below still prevents extra attachments.
+  const editableAssembly = post?.status === "hidden"
+    && (openAssembly?.state === "assembling" || openAssembly?.state === "submitted");
   if (!post || post.author_id !== profile.profileId
-    || post.status !== "active" || post.moderation_status !== "active") {
+    || (assembly && parsed.data.creationToken && !requestedAssembly)
+    || (!editablePublishedPost && !editableAssembly)) {
     return { error: "Post not found" };
   }
 
   const quarantinePrefix = `r2-private:///quarantine/community_post/${profile.profileId}/${post.id}/`;
   if (parsed.data.items.some((item) => !item.url.startsWith(quarantinePrefix))) {
     return { error: "Community upload does not belong to this post" };
+  }
+
+  // Check the durable rows before reservations so a retry after a lost
+  // response can return the original media even though those reservations
+  // were already consumed by the successful request.
+  const { count, error: countError } = await admin
+    .from("community_post_media")
+    .select("id", { count: "exact", head: true })
+    .eq("post_id", post.id);
+  if (countError) return { error: "Could not verify the post media limit" };
+
+  const existing = count ?? 0;
+  if (requestedAssembly && existing === requestedAssembly.expected_media_count) {
+    const { data: existingMedia } = await admin
+      .from("community_post_media")
+      .select("*")
+      .eq("post_id", post.id)
+      .order("sort_order", { ascending: true });
+    return { data: (existingMedia ?? []).map((item) => ({
+      ...item,
+      url: communityMediaDeliveryPath(item.id),
+    })) };
   }
 
   const references = parsed.data.items.map((item) => item.url);
@@ -400,15 +590,9 @@ export async function addCommunityPostMedia(input: unknown) {
     return { error: "One or more uploads are missing, expired, or do not match the selected media" };
   }
 
-  // Check the post-wide cap before claiming reservations. A rejected request
-  // must not consume uploads that the user can still remove or retry.
-  const { count, error: countError } = await admin
-    .from("community_post_media")
-    .select("id", { count: "exact", head: true })
-    .eq("post_id", post.id);
-  if (countError) return { error: "Could not verify the post media limit" };
-
-  const existing = count ?? 0;
+  if (openAssembly && existing + parsed.data.items.length > openAssembly.expected_media_count) {
+    return { error: "The uploaded photo count does not match this post draft." };
+  }
   if (existing + parsed.data.items.length > MAX_POST_MEDIA) {
     return { error: `Posts can include up to ${MAX_POST_MEDIA} photos` };
   }
@@ -818,6 +1002,60 @@ export async function createCommunityCommentFromInput(
       moderationMessage: moderationUserMessage(moderation.decision),
     },
   };
+}
+
+const acceptedAnswerSchema = z.object({
+  postId: z.string().uuid(),
+  commentId: z.string().uuid().nullable(),
+});
+
+const acceptedAnswerResultSchema = z.object({
+  postId: z.string().uuid(),
+  acceptedAnswerCommentId: z.string().uuid().nullable(),
+  changed: z.boolean(),
+});
+
+export async function setAcceptedCommunityAnswerFromInput(input: unknown) {
+  const parsed = acceptedAnswerSchema.safeParse(input);
+  if (!parsed.success) return { error: "Invalid accepted answer selection." };
+
+  const profile = await getCurrentProfileId();
+  if (profile.error !== undefined) return { error: profile.error };
+
+  const admin = createAdminClient();
+  const { data: post } = await admin
+    .from("community_posts")
+    .select("group_id")
+    .eq("id", parsed.data.postId)
+    .maybeSingle();
+  if (!post) return { error: "Question not found." };
+  if (post.group_id && !(await getFeatureFlags()).flags.groups) {
+    return { error: FEATURE_UNAVAILABLE_MESSAGE.groups };
+  }
+
+  const { data, error } = await admin.rpc("set_accepted_community_answer", {
+    p_actor_profile_id: profile.profileId,
+    p_post_id: parsed.data.postId,
+    p_comment_id: parsed.data.commentId,
+  });
+  if (error) {
+    console.warn("accepted answer update failed", { message: error.message });
+    return { error: "This answer is no longer available." };
+  }
+  const result = acceptedAnswerResultSchema.safeParse(data);
+  if (!result.success) return { error: "The answer selection could not be confirmed." };
+
+  revalidatePath("/community");
+  revalidatePath("/community/groups");
+  revalidatePath("/dashboard/posts");
+  return { data: result.data };
+}
+
+export async function setAcceptedCommunityAnswer(formData: FormData): Promise<void> {
+  await setAcceptedCommunityAnswerFromInput({
+    postId: formData.get("post_id"),
+    commentId: nullableUuid(formData.get("comment_id")),
+  });
 }
 
 export async function archiveMyCommunityPost(formData: FormData) {

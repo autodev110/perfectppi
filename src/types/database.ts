@@ -298,6 +298,135 @@ export type Database = {
         }
         Relationships: []
       }
+      community_answer_selection_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          id: string
+          post_id: string
+          previous_comment_id: string | null
+          selected_comment_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          post_id: string
+          previous_comment_id?: string | null
+          selected_comment_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          post_id?: string
+          previous_comment_id?: string | null
+          selected_comment_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_answer_selection_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_answer_selection_events_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_post_assemblies: {
+        Row: {
+          created_at: string
+          creation_token: string
+          expected_media_count: number
+          expires_at: string
+          finalized_at: string | null
+          owner_id: string
+          post_id: string
+          state: Database["public"]["Enums"]["community_post_assembly_state"]
+          submitted_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          creation_token: string
+          expected_media_count: number
+          expires_at?: string
+          finalized_at?: string | null
+          owner_id: string
+          post_id: string
+          state?: Database["public"]["Enums"]["community_post_assembly_state"]
+          submitted_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          creation_token?: string
+          expected_media_count?: number
+          expires_at?: string
+          finalized_at?: string | null
+          owner_id?: string
+          post_id?: string
+          state?: Database["public"]["Enums"]["community_post_assembly_state"]
+          submitted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_post_assemblies_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_post_assemblies_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_post_likes: {
+        Row: {
+          created_at: string
+          post_id: string
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          post_id: string
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          post_id?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_post_likes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_group_memberships: {
         Row: {
           group_id: string
@@ -416,6 +545,7 @@ export type Database = {
       }
       community_posts: {
         Row: {
+          accepted_answer_comment_id: string | null
           active_revision_id: string
           audience: Database["public"]["Enums"]["community_post_audience"]
           author_id: string
@@ -429,11 +559,13 @@ export type Database = {
           moderation_reason: string | null
           moderation_status: string
           moderation_version: string | null
+          post_type: Database["public"]["Enums"]["community_post_type"]
           status: Database["public"]["Enums"]["community_content_status"]
           updated_at: string
           vehicle_id: string | null
         }
         Insert: {
+          accepted_answer_comment_id?: string | null
           active_revision_id?: string
           audience?: Database["public"]["Enums"]["community_post_audience"]
           author_id: string
@@ -447,11 +579,13 @@ export type Database = {
           moderation_reason?: string | null
           moderation_status?: string
           moderation_version?: string | null
+          post_type?: Database["public"]["Enums"]["community_post_type"]
           status?: Database["public"]["Enums"]["community_content_status"]
           updated_at?: string
           vehicle_id?: string | null
         }
         Update: {
+          accepted_answer_comment_id?: string | null
           active_revision_id?: string
           audience?: Database["public"]["Enums"]["community_post_audience"]
           author_id?: string
@@ -465,11 +599,19 @@ export type Database = {
           moderation_reason?: string | null
           moderation_status?: string
           moderation_version?: string | null
+          post_type?: Database["public"]["Enums"]["community_post_type"]
           status?: Database["public"]["Enums"]["community_content_status"]
           updated_at?: string
           vehicle_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "community_posts_accepted_answer_comment_id_fkey"
+            columns: ["accepted_answer_comment_id"]
+            isOneToOne: true
+            referencedRelation: "community_comments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "community_posts_author_id_fkey"
             columns: ["author_id"]
@@ -510,6 +652,7 @@ export type Database = {
           group_status: Database["public"]["Enums"]["community_group_post_status"]
           id: string
           marketplace_listing_id: string | null
+          post_type: Database["public"]["Enums"]["community_post_type"]
           post_id: string
           revision_number: number
           vehicle_id: string | null
@@ -523,6 +666,7 @@ export type Database = {
           group_status?: Database["public"]["Enums"]["community_group_post_status"]
           id: string
           marketplace_listing_id?: string | null
+          post_type?: Database["public"]["Enums"]["community_post_type"]
           post_id: string
           revision_number: number
           vehicle_id?: string | null
@@ -536,6 +680,7 @@ export type Database = {
           group_status?: Database["public"]["Enums"]["community_group_post_status"]
           id?: string
           marketplace_listing_id?: string | null
+          post_type?: Database["public"]["Enums"]["community_post_type"]
           post_id?: string
           revision_number?: number
           vehicle_id?: string | null
@@ -3783,6 +3928,51 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_community_post_assembly: {
+        Args: {
+          p_audience: Database["public"]["Enums"]["community_post_audience"]
+          p_author_id: string
+          p_content: string
+          p_creation_token: string
+          p_expected_media_count: number
+          p_group_id: string | null
+          p_marketplace_listing_id: string | null
+          p_moderation_checked_at: string | null
+          p_moderation_reason: string | null
+          p_moderation_status: string
+          p_moderation_version: string | null
+          p_post_type: Database["public"]["Enums"]["community_post_type"]
+          p_vehicle_id: string | null
+        }
+        Returns: string
+      }
+      expire_community_post_assemblies: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
+      finalize_community_post_assembly: {
+        Args: { p_actor_profile_id: string; p_post_id: string }
+        Returns: Json
+      }
+      set_community_post_like: {
+        Args: {
+          p_actor_profile_id: string
+          p_liked: boolean
+          p_post_id: string
+        }
+        Returns: Json
+      }
+      community_post_like_summaries: {
+        Args: {
+          p_post_ids: string[]
+          p_viewer_id: string
+        }
+        Returns: {
+          like_count: number
+          liked_by_viewer: boolean
+          post_id: string
+        }[]
+      }
       create_curated_community_group: {
         Args: {
           p_actor_profile_id: string
@@ -3797,6 +3987,14 @@ export type Database = {
           p_year_start?: number | null
         }
         Returns: Database["public"]["Tables"]["community_groups"]["Row"]
+      }
+      set_accepted_community_answer: {
+        Args: {
+          p_actor_profile_id: string
+          p_comment_id?: string | null
+          p_post_id: string
+        }
+        Returns: Json
       }
       admin_correct_username: {
         Args: { p_profile_id: string; p_reason: string; p_username: string }
@@ -4468,6 +4666,8 @@ export type Database = {
       community_group_status: "active" | "archived"
       community_group_visibility: "public" | "private" | "unlisted"
       community_post_audience: "public" | "friends"
+      community_post_assembly_state: "assembling" | "submitted" | "finalized"
+      community_post_type: "general" | "question"
       community_media_type: "image" | "video"
       completion_state: "not_started" | "in_progress" | "completed"
       device_env: "prod" | "sandbox"
@@ -4481,6 +4681,8 @@ export type Database = {
         | "moderation_decision"
         | "moderation_case"
         | "report_received"
+        | "answer_accepted"
+        | "accepted_answer_unavailable"
         | "tech_request_new"
         | "tech_request_accepted"
         | "inspection_submitted"
@@ -4683,6 +4885,8 @@ export const Constants = {
       certification_level: ["none", "ase", "master", "oem_qualified"],
       community_content_status: ["active", "hidden", "archived"],
       community_post_audience: ["public", "friends"],
+      community_post_assembly_state: ["assembling", "submitted", "finalized"],
+      community_post_type: ["general", "question"],
       community_media_type: ["image", "video"],
       completion_state: ["not_started", "in_progress", "completed"],
       device_env: ["prod", "sandbox"],
@@ -4698,6 +4902,13 @@ export const Constants = {
         "warranty_available",
         "payment_completed",
         "message_received",
+        "friend_request",
+        "friend_request_accepted",
+        "moderation_decision",
+        "moderation_case",
+        "report_received",
+        "answer_accepted",
+        "accepted_answer_unavailable",
       ],
       org_member_role: ["technician", "manager"],
       payment_method: ["card", "bank_transfer", "financing"],

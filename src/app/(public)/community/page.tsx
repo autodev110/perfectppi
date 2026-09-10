@@ -12,6 +12,8 @@ import { requireRole } from "@/features/auth/guards";
 import { MemberSafetyActions } from "@/components/shared/member-safety-actions";
 import { SafetyNotice } from "@/components/shared/safety-notice";
 import { CommunityReportControl } from "@/components/shared/community-report-control";
+import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-control";
+import { CommunityLikeButton } from "@/components/shared/community-like-button";
 import { getFeatureFlags, toClientCapabilities } from "@/lib/feature-flags";
 
 export const metadata = {
@@ -121,6 +123,11 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        {post.post_type === "question" ? (
+                          <Badge className="bg-teal/10 text-teal hover:bg-teal/10">
+                            {post.accepted_answer_comment_id ? "Solved" : "Question"}
+                          </Badge>
+                        ) : null}
                         <Badge variant="outline" className="rounded-full capitalize">{post.audience}</Badge>
                         {post.author_id !== viewer.id ? <MemberSafetyActions profileId={post.author_id} compact /> : null}
                         {post.report_context ? (
@@ -185,19 +192,38 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                   )}
 
                   <div className="border-t border-outline-variant/20 bg-surface-container/50 p-6">
-                    <div className="mb-4 flex items-center gap-2 text-sm font-bold text-on-surface">
-                      <MessageSquare className="h-4 w-4 text-on-surface-variant" />
-                      {post.comments.length} comment{post.comments.length === 1 ? "" : "s"}
+                    <div className="mb-4 flex items-center gap-3 text-sm font-bold text-on-surface">
+                      <CommunityLikeButton
+                        postId={post.id}
+                        initialLiked={post.liked_by_viewer}
+                        initialCount={post.like_count}
+                        disabled={!post.can_like}
+                      />
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 text-on-surface-variant" />
+                        {post.comments.length} comment{post.comments.length === 1 ? "" : "s"}
+                      </div>
                     </div>
 
                     {post.comments.length > 0 && (
                       <div className="mb-5 space-y-3">
                         {post.comments.map((comment) => (
-                          <div key={comment.id} className="rounded-xl bg-surface-container-lowest px-4 py-3 ghost-border">
+                          <div key={comment.id} className={`rounded-xl bg-surface-container-lowest px-4 py-3 ghost-border ${post.accepted_answer_comment_id === comment.id ? "ring-2 ring-teal/30" : ""}`}>
                             <div className="mb-1 flex items-center justify-between gap-3">
-                              <p className="text-xs font-bold text-on-surface">
-                                {comment.author?.display_name ?? comment.author?.username ?? "PerfectPPI user"}
-                              </p>
+                              <div>
+                                <p className="text-xs font-bold text-on-surface">
+                                  {comment.author?.display_name ?? comment.author?.username ?? "PerfectPPI user"}
+                                </p>
+                                {post.post_type === "question" ? (
+                                  <AcceptedAnswerControl
+                                    postId={post.id}
+                                    commentId={comment.id}
+                                    accepted={post.accepted_answer_comment_id === comment.id}
+                                    canManage={post.can_manage_accepted_answer}
+                                    ownResponse={comment.author_id === post.author_id}
+                                  />
+                                ) : null}
+                              </div>
                               <div className="flex items-center gap-2">
                                 <p className="text-[10px] text-on-surface-variant">{formatDate(comment.created_at)}</p>
                                 {comment.report_context ? (

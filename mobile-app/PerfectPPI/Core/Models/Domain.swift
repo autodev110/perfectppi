@@ -117,6 +117,8 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let groupId: String?
     let content: String
     let audience: CommunityPostAudience
+    let postType: CommunityPostType?
+    let acceptedAnswerCommentId: String?
     let status: CommunityContentStatus
     let moderationStatus: String?
     let moderationReason: String?
@@ -134,6 +136,11 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let safetyNotice: CommunitySafetyNotice?
     /// Server-computed: group posts require active membership to comment.
     let canInteract: Bool?
+    let canLike: Bool?
+    /// Server-computed; the API still verifies this on every selection.
+    let canManageAcceptedAnswer: Bool?
+    let likeCount: Int?
+    let likedByViewer: Bool?
 }
 
 struct CommunityPostGroup: Codable, Identifiable, Hashable {

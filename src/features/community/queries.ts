@@ -51,7 +51,7 @@ type CommunityFeedGroup = Pick<CommunityGroupRow, "id" | "slug" | "name" | "avat
 
 export type CommunityFeedPost = Pick<
   CommunityPostRow,
-  "id" | "author_id" | "vehicle_id" | "marketplace_listing_id" | "group_id" | "content" | "audience" | "status" | "created_at" | "updated_at"
+  "id" | "author_id" | "vehicle_id" | "marketplace_listing_id" | "group_id" | "content" | "audience" | "post_type" | "accepted_answer_comment_id" | "status" | "created_at" | "updated_at"
 > & {
   author: CommunityFeedProfile | null;
   vehicle: CommunityFeedVehicle | null;
@@ -60,6 +60,10 @@ export type CommunityFeedPost = Pick<
   comments: CommunityFeedComment[];
   group: CommunityFeedGroup | null;
   can_interact: boolean;
+  can_like: boolean;
+  can_manage_accepted_answer: boolean;
+  like_count: number;
+  liked_by_viewer: boolean;
   report_context: string | null;
   /** Plan 15.5: present when the post involves a high-consequence repair topic. */
   safety_notice: SafetyNotice | null;
@@ -109,7 +113,7 @@ const COMMUNITY_POST_SELECT = `
 // are selected only where the server needs them to filter nested rows, then
 // removed before serialization.
 const COMMUNITY_FEED_SELECT = `
-  id, author_id, vehicle_id, marketplace_listing_id, group_id, active_revision_id, content, audience, status, created_at, updated_at,
+  id, author_id, vehicle_id, marketplace_listing_id, group_id, active_revision_id, content, audience, post_type, accepted_answer_comment_id, status, created_at, updated_at,
   author:profiles!community_posts_author_id_fkey(id, display_name, username, avatar_url, is_public),
   vehicle:vehicles!community_posts_vehicle_id_fkey(
     id, year, make, model, trim, mileage, visibility,
@@ -165,6 +169,11 @@ function toCommunityFeedPost(
   viewerId: string,
   memberGroupIds: ReadonlySet<string> = new Set(),
 ): CommunityFeedPost {
+  const visibleComments = (post.comments ?? [])
+    .filter((comment) => comment.status === "active" && comment.moderation_status === "active");
+  const acceptedAnswerCommentId = visibleComments.some(
+    (comment) => comment.id === post.accepted_answer_comment_id,
+  ) ? post.accepted_answer_comment_id : null;
   const vehicle = post.vehicle?.visibility === "public"
     ? {
         id: post.vehicle.id,
@@ -199,10 +208,16 @@ function toCommunityFeedPost(
     group_id: post.group_id,
     content: post.content,
     audience: post.audience,
+    post_type: post.post_type,
+    accepted_answer_comment_id: acceptedAnswerCommentId,
     status: post.status,
     created_at: post.created_at,
     updated_at: post.updated_at,
     can_interact: !post.group_id || memberGroupIds.has(post.group_id),
+    can_like: post.author_id !== viewerId,
+    can_manage_accepted_answer: post.post_type === "question" && post.author_id === viewerId,
+    like_count: 0,
+    liked_by_viewer: false,
     report_context: post.author_id === viewerId ? null : createReportContext({
       viewerId,
       entityType: "community_post",
@@ -249,8 +264,7 @@ function toCommunityFeedPost(
         sort_order: item.sort_order,
         created_at: item.created_at,
       })),
-    comments: (post.comments ?? [])
-      .filter((comment) => comment.status === "active" && comment.moderation_status === "active")
+    comments: visibleComments
       .map((comment) => ({
         id: comment.id,
         post_id: comment.post_id,
@@ -273,6 +287,24 @@ function toCommunityFeedPost(
         } : null,
       })),
   };
+}
+
+async function withPostLikeState(posts: CommunityFeedPost[], viewerId: string) {
+  if (posts.length === 0) return posts;
+  const { data, error } = await createAdminClient().rpc("community_post_like_summaries", {
+    p_viewer_id: viewerId,
+    p_post_ids: posts.map((post) => post.id),
+  });
+  if (error) {
+    console.error("community_post_like_summaries failed", error);
+    return posts;
+  }
+  const summaries = new Map((data ?? []).map((summary) => [summary.post_id, summary]));
+  return posts.map((post) => ({
+    ...post,
+    like_count: Number(summaries.get(post.id)?.like_count ?? 0),
+    liked_by_viewer: summaries.get(post.id)?.liked_by_viewer ?? false,
+  }));
 }
 
 async function activeMembershipGroupIds(viewerId: string, posts: CommunityPost[]) {
@@ -330,10 +362,11 @@ export async function getCommunityPosts(page = 1, perPage = 20) {
     ...post,
     comments: (post.comments ?? []).filter((comment) => !blockedCommentAuthors.has(comment.author_id)),
   }]));
-  return postIds.flatMap((id) => {
+  const visiblePosts = postIds.flatMap((id) => {
     const post = byId.get(id);
     return post ? [toCommunityFeedPost(post, viewerId, memberGroupIds)] : [];
   });
+  return withPostLikeState(visiblePosts, viewerId);
 }
 
 export async function getCommunityPostById(id: string) {
@@ -362,10 +395,11 @@ export async function getCommunityPostById(id: string) {
     (post.comments ?? []).map((comment) => comment.author_id),
   );
   const memberGroupIds = await activeMembershipGroupIds(viewerId, [post]);
-  return toCommunityFeedPost({
+  const visiblePost = toCommunityFeedPost({
     ...post,
     comments: (post.comments ?? []).filter((comment) => !blockedAuthors.has(comment.author_id)),
   }, viewerId, memberGroupIds);
+  return (await withPostLikeState([visiblePost], viewerId))[0] ?? null;
 }
 
 const ARCHIVE_EXPIRY_DAYS = 30;
@@ -394,6 +428,14 @@ export async function getMyCommunityPosts(status: "active" | "archived" | "revie
   if (!profile) return [];
 
   const admin = createAdminClient();
+  const { data: submittedAssemblies } = status === "review"
+    ? await admin
+        .from("community_post_assemblies")
+        .select("post_id")
+        .eq("owner_id", profile.id)
+        .eq("state", "submitted")
+    : { data: [] as Array<{ post_id: string }> };
+  const submittedPostIds = (submittedAssemblies ?? []).map((assembly) => assembly.post_id);
   let query = admin
     .from("community_posts")
     .select(COMMUNITY_POST_SELECT)
@@ -403,7 +445,11 @@ export async function getMyCommunityPosts(status: "active" | "archived" | "revie
 
   // For archived posts, only show those within the 30-day window
   if (status === "review") {
-    query = query.neq("moderation_status", "active").neq("status", "archived");
+    query = submittedPostIds.length > 0
+      ? query
+          .or(`moderation_status.neq.active,id.in.(${submittedPostIds.join(",")})`)
+          .neq("status", "archived")
+      : query.neq("moderation_status", "active").neq("status", "archived");
   } else {
     query = query.eq("status", status);
   }
@@ -515,10 +561,11 @@ export async function getCommunityGroupPosts(groupId: string, page = 1, perPage 
     ...post,
     comments: (post.comments ?? []).filter((comment) => !blockedAuthors.has(comment.author_id)),
   }]));
-  return postIds.flatMap((id) => {
+  const visiblePosts = postIds.flatMap((id) => {
     const post = byId.get(id);
     return post ? [toCommunityFeedPost(post, viewerId, memberGroupIds)] : [];
   });
+  return withPostLikeState(visiblePosts, viewerId);
 }
 
 export async function getVehicleDiscussionPosts(vehicleId: string) {
@@ -541,7 +588,8 @@ export async function getVehicleDiscussionPosts(vehicleId: string) {
     posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id)),
   );
   const memberGroupIds = await activeMembershipGroupIds(viewerId, posts);
-  return posts
+  const visiblePosts = posts
     .map((post) => ({ ...post, comments: post.comments.filter((comment) => !blockedAuthors.has(comment.author_id)) }))
     .map((post) => toCommunityFeedPost(post, viewerId, memberGroupIds));
+  return withPostLikeState(visiblePosts, viewerId);
 }

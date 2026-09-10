@@ -17,6 +17,7 @@ export async function POST(
   const body = await req.json().catch(() => null);
   const result = await addCommunityPostMedia({
     postId: id,
+    creationToken: body?.creationToken,
     items: body?.items,
   });
 

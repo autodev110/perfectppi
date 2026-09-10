@@ -147,9 +147,16 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
                       <div className="flex flex-wrap items-center gap-2">
                         {vehicleName && <Badge variant="secondary">{vehicleName}</Badge>}
                         {post.marketplace_listing && <Badge variant="secondary">Listing shared</Badge>}
+                        {post.post_type === "question" ? (
+                          <Badge variant="outline">
+                            {post.accepted_answer_comment_id ? "Solved question" : "Question / troubleshooting"}
+                          </Badge>
+                        ) : null}
                         {tab === "review" && (
                           <Badge variant={post.moderation_status === "rejected" ? "destructive" : "outline"}>
-                            {post.moderation_status.replaceAll("_", " ")}
+                            {post.moderation_status === "active" && post.status === "hidden"
+                              ? "media under review"
+                              : post.moderation_status.replaceAll("_", " ")}
                           </Badge>
                         )}
                         {daysLeft !== null && (

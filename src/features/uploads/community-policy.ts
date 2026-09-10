@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { FEATURE_UNAVAILABLE_MESSAGE, getFeatureFlags } from "@/lib/feature-flags";
 import { PUBLICATION_OUTCOME_MESSAGES, PUBLICATION_OUTCOME_STATUS } from "@/lib/moderation/launch-policy";
+import { getActivePostingRestriction } from "@/lib/moderation";
 
 /**
  * Community upload reservations obey the launch flags at every layer (plan
@@ -10,6 +11,7 @@ import { PUBLICATION_OUTCOME_MESSAGES, PUBLICATION_OUTCOME_STATUS } from "@/lib/
 export async function communityUploadRefusal(
   entity: string,
   isVideo: boolean,
+  profileId?: string,
 ): Promise<NextResponse | null> {
   if (entity !== "community_post") return null;
   const flags = await getFeatureFlags();
@@ -23,6 +25,12 @@ export async function communityUploadRefusal(
     return NextResponse.json(
       { error: FEATURE_UNAVAILABLE_MESSAGE.community_photo_uploads, code: "posting_unavailable" },
       { status: PUBLICATION_OUTCOME_STATUS.posting_unavailable },
+    );
+  }
+  if (profileId && await getActivePostingRestriction(profileId, true)) {
+    return NextResponse.json(
+      { error: PUBLICATION_OUTCOME_MESSAGES.posting_restricted, code: "posting_restricted" },
+      { status: PUBLICATION_OUTCOME_STATUS.posting_restricted },
     );
   }
   return null;

@@ -170,6 +170,8 @@ enum NotificationType: String, Codable {
     case moderationDecision = "moderation_decision"
     case moderationCase = "moderation_case"
     case reportReceived = "report_received"
+    case answerAccepted = "answer_accepted"
+    case acceptedAnswerUnavailable = "accepted_answer_unavailable"
     /// Server-side categories grow over time (plan 22.1); an unrecognized
     /// value must not fail decoding of the whole inbox on an older build.
     case unknown
@@ -186,6 +188,11 @@ enum ListingStatus: String, Codable {
 
 enum CommunityContentStatus: String, Codable {
     case active, hidden, archived
+}
+
+enum CommunityPostType: String, Codable, CaseIterable {
+    case general
+    case question
 }
 
 enum CommunityPostAudience: String, Codable, CaseIterable, Identifiable {

@@ -11,6 +11,8 @@ import { getPublicVehicleWarrantySnapshot } from "@/features/warranty/queries";
 import { createCommunityComment } from "@/features/community/actions";
 import { getVehicleDiscussionPosts } from "@/features/community/queries";
 import { SafetyNotice } from "@/components/shared/safety-notice";
+import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-control";
+import { CommunityLikeButton } from "@/components/shared/community-like-button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -597,9 +599,16 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="text-xs font-bold text-on-surface">
-                        {post.author?.display_name ?? post.author?.username ?? "PerfectPPI user"}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-bold text-on-surface">
+                          {post.author?.display_name ?? post.author?.username ?? "PerfectPPI user"}
+                        </p>
+                        {post.post_type === "question" ? (
+                          <Badge className="bg-teal/10 text-teal hover:bg-teal/10">
+                            {post.accepted_answer_comment_id ? "Solved" : "Question"}
+                          </Badge>
+                        ) : null}
+                      </div>
                       <p className="text-[10px] text-on-surface-variant">
                         {formatDate(post.created_at)}
                       </p>
@@ -622,12 +631,21 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                   </div>
                 ) : null}
 
+                <div className="mb-4">
+                  <CommunityLikeButton
+                    postId={post.id}
+                    initialLiked={post.liked_by_viewer}
+                    initialCount={post.like_count}
+                    disabled={!post.can_like}
+                  />
+                </div>
+
                 {post.comments.length > 0 && (
                   <div className="space-y-2.5 mb-4">
                     {post.comments.map((comment) => (
                       <div
                         key={comment.id}
-                        className="rounded-xl bg-surface-container p-3 ghost-border"
+                        className={`rounded-xl bg-surface-container p-3 ghost-border ${post.accepted_answer_comment_id === comment.id ? "ring-2 ring-teal/30" : ""}`}
                       >
                         <div className="flex items-center justify-between gap-3 mb-1">
                           <p className="text-[11px] font-bold text-on-surface">
@@ -637,6 +655,15 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                             {formatDate(comment.created_at)}
                           </p>
                         </div>
+                        {post.post_type === "question" ? (
+                          <AcceptedAnswerControl
+                            postId={post.id}
+                            commentId={comment.id}
+                            accepted={post.accepted_answer_comment_id === comment.id}
+                            canManage={post.can_manage_accepted_answer}
+                            ownResponse={comment.author_id === post.author_id}
+                          />
+                        ) : null}
                         <p className="text-xs text-on-surface-variant whitespace-pre-wrap">
                           {comment.content}
                         </p>

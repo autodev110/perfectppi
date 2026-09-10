@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type UploadEntity =
   | "ppi_media"
@@ -39,7 +40,10 @@ export async function canUploadToTarget(
       return true;
     }
     case "community_post": {
-      const { data } = await supabase
+      // Community raw reads are revoked from authenticated clients. Upload
+      // routes already authenticate the caller, then this server-only query
+      // proves ownership for both published posts and hidden assemblies.
+      const { data } = await createAdminClient()
         .from("community_posts")
         .select("id")
         .eq("id", recordId)

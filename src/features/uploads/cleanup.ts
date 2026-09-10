@@ -28,6 +28,9 @@ export async function deleteStoredObjectOrQueue(
 export async function runStorageCleanup(limit = 50) {
   const admin = createAdminClient();
   const now = new Date().toISOString();
+  const { data: expiredAssemblies, error: assemblyError } = await admin
+    .rpc("expire_community_post_assemblies", { p_limit: limit });
+  if (assemblyError) throw new Error(assemblyError.message);
   const { data: expired, error: expiredError } = await admin
     .from("community_upload_reservations")
     .update({ status: "expired" })
@@ -83,5 +86,10 @@ export async function runStorageCleanup(limit = 50) {
     }
   }
 
-  return { expired: expired?.length ?? 0, completed, failed };
+  return {
+    expired: expired?.length ?? 0,
+    expiredAssemblies: expiredAssemblies ?? 0,
+    completed,
+    failed,
+  };
 }

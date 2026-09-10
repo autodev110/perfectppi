@@ -28,6 +28,9 @@ enum CommunityAPI {
         let vehicleId: String?
         let listingId: String?
         let groupId: String?
+        let postType: CommunityPostType
+        let expectedMediaCount: Int
+        let creationToken: String?
     }
 
     struct CreatePostResponse: Decodable {
@@ -49,12 +52,32 @@ enum CommunityAPI {
 
     struct AddMediaPayload: Encodable {
         let items: [MediaItemPayload]
+        let creationToken: String?
     }
 
-    static func addMedia(postId: String, items: [MediaItemPayload]) async throws -> [CommunityPostMedia] {
+    static func addMedia(
+        postId: String,
+        items: [MediaItemPayload],
+        creationToken: String? = nil
+    ) async throws -> [CommunityPostMedia] {
         try await APIClient.shared.postCamel(
             "/api/community/posts/\(postId)/media",
-            body: AddMediaPayload(items: items)
+            body: AddMediaPayload(items: items, creationToken: creationToken)
+        )
+    }
+
+    struct FinalizePostResponse: Decodable {
+        let id: String
+        let published: Bool
+        let moderationStatus: String
+        let moderationMessage: String?
+    }
+    private struct FinalizePostPayload: Encodable {}
+
+    static func finalizePost(postId: String) async throws -> FinalizePostResponse {
+        try await APIClient.shared.post(
+            "/api/community/posts/\(postId)/finalize",
+            body: FinalizePostPayload()
         )
     }
 
@@ -91,6 +114,34 @@ enum CommunityAPI {
         try await APIClient.shared.post(
             "/api/community/posts/\(postId)/comments",
             body: CommentPayload(content: content)
+        )
+    }
+
+    struct AcceptedAnswerPayload: Encodable { let commentId: String? }
+    struct AcceptedAnswerResult: Decodable {
+        let postId: String
+        let acceptedAnswerCommentId: String?
+        let changed: Bool
+    }
+
+    static func setAcceptedAnswer(postId: String, commentId: String?) async throws -> AcceptedAnswerResult {
+        try await APIClient.shared.patch(
+            "/api/community/posts/\(postId)/accepted-answer",
+            body: AcceptedAnswerPayload(commentId: commentId)
+        )
+    }
+
+    struct LikePayload: Encodable { let liked: Bool }
+    struct LikeResult: Decodable {
+        let postId: String
+        let liked: Bool
+        let likeCount: Int
+    }
+
+    static func setLike(postId: String, liked: Bool) async throws -> LikeResult {
+        try await APIClient.shared.post(
+            "/api/community/posts/\(postId)/like",
+            body: LikePayload(liked: liked)
         )
     }
 

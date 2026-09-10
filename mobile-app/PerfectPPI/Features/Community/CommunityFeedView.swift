@@ -226,10 +226,20 @@ private struct ModeratedPostRow: View {
 struct CommunityPostRow: View {
     let post: CommunityPost
     let onReported: () -> Void
+    @State private var liked: Bool
+    @State private var likeCount: Int
+    @State private var liking = false
     @State private var reportTarget: ReportTarget?
     @State private var reportAccepted = false
     @State private var reportConfirmed = false
     @State private var error: String?
+
+    init(post: CommunityPost, onReported: @escaping () -> Void) {
+        self.post = post
+        self.onReported = onReported
+        _liked = State(initialValue: post.likedByViewer ?? false)
+        _likeCount = State(initialValue: post.likeCount ?? 0)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -259,6 +269,13 @@ struct CommunityPostRow: View {
                         )
                     }
                 }
+            }
+
+            if post.postType == .question {
+                Label(post.acceptedAnswerCommentId == nil ? "Question" : "Solved",
+                      systemImage: post.acceptedAnswerCommentId == nil ? "questionmark.bubble" : "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.Palette.primary)
             }
 
             Text(post.content)
@@ -292,11 +309,23 @@ struct CommunityPostRow: View {
                     .clipShape(Capsule())
             }
 
-            if let count = post.comments?.count, count > 0 {
-                Label("\(count) comment\(count == 1 ? "" : "s")", systemImage: "bubble.left")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 16) {
+                Button {
+                    Task { await toggleLike() }
+                } label: {
+                    Label("\(likeCount)", systemImage: liked ? "heart.fill" : "heart")
+                        .foregroundStyle(liked ? Theme.Palette.danger : .secondary)
+                }
+                .buttonStyle(.borderless)
+                .disabled(liking || post.canLike == false)
+                .accessibilityLabel(post.canLike == false ? "\(likeCount) likes" : liked ? "Unlike post" : "Like post")
+
+                if let count = post.comments?.count, count > 0 {
+                    Label("\(count) comment\(count == 1 ? "" : "s")", systemImage: "bubble.left")
+                        .foregroundStyle(.secondary)
+                }
             }
+            .font(.caption)
         }
         .padding(.vertical, 6)
         .sheet(item: $reportTarget, onDismiss: {
@@ -333,6 +362,26 @@ struct CommunityPostRow: View {
     }
 
     @MainActor
+    private func toggleLike() async {
+        guard !liking, post.canLike != false else { return }
+        let previousLiked = liked
+        let previousCount = likeCount
+        liked.toggle()
+        likeCount = max(0, likeCount + (liked ? 1 : -1))
+        liking = true
+        defer { liking = false }
+        do {
+            let result = try await CommunityAPI.setLike(postId: post.id, liked: liked)
+            liked = result.liked
+            likeCount = result.likeCount
+        } catch {
+            liked = previousLiked
+            likeCount = previousCount
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
     private func submitReport(target: ReportTarget, reasonCode: String, details: String?) async -> Bool {
         do {
             let _: Empty = try await CommunityAPI.report(
@@ -359,6 +408,11 @@ struct CommunityPostDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var comments: [CommunityComment]
     @State private var media: [CommunityPostMedia]
+    @State private var acceptedAnswerCommentId: String?
+    @State private var liked: Bool
+    @State private var likeCount: Int
+    @State private var liking = false
+    @State private var acceptedAnswerBusyId: String?
     @State private var comment = ""
     @State private var submitting = false
     @State private var error: String?
@@ -375,6 +429,9 @@ struct CommunityPostDetailView: View {
         self.onChanged = onChanged
         _comments = State(initialValue: post.comments ?? [])
         _media = State(initialValue: (post.media ?? []).sorted { $0.sortOrder < $1.sortOrder })
+        _acceptedAnswerCommentId = State(initialValue: post.acceptedAnswerCommentId)
+        _liked = State(initialValue: post.likedByViewer ?? false)
+        _likeCount = State(initialValue: post.likeCount ?? 0)
     }
 
     private var isMyPost: Bool {
@@ -442,11 +499,25 @@ struct CommunityPostDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text(authorName)
                     .font(.headline)
+                if post.postType == .question {
+                    Label(acceptedAnswerCommentId == nil ? "Question / troubleshooting" : "Solved question",
+                          systemImage: acceptedAnswerCommentId == nil ? "questionmark.bubble" : "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.Palette.primary)
+                }
                 Text(post.content)
                     .font(.body)
                 if let notice = post.safetyNotice {
                     CommunitySafetyNoticeView(notice: notice, compact: false)
                 }
+                Button {
+                    Task { await toggleLike() }
+                } label: {
+                    Label("\(likeCount)", systemImage: liked ? "heart.fill" : "heart")
+                        .foregroundStyle(liked ? Theme.Palette.danger : .secondary)
+                }
+                .disabled(liking || post.canLike == false)
+                .accessibilityLabel(post.canLike == false ? "\(likeCount) likes" : liked ? "Unlike post" : "Like post")
                 if let reportContext = post.reportContext {
                     ReportMenu {
                         reportTarget = ReportTarget(
@@ -482,6 +553,26 @@ struct CommunityPostDetailView: View {
                 }
             }
             .padding(.vertical, 6)
+        }
+    }
+
+    @MainActor
+    private func toggleLike() async {
+        guard !liking, post.canLike != false else { return }
+        let previousLiked = liked
+        let previousCount = likeCount
+        liked.toggle()
+        likeCount = max(0, likeCount + (liked ? 1 : -1))
+        liking = true
+        defer { liking = false }
+        do {
+            let result = try await CommunityAPI.setLike(postId: post.id, liked: liked)
+            liked = result.liked
+            likeCount = result.likeCount
+        } catch {
+            liked = previousLiked
+            likeCount = previousCount
+            self.error = error.localizedDescription
         }
     }
 
@@ -531,8 +622,27 @@ struct CommunityPostDetailView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(commentAuthor)
                             .font(.caption.weight(.semibold))
+                        if acceptedAnswerCommentId == item.id {
+                            Label("Accepted answer", systemImage: "checkmark.circle.fill")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Theme.Palette.primary)
+                        }
                         Text(item.content)
                             .font(.subheadline)
+                        if post.postType == .question,
+                           post.canManageAcceptedAnswer == true,
+                           item.authorId != post.authorId {
+                            Button(acceptedAnswerCommentId == item.id ? "Clear accepted answer" : "Accept answer") {
+                                Task {
+                                    await setAcceptedAnswer(
+                                        acceptedAnswerCommentId == item.id ? nil : item.id,
+                                        busyId: item.id
+                                    )
+                                }
+                            }
+                            .font(.caption.weight(.semibold))
+                            .disabled(acceptedAnswerBusyId != nil)
+                        }
                     }
                     Spacer()
                     if let reportContext = item.reportContext {
@@ -688,6 +798,20 @@ struct CommunityPostDetailView: View {
         } catch {
             comments.removeAll { $0.id == optimistic.id }
             comment = text
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func setAcceptedAnswer(_ commentId: String?, busyId: String) async {
+        guard acceptedAnswerBusyId == nil else { return }
+        acceptedAnswerBusyId = busyId
+        defer { acceptedAnswerBusyId = nil }
+        do {
+            let result = try await CommunityAPI.setAcceptedAnswer(postId: post.id, commentId: commentId)
+            acceptedAnswerCommentId = result.acceptedAnswerCommentId
+            onChanged()
+        } catch {
             self.error = error.localizedDescription
         }
     }
@@ -860,6 +984,7 @@ struct NewCommunityPostView: View {
 
     @State private var content = ""
     @State private var audience: CommunityPostAudience = .friends
+    @State private var postType: CommunityPostType = .general
     @State private var loadedDefaultAudience = false
     @State private var selectedVehicleId = ""
     @State private var selectedListingId = ""
@@ -873,10 +998,12 @@ struct NewCommunityPostView: View {
     @State private var photoAccessBlocked = false
     @StateObject private var uploadProgress = UploadProgressModel()
     @State private var submittedForReview = false
-    /// A failed media upload leaves the post already created — a retry has to
-    /// attach to that post instead of publishing a second one.
+    /// The private assembly and client token survive upload retries without
+    /// creating a second post.
+    @State private var creationToken = UUID().uuidString
     @State private var createdPostId: String?
     @State private var createdModerationStatus = "active"
+    @State private var uploadedMedia: [CommunityAPI.MediaItemPayload]?
 
     init(
         preselectedVehicleId: String? = nil,
@@ -904,9 +1031,18 @@ struct NewCommunityPostView: View {
                         }
 
                         Section("Post") {
+                            Picker("Post type", selection: $postType) {
+                                Text("General post").tag(CommunityPostType.general)
+                                Text("Question / troubleshooting").tag(CommunityPostType.question)
+                            }
                             TextEditor(text: $content)
                                 .frame(minHeight: 140)
                                 .disabled(!caps.communityTextPosts)
+                            if postType == .question {
+                                Text("Describe the symptoms and what you have already checked. You can accept one member response after publishing.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
 
                         Section("Audience") {
@@ -1013,6 +1149,7 @@ struct NewCommunityPostView: View {
                             }
                         }
                     }
+                    .disabled(createdPostId != nil)
                     .onAppear {
                         guard !loadedDefaultAudience else { return }
                         audience = options.canPostPublic ? options.defaultAudience : .friends
@@ -1117,7 +1254,10 @@ struct NewCommunityPostView: View {
                         audience: selectedGroupId.isEmpty ? audience : .public,
                         vehicleId: listingId == nil ? vehicleId : nil,
                         listingId: listingId,
-                        groupId: selectedGroupId.isEmpty ? nil : selectedGroupId
+                        groupId: selectedGroupId.isEmpty ? nil : selectedGroupId,
+                        postType: postType,
+                        expectedMediaCount: media.count,
+                        creationToken: media.isEmpty ? nil : creationToken
                     )
                 )
                 postId = response.id
@@ -1126,28 +1266,42 @@ struct NewCommunityPostView: View {
                 createdModerationStatus = moderationStatus
             }
             if !media.isEmpty {
-                uploadProgress.begin(total: media.count)
-                defer { uploadProgress.reset() }
-                var uploaded: [CommunityAPI.MediaItemPayload] = []
-                for (index, item) in media.enumerated() {
-                    let url = try await R2Uploader.upload(
-                        data: item.data,
-                        filename: item.filename,
-                        contentType: item.contentType,
-                        entity: "community_post",
-                        recordId: postId,
-                        onProgress: uploadProgress.handler()
-                    )
-                    uploadProgress.finishItem()
-                    uploaded.append(.init(
-                        url: url,
-                        mediaType: item.kind == .video ? "video" : "image",
-                        contentType: item.contentType,
-                        sortOrder: index
-                    ))
+                let uploaded: [CommunityAPI.MediaItemPayload]
+                if let uploadedMedia {
+                    uploaded = uploadedMedia
+                } else {
+                    uploadProgress.begin(total: media.count)
+                    defer { uploadProgress.reset() }
+                    var newUploads: [CommunityAPI.MediaItemPayload] = []
+                    for (index, item) in media.enumerated() {
+                        let url = try await R2Uploader.upload(
+                            data: item.data,
+                            filename: item.filename,
+                            contentType: item.contentType,
+                            entity: "community_post",
+                            recordId: postId,
+                            onProgress: uploadProgress.handler()
+                        )
+                        uploadProgress.finishItem()
+                        newUploads.append(.init(
+                            url: url,
+                            mediaType: item.kind == .video ? "video" : "image",
+                            contentType: item.contentType,
+                            sortOrder: index
+                        ))
+                    }
+                    uploaded = newUploads
+                    self.uploadedMedia = newUploads
                 }
-                let created = try await CommunityAPI.addMedia(postId: postId, items: uploaded)
-                hasPendingMedia = created.contains { $0.moderationStatus != "active" }
+                _ = try await CommunityAPI.addMedia(
+                    postId: postId,
+                    items: uploaded,
+                    creationToken: creationToken
+                )
+                let finalized = try await CommunityAPI.finalizePost(postId: postId)
+                moderationStatus = finalized.moderationStatus
+                createdModerationStatus = moderationStatus
+                hasPendingMedia = !finalized.published
             }
             onCreated()
             if moderationStatus == "active" && !hasPendingMedia {

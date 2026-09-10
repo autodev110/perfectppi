@@ -8,6 +8,8 @@ import { CommunityReportControl } from "@/components/shared/community-report-con
 import { MemberSafetyActions } from "@/components/shared/member-safety-actions";
 import { SafetyNotice } from "@/components/shared/safety-notice";
 import { PostMediaCarousel } from "@/components/shared/post-media-carousel";
+import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-control";
+import { CommunityLikeButton } from "@/components/shared/community-like-button";
 import { createCommunityComment } from "@/features/community/actions";
 import { getCommunityGroupPosts } from "@/features/community/queries";
 import { requireRole } from "@/features/auth/guards";
@@ -68,13 +70,16 @@ export default async function CommunityGroupPage({
           ) : posts.map((post) => (
             <article key={post.id} className="rounded-[1.5rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
               <div className="flex items-start justify-between gap-4">
-                <div><p className="font-bold">{post.author?.display_name ?? post.author?.username ?? "PerfectPPI member"}</p><p className="text-xs text-on-surface-variant">{formatDate(post.created_at)}</p></div>
+                <div><div className="flex flex-wrap items-center gap-2"><p className="font-bold">{post.author?.display_name ?? post.author?.username ?? "PerfectPPI member"}</p>{post.post_type === "question" ? <Badge className="bg-teal/10 text-teal hover:bg-teal/10">{post.accepted_answer_comment_id ? "Solved" : "Question"}</Badge> : null}</div><p className="text-xs text-on-surface-variant">{formatDate(post.created_at)}</p></div>
                 <div className="flex items-center gap-1">{post.author_id === viewer.id ? <Badge variant="outline">Your post</Badge> : <MemberSafetyActions profileId={post.author_id} compact />}{post.report_context ? <CommunityReportControl entityType="community_post" entityId={post.id} reportContext={post.report_context} /> : null}</div>
               </div>
               <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">{post.content}</p>
               {post.safety_notice ? <div className="mt-4"><SafetyNotice notice={post.safety_notice} /></div> : null}
               {post.media.length ? <div className="-mx-6 mt-5"><PostMediaCarousel media={post.media} /></div> : null}
-              {post.comments.length ? <div className="mt-5 space-y-2 border-t pt-4">{post.comments.map((comment) => <div key={comment.id} className="flex items-start justify-between gap-3 rounded-xl bg-surface-container px-4 py-3"><div><p className="text-xs font-bold">{comment.author?.display_name ?? comment.author?.username ?? "Member"}</p><p className="mt-1 text-sm text-on-surface-variant">{comment.content}</p></div>{comment.report_context ? <CommunityReportControl entityType="community_comment" entityId={comment.id} reportContext={comment.report_context} compact /> : null}</div>)}</div> : null}
+              <div className="mt-4">
+                <CommunityLikeButton postId={post.id} initialLiked={post.liked_by_viewer} initialCount={post.like_count} disabled={!post.can_like} />
+              </div>
+              {post.comments.length ? <div className="mt-5 space-y-2 border-t pt-4">{post.comments.map((comment) => <div key={comment.id} className={`flex items-start justify-between gap-3 rounded-xl bg-surface-container px-4 py-3 ${post.accepted_answer_comment_id === comment.id ? "ring-2 ring-teal/30" : ""}`}><div><p className="text-xs font-bold">{comment.author?.display_name ?? comment.author?.username ?? "Member"}</p>{post.post_type === "question" ? <AcceptedAnswerControl postId={post.id} commentId={comment.id} accepted={post.accepted_answer_comment_id === comment.id} canManage={post.can_manage_accepted_answer} ownResponse={comment.author_id === post.author_id} /> : null}<p className="mt-1 text-sm text-on-surface-variant">{comment.content}</p></div>{comment.report_context ? <CommunityReportControl entityType="community_comment" entityId={comment.id} reportContext={comment.report_context} compact /> : null}</div>)}</div> : null}
               {group.is_member ? <form action={createCommunityComment} className="mt-4 flex flex-col gap-2 sm:flex-row"><input type="hidden" name="post_id" value={post.id} /><Textarea name="content" required maxLength={600} rows={2} placeholder="Add a comment..." /><Button type="submit" className="sm:self-end">Comment</Button></form> : null}
             </article>
           ))}
