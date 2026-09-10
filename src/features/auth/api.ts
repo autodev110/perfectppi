@@ -62,5 +62,25 @@ export async function requireApiRole(
     };
   }
 
+  const { data: isAvailable, error: availabilityError } = await supabase.rpc(
+    "social_current_user_is_available",
+  );
+  if (availabilityError) {
+    return {
+      response: NextResponse.json(
+        { error: "Account status is temporarily unavailable", code: "account_status_unavailable" },
+        { status: 503 },
+      ),
+    };
+  }
+  if (!isAvailable) {
+    return {
+      response: NextResponse.json(
+        { error: "Account unavailable", code: "account_unavailable" },
+        { status: 403 },
+      ),
+    };
+  }
+
   return { profile, supabase };
 }

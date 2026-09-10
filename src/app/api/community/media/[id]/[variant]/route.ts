@@ -9,6 +9,7 @@ import {
   isLegacyPublicCommunityUrl,
 } from "@/lib/storage/community-media";
 import { UPLOAD_LIMITS } from "@/config/constants";
+import { getFeatureFlags } from "@/lib/feature-flags";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,10 +45,15 @@ export async function GET(
   const admin = createAdminClient();
   const { data: media } = await admin
     .from("community_post_media")
-    .select("id, post_id, uploader_id, url, display_reference, media_type, content_type, moderation_status")
+    .select("id, post_id, uploader_id, url, display_reference, media_type, content_type, moderation_status, post:community_posts!community_post_media_post_id_fkey(group_id)")
     .eq("id", id)
     .maybeSingle();
   if (!media) return unavailable();
+
+  const parentPost = media.post as unknown as { group_id: string | null } | null;
+  if (parentPost?.group_id && !(await getFeatureFlags()).flags.groups) {
+    return unavailable();
+  }
 
   const viewerIsUploader = media.uploader_id === auth.profile.id;
 

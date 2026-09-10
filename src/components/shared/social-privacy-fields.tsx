@@ -7,6 +7,7 @@ type Profile = Pick<
   | "default_post_audience"
   | "discoverable"
   | "allow_exact_username_lookup"
+  | "friend_request_policy"
 >;
 
 export function SocialPrivacyFields({ profile }: { profile: Profile | null }) {
@@ -59,6 +60,20 @@ export function SocialPrivacyFields({ profile }: { profile: Profile | null }) {
           <span className="block text-xs text-muted-foreground">People who enter your complete username can find your limited profile.</span>
         </span>
       </label>
+      <div className="space-y-2">
+        <Label htmlFor="friend_request_policy">Who can send you friend requests</Label>
+        <select
+          id="friend_request_policy"
+          name="friend_request_policy"
+          defaultValue={profile?.friend_request_policy ?? "everyone"}
+          className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+        >
+          <option value="everyone">Everyone</option>
+          <option value="friends_of_friends">Friends of friends</option>
+          <option value="nobody">Nobody</option>
+        </select>
+        <p className="text-xs text-muted-foreground">You can still send requests yourself. Blocked members can never send one.</p>
+      </div>
     </fieldset>
   );
 }

@@ -44,6 +44,7 @@ const postSchema = z.object({
   audience: z.enum(["public", "friends"]).optional(),
   vehicleId: z.string().uuid().optional().nullable(),
   listingId: z.string().uuid().optional().nullable(),
+  groupId: z.string().uuid().optional().nullable(),
 });
 
 const MAX_POST_MEDIA = 10;
@@ -154,6 +155,7 @@ export async function createCommunityPost(formData: FormData) {
     audience: formData.get("audience") || undefined,
     vehicleId: nullableUuid(formData.get("vehicle_id")),
     listingId: nullableUuid(formData.get("listing_id")),
+    groupId: nullableUuid(formData.get("group_id")),
   });
 }
 
@@ -184,8 +186,34 @@ export async function createCommunityPostFromInput(
   }
 
   const admin = createAdminClient();
-  const audience = parsed.data.audience ?? profile.default_post_audience;
-  if (audience === "public" && !profile.is_public) {
+  const groupId = parsed.data.groupId ?? null;
+  if (groupId && !flags.flags.groups) {
+    return rejected("posting_unavailable", FEATURE_UNAVAILABLE_MESSAGE.groups);
+  }
+
+  if (groupId) {
+    const { data: membership } = await admin
+      .from("community_group_memberships")
+      .select("group:community_groups!community_group_memberships_group_id_fkey(id, status, visibility, join_policy, is_staff_curated)")
+      .eq("group_id", groupId)
+      .eq("profile_id", profile.profileId)
+      .eq("status", "active")
+      .maybeSingle();
+    const group = membership?.group as unknown as {
+      id: string;
+      status: string;
+      visibility: string;
+      join_policy: string;
+      is_staff_curated: boolean;
+    } | null;
+    if (!group || group.status !== "active" || group.visibility !== "public"
+      || group.join_policy !== "open" || !group.is_staff_curated) {
+      return { error: "Join this group before posting." };
+    }
+  }
+
+  const audience = groupId ? "public" : (parsed.data.audience ?? profile.default_post_audience);
+  if (!groupId && audience === "public" && !profile.is_public) {
     return rejected("unauthorized_audience", "Make your profile public before publishing a Public post");
   }
 
@@ -237,6 +265,7 @@ export async function createCommunityPostFromInput(
     audience,
     vehicle_id: vehicleId,
     marketplace_listing_id: listingId,
+    group_id: groupId,
     content: evaluated.text,
     // Launch mode (plan 3.3): the row is active in the same request. The
     // legacy AI-gated path stays behind automated_post_moderation.
@@ -264,6 +293,7 @@ export async function createCommunityPostFromInput(
     }).catch((recordError) => console.error("launch moderation record failed", recordError));
 
     revalidatePath("/community");
+    if (groupId) revalidatePath("/community/groups");
     revalidatePath("/dashboard/posts");
     revalidatePath("/admin/community");
     revalidatePath("/admin/moderation");
@@ -296,6 +326,7 @@ export async function createCommunityPostFromInput(
   }
 
   revalidatePath("/community");
+  if (groupId) revalidatePath("/community/groups");
   revalidatePath("/dashboard/posts");
   revalidatePath("/admin/community");
   revalidatePath("/admin/moderation");
@@ -336,7 +367,7 @@ export async function addCommunityPostMedia(input: unknown) {
   const admin = createAdminClient();
   const { data: post } = await admin
     .from("community_posts")
-    .select("id, author_id, status, moderation_status")
+    .select("id, author_id, group_id, status, moderation_status")
     .eq("id", parsed.data.postId)
     .maybeSingle();
 
@@ -582,7 +613,7 @@ export async function removeCommunityPostMedia(input: unknown) {
   const admin = createAdminClient();
   const { data: post } = await admin
     .from("community_posts")
-    .select("id, author_id, status, moderation_status")
+    .select("id, author_id, group_id, status, moderation_status")
     .eq("id", parsed.data.postId)
     .maybeSingle();
 
@@ -700,7 +731,7 @@ export async function createCommunityCommentFromInput(
   const admin = createAdminClient();
   const { data: post } = await admin
     .from("community_posts")
-    .select("id, author_id, status, moderation_status")
+    .select("id, author_id, group_id, status, moderation_status")
     .eq("id", parsed.data.postId)
     .eq("status", "active")
     .maybeSingle();
@@ -712,6 +743,18 @@ export async function createCommunityCommentFromInput(
     p_include_muted: false,
   });
   if (!canView) return { error: "Post not found" };
+  if (post.group_id) {
+    if (!flags.flags.groups) return rejected("posting_unavailable", FEATURE_UNAVAILABLE_MESSAGE.groups);
+    const { data: membership } = await admin
+      .from("community_group_memberships")
+      .select("group:community_groups!community_group_memberships_group_id_fkey(status)")
+      .eq("group_id", post.group_id)
+      .eq("profile_id", profile.profileId)
+      .eq("status", "active")
+      .maybeSingle();
+    const group = membership?.group as unknown as { status: string } | null;
+    if (!group || group.status !== "active") return { error: "Join this group before commenting." };
+  }
 
   const launchMode = !flags.flags.automated_post_moderation;
   const { data, error } = await admin.from("community_comments").insert({

@@ -80,12 +80,22 @@ async function deliver(profileId: string, type: NotificationType, draft: Notific
 }
 
 async function moderatorRecipients(): Promise<string[]> {
-  const { data } = await createAdminClient()
+  const admin = createAdminClient();
+  const { data } = await admin
     .from("moderation_role_grants")
     .select("profile_id")
     .eq("capability", "queue_read")
     .is("revoked_at", null);
-  return [...new Set((data ?? []).map((row) => row.profile_id))];
+  const candidates = [...new Set((data ?? []).map((row) => row.profile_id))];
+  const eligible = await Promise.all(candidates.map(async (profileId) => {
+    const { data: hasCapability, error } = await admin.rpc("moderation_has_capability", {
+      p_profile_id: profileId,
+      p_capability: "queue_read",
+    });
+    if (error) throw new Error(`moderator eligibility check failed: ${error.message}`);
+    return hasCapability ? profileId : null;
+  }));
+  return eligible.filter((profileId): profileId is string => Boolean(profileId));
 }
 
 async function postOperationalWebhook(body: ReturnType<typeof operationalWebhookBody>) {

@@ -109,6 +109,35 @@ BEGIN
   IF NOT public.moderation_has_capability(current_setting('test.mod_id')::uuid, 'content_decide') THEN
     RAISE EXCEPTION 'grant did not take effect';
   END IF;
+  INSERT INTO public.user_enforcement_actions (profile_id, action_type, reason_code, created_by)
+  VALUES (
+    current_setting('test.mod_id')::uuid,
+    'suspension',
+    'moderator_access_test',
+    current_setting('test.admin_id')::uuid
+  );
+  IF public.moderation_has_capability(current_setting('test.mod_id')::uuid, 'content_decide') THEN
+    RAISE EXCEPTION 'suspended moderator retained an effective capability';
+  END IF;
+  PERFORM set_config(
+    'request.jwt.claims',
+    '{"sub":"59000000-0000-0000-0000-000000000002","role":"authenticated"}',
+    true
+  );
+  IF public.social_current_user_is_available() THEN
+    RAISE EXCEPTION 'suspended session remained available';
+  END IF;
+  BEGIN
+    PERFORM public.grant_moderation_capability(
+      current_setting('test.author_id')::uuid,
+      'queue_read',
+      'suspended administrator grant attempt'
+    );
+    RAISE EXCEPTION 'FAIL - suspended administrator granted a capability';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  DELETE FROM public.user_enforcement_actions
+  WHERE profile_id = current_setting('test.mod_id')::uuid AND reason_code = 'moderator_access_test';
   IF (SELECT count(*) FROM public.moderation_role_grant_events WHERE action = 'granted') <> 6 THEN
     RAISE EXCEPTION 'grants were not audited';
   END IF;
@@ -211,6 +240,21 @@ $$;
 SELECT set_config('request.jwt.claims', '{"sub":"59000000-0000-0000-0000-000000000003","role":"authenticated"}', true);
 DO $$
 BEGIN
+  BEGIN
+    PERFORM public.decide_moderation_case(current_setting('test.case_id')::uuid, NULL, 'restore', NULL, NULL, 'none', 7);
+    RAISE EXCEPTION 'FAIL - NULL decision version accepted';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL;
+  END;
+  BEGIN
+    PERFORM public.decide_moderation_case(current_setting('test.case_id')::uuid, 1, NULL, NULL, NULL, 'none', 7);
+    RAISE EXCEPTION 'FAIL - NULL decision accepted';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL;
+  END;
+  BEGIN
+    PERFORM public.decide_moderation_case(current_setting('test.case_id')::uuid, 1, 'restore', NULL, NULL, 'ban', 7);
+    RAISE EXCEPTION 'FAIL - account enforcement accepted with a restore';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL;
+  END;
   BEGIN
     PERFORM public.decide_moderation_case(current_setting('test.case_id')::uuid, 99, 'restore', NULL, NULL, 'none', 7);
     RAISE EXCEPTION 'FAIL - stale decision version accepted';

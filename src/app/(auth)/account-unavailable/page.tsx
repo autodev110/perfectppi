@@ -30,8 +30,8 @@ export default function AccountUnavailablePage() {
           We can&apos;t load your account
         </h1>
         <p className="text-muted-foreground">
-          You&apos;re signed in, but your profile could not be read. This is
-          usually temporary.
+          You&apos;re signed in, but your account is currently unavailable. This
+          may be temporary or may require help from support.
         </p>
       </div>
 
@@ -42,11 +42,14 @@ export default function AccountUnavailablePage() {
         <Button variant="outline" className="w-full" onClick={signOut}>
           Sign out
         </Button>
+        <Button asChild variant="ghost" className="w-full">
+          <Link href="/support">Contact support</Link>
+        </Button>
       </div>
 
       <p className="text-xs text-muted-foreground">
-        If this keeps happening, sign out and back in. If it still fails, the
-        account may need attention from an administrator.
+        You can still read our policies, contact support, and exercise your
+        privacy rights while product access is unavailable.
       </p>
     </div>
   );

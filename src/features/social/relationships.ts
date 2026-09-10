@@ -62,20 +62,47 @@ export async function getVisibleCommunityPostIds({
   page = 1,
   perPage = 20,
   vehicleId = null,
+  includeGroupPosts = true,
 }: {
   viewerId: string;
   page?: number;
   perPage?: number;
   vehicleId?: string | null;
+  includeGroupPosts?: boolean;
 }) {
   const { data, error } = await createAdminClient().rpc("social_visible_community_post_ids", {
     p_viewer_id: viewerId,
     p_limit: perPage,
     p_offset: (Math.max(page, 1) - 1) * perPage,
     p_vehicle_id: vehicleId,
+    p_include_group_posts: includeGroupPosts,
   });
   if (error) {
     console.error("getVisibleCommunityPostIds failed", error);
+    return [];
+  }
+  return (data ?? []).map((row) => row.post_id);
+}
+
+export async function getVisibleCommunityGroupPostIds({
+  viewerId,
+  groupId,
+  page = 1,
+  perPage = 20,
+}: {
+  viewerId: string;
+  groupId: string;
+  page?: number;
+  perPage?: number;
+}) {
+  const { data, error } = await createAdminClient().rpc("social_visible_community_group_post_ids", {
+    p_viewer_id: viewerId,
+    p_group_id: groupId,
+    p_limit: perPage,
+    p_offset: (Math.max(page, 1) - 1) * perPage,
+  });
+  if (error) {
+    console.error("getVisibleCommunityGroupPostIds failed", error);
     return [];
   }
   return (data ?? []).map((row) => row.post_id);

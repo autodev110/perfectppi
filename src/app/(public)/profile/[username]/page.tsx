@@ -17,9 +17,12 @@ import {
   MessageSquare,
   ArrowRight,
   Shield,
+  Users,
 } from "lucide-react";
 import { MemberSafetyActions } from "@/components/shared/member-safety-actions";
+import { FriendActionButton } from "@/components/shared/friend-action-button";
 import { getSocialRelationshipState } from "@/features/social/relationships";
+import { friendsDiscoveryEnabled, getFriendRelationshipState } from "@/features/social/friends";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -52,10 +55,12 @@ export default async function PublicProfilePage({ params }: PageProps) {
   const profile = await getPublicProfile(username);
   if (!profile) notFound();
 
-  const [content, allTechEntries, relationship] = await Promise.all([
+  const [content, allTechEntries, relationship, friendship, friendsEnabled] = await Promise.all([
     getProfilePublicContent(profile.id),
     profile.role === "technician" ? getDirectory() : Promise.resolve([]),
     getSocialRelationshipState(profile.id),
+    getFriendRelationshipState(profile.id),
+    friendsDiscoveryEnabled(),
   ]);
 
   const tech = profile.role === "technician"
@@ -126,6 +131,12 @@ export default async function PublicProfilePage({ params }: PageProps) {
                   {tech.total_inspections} completed
                 </div>
               )}
+              {friendship && friendship.state !== "self" && friendship.mutualFriendCount > 0 && (
+                <div className="flex items-center gap-1.5 text-sm font-bold text-on-surface">
+                  <Users className="h-4 w-4 text-on-surface-variant" />
+                  {friendship.mutualFriendCount} mutual friend{friendship.mutualFriendCount !== 1 ? "s" : ""}
+                </div>
+              )}
             </div>
           </div>
 
@@ -137,6 +148,9 @@ export default async function PublicProfilePage({ params }: PageProps) {
                 </Link>
               </Button>
             )}
+            {friendship ? (
+              <FriendActionButton profileId={profile.id} state={friendship.state} enabled={friendsEnabled} compact />
+            ) : null}
             <Button asChild size="sm">
               <Link href={`/dashboard/messages`}>
                 <MessageSquare className="mr-2 h-4 w-4" />

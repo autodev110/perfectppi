@@ -29,13 +29,13 @@ function metadata(value: Json): DeletionMetadata {
       ? record.retainedReferences.filter((item): item is string => typeof item === "string")
       : undefined,
     appleRevocation: record.appleRevocation === "revoked" || record.appleRevocation === "already_invalid"
-      || record.appleRevocation === "not_linked" || record.appleRevocation === "not_configured"
+      || record.appleRevocation === "not_linked"
       ? record.appleRevocation
       : undefined,
   };
 }
 
-type AppleRevocationRecord = "revoked" | "already_invalid" | "not_linked" | "not_configured";
+type AppleRevocationRecord = "revoked" | "already_invalid" | "not_linked";
 
 async function revokeAppleTokenForProfile(profileId: string): Promise<AppleRevocationRecord> {
   const admin = createAdminClient();
@@ -49,13 +49,13 @@ async function revokeAppleTokenForProfile(profileId: string): Promise<AppleRevoc
 
   const config = readAppleSignInConfig();
   if (!config) {
-    // Token custody was configured when the user linked, but revocation
-    // cannot run now: record it rather than pretend it happened.
+    // Never delete the account (and cascade-delete our only copy of the
+    // refresh token) before Apple revocation can run. This is retryable once
+    // the deployment credentials are restored.
     await admin.from("apple_sign_in_tokens").update({
       revoke_attempted_at: new Date().toISOString(), revoke_outcome: "failed", last_error: "Apple sign-in not configured",
     }).eq("profile_id", profileId);
-    console.error("[privacy] Apple token revocation skipped: not configured", { profileId });
-    return "not_configured";
+    throw new Error("Apple token revocation is not configured; deletion will retry");
   }
 
   try {

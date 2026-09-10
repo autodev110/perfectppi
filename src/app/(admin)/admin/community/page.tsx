@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils/formatting";
-import { ExternalLink, MessageSquare } from "lucide-react";
+import { ExternalLink, MessageSquare, Users } from "lucide-react";
 
 const STATUS_BADGE: Record<string, string> = {
   active: "bg-teal/10 text-teal border-teal/20",
@@ -29,11 +29,14 @@ export default async function AdminCommunityPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div>
         <h1 className="font-heading text-2xl font-bold">Community Moderation</h1>
         <p className="text-muted-foreground">
           Review community posts and moderate content from across the platform.
         </p>
+        </div>
+        <Button asChild variant="outline"><Link href="/admin/community/groups"><Users className="mr-2 h-4 w-4" />Curated Groups</Link></Button>
       </div>
 
       {/* Tabs */}

@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createCommunityPost } from "@/features/community/actions";
-import type { CommunityPostOptionListing, CommunityPostOptionVehicle } from "@/features/community/queries";
+import type {
+  CommunityPostOptionGroup,
+  CommunityPostOptionListing,
+  CommunityPostOptionVehicle,
+} from "@/features/community/queries";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,7 +20,9 @@ const MAX_MEDIA = 10;
 type NewPostFormProps = {
   vehicles: CommunityPostOptionVehicle[];
   listings: CommunityPostOptionListing[];
+  groups: CommunityPostOptionGroup[];
   selectedVehicleId?: string;
+  selectedGroupSlug?: string;
   defaultAudience: "public" | "friends";
   canPostPublic: boolean;
   /** Server capabilities (plan 30.2); presentation only, the API re-checks. */
@@ -31,7 +37,16 @@ function vehicleLabel(vehicle: CommunityPostOptionVehicle | null) {
   return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ") || "Vehicle";
 }
 
-export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudience, canPostPublic, capabilities }: NewPostFormProps) {
+export function NewPostForm({
+  vehicles,
+  listings,
+  groups,
+  selectedVehicleId,
+  selectedGroupSlug,
+  defaultAudience,
+  canPostPublic,
+  capabilities,
+}: NewPostFormProps) {
   const videoAllowed = capabilities.communityVideoUploads;
   const mediaAllowed = capabilities.communityPhotoUploads;
   const acceptTypes = videoAllowed
@@ -40,6 +55,11 @@ export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudi
   const router = useRouter();
   const requestedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
   const [attachmentType, setAttachmentType] = useState(requestedVehicle ? "vehicle" : "none");
+  const requestedGroup = groups.find((group) => group.slug === selectedGroupSlug);
+  const [groupId, setGroupId] = useState(requestedGroup?.id ?? "");
+  const [audience, setAudience] = useState<"public" | "friends">(
+    canPostPublic ? defaultAudience : "friends",
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [media, setMedia] = useState<File[]>([]);
@@ -105,7 +125,10 @@ export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudi
       }
     }
 
-    router.push(createdModerationStatus.current === "active" ? "/dashboard/posts" : "/dashboard/posts?tab=review");
+    const destinationGroup = groups.find((group) => group.id === groupId);
+    router.push(createdModerationStatus.current === "active"
+      ? destinationGroup ? `/community/groups/${destinationGroup.slug}` : "/dashboard/posts"
+      : "/dashboard/posts?tab=review");
     router.refresh();
   }
 
@@ -146,18 +169,40 @@ export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudi
       </div>
 
       <div className="space-y-2">
+        <Label htmlFor="group_id">Post destination</Label>
+        <select
+          id="group_id"
+          name="group_id"
+          value={groupId}
+          onChange={(event) => setGroupId(event.target.value)}
+          className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+        >
+          <option value="">My feed</option>
+          {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          {groups.length ? "Only groups you have joined appear here." : "Join a Community group to post there."}
+        </p>
+      </div>
+
+      <div className="space-y-2">
         <Label htmlFor="audience">Audience</Label>
         <select
           id="audience"
           name="audience"
-          defaultValue={canPostPublic ? defaultAudience : "friends"}
+          value={groupId ? "public" : audience}
+          onChange={(event) => setAudience(event.target.value as "public" | "friends")}
+          disabled={Boolean(groupId)}
           className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
         >
           <option value="friends">Friends</option>
           {canPostPublic ? <option value="public">Public inside PerfectPPI</option> : null}
         </select>
+        {groupId ? <input type="hidden" name="audience" value="public" /> : null}
         <p className="text-xs text-muted-foreground">
-          {canPostPublic ? "Public posts are visible only to signed-in PerfectPPI members." : "Your private profile can publish to Friends only."}
+          {groupId
+            ? "Public group posts are visible to eligible signed-in PerfectPPI members."
+            : canPostPublic ? "Public posts are visible only to signed-in PerfectPPI members." : "Your private profile can publish to Friends only."}
         </p>
       </div>
 

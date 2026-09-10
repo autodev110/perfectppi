@@ -35,4 +35,20 @@ describe("moderation capabilities", () => {
       assert.ok(enforcement.includes(required), `${required} missing from decide_moderation_case`);
     }
   });
+
+  test("the audit hardening migration closes null and inactive-account bypasses", () => {
+    const sql = readFileSync(
+      new URL("../../supabase/migrations/20260911020000_audit_lifecycle_hardening.sql", import.meta.url),
+      "utf8",
+    );
+    assert.match(sql, /social_profile_is_available\(p_profile_id\)/);
+    assert.match(sql, /social_current_user_is_available/);
+    assert.match(sql, /p_expected_version IS NULL/);
+    assert.match(sql, /p_decision IS NULL/);
+    assert.match(sql, /p_enforcement IS NULL/);
+    assert.match(sql, /p_enforcement <> 'none' AND p_decision <> 'remove'/);
+    assert.match(sql, /p_environment = 'production'[\s\S]*moderation_has_capability\(v_actor_id, 'legal_hold_review'\)/);
+    assert.match(sql, /linked_case_retention_active/);
+    assert.match(sql, /comment_case_retention_active/);
+  });
 });

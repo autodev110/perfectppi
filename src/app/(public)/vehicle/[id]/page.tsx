@@ -10,6 +10,7 @@ import { contactSellerFromListing } from "@/features/marketplace/actions";
 import { getPublicVehicleWarrantySnapshot } from "@/features/warranty/queries";
 import { createCommunityComment } from "@/features/community/actions";
 import { getVehicleDiscussionPosts } from "@/features/community/queries";
+import { SafetyNotice } from "@/components/shared/safety-notice";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -615,6 +616,11 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                 <p className="text-sm text-on-surface-variant whitespace-pre-wrap mb-5">
                   {post.content}
                 </p>
+                {post.safety_notice ? (
+                  <div className="mb-5">
+                    <SafetyNotice notice={post.safety_notice} compact />
+                  </div>
+                ) : null}
 
                 {post.comments.length > 0 && (
                   <div className="space-y-2.5 mb-4">

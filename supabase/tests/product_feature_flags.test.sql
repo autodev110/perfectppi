@@ -76,6 +76,23 @@ $$;
 SELECT set_config('request.jwt.claims',
   '{"sub":"57000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
 DO $$
+BEGIN
+  BEGIN
+    PERFORM public.set_product_feature_flag(
+      'production', 'community_photo_uploads', false,
+      'incident 42: ungranted administrator attempt'
+    );
+    RAISE EXCEPTION 'FAIL - ungranted admin changed a production feature flag';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END
+$$;
+SELECT public.grant_moderation_capability(
+  (SELECT id FROM public.profiles WHERE auth_user_id = '57000000-0000-0000-0000-000000000001'),
+  'legal_hold_review',
+  'designated production release and safety reviewer'
+);
+DO $$
 DECLARE
   updated public.product_feature_flags%ROWTYPE;
 BEGIN

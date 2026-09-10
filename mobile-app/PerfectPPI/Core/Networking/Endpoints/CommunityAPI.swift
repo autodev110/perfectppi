@@ -27,6 +27,7 @@ enum CommunityAPI {
         let audience: CommunityPostAudience
         let vehicleId: String?
         let listingId: String?
+        let groupId: String?
     }
 
     struct CreatePostResponse: Decodable {
@@ -143,5 +144,26 @@ enum CommunityAPI {
 
     static func notices() async throws -> [EnforcementNotice] {
         try await APIClient.shared.get("/api/community/moderation/notices")
+    }
+
+    static func groups() async throws -> CommunityGroupDirectory {
+        try await APIClient.shared.get("/api/community/groups")
+    }
+
+    static func group(slug: String, page: Int = 1) async throws -> CommunityGroupDetail {
+        try await APIClient.shared.get(
+            "/api/community/groups/\(slug)",
+            query: [URLQueryItem(name: "page", value: String(page))]
+        )
+    }
+
+    struct GroupMembershipPayload: Encodable { let joined: Bool }
+    struct GroupMembershipResult: Decodable { let joined: Bool; let changed: Bool }
+
+    static func setGroupMembership(id: String, joined: Bool) async throws -> GroupMembershipResult {
+        try await APIClient.shared.post(
+            "/api/community/groups/\(id)/membership",
+            body: GroupMembershipPayload(joined: joined)
+        )
     }
 }

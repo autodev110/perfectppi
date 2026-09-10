@@ -298,6 +298,122 @@ export type Database = {
         }
         Relationships: []
       }
+      community_group_memberships: {
+        Row: {
+          group_id: string
+          joined_at: string
+          profile_id: string
+          role: Database["public"]["Enums"]["community_group_role"]
+          status: Database["public"]["Enums"]["community_group_membership_status"]
+          updated_at: string
+        }
+        Insert: {
+          group_id: string
+          joined_at?: string
+          profile_id: string
+          role?: Database["public"]["Enums"]["community_group_role"]
+          status?: Database["public"]["Enums"]["community_group_membership_status"]
+          updated_at?: string
+        }
+        Update: {
+          group_id?: string
+          joined_at?: string
+          profile_id?: string
+          role?: Database["public"]["Enums"]["community_group_role"]
+          status?: Database["public"]["Enums"]["community_group_membership_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_group_memberships_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "community_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_group_memberships_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_groups: {
+        Row: {
+          avatar_url: string | null
+          category: string
+          cover_url: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          is_staff_curated: boolean
+          join_policy: Database["public"]["Enums"]["community_group_join_policy"]
+          name: string
+          rules: string[]
+          slug: string
+          status: Database["public"]["Enums"]["community_group_status"]
+          updated_at: string
+          vehicle_make: string | null
+          vehicle_model: string | null
+          visibility: Database["public"]["Enums"]["community_group_visibility"]
+          year_end: number | null
+          year_start: number | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          category: string
+          cover_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          description: string
+          id?: string
+          is_staff_curated?: boolean
+          join_policy?: Database["public"]["Enums"]["community_group_join_policy"]
+          name: string
+          rules?: string[]
+          slug: string
+          status?: Database["public"]["Enums"]["community_group_status"]
+          updated_at?: string
+          vehicle_make?: string | null
+          vehicle_model?: string | null
+          visibility?: Database["public"]["Enums"]["community_group_visibility"]
+          year_end?: number | null
+          year_start?: number | null
+        }
+        Update: {
+          avatar_url?: string | null
+          category?: string
+          cover_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          is_staff_curated?: boolean
+          join_policy?: Database["public"]["Enums"]["community_group_join_policy"]
+          name?: string
+          rules?: string[]
+          slug?: string
+          status?: Database["public"]["Enums"]["community_group_status"]
+          updated_at?: string
+          vehicle_make?: string | null
+          vehicle_model?: string | null
+          visibility?: Database["public"]["Enums"]["community_group_visibility"]
+          year_end?: number | null
+          year_start?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_posts: {
         Row: {
           active_revision_id: string
@@ -305,6 +421,8 @@ export type Database = {
           author_id: string
           content: string
           created_at: string
+          group_id: string | null
+          group_status: Database["public"]["Enums"]["community_group_post_status"]
           id: string
           marketplace_listing_id: string | null
           moderation_checked_at: string | null
@@ -321,6 +439,8 @@ export type Database = {
           author_id: string
           content: string
           created_at?: string
+          group_id?: string | null
+          group_status?: Database["public"]["Enums"]["community_group_post_status"]
           id?: string
           marketplace_listing_id?: string | null
           moderation_checked_at?: string | null
@@ -337,6 +457,8 @@ export type Database = {
           author_id?: string
           content?: string
           created_at?: string
+          group_id?: string | null
+          group_status?: Database["public"]["Enums"]["community_group_post_status"]
           id?: string
           marketplace_listing_id?: string | null
           moderation_checked_at?: string | null
@@ -353,6 +475,13 @@ export type Database = {
             columns: ["author_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_posts_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "community_groups"
             referencedColumns: ["id"]
           },
           {
@@ -377,6 +506,8 @@ export type Database = {
           author_id: string | null
           content: string
           created_at: string
+          group_id: string | null
+          group_status: Database["public"]["Enums"]["community_group_post_status"]
           id: string
           marketplace_listing_id: string | null
           post_id: string
@@ -388,6 +519,8 @@ export type Database = {
           author_id?: string | null
           content: string
           created_at?: string
+          group_id?: string | null
+          group_status?: Database["public"]["Enums"]["community_group_post_status"]
           id: string
           marketplace_listing_id?: string | null
           post_id: string
@@ -399,6 +532,8 @@ export type Database = {
           author_id?: string | null
           content?: string
           created_at?: string
+          group_id?: string | null
+          group_status?: Database["public"]["Enums"]["community_group_post_status"]
           id?: string
           marketplace_listing_id?: string | null
           post_id?: string
@@ -2830,6 +2965,30 @@ export type Database = {
         }
         Relationships: []
       }
+      friend_request_events: {
+        Row: {
+          actor_id: string
+          created_at: string
+          event: string
+          id: number
+          target_id: string
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          event: string
+          id?: never
+          target_id: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          event?: string
+          id?: never
+          target_id?: string
+        }
+        Relationships: []
+      }
       product_feature_flag_changes: {
         Row: {
           actor_id: string | null
@@ -2936,6 +3095,7 @@ export type Database = {
           default_post_audience: Database["public"]["Enums"]["community_post_audience"]
           display_name: string | null
           discoverable: boolean
+          friend_request_policy: string
           id: string
           is_developer: boolean
           is_public: boolean
@@ -2954,6 +3114,7 @@ export type Database = {
           default_post_audience?: Database["public"]["Enums"]["community_post_audience"]
           display_name?: string | null
           discoverable?: boolean
+          friend_request_policy?: string
           id?: string
           is_developer?: boolean
           is_public?: boolean
@@ -2972,6 +3133,7 @@ export type Database = {
           default_post_audience?: Database["public"]["Enums"]["community_post_audience"]
           display_name?: string | null
           discoverable?: boolean
+          friend_request_policy?: string
           id?: string
           is_developer?: boolean
           is_public?: boolean
@@ -3621,6 +3783,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_curated_community_group: {
+        Args: {
+          p_actor_profile_id: string
+          p_category: string
+          p_description: string
+          p_name: string
+          p_rules?: string[]
+          p_slug: string
+          p_vehicle_make?: string | null
+          p_vehicle_model?: string | null
+          p_year_end?: number | null
+          p_year_start?: number | null
+        }
+        Returns: Database["public"]["Tables"]["community_groups"]["Row"]
+      }
       admin_correct_username: {
         Args: { p_profile_id: string; p_reason: string; p_username: string }
         Returns: Database["public"]["Tables"]["profiles"]["Row"]
@@ -3955,9 +4132,69 @@ export type Database = {
           p_allow_exact_username_lookup?: boolean
           p_default_post_audience: Database["public"]["Enums"]["community_post_audience"]
           p_discoverable?: boolean
+          p_friend_request_policy?: string | null
           p_is_public: boolean
         }
         Returns: Database["public"]["Tables"]["profiles"]["Row"]
+      }
+      friend_mutual_ids: {
+        Args: { p_first_id: string; p_second_id: string }
+        Returns: string[]
+      }
+      friend_relationship_state: {
+        Args: { p_viewer_id: string; p_target_id: string }
+        Returns: string
+      }
+      send_friend_request: {
+        Args: { p_actor_profile_id: string; p_target_profile_id: string }
+        Returns: Json
+      }
+      respond_friend_request: {
+        Args: { p_actor_profile_id: string; p_requester_profile_id: string; p_accept: boolean }
+        Returns: Json
+      }
+      cancel_friend_request: {
+        Args: { p_actor_profile_id: string; p_target_profile_id: string }
+        Returns: Json
+      }
+      remove_friend: {
+        Args: { p_actor_profile_id: string; p_target_profile_id: string }
+        Returns: Json
+      }
+      list_friend_requests: {
+        Args: { p_actor_profile_id: string }
+        Returns: {
+          direction: string
+          profile_id: string
+          username: string | null
+          display_name: string | null
+          avatar_url: string | null
+          created_at: string
+        }[]
+      }
+      list_my_friends: {
+        Args: { p_actor_profile_id: string }
+        Returns: {
+          profile_id: string
+          username: string | null
+          display_name: string | null
+          avatar_url: string | null
+          is_public: boolean
+          friends_since: string
+        }[]
+      }
+      search_profiles: {
+        Args: { p_viewer_profile_id: string; p_query: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          profile_id: string
+          username: string | null
+          display_name: string | null
+          avatar_url: string | null
+          is_public: boolean
+          exact_match: boolean
+          relationship_state: string
+          mutual_friend_count: number
+        }[]
       }
       social_can_view_community_post: {
         Args: { p_include_muted?: boolean; p_post_id: string; p_viewer_id: string }
@@ -3983,6 +4220,10 @@ export type Database = {
         Args: { p_profile_id: string }
         Returns: boolean
       }
+      social_current_user_is_available: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       social_profiles_are_blocked: {
         Args: { p_first_id: string; p_second_id: string }
         Returns: boolean
@@ -3993,12 +4234,30 @@ export type Database = {
       }
       social_visible_community_post_ids: {
         Args: {
+          p_include_group_posts?: boolean
           p_limit?: number
           p_offset?: number
           p_vehicle_id?: string | null
           p_viewer_id: string
         }
         Returns: { post_id: string }[]
+      }
+      social_visible_community_group_post_ids: {
+        Args: {
+          p_group_id: string
+          p_limit?: number
+          p_offset?: number
+          p_viewer_id: string
+        }
+        Returns: { post_id: string }[]
+      }
+      join_curated_community_group: {
+        Args: { p_actor_profile_id: string; p_group_id: string }
+        Returns: boolean
+      }
+      leave_curated_community_group: {
+        Args: { p_actor_profile_id: string; p_group_id: string }
+        Returns: boolean
       }
       get_my_is_developer: { Args: never; Returns: boolean }
       get_my_org_id: { Args: never; Returns: string }
@@ -4202,6 +4461,12 @@ export type Database = {
         | "submission_resubmitted"
       certification_level: "none" | "ase" | "master" | "oem_qualified"
       community_content_status: "active" | "hidden" | "archived"
+      community_group_join_policy: "open" | "request_approval" | "invite_only"
+      community_group_membership_status: "active" | "left" | "removed" | "banned"
+      community_group_post_status: "active" | "group_removed"
+      community_group_role: "owner" | "moderator" | "member"
+      community_group_status: "active" | "archived"
+      community_group_visibility: "public" | "private" | "unlisted"
       community_post_audience: "public" | "friends"
       community_media_type: "image" | "video"
       completion_state: "not_started" | "in_progress" | "completed"
@@ -4211,6 +4476,8 @@ export type Database = {
       media_type: "image" | "video"
       message_status: "unread" | "read" | "archived"
       notification_type:
+        | "friend_request"
+        | "friend_request_accepted"
         | "moderation_decision"
         | "moderation_case"
         | "report_received"

@@ -15,19 +15,27 @@ import { MODERATION_CAPABILITIES, type ModerationCapability } from "./capability
 export type CapabilitySet = ReadonlySet<ModerationCapability>;
 
 export async function getModerationCapabilities(profileId: string): Promise<CapabilitySet> {
-  const { data, error } = await createAdminClient()
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("moderation_role_grants")
     .select("capability")
     .eq("profile_id", profileId)
     .is("revoked_at", null);
   if (error) throw new Error(error.message);
-  return new Set(
-    (data ?? [])
-      .map((row) => row.capability)
-      .filter((value): value is ModerationCapability =>
-        (MODERATION_CAPABILITIES as readonly string[]).includes(value),
-      ),
-  );
+  const candidates = (data ?? [])
+    .map((row) => row.capability)
+    .filter((value): value is ModerationCapability =>
+      (MODERATION_CAPABILITIES as readonly string[]).includes(value),
+    );
+  const effective = await Promise.all(candidates.map(async (capability) => {
+    const { data: allowed, error: capabilityError } = await admin.rpc("moderation_has_capability", {
+      p_profile_id: profileId,
+      p_capability: capability,
+    });
+    if (capabilityError) throw new Error(capabilityError.message);
+    return allowed ? capability : null;
+  }));
+  return new Set(effective.filter((value): value is ModerationCapability => Boolean(value)));
 }
 
 /**

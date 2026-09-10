@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, CheckCheck, MessageSquare, ShieldCheck, CreditCard, FileText, Wrench, Flag, Gavel } from "lucide-react";
+import { Bell, CheckCheck, MessageSquare, ShieldCheck, CreditCard, FileText, Wrench, Flag, Gavel, UserPlus, UserCheck } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils/formatting";
 import type { Database } from "@/types/database";
 
@@ -33,6 +33,8 @@ const typeStyle: Record<
   moderation_decision: { icon: Gavel, color: "text-rose-600", bg: "bg-rose-50" },
   moderation_case: { icon: ShieldCheck, color: "text-rose-600", bg: "bg-rose-50" },
   report_received: { icon: Flag, color: "text-slate-600", bg: "bg-slate-50" },
+  friend_request: { icon: UserPlus, color: "text-sky-600", bg: "bg-sky-50" },
+  friend_request_accepted: { icon: UserCheck, color: "text-emerald-600", bg: "bg-emerald-50" },
 };
 
 export function NotificationBell({ messagesBase }: { messagesBase: string }) {
@@ -86,6 +88,13 @@ export function NotificationBell({ messagesBase }: { messagesBase: string }) {
       return `/admin/moderation/cases/${data.caseId}`;
     }
     if (n.type === "moderation_case") return "/admin/moderation";
+    // Friend notices open the owner's request list or the accepter's profile;
+    // both destinations re-check visibility on load.
+    if (n.type === "friend_request") return "/dashboard/friends";
+    if (n.type === "friend_request_accepted" && typeof data.username === "string") {
+      return `/profile/${encodeURIComponent(data.username)}`;
+    }
+    if (n.type === "friend_request_accepted") return "/dashboard/friends";
     return null;
   }
 

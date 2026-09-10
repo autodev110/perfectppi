@@ -19,8 +19,8 @@ export async function setFeatureFlag(formData: FormData) {
   });
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
-  // The RPC enforces the admin gate itself; the session client keeps the
-  // actor's identity attached to the audit row.
+  // The RPC enforces active-admin access and requires an explicit safety
+  // capability in production; the session preserves the audit actor.
   const supabase = await createClient();
   const { error } = await supabase.rpc("set_product_feature_flag", {
     p_environment: resolveFeatureFlagEnvironment(),

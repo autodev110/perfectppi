@@ -1,22 +1,18 @@
 import Link from "next/link";
 import { createCommunityComment } from "@/features/community/actions";
-import { reportCommunityContentForm } from "@/features/moderation/actions";
-import {
-  REPORT_DETAILS_MAX_LENGTH,
-  REPORT_REASON_CODES,
-  REPORT_REASON_LABELS,
-  REPORT_REASONS_REQUIRING_DETAILS,
-} from "@/features/moderation/report-reasons";
 import { getCommunityPosts } from "@/features/community/queries";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate, formatMileage, getInitials } from "@/lib/utils/formatting";
-import { Car, Flag, MessageSquare, Plus, Tag, Users } from "lucide-react";
+import { Car, MessageSquare, Plus, Tag, Users, Warehouse } from "lucide-react";
 import { PostMediaCarousel } from "@/components/shared/post-media-carousel";
 import { requireRole } from "@/features/auth/guards";
 import { MemberSafetyActions } from "@/components/shared/member-safety-actions";
+import { SafetyNotice } from "@/components/shared/safety-notice";
+import { CommunityReportControl } from "@/components/shared/community-report-control";
+import { getFeatureFlags, toClientCapabilities } from "@/lib/feature-flags";
 
 export const metadata = {
   title: "Community — PerfectPPI",
@@ -33,7 +29,10 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
   const viewer = await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const requestedPage = Number((await searchParams).page ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const posts = await getCommunityPosts(page, 20);
+  const [posts, capabilities] = await Promise.all([
+    getCommunityPosts(page, 20),
+    getFeatureFlags().then(toClientCapabilities),
+  ]);
 
   return (
     <div className="min-h-screen bg-surface">
@@ -51,12 +50,30 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
               A lightweight feed for listing shares, inspection discussions, and vehicle context. No fake engagement, no generic social clutter.
             </p>
           </div>
-          <Button asChild className="h-12 rounded-xl px-6">
-            <Link href="/dashboard/posts/new">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Post
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {capabilities.capabilities.groups ? (
+              <Button asChild variant="outline" className="h-12 rounded-xl px-6">
+                <Link href="/community/groups">
+                  <Warehouse className="mr-2 h-4 w-4" />
+                  Groups
+                </Link>
+              </Button>
+            ) : null}
+            {capabilities.capabilities.friendsDiscovery ? (
+              <Button asChild variant="outline" className="h-12 rounded-xl px-6">
+                <Link href="/community/people">
+                  <Users className="mr-2 h-4 w-4" />
+                  Find People
+                </Link>
+              </Button>
+            ) : null}
+            <Button asChild className="h-12 rounded-xl px-6">
+              <Link href="/dashboard/posts/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Post
+              </Link>
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -96,13 +113,18 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                             {post.author?.display_name ?? post.author?.username ?? "PerfectPPI user"}
                           </p>
                           <p className="text-xs text-on-surface-variant">{formatDate(post.created_at)}</p>
+                          {post.group ? (
+                            <Link href={`/community/groups/${post.group.slug}`} className="text-xs font-semibold text-primary hover:underline">
+                              {post.group.name}
+                            </Link>
+                          ) : null}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="rounded-full capitalize">{post.audience}</Badge>
                         {post.author_id !== viewer.id ? <MemberSafetyActions profileId={post.author_id} compact /> : null}
                         {post.report_context ? (
-                          <ReportControl entityType="community_post" entityId={post.id} reportContext={post.report_context} />
+                          <CommunityReportControl entityType="community_post" entityId={post.id} reportContext={post.report_context} />
                         ) : null}
                       </div>
                     </div>
@@ -110,6 +132,11 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">
                       {post.content}
                     </p>
+                    {post.safety_notice ? (
+                      <div className="mt-4">
+                        <SafetyNotice notice={post.safety_notice} />
+                      </div>
+                    ) : null}
                   </div>
 
                   <PostMediaCarousel media={post.media} />
@@ -174,7 +201,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                               <div className="flex items-center gap-2">
                                 <p className="text-[10px] text-on-surface-variant">{formatDate(comment.created_at)}</p>
                                 {comment.report_context ? (
-                                  <ReportControl entityType="community_comment" entityId={comment.id} reportContext={comment.report_context} compact />
+                                  <CommunityReportControl entityType="community_comment" entityId={comment.id} reportContext={comment.report_context} compact />
                                 ) : null}
                               </div>
                             </div>
@@ -184,11 +211,15 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                       </div>
                     )}
 
-                    <form action={createCommunityComment} className="space-y-3">
-                      <input type="hidden" name="post_id" value={post.id} />
-                      <Textarea name="content" placeholder="Add a factual question or comment..." rows={3} maxLength={600} />
-                      <Button type="submit" size="sm">Comment</Button>
-                    </form>
+                    {post.can_interact ? (
+                      <form action={createCommunityComment} className="space-y-3">
+                        <input type="hidden" name="post_id" value={post.id} />
+                        <Textarea name="content" placeholder="Add a factual question or comment..." rows={3} maxLength={600} />
+                        <Button type="submit" size="sm">Comment</Button>
+                      </form>
+                    ) : post.group ? (
+                      <Button asChild size="sm" variant="outline"><Link href={`/community/groups/${post.group.slug}`}>Join the group to comment</Link></Button>
+                    ) : null}
                   </div>
                 </article>
               );
@@ -201,42 +232,5 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
         </div>
       </section>
     </div>
-  );
-}
-
-function ReportControl({
-  entityType,
-  entityId,
-  reportContext,
-  compact = false,
-}: {
-  entityType: "community_post" | "community_comment";
-  entityId: string;
-  reportContext: string;
-  compact?: boolean;
-}) {
-  return (
-    <details className="relative">
-      <summary className="inline-flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full text-destructive hover:bg-destructive/10" aria-label="Report content">
-        <Flag className={compact ? "h-3 w-3" : "h-4 w-4"} />
-      </summary>
-      <form action={reportCommunityContentForm} className="absolute right-0 z-20 mt-2 w-72 space-y-3 rounded-xl border bg-background p-4 shadow-xl">
-        <input type="hidden" name="entity_type" value={entityType} />
-        <input type="hidden" name="entity_id" value={entityId} />
-        <input type="hidden" name="report_context" value={reportContext} />
-        <p className="text-sm font-bold">Report content</p>
-        <select name="reason_code" required defaultValue="" className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-          <option value="" disabled>Choose a reason</option>
-          {REPORT_REASON_CODES.map((code) => (
-            <option key={code} value={code}>{REPORT_REASON_LABELS[code]}</option>
-          ))}
-        </select>
-        <Textarea name="details" rows={2} maxLength={REPORT_DETAILS_MAX_LENGTH} placeholder="Details (required for Other and intellectual-property reports)" />
-        <p className="text-xs text-muted-foreground">
-          Required for: {[...REPORT_REASONS_REQUIRING_DETAILS].map((code) => REPORT_REASON_LABELS[code]).join(", ")}.
-        </p>
-        <Button size="sm" type="submit">Submit report</Button>
-      </form>
-    </details>
   );
 }

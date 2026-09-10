@@ -92,6 +92,13 @@ const decisionSchema = z.object({
   if (value.decision !== "restore" && (value.rationale ?? "").length < 10) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["rationale"], message: "Add a rationale of at least 10 characters." });
   }
+  if (value.enforcement !== "none" && value.decision !== "remove") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["enforcement"],
+      message: "Account enforcement requires a removal decision.",
+    });
+  }
 });
 
 export async function decideModerationCase(formData: FormData): Promise<void> {

@@ -34,9 +34,9 @@ export default function CommunityGuidelinesPage() {
         Use one account and your real ownership context. Do not impersonate another person, shop, or manufacturer; fabricate inspection evidence, mileage, service history, or reviews; conceal a material relationship with a seller or shop; misstate credentials; manipulate ratings; or list a vehicle you are not authorized to sell. Honest positive and negative opinions are welcome.
       </p>
 
-      <h2>Vehicle safety comes first</h2>
+      <h2 id="vehicle-safety">Vehicle safety comes first</h2>
       <p>
-        Community answers are not a professional diagnosis. Do not present guesswork as certainty on brakes, steering, airbags, fuel systems, vehicle lifting and jack points, wheel fasteners, or high-voltage EV systems, and do not encourage anyone to disable a safety system, ignore a recall, or drive a vehicle that is not safe to drive. Speed runs, street-racing challenges, and content that encourages dangerous driving are not allowed. PerfectPPI labels some topics with a safety notice; treat it seriously and get qualified help for anything you would not stake your life on.
+        Community answers are not a professional diagnosis. Do not present guesswork as certainty on brakes, steering, airbags, fuel systems, vehicle lifting and jack points, wheel fasteners, or high-voltage EV systems, and do not encourage anyone to disable a safety system, ignore a recall, or drive a vehicle that is not safe to drive. Speed runs, street-racing challenges, and content that encourages dangerous driving are not allowed. PerfectPPI labels posts that involve these topics with a safety notice; treat it seriously and get qualified help for anything you would not stake your life on.
       </p>
 
       <h2>No scams or unsafe transactions</h2>

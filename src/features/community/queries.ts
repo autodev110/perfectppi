@@ -1,9 +1,15 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
-import { getBlockedProfileIds, getVisibleCommunityPostIds } from "@/features/social/relationships";
+import {
+  getBlockedProfileIds,
+  getVisibleCommunityGroupPostIds,
+  getVisibleCommunityPostIds,
+} from "@/features/social/relationships";
 import { createReportContext } from "@/features/moderation/report-context";
 import { communityMediaDeliveryPath } from "@/lib/storage/community-media";
+import { buildSafetyNotice, type SafetyNotice } from "@/lib/moderation/safety-notice";
+import { getFeatureFlags } from "@/lib/feature-flags";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -18,6 +24,7 @@ type Listing = Database["public"]["Tables"]["marketplace_listings"]["Row"];
 type CommunityPostRow = Database["public"]["Tables"]["community_posts"]["Row"];
 type CommunityPostMediaRow = Database["public"]["Tables"]["community_post_media"]["Row"];
 type CommunityCommentRow = Database["public"]["Tables"]["community_comments"]["Row"];
+type CommunityGroupRow = Database["public"]["Tables"]["community_groups"]["Row"];
 
 type CommunityFeedProfile = Pick<Profile, "id" | "display_name" | "username" | "avatar_url">;
 type CommunityFeedVehicleMedia = Pick<
@@ -40,17 +47,22 @@ type CommunityFeedComment = Pick<
   CommunityCommentRow,
   "id" | "post_id" | "author_id" | "content" | "status" | "created_at" | "updated_at"
 > & { author: CommunityFeedProfile | null; report_context: string | null };
+type CommunityFeedGroup = Pick<CommunityGroupRow, "id" | "slug" | "name" | "avatar_url">;
 
 export type CommunityFeedPost = Pick<
   CommunityPostRow,
-  "id" | "author_id" | "vehicle_id" | "marketplace_listing_id" | "content" | "audience" | "status" | "created_at" | "updated_at"
+  "id" | "author_id" | "vehicle_id" | "marketplace_listing_id" | "group_id" | "content" | "audience" | "status" | "created_at" | "updated_at"
 > & {
   author: CommunityFeedProfile | null;
   vehicle: CommunityFeedVehicle | null;
   marketplace_listing: CommunityFeedListing | null;
   media: CommunityFeedMedia[];
   comments: CommunityFeedComment[];
+  group: CommunityFeedGroup | null;
+  can_interact: boolean;
   report_context: string | null;
+  /** Plan 15.5: present when the post involves a high-consequence repair topic. */
+  safety_notice: SafetyNotice | null;
 };
 
 export type CommunityComment = CommunityCommentRow & {
@@ -63,6 +75,7 @@ export type CommunityPost = CommunityPostRow & {
   marketplace_listing: Listing | null;
   media: CommunityPostMediaRow[];
   comments: CommunityComment[];
+  group: CommunityGroupRow | null;
 };
 
 export type CommunityPostOptionVehicle = Pick<
@@ -77,11 +90,14 @@ export type CommunityPostOptionListing = Pick<
   vehicle: CommunityPostOptionVehicle | null;
 };
 
+export type CommunityPostOptionGroup = Pick<CommunityGroupRow, "id" | "slug" | "name" | "avatar_url">;
+
 const COMMUNITY_POST_SELECT = `
   *,
   author:profiles!community_posts_author_id_fkey(id, display_name, username, avatar_url, is_public),
   vehicle:vehicles!community_posts_vehicle_id_fkey(*, vehicle_media(*)),
   marketplace_listing:marketplace_listings!community_posts_marketplace_listing_id_fkey(*),
+  group:community_groups!community_posts_group_id_fkey(*),
   media:community_post_media!community_post_media_post_id_fkey(*),
   comments:community_comments!community_comments_post_id_fkey(
     *,
@@ -93,7 +109,7 @@ const COMMUNITY_POST_SELECT = `
 // are selected only where the server needs them to filter nested rows, then
 // removed before serialization.
 const COMMUNITY_FEED_SELECT = `
-  id, author_id, vehicle_id, marketplace_listing_id, active_revision_id, content, audience, status, created_at, updated_at,
+  id, author_id, vehicle_id, marketplace_listing_id, group_id, active_revision_id, content, audience, status, created_at, updated_at,
   author:profiles!community_posts_author_id_fkey(id, display_name, username, avatar_url, is_public),
   vehicle:vehicles!community_posts_vehicle_id_fkey(
     id, year, make, model, trim, mileage, visibility,
@@ -102,6 +118,7 @@ const COMMUNITY_FEED_SELECT = `
   marketplace_listing:marketplace_listings!community_posts_marketplace_listing_id_fkey(
     id, vehicle_id, seller_id, title, asking_price_cents, location, status, created_at, updated_at
   ),
+  group:community_groups!community_posts_group_id_fkey(id, slug, name, avatar_url),
   media:community_post_media!community_post_media_post_id_fkey(
     id, post_id, url, media_type, content_type, sort_order, created_at, moderation_status
   ),
@@ -143,7 +160,11 @@ function cleanPosts(posts: CommunityPost[], includeModerated = false) {
   }));
 }
 
-function toCommunityFeedPost(post: CommunityPost, viewerId: string): CommunityFeedPost {
+function toCommunityFeedPost(
+  post: CommunityPost,
+  viewerId: string,
+  memberGroupIds: ReadonlySet<string> = new Set(),
+): CommunityFeedPost {
   const vehicle = post.vehicle?.visibility === "public"
     ? {
         id: post.vehicle.id,
@@ -175,17 +196,20 @@ function toCommunityFeedPost(post: CommunityPost, viewerId: string): CommunityFe
       vehicle && post.marketplace_listing?.status === "active"
         ? post.marketplace_listing_id
         : null,
+    group_id: post.group_id,
     content: post.content,
     audience: post.audience,
     status: post.status,
     created_at: post.created_at,
     updated_at: post.updated_at,
+    can_interact: !post.group_id || memberGroupIds.has(post.group_id),
     report_context: post.author_id === viewerId ? null : createReportContext({
       viewerId,
       entityType: "community_post",
       entityId: post.id,
       revisionId: post.active_revision_id,
     }),
+    safety_notice: buildSafetyNotice(post.content),
     author: post.author ? {
       id: post.author.id,
       display_name: post.author.display_name,
@@ -207,6 +231,12 @@ function toCommunityFeedPost(post: CommunityPost, viewerId: string): CommunityFe
             updated_at: post.marketplace_listing.updated_at,
           }
         : null,
+    group: post.group ? {
+      id: post.group.id,
+      slug: post.group.slug,
+      name: post.group.name,
+      avatar_url: post.group.avatar_url,
+    } : null,
     media: (post.media ?? [])
       .filter((item) => item.moderation_status === "active")
       .sort((a, b) => a.sort_order - b.sort_order)
@@ -245,6 +275,18 @@ function toCommunityFeedPost(post: CommunityPost, viewerId: string): CommunityFe
   };
 }
 
+async function activeMembershipGroupIds(viewerId: string, posts: CommunityPost[]) {
+  const groupIds = [...new Set(posts.flatMap((post) => post.group_id ? [post.group_id] : []))];
+  if (groupIds.length === 0) return new Set<string>();
+  const { data } = await createAdminClient()
+    .from("community_group_memberships")
+    .select("group_id")
+    .eq("profile_id", viewerId)
+    .eq("status", "active")
+    .in("group_id", groupIds);
+  return new Set((data ?? []).map((membership) => membership.group_id));
+}
+
 async function getCommunityViewerId() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -263,7 +305,13 @@ export async function getCommunityPosts(page = 1, perPage = 20) {
   if (!viewerId) return [];
 
   const admin = createAdminClient();
-  const postIds = await getVisibleCommunityPostIds({ viewerId, page, perPage });
+  const flags = await getFeatureFlags();
+  const postIds = await getVisibleCommunityPostIds({
+    viewerId,
+    page,
+    perPage,
+    includeGroupPosts: flags.flags.groups,
+  });
   if (postIds.length === 0) return [];
   const { data } = await admin
     .from("community_posts")
@@ -277,13 +325,14 @@ export async function getCommunityPosts(page = 1, perPage = 20) {
     viewerId,
     posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id)),
   );
+  const memberGroupIds = await activeMembershipGroupIds(viewerId, posts);
   const byId = new Map(posts.map((post) => [post.id, {
     ...post,
     comments: (post.comments ?? []).filter((comment) => !blockedCommentAuthors.has(comment.author_id)),
   }]));
   return postIds.flatMap((id) => {
     const post = byId.get(id);
-    return post ? [toCommunityFeedPost(post, viewerId)] : [];
+    return post ? [toCommunityFeedPost(post, viewerId, memberGroupIds)] : [];
   });
 }
 
@@ -306,15 +355,17 @@ export async function getCommunityPostById(id: string) {
     .maybeSingle();
 
   const post = data as unknown as CommunityPost | null;
+  if (post?.group_id && !(await getFeatureFlags()).flags.groups) return null;
   if (!post || (post.vehicle && post.vehicle.visibility !== "public")) return null;
   const blockedAuthors = await getBlockedProfileIds(
     viewerId,
     (post.comments ?? []).map((comment) => comment.author_id),
   );
+  const memberGroupIds = await activeMembershipGroupIds(viewerId, [post]);
   return toCommunityFeedPost({
     ...post,
     comments: (post.comments ?? []).filter((comment) => !blockedAuthors.has(comment.author_id)),
-  }, viewerId);
+  }, viewerId, memberGroupIds);
 }
 
 const ARCHIVE_EXPIRY_DAYS = 30;
@@ -400,13 +451,14 @@ export async function getCommunityPostOptions() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return { vehicles: [], listings: [], defaultAudience: "friends" as const, canPostPublic: false };
+  if (!user) return { vehicles: [], listings: [], groups: [], defaultAudience: "friends" as const, canPostPublic: false };
 
   const { data: profile } = await getProfileIdFromAuthUserId(user.id);
-  if (!profile) return { vehicles: [], listings: [], defaultAudience: "friends" as const, canPostPublic: false };
+  if (!profile) return { vehicles: [], listings: [], groups: [], defaultAudience: "friends" as const, canPostPublic: false };
 
   const admin = createAdminClient();
-  const [{ data: vehicles }, { data: listings }] = await Promise.all([
+  const flags = await getFeatureFlags();
+  const [{ data: vehicles }, { data: listings }, { data: memberships }] = await Promise.all([
     admin
       .from("vehicles")
       .select("id, year, make, model, trim, vin")
@@ -419,14 +471,54 @@ export async function getCommunityPostOptions() {
       .eq("seller_id", profile.id)
       .eq("status", "active")
       .order("created_at", { ascending: false }),
+    flags.flags.groups
+      ? admin
+          .from("community_group_memberships")
+          .select("group:community_groups!community_group_memberships_group_id_fkey(id, slug, name, avatar_url)")
+          .eq("profile_id", profile.id)
+          .eq("status", "active")
+      : Promise.resolve({ data: [] }),
   ]);
+
+  const groups = (memberships ?? []).flatMap((membership) => {
+    const group = membership.group as unknown as CommunityPostOptionGroup | null;
+    return group ? [group] : [];
+  }).sort((a, b) => a.name.localeCompare(b.name));
 
   return {
     vehicles: (vehicles ?? []) as CommunityPostOptionVehicle[],
     listings: (listings ?? []) as CommunityPostOptionListing[],
+    groups,
     defaultAudience: profile.default_post_audience,
     canPostPublic: profile.is_public,
   };
+}
+
+export async function getCommunityGroupPosts(groupId: string, page = 1, perPage = 20) {
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId || !(await getFeatureFlags()).flags.groups) return [];
+  const postIds = await getVisibleCommunityGroupPostIds({ viewerId, groupId, page, perPage });
+  if (postIds.length === 0) return [];
+
+  const { data } = await createAdminClient()
+    .from("community_posts")
+    .select(COMMUNITY_FEED_SELECT)
+    .in("id", postIds)
+    .order("created_at", { ascending: true, referencedTable: "community_comments" });
+  const posts = (data ?? []) as unknown as CommunityPost[];
+  const blockedAuthors = await getBlockedProfileIds(
+    viewerId,
+    posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id)),
+  );
+  const memberGroupIds = await activeMembershipGroupIds(viewerId, posts);
+  const byId = new Map(posts.map((post) => [post.id, {
+    ...post,
+    comments: (post.comments ?? []).filter((comment) => !blockedAuthors.has(comment.author_id)),
+  }]));
+  return postIds.flatMap((id) => {
+    const post = byId.get(id);
+    return post ? [toCommunityFeedPost(post, viewerId, memberGroupIds)] : [];
+  });
 }
 
 export async function getVehicleDiscussionPosts(vehicleId: string) {
@@ -448,7 +540,8 @@ export async function getVehicleDiscussionPosts(vehicleId: string) {
     viewerId,
     posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id)),
   );
+  const memberGroupIds = await activeMembershipGroupIds(viewerId, posts);
   return posts
     .map((post) => ({ ...post, comments: post.comments.filter((comment) => !blockedAuthors.has(comment.author_id)) }))
-    .map((post) => toCommunityFeedPost(post, viewerId));
+    .map((post) => toCommunityFeedPost(post, viewerId, memberGroupIds));
 }

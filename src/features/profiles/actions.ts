@@ -14,6 +14,7 @@ const updateProfileSchema = z.object({
   default_post_audience: z.enum(["public", "friends"]).optional(),
   discoverable: z.boolean().optional(),
   allow_exact_username_lookup: z.boolean().optional(),
+  friend_request_policy: z.enum(["everyone", "friends_of_friends", "nobody"]).optional(),
 });
 
 const certificationLevelSchema = z.enum([
@@ -103,6 +104,7 @@ export async function updateProfile(formData: FormData) {
     default_post_audience,
     discoverable,
     allow_exact_username_lookup,
+    friend_request_policy,
     ...profileUpdates
   } = parsed.data;
 
@@ -122,6 +124,7 @@ export async function updateProfile(formData: FormData) {
       : "friends",
     p_discoverable: discoverable ?? true,
     p_allow_exact_username_lookup: allow_exact_username_lookup ?? true,
+    p_friend_request_policy: friend_request_policy ?? null,
   });
   if (privacyError) return { error: "Privacy settings could not be updated" };
 

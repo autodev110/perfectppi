@@ -8,10 +8,10 @@ export const dynamic = "force-dynamic";
 export default async function NewDashboardPostPage({
   searchParams,
 }: {
-  searchParams: Promise<{ vehicle?: string }>;
+  searchParams: Promise<{ vehicle?: string; group?: string }>;
 }) {
-  const { vehicle: requestedVehicleId } = await searchParams;
-  const [{ vehicles, listings, defaultAudience, canPostPublic }, flags] = await Promise.all([
+  const { vehicle: requestedVehicleId, group: requestedGroupSlug } = await searchParams;
+  const [{ vehicles, listings, groups, defaultAudience, canPostPublic }, flags] = await Promise.all([
     getCommunityPostOptions(),
     getFeatureFlags(),
   ]);
@@ -34,7 +34,9 @@ export default async function NewDashboardPostPage({
             <NewPostForm
               vehicles={vehicles}
               listings={listings}
+              groups={groups}
               selectedVehicleId={requestedVehicleId}
+              selectedGroupSlug={requestedGroupSlug}
               defaultAudience={defaultAudience}
               canPostPublic={canPostPublic}
               capabilities={capabilities}

@@ -4,10 +4,12 @@ import Photos
 import PhotosUI
 
 struct CommunityFeedView: View {
+    @EnvironmentObject private var auth: AuthStore
     @State private var reloadToken = UUID()
     @State private var showingComposer = false
     @State private var showingMyPosts = false
     @State private var showingGuidelines = false
+    @State private var showingGroups = false
 
     var body: some View {
         AsyncContent(
@@ -39,6 +41,13 @@ struct CommunityFeedView: View {
                 .navigationTitle("Community")
                 .toolbar {
                     Menu {
+                        if auth.capabilities.capabilities.groups {
+                            Button {
+                                showingGroups = true
+                            } label: {
+                                Label("Groups", systemImage: "person.3")
+                            }
+                        }
                         Button {
                             showingComposer = true
                         } label: {
@@ -60,6 +69,9 @@ struct CommunityFeedView: View {
                 }
                 .sheet(isPresented: $showingGuidelines) {
                     SafariWebView(url: PolicyPage.communityGuidelines.url)
+                }
+                .sheet(isPresented: $showingGroups) {
+                    CommunityGroupsView()
                 }
                 .sheet(isPresented: $showingComposer) {
                     NewCommunityPostView {
@@ -211,7 +223,7 @@ private struct ModeratedPostRow: View {
     }
 }
 
-private struct CommunityPostRow: View {
+struct CommunityPostRow: View {
     let post: CommunityPost
     let onReported: () -> Void
     @State private var reportTarget: ReportTarget?
@@ -231,6 +243,11 @@ private struct CommunityPostRow: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    if let group = post.group {
+                        Text(group.name)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Theme.Palette.primary)
+                    }
                 }
                 Spacer()
                 if let reportContext = post.reportContext {
@@ -248,6 +265,10 @@ private struct CommunityPostRow: View {
                 .font(.subheadline)
                 .foregroundStyle(.primary.opacity(0.9))
                 .lineLimit(4)
+
+            if let notice = post.safetyNotice {
+                CommunitySafetyNoticeView(notice: notice, compact: true)
+            }
 
             if let media = post.media, !media.isEmpty {
                 CommunityMediaCarousel(media: media)
@@ -330,7 +351,7 @@ private struct CommunityPostRow: View {
     }
 }
 
-private struct CommunityPostDetailView: View {
+struct CommunityPostDetailView: View {
     let post: CommunityPost
     let onChanged: () -> Void
 
@@ -423,6 +444,9 @@ private struct CommunityPostDetailView: View {
                     .font(.headline)
                 Text(post.content)
                     .font(.body)
+                if let notice = post.safetyNotice {
+                    CommunitySafetyNoticeView(notice: notice, compact: false)
+                }
                 if let reportContext = post.reportContext {
                     ReportMenu {
                         reportTarget = ReportTarget(
@@ -524,17 +548,23 @@ private struct CommunityPostDetailView: View {
                 .padding(.vertical, 4)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                TextField("Add a comment", text: $comment, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...4)
-                Button(submitting ? "Posting..." : "Post Comment") {
-                    Task { await submitComment() }
+            if post.canInteract != false {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Add a comment", text: $comment, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(1...4)
+                    Button(submitting ? "Posting..." : "Post Comment") {
+                        Task { await submitComment() }
+                    }
+                    .buttonStyle(PrimaryButtonStyle(isLoading: submitting))
+                    .disabled(submitting || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .buttonStyle(PrimaryButtonStyle(isLoading: submitting))
-                .disabled(submitting || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .padding(.vertical, 4)
+            } else if let group = post.group {
+                Text("Join \(group.name) to comment.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .padding(.vertical, 4)
         }
     }
 
@@ -833,6 +863,7 @@ struct NewCommunityPostView: View {
     @State private var loadedDefaultAudience = false
     @State private var selectedVehicleId = ""
     @State private var selectedListingId = ""
+    @State private var selectedGroupId = ""
     @State private var saving = false
     @State private var error: String?
     @State private var media: [PickedAttachment] = []
@@ -847,9 +878,14 @@ struct NewCommunityPostView: View {
     @State private var createdPostId: String?
     @State private var createdModerationStatus = "active"
 
-    init(preselectedVehicleId: String? = nil, onCreated: @escaping () -> Void) {
+    init(
+        preselectedVehicleId: String? = nil,
+        preselectedGroupId: String? = nil,
+        onCreated: @escaping () -> Void
+    ) {
         self.onCreated = onCreated
         _selectedVehicleId = State(initialValue: preselectedVehicleId ?? "")
+        _selectedGroupId = State(initialValue: preselectedGroupId ?? "")
     }
 
     var body: some View {
@@ -874,17 +910,33 @@ struct NewCommunityPostView: View {
                         }
 
                         Section("Audience") {
-                            Picker("Who can see this?", selection: $audience) {
-                                Text("Friends").tag(CommunityPostAudience.friends)
-                                if options.canPostPublic {
-                                    Text("Public inside PerfectPPI").tag(CommunityPostAudience.public)
+                            if caps.groups, !options.groups.isEmpty {
+                                Picker("Post to", selection: $selectedGroupId) {
+                                    Text("My feed").tag("")
+                                    ForEach(options.groups) { group in
+                                        Text(group.name).tag(group.id)
+                                    }
                                 }
                             }
-                            Text(options.canPostPublic
-                                 ? "Public posts are visible only to signed-in PerfectPPI members."
-                                 : "Your private profile can publish to Friends only.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            if selectedGroupId.isEmpty {
+                                Picker("Who can see this?", selection: $audience) {
+                                    Text("Friends").tag(CommunityPostAudience.friends)
+                                    if options.canPostPublic {
+                                        Text("Public inside PerfectPPI").tag(CommunityPostAudience.public)
+                                    }
+                                }
+                                Text(options.canPostPublic
+                                     ? "Public posts are visible only to signed-in PerfectPPI members."
+                                     : "Your private profile can publish to Friends only.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Label("Public group", systemImage: "person.3")
+                                    .font(.subheadline)
+                                Text("Only groups you have joined appear here.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
 
                         Section("Attach") {
@@ -1062,9 +1114,10 @@ struct NewCommunityPostView: View {
                 let response = try await CommunityAPI.createPost(
                     .init(
                         content: trimmed,
-                        audience: audience,
+                        audience: selectedGroupId.isEmpty ? audience : .public,
                         vehicleId: listingId == nil ? vehicleId : nil,
-                        listingId: listingId
+                        listingId: listingId,
+                        groupId: selectedGroupId.isEmpty ? nil : selectedGroupId
                     )
                 )
                 postId = response.id

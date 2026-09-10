@@ -52,6 +52,25 @@ const USERNAME_PENDING_ROUTES = [
   "/api/privacy",
 ];
 
+// A suspended/banned account can still sign out, contact support, read the
+// governing policies, and exercise privacy rights. Product and profile-edit
+// routes remain unavailable for the duration of the enforcement action.
+const ACCOUNT_UNAVAILABLE_ROUTES = [
+  "/account-unavailable",
+  "/terms",
+  "/privacy",
+  "/privacy-choices",
+  "/notice-at-collection",
+  "/community-guidelines",
+  "/ai-disclosure",
+  "/accessibility",
+  "/copyright",
+  "/warranty-disclosure",
+  "/support",
+  "/api/auth",
+  "/api/privacy",
+];
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -96,6 +115,35 @@ export async function middleware(request: NextRequest) {
       const destination = new URL("/onboarding/username", request.url);
       destination.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
       return NextResponse.redirect(destination);
+    }
+
+    if (profile?.username_state === "claimed") {
+      const unavailableRouteAllowed = ACCOUNT_UNAVAILABLE_ROUTES.some((route) =>
+        matchesRoute(pathname, route)
+      );
+      if (!unavailableRouteAllowed) {
+        const { data: isAvailable, error: availabilityError } = await supabase.rpc(
+          "social_current_user_is_available",
+        );
+        if (availabilityError) {
+          if (pathname.startsWith("/api/")) {
+            return NextResponse.json(
+              { error: "Account status is temporarily unavailable", code: "account_status_unavailable" },
+              { status: 503 },
+            );
+          }
+          return NextResponse.redirect(new URL("/account-unavailable", request.url));
+        }
+        if (!isAvailable) {
+          if (pathname.startsWith("/api/")) {
+            return NextResponse.json(
+              { error: "Account unavailable", code: "account_unavailable" },
+              { status: 403 },
+            );
+          }
+          return NextResponse.redirect(new URL("/account-unavailable", request.url));
+        }
+      }
     }
   }
 

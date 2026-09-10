@@ -114,6 +114,7 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let authorId: String
     let vehicleId: String?
     let marketplaceListingId: String?
+    let groupId: String?
     let content: String
     let audience: CommunityPostAudience
     let status: CommunityContentStatus
@@ -124,9 +125,30 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let author: Profile?
     let vehicle: Vehicle?
     let marketplaceListing: MarketplaceListing?
+    let group: CommunityPostGroup?
     let media: [CommunityPostMedia]?
     let comments: [CommunityComment]?
     let reportContext: String?
+    /// Plan 15.5: server-computed label for high-consequence repair topics.
+    /// Absent on endpoints that return raw rows (My Posts) and on old servers.
+    let safetyNotice: CommunitySafetyNotice?
+    /// Server-computed: group posts require active membership to comment.
+    let canInteract: Bool?
+}
+
+struct CommunityPostGroup: Codable, Identifiable, Hashable {
+    let id: String
+    let slug: String
+    let name: String
+    let avatarUrl: String?
+}
+
+/// The server owns the wording so it can change without an app release;
+/// `topics` are stable codes (brakes, airbags, lifting, fuel_system,
+/// high_voltage) that may be used for iconography.
+struct CommunitySafetyNotice: Codable, Hashable {
+    let topics: [String]
+    let message: String
 }
 
 struct CommunityPostMedia: Codable, Identifiable, Hashable {
@@ -219,8 +241,47 @@ struct ClientCapabilities: Codable, Hashable {
 struct CommunityPostOptions: Codable, Hashable {
     let vehicles: [CommunityPostOptionVehicle]
     let listings: [CommunityPostOptionListing]
+    let groups: [CommunityPostOptionGroup]
     let defaultAudience: CommunityPostAudience
     let canPostPublic: Bool
+}
+
+struct CommunityPostOptionGroup: Codable, Identifiable, Hashable {
+    let id: String
+    let slug: String
+    let name: String
+    let avatarUrl: String?
+}
+
+struct CommunityGroupSummary: Codable, Identifiable, Hashable {
+    let id: String
+    let slug: String
+    let name: String
+    let description: String
+    let category: String
+    let rules: [String]
+    let avatarUrl: String?
+    let coverUrl: String?
+    let vehicleMake: String?
+    let vehicleModel: String?
+    let yearStart: Int?
+    let yearEnd: Int?
+    let memberCount: Int
+    let isMember: Bool
+    let membershipRole: String?
+    let isSuggested: Bool
+}
+
+struct CommunityGroupDirectory: Codable, Hashable {
+    let enabled: Bool
+    let groups: [CommunityGroupSummary]
+}
+
+struct CommunityGroupDetail: Codable, Hashable {
+    let group: CommunityGroupSummary
+    let posts: [CommunityPost]
+    let page: Int
+    let hasMore: Bool
 }
 
 struct CommunityPostOptionVehicle: Codable, Identifiable, Hashable {

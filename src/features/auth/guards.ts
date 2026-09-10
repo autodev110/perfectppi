@@ -48,6 +48,11 @@ async function resolveSession(): Promise<SessionState> {
 
   if (profile.username_state !== "claimed") return { status: "username_required" };
 
+  const { data: isAvailable, error: availabilityError } = await supabase.rpc(
+    "social_current_user_is_available",
+  );
+  if (availabilityError || !isAvailable) return { status: "unusable" };
+
   return { status: "ok", profile };
 }
 
