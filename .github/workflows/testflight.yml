@@ -163,6 +163,8 @@ jobs:
           profile_is_beta="$(plutil -extract Entitlements.beta-reports-active raw "$profile_plist")"
           profile_is_debug="$(plutil -extract Entitlements.get-task-allow raw "$profile_plist")"
           profile_push_environment="$(plutil -extract Entitlements.aps-environment raw "$profile_plist" 2>/dev/null || true)"
+          profile_apple_sign_in="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.applesignin:0' "$profile_plist" 2>/dev/null || true)"
+          profile_is_xcode_managed="$(plutil -extract IsXcodeManaged raw "$profile_plist" 2>/dev/null || true)"
           profile_expiration="$(plutil -extract ExpirationDate raw "$profile_plist")"
 
           if [[ "$profile_team" != "$APPLE_TEAM_ID" || "$profile_app_id" != "$APPLE_TEAM_ID.$IOS_BUNDLE_ID" ]]; then
@@ -175,6 +177,25 @@ jobs:
           fi
           if [[ "$profile_push_environment" != "production" ]]; then
             echo "::error::The App Store provisioning profile must include the production push-notification entitlement."
+            exit 1
+          fi
+          if [[ "$profile_apple_sign_in" != "Default" ]]; then
+            echo "::error::The App Store provisioning profile must include Sign in with Apple. Enable it for com.perfectppi.app, regenerate a manual App Store profile, and replace APPLE_DISTRIBUTION_PROVISIONING_PROFILE_BASE64."
+            exit 1
+          fi
+          for domain in \
+            'applinks:perfectppi.com' \
+            'applinks:www.perfectppi.com' \
+            'webcredentials:perfectppi.com' \
+            'webcredentials:www.perfectppi.com'; do
+            if ! plutil -p "$profile_plist" \
+              | grep -Fq "\"$domain\""; then
+              echo "::error::The App Store provisioning profile is missing the Associated Domains value: $domain"
+              exit 1
+            fi
+          done
+          if [[ "$profile_is_xcode_managed" == "true" || "$profile_name" == 'iOS Team Store Provisioning Profile:'* ]]; then
+            echo "::error::The supplied profile is Xcode-managed and cannot be used by this manual CI signing flow. Create and download a manual App Store Connect provisioning profile in the Apple Developer portal."
             exit 1
           fi
 
@@ -317,11 +338,8 @@ jobs:
             -archivePath "$archive_path" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_NAME" \
-            OTHER_CODE_SIGN_FLAGS="--keychain $SIGNING_KEYCHAIN" \
+            PERFECTPPI_PROVISIONING_PROFILE_UUID="$PROVISIONING_PROFILE_UUID" \
+            PERFECTPPI_SIGNING_KEYCHAIN="$SIGNING_KEYCHAIN" \
             clean archive
 
       - name: Verify the archive before upload
@@ -329,6 +347,8 @@ jobs:
           app_path="$ARCHIVE_PATH/Products/Applications/PerfectPPI.app"
           info_plist="$app_path/Info.plist"
           app_config="$app_path/AppConfig.plist"
+          embedded_profile_plist="$RUNNER_TEMP/PerfectPPI-embedded-profile.plist"
+          signed_entitlements="$RUNNER_TEMP/PerfectPPI-signed-entitlements.plist"
 
           [[ -d "$app_path" ]]
           [[ "$(plutil -extract CFBundleIdentifier raw "$info_plist")" == "$IOS_BUNDLE_ID" ]]
@@ -347,6 +367,24 @@ jobs:
             exit 1
           fi
 
+          security cms -D \
+            -i "$app_path/embedded.mobileprovision" \
+            -o "$embedded_profile_plist"
+          if [[ "$(plutil -extract UUID raw "$embedded_profile_plist")" != "$PROVISIONING_PROFILE_UUID" ]]; then
+            echo "::error::The archive embedded a different provisioning profile than the validated CI profile."
+            exit 1
+          fi
+
+          codesign -d --entitlements :- "$app_path" > "$signed_entitlements"
+          if [[ "$(plutil -extract aps-environment raw "$signed_entitlements")" != "production" ]]; then
+            echo "::error::The signed archive does not have the production push-notification entitlement."
+            exit 1
+          fi
+          if [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.applesignin:0' "$signed_entitlements" 2>/dev/null || true)" != "Default" ]]; then
+            echo "::error::The signed archive does not have the Sign in with Apple entitlement."
+            exit 1
+          fi
+
           version="$(plutil -extract CFBundleShortVersionString raw "$info_plist")"
           echo "Verified $IOS_BUNDLE_ID version $version ($BUILD_NUMBER)."
           echo "MARKETING_VERSION=$version" >> "$GITHUB_ENV"
@@ -359,7 +397,7 @@ jobs:
           /usr/libexec/PlistBuddy \
             -c "Set :signingStyle manual" \
             -c "Add :provisioningProfiles dict" \
-            -c "Add :provisioningProfiles:$IOS_BUNDLE_ID string $PROVISIONING_PROFILE_NAME" \
+            -c "Add :provisioningProfiles:$IOS_BUNDLE_ID string $PROVISIONING_PROFILE_UUID" \
             "$export_options"
 
           xcodebuild \

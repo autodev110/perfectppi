@@ -30,6 +30,11 @@ const contactSellerSchema = z.object({
   listingId: z.string().uuid(),
   vehicleId: z.string().uuid().optional(),
 });
+const requestInspectionSchema = z.object({
+  listingId: z.string().uuid(),
+  vehicleId: z.string().uuid().optional(),
+  scope: z.enum(["complete", "dents_tires"]).default("complete"),
+});
 
 async function getCurrentProfileId() {
   const supabase = await createClient();
@@ -301,4 +306,83 @@ export async function contactSellerForListing(input: unknown): Promise<ContactSe
       messagesPath: getMessagesBasePath(profile.role),
     },
   };
+}
+
+export type RequestMarketplaceInspectionResult =
+  | { error: string; data?: undefined }
+  | {
+      error?: undefined;
+      data: {
+        requestId: string;
+        status: string;
+        created: boolean;
+      };
+    };
+
+export async function requestMarketplaceInspection(
+  input: unknown,
+): Promise<RequestMarketplaceInspectionResult> {
+  const parsed = requestInspectionSchema.safeParse(input);
+  if (!parsed.success) return { error: "Invalid inspection request" };
+
+  const profile = await getCurrentProfileId();
+  if ("error" in profile) return { error: profile.error ?? "Not authenticated" };
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("request_marketplace_inspection", {
+    p_requester_id: profile.profileId,
+    p_listing_id: parsed.data.listingId,
+    p_scope: parsed.data.scope,
+  });
+
+  const row = data?.[0];
+  if (error || !row) {
+    if (error?.code === "P0002" || error?.message === "Listing is not available") {
+      return { error: "This listing is no longer available" };
+    }
+    if (error?.message?.includes("own listing")) {
+      return { error: "You cannot request an inspection on your own listing" };
+    }
+    if (error?.code === "42501") {
+      return { error: "This inspection request is not available" };
+    }
+    console.error("[marketplace-inspection] Request failed", error);
+    return { error: "Could not request an inspection. Please try again." };
+  }
+
+  revalidatePath("/marketplace");
+  if (parsed.data.vehicleId) revalidatePath(`/vehicle/${parsed.data.vehicleId}`);
+  return {
+    data: {
+      requestId: row.request_id,
+      status: row.request_status,
+      created: row.created,
+    },
+  };
+}
+
+export async function requestMarketplaceInspectionFromListing(formData: FormData) {
+  const parsed = requestInspectionSchema.safeParse({
+    listingId: formData.get("listing_id"),
+    vehicleId: formData.get("vehicle_id"),
+    scope: formData.get("scope") || "complete",
+  });
+  if (!parsed.success) redirect("/marketplace");
+
+  const result = await requestMarketplaceInspection(parsed.data);
+  if (!result.data) {
+    if (result.error === "Not authenticated" || result.error === "Profile not found") {
+      redirect("/login");
+    }
+    const back = parsed.data.vehicleId
+      ? `/vehicle/${parsed.data.vehicleId}?tab=marketplace`
+      : "/marketplace";
+    const separator = back.includes("?") ? "&" : "?";
+    redirect(`${back}${separator}inspection_error=${encodeURIComponent(result.error)}`);
+  }
+
+  const back = parsed.data.vehicleId
+    ? `/vehicle/${parsed.data.vehicleId}?tab=marketplace`
+    : "/marketplace?tab=marketplace";
+  redirect(`${back}&inspection_requested=1`);
 }

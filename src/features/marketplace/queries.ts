@@ -2,30 +2,57 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
-import { getBlockedProfileIds, getCurrentSocialProfileId } from "@/features/social/relationships";
+import { getCurrentSocialProfileId } from "@/features/social/relationships";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
   "id" | "display_name" | "username" | "avatar_url" | "is_public"
 >;
 
-type VehicleMedia = Database["public"]["Tables"]["vehicle_media"]["Row"];
-type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"] & {
-  vehicle_media: VehicleMedia[];
+type VehicleMediaRow = Database["public"]["Tables"]["vehicle_media"]["Row"];
+type MarketplaceVehicleMedia = Pick<
+  VehicleMediaRow,
+  "id" | "vehicle_id" | "url" | "media_type" | "is_primary" | "sort_order" | "uploaded_at" | "moderation_status"
+>;
+type MarketplaceVehicle = Pick<
+  Database["public"]["Tables"]["vehicles"]["Row"],
+  "id" | "owner_id" | "year" | "make" | "model" | "trim" | "nickname" | "mileage" | "mileage_updated_at" | "visibility" | "created_at" | "updated_at"
+> & {
+  vehicle_media: MarketplaceVehicleMedia[];
 };
 
 type Listing = Database["public"]["Tables"]["marketplace_listings"]["Row"];
 
+export type MarketplaceInspectionSummary = {
+  request_id: string;
+  scope: Database["public"]["Enums"]["inspection_scope"];
+  inspected_at: string;
+  performed_by: string;
+};
+
+export type MarketplaceInspectionRequestSummary = {
+  request_id: string;
+  status: Database["public"]["Enums"]["ppi_request_status"];
+};
+
 export type MarketplaceListing = Listing & {
-  vehicle: Vehicle | null;
+  vehicle: MarketplaceVehicle | null;
   seller: Profile | null;
+  inspection_summary: MarketplaceInspectionSummary | null;
+  inspection_request: MarketplaceInspectionRequestSummary | null;
+  viewer_is_seller: boolean;
 };
 
 const LISTING_SELECT = `
-  *,
-  vehicle:vehicles!marketplace_listings_vehicle_id_fkey(*, vehicle_media(*)),
+  id, vehicle_id, seller_id, title, description, asking_price_cents, location, status, created_at, updated_at,
+  vehicle:vehicles!marketplace_listings_vehicle_id_fkey(
+    id, owner_id, year, make, model, trim, nickname, mileage, mileage_updated_at, visibility, created_at, updated_at,
+    vehicle_media(id, vehicle_id, url, media_type, is_primary, sort_order, uploaded_at, moderation_status)
+  ),
   seller:profiles!marketplace_listings_seller_id_fkey(id, display_name, username, avatar_url, is_public)
 `;
+
+type ListingRow = Omit<MarketplaceListing, "inspection_summary" | "inspection_request" | "viewer_is_seller">;
 
 export type MarketplaceFilters = {
   q?: string;
@@ -52,7 +79,6 @@ function applyFilters(listings: MarketplaceListing[], filters: MarketplaceFilter
         vehicle?.make,
         vehicle?.model,
         vehicle?.trim,
-        vehicle?.vin,
       ]
         .filter(Boolean)
         .join(" ")
@@ -99,7 +125,7 @@ function applyFilters(listings: MarketplaceListing[], filters: MarketplaceFilter
   return result;
 }
 
-async function cleanListingMedia(listing: MarketplaceListing, publicOnly = true): Promise<MarketplaceListing> {
+async function cleanListingMedia(listing: ListingRow, publicOnly = true): Promise<ListingRow> {
   if (!listing.vehicle) return listing;
   const visible = publicOnly
     ? listing.vehicle.vehicle_media.filter((item) => item.moderation_status === "active")
@@ -116,6 +142,119 @@ async function cleanListingMedia(listing: MarketplaceListing, publicOnly = true)
   };
 }
 
+async function addInspectionTrust(
+  listings: ListingRow[],
+  viewerId: string | null,
+): Promise<MarketplaceListing[]> {
+  if (listings.length === 0) return [];
+
+  const admin = createAdminClient();
+  const vehicleIds = [...new Set(listings.map((listing) => listing.vehicle_id))];
+  const listingIds = listings.map((listing) => listing.id);
+  const { data: requestRows } = await admin
+    .from("ppi_requests")
+    .select("id, vehicle_id, requester_id, performer_type, inspection_scope, status")
+    .in("vehicle_id", vehicleIds)
+    .in("status", ["submitted", "completed"]);
+
+  const sellerByVehicle = new Map(listings.map((listing) => [listing.vehicle_id, listing.seller_id]));
+  const eligibleRequests = (requestRows ?? []).filter(
+    (request) => request.requester_id === sellerByVehicle.get(request.vehicle_id),
+  );
+  const requestIds = eligibleRequests.map((request) => request.id);
+  const [{ data: submissionRows }, { data: openRequestRows }] = await Promise.all([
+    requestIds.length > 0
+      ? admin
+          .from("ppi_submissions")
+          .select("ppi_request_id, performer_id, submitted_at, completed_at")
+          .in("ppi_request_id", requestIds)
+          .eq("is_current", true)
+          .in("status", ["submitted", "completed"])
+      : Promise.resolve({ data: [] }),
+    viewerId
+      ? admin
+          .from("ppi_requests")
+          .select("id, marketplace_listing_id, status, created_at")
+          .eq("requester_id", viewerId)
+          .in("marketplace_listing_id", listingIds)
+          .in("status", [
+            "draft",
+            "pending_assignment",
+            "assigned",
+            "accepted",
+            "in_progress",
+            "submitted",
+            "needs_revision",
+          ])
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const performerIds = [...new Set((submissionRows ?? []).map((row) => row.performer_id))];
+  const { data: performerRows } = performerIds.length > 0
+    ? await admin
+        .from("profiles")
+        .select("id, display_name, username, is_public")
+        .in("id", performerIds)
+    : { data: [] };
+  const performerById = new Map((performerRows ?? []).map((profile) => [profile.id, profile]));
+  const requestById = new Map(eligibleRequests.map((request) => [request.id, request]));
+  const inspectionByVehicle = new Map<string, MarketplaceInspectionSummary>();
+
+  for (const submission of submissionRows ?? []) {
+    const request = requestById.get(submission.ppi_request_id);
+    const inspectedAt = submission.completed_at ?? submission.submitted_at;
+    if (!request || !inspectedAt) continue;
+
+    const performer = performerById.get(submission.performer_id);
+    const performedBy = request.performer_type === "self"
+      ? "Owner self-inspection"
+      : performer?.is_public
+        ? performer.display_name ?? performer.username ?? "PerfectPPI technician"
+        : "PerfectPPI technician";
+    const current = inspectionByVehicle.get(request.vehicle_id);
+    if (!current || inspectedAt > current.inspected_at) {
+      inspectionByVehicle.set(request.vehicle_id, {
+        request_id: request.id,
+        scope: request.inspection_scope,
+        inspected_at: inspectedAt,
+        performed_by: performedBy,
+      });
+    }
+  }
+
+  const openRequestByListing = new Map<string, MarketplaceInspectionRequestSummary>();
+  for (const request of openRequestRows ?? []) {
+    if (request.marketplace_listing_id && !openRequestByListing.has(request.marketplace_listing_id)) {
+      openRequestByListing.set(request.marketplace_listing_id, {
+        request_id: request.id,
+        status: request.status,
+      });
+    }
+  }
+
+  return listings.map((listing) => ({
+    ...listing,
+    inspection_summary: inspectionByVehicle.get(listing.vehicle_id) ?? null,
+    inspection_request: openRequestByListing.get(listing.id) ?? null,
+    viewer_is_seller: viewerId === listing.seller_id,
+  }));
+}
+
+async function filterVisibleListings(listings: ListingRow[], viewerId: string | null) {
+  if (listings.length === 0) return [];
+  const { data, error } = await createAdminClient().rpc("marketplace_visible_listing_ids", {
+    p_viewer_id: viewerId,
+    p_listing_ids: listings.map((listing) => listing.id),
+  });
+  if (error) {
+    console.error("[marketplace] Visibility check failed", error);
+    return [];
+  }
+  const visibleIds = new Set((data ?? []).map((row) => row.listing_id));
+  return listings.filter((listing) => visibleIds.has(listing.id));
+}
+
 export async function getMarketplaceListings(filters?: MarketplaceFilters) {
   const supabase = createAdminClient();
   const viewerId = await getCurrentSocialProfileId();
@@ -126,15 +265,11 @@ export async function getMarketplaceListings(filters?: MarketplaceFilters) {
     .eq("status", "active")
     .order("created_at", { ascending: false });
 
-  const rows = (data ?? []) as MarketplaceListing[];
-  const blockedIds = viewerId
-    ? await getBlockedProfileIds(viewerId, rows.map((listing) => listing.seller_id))
-    : new Set<string>();
-  const publicListings = rows.filter(
-    (listing) => listing.vehicle?.visibility === "public" && !blockedIds.has(listing.seller_id)
-  );
+  const rows = (data ?? []) as unknown as ListingRow[];
+  const publicListings = await filterVisibleListings(rows, viewerId);
 
-  return applyFilters(await Promise.all(publicListings.map((item) => cleanListingMedia(item))), filters ?? {});
+  const cleaned = await Promise.all(publicListings.map((item) => cleanListingMedia(item)));
+  return applyFilters(await addInspectionTrust(cleaned, viewerId), filters ?? {});
 }
 
 export async function getVehicleActiveListing(vehicleId: string) {
@@ -148,9 +283,12 @@ export async function getVehicleActiveListing(vehicleId: string) {
     .eq("status", "active")
     .maybeSingle();
 
-  const listing = (data as MarketplaceListing | null) ?? null;
-  if (listing && viewerId && (await getBlockedProfileIds(viewerId, [listing.seller_id])).has(listing.seller_id)) return null;
-  return listing ? cleanListingMedia(listing) : null;
+  const listing = (data as unknown as ListingRow | null) ?? null;
+  if (!listing) return null;
+  const [visible] = await filterVisibleListings([listing], viewerId);
+  if (!visible) return null;
+  const [trusted] = await addInspectionTrust([await cleanListingMedia(visible)], viewerId);
+  return trusted ?? null;
 }
 
 export async function getMarketplaceListing(listingId: string) {
@@ -163,15 +301,12 @@ export async function getMarketplaceListing(listingId: string) {
     .eq("id", listingId)
     .maybeSingle();
 
-  const listing = (data as MarketplaceListing | null) ?? null;
+  const listing = (data as unknown as ListingRow | null) ?? null;
   if (!listing) return null;
-  if (viewerId && (await getBlockedProfileIds(viewerId, [listing.seller_id])).has(listing.seller_id)) return null;
-
-  const isPublicActive =
-    listing.status === "active" && listing.vehicle?.visibility === "public";
-
-  if (!isPublicActive) return null;
-  return cleanListingMedia(listing);
+  const [visible] = await filterVisibleListings([listing], viewerId);
+  if (!visible) return null;
+  const [trusted] = await addInspectionTrust([await cleanListingMedia(visible)], viewerId);
+  return trusted ?? null;
 }
 
 export async function getMyMarketplaceListings() {
@@ -197,7 +332,8 @@ export async function getMyMarketplaceListings() {
     .eq("seller_id", profile.id)
     .order("created_at", { ascending: false });
 
-  return Promise.all(((data ?? []) as MarketplaceListing[]).map((item) => cleanListingMedia(item, false)));
+  const rows = (data ?? []) as unknown as ListingRow[];
+  return addInspectionTrust(await Promise.all(rows.map((item) => cleanListingMedia(item, false))), profile.id);
 }
 
 export async function getMyMarketplaceListing(listingId: string) {
@@ -217,8 +353,11 @@ export async function getAdminMarketplaceListings(page = 1, perPage = 50) {
     .range(from, to);
 
   return {
-    listings: await Promise.all(((data ?? []) as MarketplaceListing[])
-      .map((item) => cleanListingMedia(item, false))),
+    listings: await addInspectionTrust(
+      await Promise.all(((data ?? []) as unknown as ListingRow[])
+        .map((item) => cleanListingMedia(item, false))),
+      null,
+    ),
     total: count ?? 0,
   };
 }

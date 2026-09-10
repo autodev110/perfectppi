@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { formatCurrency, formatMileage } from "@/lib/utils/formatting";
-import { ArrowRight, Car, Gauge, MapPin, Search, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
+import { ArrowRight, Car, ClipboardCheck, Gauge, MapPin, Search, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
 
 type PageProps = {
   searchParams: Promise<{
@@ -65,7 +65,7 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                   aria-label="Search marketplace"
                   name="q"
                   defaultValue={q ?? ""}
-                  placeholder="Search make, model, VIN, or location…"
+                  placeholder="Search make, model, or location…"
                   className="pl-9 h-12 rounded-xl bg-surface-container-lowest ghost-border"
                 />
               </div>
@@ -210,6 +210,12 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                         </div>
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-primary-container/70 via-transparent to-transparent opacity-80" />
+                      {listing.inspection_summary && (
+                        <Badge className="absolute left-4 top-4 gap-1.5 bg-white/95 text-primary hover:bg-white/95">
+                          <ClipboardCheck className="h-3.5 w-3.5" />
+                          {listing.inspection_summary.scope === "dents_tires" ? "Dents & Tires" : "Complete"} inspection
+                        </Badge>
+                      )}
                       <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-white font-heading font-extrabold text-xl tracking-tight leading-tight line-clamp-2">

@@ -108,8 +108,9 @@ export async function getPublicVehicle(id: string) {
   const { data: vehicle } = await admin
     .from("vehicles")
     .select(`
-      *,
-      vehicle_media(*),
+      id, owner_id, year, make, model, trim, nickname, ownership_state,
+      mileage, mileage_updated_at, visibility, created_at, updated_at,
+      vehicle_media(id, vehicle_id, url, media_type, is_primary, sort_order, uploaded_at, moderation_status),
       owner:profiles!vehicles_owner_id_fkey(id, display_name, username, avatar_url, is_public)
     `)
     .eq("id", id)
@@ -117,31 +118,57 @@ export async function getPublicVehicle(id: string) {
     .single();
 
   if (!vehicle) return null;
-  if (viewerId && vehicle.owner_id) {
-    const blockedIds = await getBlockedProfileIds(viewerId, [vehicle.owner_id]);
-    if (blockedIds.has(vehicle.owner_id)) return null;
+  if (vehicle.owner_id) {
+    const [{ data: ownerAvailable }, blockedIds] = await Promise.all([
+      admin.rpc("social_profile_is_available", { p_profile_id: vehicle.owner_id }),
+      viewerId
+        ? getBlockedProfileIds(viewerId, [vehicle.owner_id])
+        : Promise.resolve(new Set<string>()),
+    ]);
+    if (!ownerAvailable || blockedIds.has(vehicle.owner_id)) return null;
   }
   return {
     ...vehicle,
-    vehicle_media: (vehicle.vehicle_media ?? []).filter((media) => media.moderation_status === "active"),
+    vehicle_media: await authorizeVehicleMedia(
+      (vehicle.vehicle_media ?? []).filter((media) => media.moderation_status === "active"),
+    ),
   };
 }
 
 export async function getVehiclePpiHistory(vehicleId: string) {
   const admin = createAdminClient();
+  const { data: vehicle } = await admin
+    .from("vehicles")
+    .select("owner_id, visibility")
+    .eq("id", vehicleId)
+    .maybeSingle();
+
+  if (!vehicle || vehicle.visibility !== "public" || !vehicle.owner_id) return [];
+
+  const { data: listing } = await admin
+    .from("marketplace_listings")
+    .select("id")
+    .eq("vehicle_id", vehicleId)
+    .eq("seller_id", vehicle.owner_id)
+    .eq("status", "active")
+    .maybeSingle();
+  if (!listing) return [];
 
   const { data } = await admin
     .from("ppi_requests")
     .select(`
       id,
       ppi_type,
+      performer_type,
+      inspection_scope,
       status,
       created_at,
       updated_at,
-      requester:profiles!ppi_requests_requester_id_fkey(id, display_name, username, avatar_url),
-      assigned_tech:profiles!ppi_requests_assigned_tech_id_fkey(id, display_name, username, avatar_url)
+      requester:profiles!ppi_requests_requester_id_fkey(id, display_name, username, avatar_url, is_public),
+      assigned_tech:profiles!ppi_requests_assigned_tech_id_fkey(id, display_name, username, avatar_url, is_public)
     `)
     .eq("vehicle_id", vehicleId)
+    .eq("requester_id", vehicle.owner_id)
     .in("status", ["submitted", "completed"])
     .order("created_at", { ascending: false });
 

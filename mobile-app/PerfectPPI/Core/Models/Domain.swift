@@ -122,6 +122,21 @@ struct MarketplaceListing: Codable, Identifiable, Hashable {
     let updatedAt: Date?
     let vehicle: Vehicle?
     let seller: Profile?
+    let inspectionSummary: MarketplaceInspectionSummary?
+    let inspectionRequest: MarketplaceInspectionRequestSummary?
+    let viewerIsSeller: Bool?
+}
+
+struct MarketplaceInspectionSummary: Codable, Hashable {
+    let requestId: String
+    let scope: InspectionScope
+    let inspectedAt: Date
+    let performedBy: String
+}
+
+struct MarketplaceInspectionRequestSummary: Codable, Hashable {
+    let requestId: String
+    let status: PpiRequestStatus
 }
 
 // MARK: - Community

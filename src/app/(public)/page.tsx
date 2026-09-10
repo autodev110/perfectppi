@@ -446,7 +446,11 @@ export default async function HomePage() {
                           </span>
                         )}
                         <span className="flex items-center gap-1 px-2.5 py-1 bg-teal/10 rounded-full text-teal">
-                          <Tag className="h-3 w-3" />PPI Listed
+                          {listing.inspection_summary ? (
+                            <><ClipboardCheck className="h-3 w-3" />{listing.inspection_summary.scope === "dents_tires" ? "Dents & Tires inspected" : "Complete inspection"}</>
+                          ) : (
+                            <><Tag className="h-3 w-3" />Marketplace listing</>
+                          )}
                         </span>
                       </div>
                     </div>

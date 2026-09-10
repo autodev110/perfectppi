@@ -6,7 +6,10 @@ import {
   getVehiclePpiHistory,
 } from "@/features/vehicles/queries";
 import { getVehicleActiveListing } from "@/features/marketplace/queries";
-import { contactSellerFromListing } from "@/features/marketplace/actions";
+import {
+  contactSellerFromListing,
+  requestMarketplaceInspectionFromListing,
+} from "@/features/marketplace/actions";
 import { getPublicVehicleWarrantySnapshot } from "@/features/warranty/queries";
 import { createCommunityComment } from "@/features/community/actions";
 import { getVehicleDiscussionPosts } from "@/features/community/queries";
@@ -21,11 +24,8 @@ import { formatMileage, formatDate, getInitials, formatCurrency } from "@/lib/ut
 import {
   Car,
   ClipboardCheck,
-  Share2,
-  Award,
   Calendar,
   Gauge,
-  Hash,
   User,
   ShieldCheck,
   ArrowRight,
@@ -42,7 +42,12 @@ import {
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; contact_error?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    contact_error?: string;
+    inspection_error?: string;
+    inspection_requested?: string;
+  }>;
 };
 
 // ── Metadata ──────────────────────────────────────────────────────────────────
@@ -60,27 +65,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-const PPI_BADGE = {
-  personal: {
-    label: "Bronze · Personal",
-    color: "text-amber-700",
-    bg: "bg-amber-50 border-amber-200",
-    dot: "bg-amber-500",
-  },
-  general_tech: {
-    label: "Silver · General Tech",
-    color: "text-slate-600",
-    bg: "bg-slate-50 border-slate-200",
-    dot: "bg-slate-400",
-  },
-  certified_tech: {
-    label: "Gold · Certified Tech",
-    color: "text-yellow-700",
-    bg: "bg-yellow-50 border-yellow-200",
-    dot: "bg-yellow-500",
-  },
-} as const;
 
 const STATUS_LABEL: Record<string, string> = {
   submitted: "Submitted",
@@ -104,7 +88,12 @@ const WARRANTY_STATUS_LABEL: Record<string, string> = {
 
 export default async function PublicVehiclePage({ params, searchParams }: PageProps) {
   const { id } = await params;
-  const { tab, contact_error: contactError } = await searchParams;
+  const {
+    tab,
+    contact_error: contactError,
+    inspection_error: inspectionError,
+    inspection_requested: inspectionRequested,
+  } = await searchParams;
   const activeTab =
     tab === "ppi-history" ||
     tab === "marketplace" ||
@@ -139,9 +128,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
     .join(" ");
 
   const latestPpi = ppiHistory[0];
-  const latestBadge = latestPpi
-    ? PPI_BADGE[latestPpi.ppi_type as keyof typeof PPI_BADGE]
-    : null;
+  const listingInspection = activeListing?.inspection_summary ?? null;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
@@ -163,12 +150,10 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
             </div>
           )}
           {/* Trust badge overlay */}
-          {latestBadge && (
-            <div
-              className={`absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold backdrop-blur-sm bg-white/90 ${latestBadge.color} ${latestBadge.bg}`}
-            >
-              <Award className="h-3.5 w-3.5" />
-              {latestBadge.label}
+          {listingInspection && (
+            <div className="absolute top-4 left-4 flex items-center gap-2 rounded-xl border border-teal/20 bg-white/90 px-3 py-1.5 text-xs font-bold text-teal backdrop-blur-sm">
+              <ClipboardCheck className="h-3.5 w-3.5" />
+              {listingInspection.scope === "dents_tires" ? "Dents & Tires" : "Complete"} · {formatDate(listingInspection.inspected_at)}
             </div>
           )}
         </div>
@@ -188,12 +173,6 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                 <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant">
                   <Gauge className="h-3 w-3" />
                   {formatMileage(vehicle.mileage)} mi
-                </span>
-              )}
-              {vehicle.vin && (
-                <span className="flex max-w-full items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant font-mono">
-                  <Hash className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{vehicle.vin}</span>
                 </span>
               )}
               <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant">
@@ -268,13 +247,12 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                 { label: "Model", value: vehicle.model },
                 { label: "Trim", value: vehicle.trim },
                 { label: "Mileage", value: vehicle.mileage != null ? `${formatMileage(vehicle.mileage)} miles` : null },
-                { label: "VIN", value: vehicle.vin, mono: true },
-              ].filter((f) => f.value).map(({ label, value, mono }) => (
+              ].filter((f) => f.value).map(({ label, value }) => (
                 <div key={label}>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">
                     {label}
                   </p>
-                  <p className={`text-sm font-semibold text-on-surface break-words ${mono ? "font-mono break-all" : ""}`}>
+                  <p className="text-sm font-semibold text-on-surface break-words">
                     {value}
                   </p>
                 </div>
@@ -308,10 +286,10 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                       Most recent: {formatDate(latestPpi!.created_at)}
                     </p>
                   </div>
-                  {latestBadge && (
-                    <span className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold ${latestBadge.color} ${latestBadge.bg}`}>
-                      <Award className="h-3 w-3" />
-                      {latestBadge.label}
+                  {latestPpi && (
+                    <span className="ml-auto flex items-center gap-1.5 rounded-xl border border-teal/20 bg-teal/10 px-3 py-1.5 text-xs font-bold text-teal">
+                      <ClipboardCheck className="h-3 w-3" />
+                      {latestPpi.inspection_scope === "dents_tires" ? "Dents & Tires" : "Complete"}
                     </span>
                   )}
                 </div>
@@ -382,6 +360,22 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                     No seller description has been added yet.
                   </p>
                 )}
+                {activeListing.inspection_summary && (
+                  <div className="mt-5 rounded-2xl bg-teal/10 p-4 text-sm text-on-surface ghost-border">
+                    <div className="flex items-center gap-2 font-bold">
+                      <ClipboardCheck className="h-4 w-4 text-teal" />
+                      {activeListing.inspection_summary.scope === "dents_tires"
+                        ? "Dents & Tires inspection"
+                        : "Complete inspection"}
+                    </div>
+                    <p className="mt-1 text-xs text-on-surface-variant">
+                      Inspected {formatDate(activeListing.inspection_summary.inspected_at)} by {activeListing.inspection_summary.performed_by}.
+                    </p>
+                    <p className="mt-2 text-[11px] text-on-surface-variant">
+                      This inspection reflects the vehicle at that time and is not a guarantee of its current condition. Private notes, media, VIN, and the full report are not publicly shared.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="min-w-0 rounded-2xl bg-surface-container p-5 ghost-border">
@@ -405,20 +399,60 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                   </div>
                 </div>
 
-                <form action={contactSellerFromListing}>
-                  <input type="hidden" name="listing_id" value={activeListing.id} />
-                  <input type="hidden" name="vehicle_id" value={id} />
-                  <button
-                    type="submit"
+                {activeListing.viewer_is_seller ? (
+                  <Link
+                    href={`/dashboard/listings/${activeListing.id}/edit`}
                     className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90 transition-opacity"
                   >
-                    Contact Seller
+                    Manage Listing
                     <ArrowRight className="h-4 w-4" />
-                  </button>
-                </form>
-                <p className="mt-2 text-[11px] text-on-surface-variant">
-                  Opens your existing thread with this seller, or starts a new one.
-                </p>
+                  </Link>
+                ) : (
+                  <form action={contactSellerFromListing}>
+                    <input type="hidden" name="listing_id" value={activeListing.id} />
+                    <input type="hidden" name="vehicle_id" value={id} />
+                    <button
+                      type="submit"
+                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90 transition-opacity"
+                    >
+                      Contact Seller
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </form>
+                )}
+                {!activeListing.viewer_is_seller && activeListing.inspection_request ? (
+                  <div className="mt-3 rounded-xl bg-teal/10 px-4 py-3 text-center text-xs font-bold text-teal ghost-border">
+                    Inspection requested · {activeListing.inspection_request.status.replaceAll("_", " ")}
+                  </div>
+                ) : !activeListing.viewer_is_seller ? (
+                  <form action={requestMarketplaceInspectionFromListing}>
+                    <input type="hidden" name="listing_id" value={activeListing.id} />
+                    <input type="hidden" name="vehicle_id" value={id} />
+                    <input type="hidden" name="scope" value="complete" />
+                    <button
+                      type="submit"
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-primary px-5 py-3 text-sm font-bold text-primary hover:bg-primary/5 transition-colors"
+                    >
+                      <ClipboardCheck className="h-4 w-4" />
+                      Request Inspection
+                    </button>
+                  </form>
+                ) : null}
+                {!activeListing.viewer_is_seller && (
+                  <p className="mt-2 text-[11px] text-on-surface-variant">
+                    Opens your existing thread with this seller, or starts a new one.
+                  </p>
+                )}
+                {inspectionRequested && (
+                  <p className="mt-2 text-xs font-semibold text-teal">
+                    Your inspection request was sent.
+                  </p>
+                )}
+                {inspectionError && (
+                  <p className="mt-2 text-xs font-semibold text-destructive break-words">
+                    {inspectionError}
+                  </p>
+                )}
                 {contactError && (
                   <p className="mt-2 text-xs font-semibold text-destructive break-words">
                     {contactError}
@@ -703,9 +737,8 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
             </div>
           ) : (
             ppiHistory.map((ppi, i) => {
-              const badge = PPI_BADGE[ppi.ppi_type as keyof typeof PPI_BADGE];
-              const requester = ppi.requester as { display_name: string | null; username: string | null; avatar_url: string | null } | null;
-              const tech = ppi.assigned_tech as { display_name: string | null; username: string | null; avatar_url: string | null } | null;
+              const requester = ppi.requester as { display_name: string | null; username: string | null; avatar_url: string | null; is_public: boolean } | null;
+              const tech = ppi.assigned_tech as { display_name: string | null; username: string | null; avatar_url: string | null; is_public: boolean } | null;
 
               return (
                 <div
@@ -722,12 +755,10 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
-                      {badge && (
-                        <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold ${badge.color} ${badge.bg}`}>
-                          <Award className="h-3 w-3" />
-                          {badge.label}
-                        </span>
-                      )}
+                      <span className="flex items-center gap-1.5 rounded-lg border border-teal/20 bg-teal/10 px-2.5 py-1 text-[11px] font-bold text-teal">
+                        <ClipboardCheck className="h-3 w-3" />
+                        {ppi.inspection_scope === "dents_tires" ? "Dents & Tires" : "Complete inspection"}
+                      </span>
                       <Badge variant="outline" className="text-[11px]">
                         {STATUS_LABEL[ppi.status] ?? ppi.status}
                       </Badge>
@@ -739,7 +770,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
 
                   {/* Performer */}
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    {tech ? (
+                    {tech?.is_public ? (
                       <>
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={tech.avatar_url ?? ""} />
@@ -754,7 +785,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                           <p className="text-[10px] text-on-surface-variant">Inspector</p>
                         </div>
                       </>
-                    ) : requester ? (
+                    ) : requester?.is_public ? (
                       <>
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={requester.avatar_url ?? ""} />
@@ -772,13 +803,6 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                     ) : null}
                   </div>
 
-                  {/* Share icon */}
-                  <button
-                    className="flex-shrink-0 w-8 h-8 rounded-lg bg-surface-container ghost-border flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
-                    aria-label="Share inspection"
-                  >
-                    <Share2 className="h-3.5 w-3.5" />
-                  </button>
                 </div>
               );
             })

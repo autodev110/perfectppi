@@ -92,6 +92,14 @@ private struct MarketplaceListingRow: View {
                             .truncationMode(.tail)
                     }
                 }
+                if let inspection = listing.inspectionSummary {
+                    Label(
+                        inspection.scope == .dentsTires ? "Dents & Tires inspected" : "Complete inspection",
+                        systemImage: "checkmark.seal"
+                    )
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Theme.Palette.success)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -111,8 +119,16 @@ private struct MarketplaceListingDetailView: View {
     let currentProfileId: String?
 
     @State private var contacting = false
+    @State private var requestingInspection = false
     @State private var notice: String?
     @State private var openConversationId: String?
+    @State private var inspectionRequest: MarketplaceInspectionRequestSummary?
+
+    init(listing: MarketplaceListing, currentProfileId: String?) {
+        self.listing = listing
+        self.currentProfileId = currentProfileId
+        _inspectionRequest = State(initialValue: listing.inspectionRequest)
+    }
 
     var body: some View {
         ScrollView {
@@ -143,9 +159,24 @@ private struct MarketplaceListingDetailView: View {
                             if let mileage = vehicle.mileage {
                                 row("Mileage", "\(mileage.formatted()) mi")
                             }
-                            if let vin = vehicle.vin {
-                                row("VIN", vin)
-                            }
+                        }
+                    }
+                }
+
+                if let inspection = listing.inspectionSummary {
+                    section("Inspection") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label(
+                                inspection.scope == .dentsTires ? "Dents & Tires inspection" : "Complete inspection",
+                                systemImage: "checkmark.seal.fill"
+                            )
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.Palette.success)
+                            Text("Inspected \(inspection.inspectedAt.formatted(date: .abbreviated, time: .omitted)) by \(inspection.performedBy).")
+                                .font(.caption)
+                            Text("This reflects the vehicle at that time and is not a guarantee of its current condition. Private notes, media, VIN, and the full report are not publicly shared.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -157,18 +188,41 @@ private struct MarketplaceListingDetailView: View {
                     }
                 }
 
-                Button {
-                    Task { await contactSeller() }
-                } label: {
-                    Label(contacting ? "Opening..." : "Contact Seller", systemImage: "message")
-                }
-                .buttonStyle(PrimaryButtonStyle(isLoading: contacting))
-                .disabled(contacting || listing.sellerId == currentProfileId)
-
                 if listing.sellerId == currentProfileId {
                     Text("This is your listing.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                } else {
+                    Button {
+                        Task { await contactSeller() }
+                    } label: {
+                        Label(contacting ? "Opening..." : "Contact Seller", systemImage: "message")
+                    }
+                    .buttonStyle(PrimaryButtonStyle(isLoading: contacting))
+                    .disabled(contacting)
+
+                    if let inspectionRequest {
+                        NavigationLink {
+                            ConsumerPpiDetailView(requestId: inspectionRequest.requestId)
+                        } label: {
+                            Label(
+                                "Inspection requested · \(inspectionRequest.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)",
+                                systemImage: "checkmark.circle"
+                            )
+                        }
+                        .buttonStyle(OutlineButtonStyle())
+                    } else {
+                        Button {
+                            Task { await requestInspection() }
+                        } label: {
+                            Label(
+                                requestingInspection ? "Requesting..." : "Request Inspection",
+                                systemImage: "checklist"
+                            )
+                        }
+                        .buttonStyle(OutlineButtonStyle())
+                        .disabled(requestingInspection)
+                    }
                 }
             }
             .padding()
@@ -224,6 +278,21 @@ private struct MarketplaceListingDetailView: View {
         do {
             let result = try await MarketplaceAPI.contactSeller(listingId: listing.id)
             openConversationId = result.conversationId
+        } catch {
+            notice = error.localizedDescription
+        }
+    }
+
+    private func requestInspection() async {
+        guard !requestingInspection else { return }
+        requestingInspection = true
+        defer { requestingInspection = false }
+        do {
+            let result = try await MarketplaceAPI.requestInspection(listingId: listing.id)
+            inspectionRequest = .init(requestId: result.requestId, status: result.status)
+            notice = result.created
+                ? "Your inspection request was sent."
+                : "You already have an active inspection request for this listing."
         } catch {
             notice = error.localizedDescription
         }

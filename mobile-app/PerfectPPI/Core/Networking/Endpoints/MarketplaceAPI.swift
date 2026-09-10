@@ -77,4 +77,24 @@ enum MarketplaceAPI {
             body: Empty()
         )
     }
+
+    struct RequestInspectionPayload: Encodable {
+        let scope: InspectionScope
+    }
+
+    struct RequestInspectionResponse: Codable {
+        let requestId: String
+        let status: PpiRequestStatus
+        let created: Bool
+    }
+
+    static func requestInspection(
+        listingId: String,
+        scope: InspectionScope = .complete
+    ) async throws -> RequestInspectionResponse {
+        try await APIClient.shared.post(
+            "/api/marketplace/listings/\(listingId)/request-inspection",
+            body: RequestInspectionPayload(scope: scope)
+        )
+    }
 }

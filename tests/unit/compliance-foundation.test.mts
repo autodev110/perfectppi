@@ -102,12 +102,21 @@ describe("compliance foundation", () => {
       workflow.indexOf("- name: Verify the archive before upload"),
     );
 
-    assert.ok(archiveStep.includes("CODE_SIGN_STYLE=Manual"));
-    assert.ok(archiveStep.includes('CODE_SIGN_IDENTITY=\"Apple Distribution\"'));
-    assert.ok(archiveStep.includes('PROVISIONING_PROFILE_SPECIFIER=\"$PROVISIONING_PROFILE_NAME\"'));
+    assert.ok(archiveStep.includes('PERFECTPPI_PROVISIONING_PROFILE_UUID=\"$PROVISIONING_PROFILE_UUID\"'));
+    assert.ok(archiveStep.includes('PERFECTPPI_SIGNING_KEYCHAIN=\"$SIGNING_KEYCHAIN\"'));
+    assert.ok(!archiveStep.includes("CODE_SIGN_STYLE=Manual"));
+    assert.ok(!archiveStep.includes("PROVISIONING_PROFILE_SPECIFIER="));
     assert.ok(!archiveStep.includes("-allowProvisioningUpdates"));
     assert.ok(workflow.includes('-c "Set :signingStyle manual"'));
+    assert.ok(workflow.includes("profile_apple_sign_in"));
+    assert.ok(workflow.includes("profile_is_xcode_managed"));
+    assert.ok(workflow.includes("embedded.mobileprovision"));
+    assert.ok(workflow.includes("codesign -d --entitlements :-"));
     assert.ok(project.includes("Release:\n          CODE_SIGN_ENTITLEMENTS: PerfectPPI/Resources/PerfectPPI-Release.entitlements"));
+    assert.ok(project.includes("CODE_SIGN_STYLE: Manual"));
+    assert.ok(project.includes("CODE_SIGN_IDENTITY: Apple Distribution"));
+    assert.ok(project.includes('PROVISIONING_PROFILE_SPECIFIER: "$(PERFECTPPI_PROVISIONING_PROFILE_UUID)"'));
     assert.ok(releaseEntitlements.includes("<string>production</string>"));
+    assert.ok(releaseEntitlements.includes("com.apple.developer.applesignin"));
   });
 });

@@ -2914,6 +2914,7 @@ export type Database = {
           created_at: string
           id: string
           inspection_scope: Database["public"]["Enums"]["inspection_scope"]
+          marketplace_listing_id: string | null
           performer_type: Database["public"]["Enums"]["performer_type"]
           ppi_type: Database["public"]["Enums"]["ppi_type"]
           requester_id: string | null
@@ -2930,6 +2931,7 @@ export type Database = {
           created_at?: string
           id?: string
           inspection_scope?: Database["public"]["Enums"]["inspection_scope"]
+          marketplace_listing_id?: string | null
           performer_type: Database["public"]["Enums"]["performer_type"]
           ppi_type?: Database["public"]["Enums"]["ppi_type"]
           requester_id?: string | null
@@ -2946,6 +2948,7 @@ export type Database = {
           created_at?: string
           id?: string
           inspection_scope?: Database["public"]["Enums"]["inspection_scope"]
+          marketplace_listing_id?: string | null
           performer_type?: Database["public"]["Enums"]["performer_type"]
           ppi_type?: Database["public"]["Enums"]["ppi_type"]
           requester_id?: string | null
@@ -2963,6 +2966,13 @@ export type Database = {
             columns: ["assigned_tech_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppi_requests_marketplace_listing_id_fkey"
+            columns: ["marketplace_listing_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_listings"
             referencedColumns: ["id"]
           },
           {
@@ -3937,6 +3947,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      marketplace_visible_listing_ids: {
+        Args: { p_listing_ids: string[]; p_viewer_id: string | null }
+        Returns: { listing_id: string }[]
+      }
+      request_marketplace_inspection: {
+        Args: {
+          p_listing_id: string
+          p_requester_id: string
+          p_scope?: Database["public"]["Enums"]["inspection_scope"]
+        }
+        Returns: {
+          created: boolean
+          request_id: string
+          request_status: Database["public"]["Enums"]["ppi_request_status"]
+        }[]
+      }
       create_community_post_assembly: {
         Args: {
           p_audience: Database["public"]["Enums"]["community_post_audience"]
