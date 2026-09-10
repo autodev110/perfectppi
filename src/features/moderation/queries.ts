@@ -15,6 +15,21 @@ export async function getModerationQueue(status: "pending_review" | "rejected" |
   const { data, error } = await query.limit(100);
   if (error) throw new Error(error.message);
   const items = data ?? [];
+  const itemIds = items.map((item) => item.id);
+  const { data: cases, error: casesError } = itemIds.length
+    ? await admin
+        .from("moderation_cases")
+        .select("id, moderation_item_id, entity_type, entity_id, revision_id, state, resolution, priority, sla_due_at, assigned_moderator_id, claim_expires_at, decision_version, first_reported_at, last_reported_at, closed_at, legal_hold, created_at")
+        .in("moderation_item_id", itemIds)
+        .order("created_at", { ascending: false })
+    : { data: [], error: null };
+  if (casesError) throw new Error(casesError.message);
+  const caseByItemId = new Map<string, (typeof cases)[number]>();
+  for (const moderationCase of cases ?? []) {
+    if (!caseByItemId.has(moderationCase.moderation_item_id)) {
+      caseByItemId.set(moderationCase.moderation_item_id, moderationCase);
+    }
+  }
   const entityIds = items.map((item) => item.entity_id);
   const communityMediaIds = items
     .filter((item) => item.entity_type === "community_post_media")
@@ -43,6 +58,7 @@ export async function getModerationQueue(status: "pending_review" | "rejected" |
 
   return items.map((item) => ({
     ...item,
+    case: caseByItemId.get(item.id) ?? null,
     reports: (reports ?? []).filter((report) =>
       report.entity_type === item.entity_type && report.entity_id === item.entity_id
     ),

@@ -27,7 +27,9 @@ struct CommunityFeedView: View {
                                     reloadToken = UUID()
                                 }
                             } label: {
-                                CommunityPostRow(post: post)
+                                CommunityPostRow(post: post) {
+                                    reloadToken = UUID()
+                                }
                             }
                         }
                         .listStyle(.insetGrouped)
@@ -202,6 +204,9 @@ private struct ModeratedPostRow: View {
 
 private struct CommunityPostRow: View {
     let post: CommunityPost
+    let onReported: () -> Void
+    @State private var reportTarget: ReportTarget?
+    @State private var error: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -217,6 +222,15 @@ private struct CommunityPostRow: View {
                     }
                 }
                 Spacer()
+                if let reportContext = post.reportContext {
+                    ReportMenu {
+                        reportTarget = ReportTarget(
+                            entityType: "community_post",
+                            entityId: post.id,
+                            contextToken: reportContext
+                        )
+                    }
+                }
             }
 
             Text(post.content)
@@ -253,6 +267,16 @@ private struct CommunityPostRow: View {
             }
         }
         .padding(.vertical, 6)
+        .sheet(item: $reportTarget) { target in
+            CommunityReportSheet { reasonCode, details in
+                await submitReport(target: target, reasonCode: reasonCode, details: details)
+            }
+        }
+        .alert("Report not submitted", isPresented: .constant(error != nil)) {
+            Button("OK") { error = nil }
+        } message: {
+            Text(error ?? "Please try again.")
+        }
     }
 
     private var authorName: String {
@@ -263,6 +287,24 @@ private struct CommunityPostRow: View {
         let parts = [vehicle.year.map(String.init), vehicle.make, vehicle.model, vehicle.trim]
             .compactMap { $0 }
         return parts.isEmpty ? "Vehicle" : parts.joined(separator: " ")
+    }
+
+    @MainActor
+    private func submitReport(target: ReportTarget, reasonCode: String, details: String?) async -> Bool {
+        do {
+            let _: Empty = try await CommunityAPI.report(
+                entityType: target.entityType,
+                entityId: target.entityId,
+                reasonCode: reasonCode,
+                details: details,
+                contextToken: target.contextToken
+            )
+            onReported()
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
+        }
     }
 }
 
@@ -282,6 +324,7 @@ private struct CommunityPostDetailView: View {
     @State private var removingMediaId: String?
     @StateObject private var uploadProgress = UploadProgressModel()
     @State private var reportSubmitted = false
+    @State private var reportTarget: ReportTarget?
     @State private var confirmingBlock = false
 
     init(post: CommunityPost, onChanged: @escaping () -> Void) {
@@ -320,12 +363,26 @@ private struct CommunityPostDetailView: View {
         .onChange(of: pickerItems) { _, items in
             Task { await addMedia(items) }
         }
+        .sheet(item: $reportTarget) { target in
+            CommunityReportSheet { reasonCode, details in
+                await report(
+                    entityType: target.entityType,
+                    entityId: target.entityId,
+                    reasonCode: reasonCode,
+                    details: details,
+                    contextToken: target.contextToken
+                )
+            }
+        }
         .alert("Something went wrong",
                isPresented: .constant(error != nil),
                actions: { Button("OK") { error = nil } },
                message: { Text(error ?? "") })
         .alert("Report submitted", isPresented: $reportSubmitted) {
-            Button("OK", role: .cancel) {}
+            Button("OK", role: .cancel) {
+                onChanged()
+                dismiss()
+            }
         } message: {
             Text("Thank you. The moderation team will review this content.")
         }
@@ -344,8 +401,14 @@ private struct CommunityPostDetailView: View {
                     .font(.headline)
                 Text(post.content)
                     .font(.body)
-                ReportMenu { reasonCode in
-                    Task { await report(entityType: "community_post", entityId: post.id, reasonCode: reasonCode) }
+                if let reportContext = post.reportContext {
+                    ReportMenu {
+                        reportTarget = ReportTarget(
+                            entityType: "community_post",
+                            entityId: post.id,
+                            contextToken: reportContext
+                        )
+                    }
                 }
                 if !isMyPost {
                     Menu {
@@ -423,8 +486,14 @@ private struct CommunityPostDetailView: View {
                             .font(.subheadline)
                     }
                     Spacer()
-                    ReportMenu { reasonCode in
-                        Task { await report(entityType: "community_comment", entityId: item.id, reasonCode: reasonCode) }
+                    if let reportContext = item.reportContext {
+                        ReportMenu {
+                            reportTarget = ReportTarget(
+                                entityType: "community_comment",
+                                entityId: item.id,
+                                contextToken: reportContext
+                            )
+                        }
                     }
                 }
                 .padding(.vertical, 4)
@@ -529,7 +598,8 @@ private struct CommunityPostDetailView: View {
             moderationReason: nil,
             createdAt: Date(),
             updatedAt: nil,
-            author: auth.profile
+            author: auth.profile,
+            reportContext: nil
         )
         comments.append(optimistic)
         comment = ""
@@ -555,12 +625,26 @@ private struct CommunityPostDetailView: View {
         }
     }
 
-    private func report(entityType: String, entityId: String, reasonCode: String) async {
+    private func report(
+        entityType: String,
+        entityId: String,
+        reasonCode: String,
+        details: String?,
+        contextToken: String
+    ) async -> Bool {
         do {
-            _ = try await CommunityAPI.report(entityType: entityType, entityId: entityId, reasonCode: reasonCode)
+            _ = try await CommunityAPI.report(
+                entityType: entityType,
+                entityId: entityId,
+                reasonCode: reasonCode,
+                details: details,
+                contextToken: contextToken
+            )
             reportSubmitted = true
+            return true
         } catch {
             self.error = error.localizedDescription
+            return false
         }
     }
 
@@ -575,24 +659,99 @@ private struct CommunityPostDetailView: View {
     }
 }
 
+private struct ReportTarget: Identifiable {
+    let entityType: String
+    let entityId: String
+    let contextToken: String
+    var id: String { "\(entityType):\(entityId)" }
+}
+
 private struct ReportMenu: View {
-    let onReport: (String) -> Void
+    let onOpen: () -> Void
 
     var body: some View {
-        Menu {
-            Button("Spam") { onReport("spam") }
-            Button("Harassment") { onReport("harassment") }
-            Button("Hate or abuse") { onReport("hate") }
-            Button("Violence") { onReport("violence") }
-            Button("Sexual content") { onReport("sexual_content") }
-            Button("Personal information") { onReport("personal_information") }
-            Button("Fraud or scam") { onReport("fraud") }
-            Button("Illegal content", role: .destructive) { onReport("illegal_content") }
-            Button("Other") { onReport("other") }
-        } label: {
+        Button(action: onOpen) {
             Label("Report", systemImage: "flag")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.Palette.danger)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Report content")
+        .frame(minWidth: 44, minHeight: 44)
+    }
+}
+
+private struct CommunityReportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var reasonCode = ""
+    @State private var details = ""
+    @State private var submitting = false
+
+    let onSubmit: (String, String?) async -> Bool
+
+    private let reasons = [
+        ("spam", "Spam"),
+        ("harassment", "Harassment"),
+        ("hate", "Hate or abuse"),
+        ("violence", "Violence"),
+        ("sexual_content", "Sexual content"),
+        ("personal_information", "Personal information"),
+        ("fraud", "Fraud or scam"),
+        ("illegal_content", "Illegal content"),
+        ("other", "Other")
+    ]
+
+    private var trimmedDetails: String {
+        details.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canSubmit: Bool {
+        !reasonCode.isEmpty && (reasonCode != "other" || trimmedDetails.count >= 10)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Why are you reporting this?") {
+                    Picker("Reason", selection: $reasonCode) {
+                        Text("Choose a reason").tag("")
+                        ForEach(reasons, id: \.0) { reason in
+                            Text(reason.1).tag(reason.0)
+                        }
+                    }
+                }
+                Section("Details") {
+                    TextEditor(text: $details)
+                        .frame(minHeight: 100)
+                    Text(reasonCode == "other"
+                         ? "Please provide at least 10 characters."
+                         : "Optional. Do not include sensitive personal information.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Report Content")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(submitting)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(submitting ? "Submitting..." : "Submit") {
+                        Task {
+                            submitting = true
+                            let accepted = await onSubmit(
+                                reasonCode,
+                                trimmedDetails.isEmpty ? nil : trimmedDetails
+                            )
+                            submitting = false
+                            if accepted { dismiss() }
+                        }
+                    }
+                    .disabled(submitting || !canSubmit)
+                }
+            }
         }
     }
 }

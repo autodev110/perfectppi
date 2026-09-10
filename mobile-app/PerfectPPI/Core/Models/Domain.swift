@@ -126,6 +126,7 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let marketplaceListing: MarketplaceListing?
     let media: [CommunityPostMedia]?
     let comments: [CommunityComment]?
+    let reportContext: String?
 }
 
 struct CommunityPostMedia: Codable, Identifiable, Hashable {
@@ -171,6 +172,7 @@ struct CommunityComment: Codable, Identifiable, Hashable {
     let createdAt: Date?
     let updatedAt: Date?
     let author: Profile?
+    let reportContext: String?
 }
 
 struct CommunityPostOptions: Codable, Hashable {

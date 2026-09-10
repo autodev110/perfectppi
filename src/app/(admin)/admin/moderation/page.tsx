@@ -65,6 +65,7 @@ export default async function ModerationPage({ searchParams }: PageProps) {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Badge variant="outline">{item.status.replaceAll("_", " ")}</Badge>
+                      {item.case ? <Badge variant="outline">case {item.case.state.replaceAll("_", " ")}</Badge> : null}
                       <Badge variant={item.risk_level === "critical" ? "destructive" : "secondary"}>{item.risk_level} risk</Badge>
                       {item.report_count > 0 ? <Badge variant="secondary">{item.report_count} reports</Badge> : null}
                     </div>
@@ -94,6 +95,10 @@ export default async function ModerationPage({ searchParams }: PageProps) {
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                     <span>Reasons: {item.reason_codes.join(", ") || "none"}</span>
                     <span>Provider: {item.model_provider}</span>
+                    {item.case ? <span>Revision: {item.case.revision_id.slice(0, 8)}</span> : null}
+                    {item.case ? <span>Priority: {item.case.priority}</span> : null}
+                    {item.case ? <span>Decision version: {item.case.decision_version}</span> : null}
+                    {item.case ? <span>SLA due: {formatDate(item.case.sla_due_at)}</span> : null}
                   </div>
 
                   {appeals.map((appeal) => (
@@ -130,9 +135,9 @@ export default async function ModerationPage({ searchParams }: PageProps) {
                       <option value="suspension">7-day suspension</option>
                     </select>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" name="decision" value="approve">Approve</Button>
-                      <Button size="sm" variant="destructive" name="decision" value="reject">Reject</Button>
-                      {legalHoldReviewer ? <Button size="sm" variant="outline" name="decision" value="legal_hold">Legal hold</Button> : null}
+                      <Button size="sm" name="decision" value="approve">Restore Post</Button>
+                      <Button size="sm" variant="destructive" name="decision" value="reject">Remove from Community</Button>
+                      {legalHoldReviewer ? <Button size="sm" variant="outline" name="decision" value="legal_hold">Preserve and Escalate</Button> : null}
                     </div>
                   </form>}
                 </CardContent>

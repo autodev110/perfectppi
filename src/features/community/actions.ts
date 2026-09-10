@@ -220,11 +220,12 @@ export async function addCommunityPostMedia(input: unknown) {
   const admin = createAdminClient();
   const { data: post } = await admin
     .from("community_posts")
-    .select("id, author_id")
+    .select("id, author_id, status, moderation_status")
     .eq("id", parsed.data.postId)
     .maybeSingle();
 
-  if (!post || post.author_id !== profile.profileId) {
+  if (!post || post.author_id !== profile.profileId
+    || post.status !== "active" || post.moderation_status !== "active") {
     return { error: "Post not found" };
   }
 
@@ -450,11 +451,12 @@ export async function removeCommunityPostMedia(input: unknown) {
   const admin = createAdminClient();
   const { data: post } = await admin
     .from("community_posts")
-    .select("id, author_id")
+    .select("id, author_id, status, moderation_status")
     .eq("id", parsed.data.postId)
     .maybeSingle();
 
-  if (!post || post.author_id !== profile.profileId) {
+  if (!post || post.author_id !== profile.profileId
+    || post.status !== "active" || post.moderation_status !== "active") {
     return { error: "Post not found" };
   }
 
@@ -613,16 +615,14 @@ export async function updateMyCommunityPostStatus(postId: string, status: "activ
   if ("error" in profile) return { error: profile.error };
 
   const admin = createAdminClient();
-  if (status === "active") {
-    const { data: post } = await admin
-      .from("community_posts")
-      .select("moderation_status")
-      .eq("id", postId)
-      .eq("author_id", profile.profileId)
-      .maybeSingle();
-    if (!post || post.moderation_status !== "active") {
-      return { error: "This post must be approved before it can be restored" };
-    }
+  const { data: post } = await admin
+    .from("community_posts")
+    .select("moderation_status")
+    .eq("id", postId)
+    .eq("author_id", profile.profileId)
+    .maybeSingle();
+  if (!post || post.moderation_status !== "active") {
+    return { error: "This post cannot be changed while it is under review" };
   }
 
   const updates: { status: "active" | "archived"; updated_at?: string } = { status };
@@ -655,10 +655,10 @@ export async function deleteCommunityPostById(postId: string) {
 
   const admin = createAdminClient();
 
-  // Allow if admin or author
+  // Routine removal is always soft. Retention workers own physical deletion.
   const { data: post } = await admin
     .from("community_posts")
-    .select("id, author_id")
+    .select("id, author_id, moderation_status")
     .eq("id", postId)
     .single();
 
@@ -666,37 +666,19 @@ export async function deleteCommunityPostById(postId: string) {
   if (profile.role !== "admin" && post.author_id !== profile.profileId) {
     return { error: "Not authorized" };
   }
-
-  const { data: media } = await admin.from("community_post_media")
-    .select("id, url")
-    .eq("post_id", postId);
-  const { data: heldPost } = await admin.from("moderation_items")
-    .select("id")
-    .eq("entity_type", "community_post")
-    .eq("entity_id", postId)
-    .eq("status", "legal_hold")
-    .maybeSingle();
-  const mediaIds = (media ?? []).map((item) => item.id);
-  const { data: heldMedia } = mediaIds.length
-    ? await admin.from("moderation_items").select("id")
-      .eq("entity_type", "community_post_media")
-      .in("entity_id", mediaIds)
-      .eq("status", "legal_hold")
-      .limit(1)
-      .maybeSingle()
-    : { data: null };
-  if (heldPost || heldMedia) {
-    return { error: "This post contains evidence preserved for legal review and cannot be deleted" };
+  if (post.moderation_status !== "active") {
+    return { error: "This post cannot be removed while it is under review" };
   }
 
-  const { error } = await admin.from("community_posts").delete().eq("id", postId);
+  const { error } = await admin.from("community_posts")
+    .update({ status: "archived", updated_at: new Date().toISOString() })
+    .eq("id", postId);
   if (error) return { error: error.message };
-  await Promise.all((media ?? []).map((item) => deleteOrQueue(item.url, "community_post_deleted")));
 
   revalidatePath("/community");
   revalidatePath("/dashboard/posts");
   revalidatePath("/admin/community");
-  return { success: true };
+  return { success: true, archived: true };
 }
 
 async function deleteOrQueue(storageReference: string, reason: string) {

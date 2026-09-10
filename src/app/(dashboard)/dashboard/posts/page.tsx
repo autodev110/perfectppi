@@ -110,7 +110,7 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
                 <Archive className="mb-4 h-12 w-12 text-muted-foreground" />
                 <p className="text-lg font-medium">No archived posts</p>
                 <p className="mb-4 max-w-md text-sm text-muted-foreground">
-                  Posts you archive will appear here for 30 days before being permanently removed.
+                  Archived posts remain restorable for 30 days, then become eligible for controlled retention cleanup.
                 </p>
               </>
             ) : tab === "review" ? (
@@ -221,7 +221,7 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
                         <input type="hidden" name="post_id" value={post.id} />
                         <Button size="sm" variant="ghost" type="submit" className="text-destructive hover:text-destructive hover:bg-destructive/10">
                           <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                          Delete
+                          Remove
                         </Button>
                       </form>}
                     </div>

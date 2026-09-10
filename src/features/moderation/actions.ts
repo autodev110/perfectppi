@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -16,6 +17,7 @@ import {
 import { UPLOAD_LIMITS } from "@/config/constants";
 import { extensionForContentType, moderateMediaBytes } from "@/lib/moderation/media-safety";
 import { recordModeration } from "@/lib/moderation";
+import { verifyReportContext } from "@/features/moderation/report-context";
 
 const reportSchema = z.object({
   entityType: z.enum(["community_post", "community_comment"]),
@@ -25,6 +27,7 @@ const reportSchema = z.object({
     "personal_information", "fraud", "illegal_content", "other",
   ]),
   details: z.string().trim().max(500).optional(),
+  contextToken: z.string().min(40).max(2000),
 });
 
 async function currentProfile() {
@@ -48,21 +51,30 @@ export async function reportCommunityContent(formData: FormData) {
     entityId: formData.get("entity_id"),
     reasonCode: formData.get("reason_code"),
     details: String(formData.get("details") ?? "") || undefined,
+    contextToken: formData.get("report_context"),
   });
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
+  const reportContext = verifyReportContext(parsed.data.contextToken, {
+    viewerId: profile.id,
+    entityType: parsed.data.entityType,
+    entityId: parsed.data.entityId,
+  });
+  if (!reportContext) return { error: "This content is no longer available to report" };
+
   const admin = createAdminClient();
-  const { error } = await admin.rpc("submit_moderation_report", {
+  const { data, error } = await admin.rpc("submit_moderation_report", {
     p_reporter_id: profile.id,
     p_entity_type: parsed.data.entityType,
     p_entity_id: parsed.data.entityId,
+    p_revision_id: reportContext.revisionId,
     p_reason_code: parsed.data.reasonCode,
     p_details: parsed.data.details ?? null,
+    p_idempotency_key: createHash("sha256").update(parsed.data.contextToken).digest("hex"),
   });
-  if (error?.code === "23505") return { error: "You already reported this content" };
   if (error) return { error: error.message };
-  revalidatePath("/admin/moderation");
-  return { data: { submitted: true } };
+  revalidateModerationPaths();
+  return { data: { submitted: true, ...(data && typeof data === "object" ? data : {}) } };
 }
 
 export async function reportCommunityContentForm(formData: FormData): Promise<void> {

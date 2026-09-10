@@ -91,12 +91,26 @@ enum CommunityAPI {
         let entityType: String
         let entityId: String
         let reasonCode: String
+        let details: String?
+        let contextToken: String
     }
 
-    static func report(entityType: String, entityId: String, reasonCode: String) async throws -> Empty {
+    static func report(
+        entityType: String,
+        entityId: String,
+        reasonCode: String,
+        details: String?,
+        contextToken: String
+    ) async throws -> Empty {
         try await APIClient.shared.postCamel(
             "/api/community/reports",
-            body: ReportPayload(entityType: entityType, entityId: entityId, reasonCode: reasonCode)
+            body: ReportPayload(
+                entityType: entityType,
+                entityId: entityId,
+                reasonCode: reasonCode,
+                details: details,
+                contextToken: contextToken
+            )
         )
     }
 

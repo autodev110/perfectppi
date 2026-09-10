@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
   formData.set("entity_type", String(body?.entityType ?? ""));
   formData.set("entity_id", String(body?.entityId ?? ""));
   formData.set("reason_code", String(body?.reasonCode ?? ""));
+  formData.set("report_context", String(body?.contextToken ?? ""));
   if (body?.details) formData.set("details", String(body.details));
   const result = await reportCommunityContent(formData);
   if (result?.error) {

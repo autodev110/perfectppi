@@ -44,7 +44,10 @@ async function rowsForIds(
 ) {
   if (values.length === 0) return [];
   const admin = createAdminClient();
-  return rows(label, admin.from(table).select("*").in(column, values) as unknown as ArrayQuery);
+  const from = admin.from as unknown as (name: string) => {
+    select: (columns: string) => { in: (key: string, ids: string[]) => ArrayQuery };
+  };
+  return rows(label, from(table).select("*").in(column, values));
 }
 
 export async function buildAccountDataExport(profileId: string, user: User) {

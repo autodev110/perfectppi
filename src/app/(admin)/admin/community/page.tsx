@@ -114,7 +114,7 @@ export default async function AdminCommunityPage({ searchParams }: PageProps) {
                         <form action={deleteCommunityPost}>
                           <input type="hidden" name="post_id" value={post.id} />
                           <Button size="sm" variant="ghost" type="submit" className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                            Delete
+                            Remove from Community
                           </Button>
                         </form>
                       </div>

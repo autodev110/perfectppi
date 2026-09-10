@@ -95,7 +95,9 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="rounded-full capitalize">{post.audience}</Badge>
                         {post.author_id !== viewer.id ? <MemberSafetyActions profileId={post.author_id} compact /> : null}
-                        <ReportControl entityType="community_post" entityId={post.id} />
+                        {post.report_context ? (
+                          <ReportControl entityType="community_post" entityId={post.id} reportContext={post.report_context} />
+                        ) : null}
                       </div>
                     </div>
 
@@ -165,7 +167,9 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                               </p>
                               <div className="flex items-center gap-2">
                                 <p className="text-[10px] text-on-surface-variant">{formatDate(comment.created_at)}</p>
-                                <ReportControl entityType="community_comment" entityId={comment.id} compact />
+                                {comment.report_context ? (
+                                  <ReportControl entityType="community_comment" entityId={comment.id} reportContext={comment.report_context} compact />
+                                ) : null}
                               </div>
                             </div>
                             <p className="whitespace-pre-wrap text-sm text-on-surface-variant">{comment.content}</p>
@@ -197,20 +201,23 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
 function ReportControl({
   entityType,
   entityId,
+  reportContext,
   compact = false,
 }: {
   entityType: "community_post" | "community_comment";
   entityId: string;
+  reportContext: string;
   compact?: boolean;
 }) {
   return (
     <details className="relative">
-      <summary className="cursor-pointer list-none rounded-full p-1.5 text-on-surface-variant hover:bg-surface-container-high" aria-label="Report content">
+      <summary className="inline-flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full text-destructive hover:bg-destructive/10" aria-label="Report content">
         <Flag className={compact ? "h-3 w-3" : "h-4 w-4"} />
       </summary>
       <form action={reportCommunityContentForm} className="absolute right-0 z-20 mt-2 w-72 space-y-3 rounded-xl border bg-background p-4 shadow-xl">
         <input type="hidden" name="entity_type" value={entityType} />
         <input type="hidden" name="entity_id" value={entityId} />
+        <input type="hidden" name="report_context" value={reportContext} />
         <p className="text-sm font-bold">Report content</p>
         <select name="reason_code" required defaultValue="" className="h-10 w-full rounded-md border bg-background px-3 text-sm">
           <option value="" disabled>Choose a reason</option>

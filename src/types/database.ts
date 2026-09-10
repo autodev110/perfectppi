@@ -180,6 +180,7 @@ export type Database = {
       }
       community_comments: {
         Row: {
+          active_revision_id: string
           author_id: string
           content: string
           created_at: string
@@ -193,6 +194,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          active_revision_id?: string
           author_id: string
           content: string
           created_at?: string
@@ -206,6 +208,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          active_revision_id?: string
           author_id?: string
           content?: string
           created_at?: string
@@ -235,8 +238,36 @@ export type Database = {
           },
         ]
       }
+      community_comment_revisions: {
+        Row: {
+          author_id: string | null
+          comment_id: string
+          content: string
+          created_at: string
+          id: string
+          revision_number: number
+        }
+        Insert: {
+          author_id?: string | null
+          comment_id: string
+          content: string
+          created_at?: string
+          id: string
+          revision_number: number
+        }
+        Update: {
+          author_id?: string | null
+          comment_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          revision_number?: number
+        }
+        Relationships: []
+      }
       community_posts: {
         Row: {
+          active_revision_id: string
           audience: Database["public"]["Enums"]["community_post_audience"]
           author_id: string
           content: string
@@ -252,6 +283,7 @@ export type Database = {
           vehicle_id: string | null
         }
         Insert: {
+          active_revision_id?: string
           audience?: Database["public"]["Enums"]["community_post_audience"]
           author_id: string
           content: string
@@ -267,6 +299,7 @@ export type Database = {
           vehicle_id?: string | null
         }
         Update: {
+          active_revision_id?: string
           audience?: Database["public"]["Enums"]["community_post_audience"]
           author_id?: string
           content?: string
@@ -304,6 +337,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      community_post_revisions: {
+        Row: {
+          audience: Database["public"]["Enums"]["community_post_audience"]
+          author_id: string | null
+          content: string
+          created_at: string
+          id: string
+          marketplace_listing_id: string | null
+          post_id: string
+          revision_number: number
+          vehicle_id: string | null
+        }
+        Insert: {
+          audience: Database["public"]["Enums"]["community_post_audience"]
+          author_id?: string | null
+          content: string
+          created_at?: string
+          id: string
+          marketplace_listing_id?: string | null
+          post_id: string
+          revision_number: number
+          vehicle_id?: string | null
+        }
+        Update: {
+          audience?: Database["public"]["Enums"]["community_post_audience"]
+          author_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          marketplace_listing_id?: string | null
+          post_id?: string
+          revision_number?: number
+          vehicle_id?: string | null
+        }
+        Relationships: []
       }
       community_post_media: {
         Row: {
@@ -431,10 +500,12 @@ export type Database = {
       }
       moderation_appeals: {
         Row: {
-          appellant_id: string
+          appellant_id: string | null
+          case_id: string | null
           created_at: string
           id: string
           moderation_item_id: string
+          revision_id: string | null
           resolution_notes: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -442,10 +513,12 @@ export type Database = {
           status: string
         }
         Insert: {
-          appellant_id: string
+          appellant_id?: string | null
+          case_id?: string | null
           created_at?: string
           id?: string
           moderation_item_id: string
+          revision_id?: string | null
           resolution_notes?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -453,10 +526,12 @@ export type Database = {
           status?: string
         }
         Update: {
-          appellant_id?: string
+          appellant_id?: string | null
+          case_id?: string | null
           created_at?: string
           id?: string
           moderation_item_id?: string
+          revision_id?: string | null
           resolution_notes?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -491,6 +566,7 @@ export type Database = {
         Row: {
           actor_id: string | null
           actor_type: string
+          case_id: string | null
           created_at: string
           event_type: string
           id: string
@@ -499,10 +575,12 @@ export type Database = {
           next_status: string
           notes: string | null
           previous_status: string | null
+          revision_id: string | null
         }
         Insert: {
           actor_id?: string | null
           actor_type: string
+          case_id?: string | null
           created_at?: string
           event_type: string
           id?: string
@@ -511,10 +589,12 @@ export type Database = {
           next_status: string
           notes?: string | null
           previous_status?: string | null
+          revision_id?: string | null
         }
         Update: {
           actor_id?: string | null
           actor_type?: string
+          case_id?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -523,6 +603,7 @@ export type Database = {
           next_status?: string
           notes?: string | null
           previous_status?: string | null
+          revision_id?: string | null
         }
         Relationships: [
           {
@@ -583,6 +664,111 @@ export type Database = {
           scan_status?: string
           sha256?: string
           width?: number | null
+        }
+        Relationships: []
+      }
+      moderation_cases: {
+        Row: {
+          assigned_moderator_id: string | null
+          claim_expires_at: string | null
+          claimed_at: string | null
+          closed_at: string | null
+          created_at: string
+          decision_version: number
+          disposition_state: string
+          entity_id: string
+          entity_type: string
+          first_reported_at: string | null
+          id: string
+          last_reported_at: string | null
+          legal_hold: boolean
+          moderation_item_id: string
+          priority: string
+          resolution: string | null
+          retention_basis: string
+          retention_expires_at: string | null
+          revision_id: string
+          sla_due_at: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_moderator_id?: string | null
+          claim_expires_at?: string | null
+          claimed_at?: string | null
+          closed_at?: string | null
+          created_at?: string
+          decision_version?: number
+          disposition_state?: string
+          entity_id: string
+          entity_type: string
+          first_reported_at?: string | null
+          id?: string
+          last_reported_at?: string | null
+          legal_hold?: boolean
+          moderation_item_id: string
+          priority?: string
+          resolution?: string | null
+          retention_basis?: string
+          retention_expires_at?: string | null
+          revision_id: string
+          sla_due_at: string
+          state: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_moderator_id?: string | null
+          claim_expires_at?: string | null
+          claimed_at?: string | null
+          closed_at?: string | null
+          created_at?: string
+          decision_version?: number
+          disposition_state?: string
+          entity_id?: string
+          entity_type?: string
+          first_reported_at?: string | null
+          id?: string
+          last_reported_at?: string | null
+          legal_hold?: boolean
+          moderation_item_id?: string
+          priority?: string
+          resolution?: string | null
+          retention_basis?: string
+          retention_expires_at?: string | null
+          revision_id?: string
+          sla_due_at?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      moderation_evidence: {
+        Row: {
+          captured_at: string
+          case_id: string
+          content_sha256: string
+          content_snapshot: Json
+          id: string
+          media_references: Json
+          revision_id: string
+        }
+        Insert: {
+          captured_at?: string
+          case_id: string
+          content_sha256: string
+          content_snapshot: Json
+          id?: string
+          media_references?: Json
+          revision_id: string
+        }
+        Update: {
+          captured_at?: string
+          case_id?: string
+          content_sha256?: string
+          content_snapshot?: Json
+          id?: string
+          media_references?: Json
+          revision_id?: string
         }
         Relationships: []
       }
@@ -700,33 +886,84 @@ export type Database = {
           },
         ]
       }
+      moderation_outbox: {
+        Row: {
+          attempt_count: number
+          case_id: string
+          completed_at: string | null
+          created_at: string
+          event_type: string
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          next_attempt_at: string
+          payload: Json
+          status: string
+        }
+        Insert: {
+          attempt_count?: number
+          case_id: string
+          completed_at?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          status?: string
+        }
+        Update: {
+          attempt_count?: number
+          case_id?: string
+          completed_at?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          status?: string
+        }
+        Relationships: []
+      }
       moderation_reports: {
         Row: {
+          case_id: string
           created_at: string
           details: string | null
           entity_id: string
           entity_type: string
           id: string
+          idempotency_key: string
           reason_code: string
-          reporter_id: string
+          reporter_id: string | null
+          revision_id: string
         }
         Insert: {
+          case_id: string
           created_at?: string
           details?: string | null
           entity_id: string
           entity_type: string
           id?: string
+          idempotency_key: string
           reason_code: string
-          reporter_id: string
+          reporter_id?: string | null
+          revision_id: string
         }
         Update: {
+          case_id?: string
           created_at?: string
           details?: string | null
           entity_id?: string
           entity_type?: string
           id?: string
+          idempotency_key?: string
           reason_code?: string
-          reporter_id?: string
+          reporter_id?: string | null
+          revision_id?: string
         }
         Relationships: [
           {
@@ -3279,10 +3516,12 @@ export type Database = {
           p_details: string | null
           p_entity_id: string
           p_entity_type: string
+          p_idempotency_key: string
           p_reason_code: string
           p_reporter_id: string
+          p_revision_id: string
         }
-        Returns: undefined
+        Returns: Json
       }
       submit_ppi_atomic: {
         Args: { p_submission_id: string; p_submitted_at: string }

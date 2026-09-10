@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 import { getBlockedProfileIds, getVisibleCommunityPostIds } from "@/features/social/relationships";
+import { createReportContext } from "@/features/moderation/report-context";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -37,7 +38,7 @@ type CommunityFeedMedia = Pick<
 type CommunityFeedComment = Pick<
   CommunityCommentRow,
   "id" | "post_id" | "author_id" | "content" | "status" | "created_at" | "updated_at"
-> & { author: CommunityFeedProfile | null };
+> & { author: CommunityFeedProfile | null; report_context: string | null };
 
 export type CommunityFeedPost = Pick<
   CommunityPostRow,
@@ -48,6 +49,7 @@ export type CommunityFeedPost = Pick<
   marketplace_listing: CommunityFeedListing | null;
   media: CommunityFeedMedia[];
   comments: CommunityFeedComment[];
+  report_context: string | null;
 };
 
 export type CommunityComment = CommunityCommentRow & {
@@ -90,7 +92,7 @@ const COMMUNITY_POST_SELECT = `
 // are selected only where the server needs them to filter nested rows, then
 // removed before serialization.
 const COMMUNITY_FEED_SELECT = `
-  id, author_id, vehicle_id, marketplace_listing_id, content, audience, status, created_at, updated_at,
+  id, author_id, vehicle_id, marketplace_listing_id, active_revision_id, content, audience, status, created_at, updated_at,
   author:profiles!community_posts_author_id_fkey(id, display_name, username, avatar_url, is_public),
   vehicle:vehicles!community_posts_vehicle_id_fkey(
     id, year, make, model, trim, mileage, visibility,
@@ -103,7 +105,7 @@ const COMMUNITY_FEED_SELECT = `
     id, post_id, url, media_type, content_type, sort_order, created_at, moderation_status
   ),
   comments:community_comments!community_comments_post_id_fkey(
-    id, post_id, author_id, content, status, created_at, updated_at, moderation_status,
+    id, post_id, author_id, active_revision_id, content, status, created_at, updated_at, moderation_status,
     author:profiles!community_comments_author_id_fkey(id, display_name, username, avatar_url, is_public)
   )
 `;
@@ -133,7 +135,7 @@ function cleanPosts(posts: CommunityPost[], includeModerated = false) {
   }));
 }
 
-function toCommunityFeedPost(post: CommunityPost): CommunityFeedPost {
+function toCommunityFeedPost(post: CommunityPost, viewerId: string): CommunityFeedPost {
   const vehicle = post.vehicle?.visibility === "public"
     ? {
         id: post.vehicle.id,
@@ -170,6 +172,12 @@ function toCommunityFeedPost(post: CommunityPost): CommunityFeedPost {
     status: post.status,
     created_at: post.created_at,
     updated_at: post.updated_at,
+    report_context: post.author_id === viewerId ? null : createReportContext({
+      viewerId,
+      entityType: "community_post",
+      entityId: post.id,
+      revisionId: post.active_revision_id,
+    }),
     author: post.author ? {
       id: post.author.id,
       display_name: post.author.display_name,
@@ -213,6 +221,12 @@ function toCommunityFeedPost(post: CommunityPost): CommunityFeedPost {
         status: comment.status,
         created_at: comment.created_at,
         updated_at: comment.updated_at,
+        report_context: comment.author_id === viewerId ? null : createReportContext({
+          viewerId,
+          entityType: "community_comment",
+          entityId: comment.id,
+          revisionId: comment.active_revision_id,
+        }),
         author: comment.author ? {
           id: comment.author.id,
           display_name: comment.author.display_name,
@@ -261,7 +275,7 @@ export async function getCommunityPosts(page = 1, perPage = 20) {
   }]));
   return postIds.flatMap((id) => {
     const post = byId.get(id);
-    return post ? [toCommunityFeedPost(post)] : [];
+    return post ? [toCommunityFeedPost(post, viewerId)] : [];
   });
 }
 
@@ -292,7 +306,7 @@ export async function getCommunityPostById(id: string) {
   return toCommunityFeedPost({
     ...post,
     comments: (post.comments ?? []).filter((comment) => !blockedAuthors.has(comment.author_id)),
-  });
+  }, viewerId);
 }
 
 const ARCHIVE_EXPIRY_DAYS = 30;
@@ -428,5 +442,5 @@ export async function getVehicleDiscussionPosts(vehicleId: string) {
   );
   return posts
     .map((post) => ({ ...post, comments: post.comments.filter((comment) => !blockedAuthors.has(comment.author_id)) }))
-    .map(toCommunityFeedPost);
+    .map((post) => toCommunityFeedPost(post, viewerId));
 }
