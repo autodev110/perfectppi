@@ -76,29 +76,50 @@ export async function PATCH(request: Request) {
     allow_exact_username_lookup,
     ...profileUpdates
   } = parsed.data;
-  const { error } = await supabase
-    .from("profiles")
-    .update(profileUpdates)
-    .eq("auth_user_id", user.id)
-    .select("id")
-    .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // An audience-only PATCH from the app carries no plain profile fields; an
+  // empty PostgREST update is not a no-op we want to rely on.
+  if (Object.keys(profileUpdates).length > 0) {
+    const { error } = await supabase
+      .from("profiles")
+      .update(profileUpdates)
+      .eq("auth_user_id", user.id)
+      .select("id")
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
   }
 
-  const nextPublic = is_public ?? currentProfile.is_public;
-  const { data, error: privacyError } = await supabase.rpc("set_own_social_privacy", {
-    p_is_public: nextPublic,
-    p_default_post_audience: nextPublic
-      ? (default_post_audience ?? currentProfile.default_post_audience)
-      : "friends",
-    p_discoverable: discoverable ?? currentProfile.discoverable,
-    p_allow_exact_username_lookup:
-      allow_exact_username_lookup ?? currentProfile.allow_exact_username_lookup,
-  });
-  if (privacyError) {
-    return NextResponse.json({ error: "Privacy settings could not be updated" }, { status: 500 });
+  const touchesPrivacy = is_public !== undefined
+    || default_post_audience !== undefined
+    || discoverable !== undefined
+    || allow_exact_username_lookup !== undefined;
+
+  if (touchesPrivacy) {
+    const nextPublic = is_public ?? currentProfile.is_public;
+    const { error: privacyError } = await supabase.rpc("set_own_social_privacy", {
+      p_is_public: nextPublic,
+      p_default_post_audience: nextPublic
+        ? (default_post_audience ?? currentProfile.default_post_audience)
+        : "friends",
+      p_discoverable: discoverable ?? currentProfile.discoverable,
+      p_allow_exact_username_lookup:
+        allow_exact_username_lookup ?? currentProfile.allow_exact_username_lookup,
+    });
+    if (privacyError) {
+      return NextResponse.json({ error: "Privacy settings could not be updated" }, { status: 500 });
+    }
+  }
+
+  const { data, error: reloadError } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("auth_user_id", user.id)
+    .single();
+  if (reloadError) {
+    return NextResponse.json({ error: reloadError.message }, { status: 500 });
   }
 
   return NextResponse.json(data);

@@ -206,6 +206,8 @@ private struct CommunityPostRow: View {
     let post: CommunityPost
     let onReported: () -> Void
     @State private var reportTarget: ReportTarget?
+    @State private var reportAccepted = false
+    @State private var reportConfirmed = false
     @State private var error: String?
 
     var body: some View {
@@ -267,7 +269,13 @@ private struct CommunityPostRow: View {
             }
         }
         .padding(.vertical, 6)
-        .sheet(item: $reportTarget) { target in
+        .sheet(item: $reportTarget, onDismiss: {
+            // Present the confirmation only after the sheet is gone; SwiftUI
+            // drops an alert that races a dismissing sheet.
+            guard reportAccepted else { return }
+            reportAccepted = false
+            reportConfirmed = true
+        }) { target in
             CommunityReportSheet { reasonCode, details in
                 await submitReport(target: target, reasonCode: reasonCode, details: details)
             }
@@ -276,6 +284,11 @@ private struct CommunityPostRow: View {
             Button("OK") { error = nil }
         } message: {
             Text(error ?? "Please try again.")
+        }
+        .alert("Report received", isPresented: $reportConfirmed) {
+            Button("OK", role: .cancel) { onReported() }
+        } message: {
+            Text("This post is hidden while it is reviewed.")
         }
     }
 
@@ -299,7 +312,7 @@ private struct CommunityPostRow: View {
                 details: details,
                 contextToken: target.contextToken
             )
-            onReported()
+            reportAccepted = true
             return true
         } catch {
             self.error = error.localizedDescription
@@ -487,7 +500,7 @@ private struct CommunityPostDetailView: View {
                     }
                     Spacer()
                     if let reportContext = item.reportContext {
-                        ReportMenu {
+                        ReportMenu(entityLabel: "comment") {
                             reportTarget = ReportTarget(
                                 entityType: "community_comment",
                                 entityId: item.id,
@@ -667,6 +680,7 @@ private struct ReportTarget: Identifiable {
 }
 
 private struct ReportMenu: View {
+    var entityLabel: String = "post"
     let onOpen: () -> Void
 
     var body: some View {
@@ -674,10 +688,14 @@ private struct ReportMenu: View {
             Label("Report", systemImage: "flag")
                 .font(.caption)
                 .foregroundStyle(Theme.Palette.danger)
+                // The glyph stays small; the touch target must not (plan 16.1).
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Report content")
-        .frame(minWidth: 44, minHeight: 44)
+        .accessibilityLabel("Report this \(entityLabel)")
+        .accessibilityHint("Opens reporting options. A submitted report hides the \(entityLabel) while it is reviewed.")
+        .accessibilityIdentifier("community.report.\(entityLabel)")
     }
 }
 
@@ -689,29 +707,45 @@ private struct CommunityReportSheet: View {
 
     let onSubmit: (String, String?) async -> Bool
 
+    // Stable machine codes shared with the API and database (plan 16.2).
     private let reasons = [
-        ("spam", "Spam"),
-        ("harassment", "Harassment"),
-        ("hate", "Hate or abuse"),
-        ("violence", "Violence"),
-        ("sexual_content", "Sexual content"),
-        ("personal_information", "Personal information"),
-        ("fraud", "Fraud or scam"),
-        ("illegal_content", "Illegal content"),
+        ("spam", "Spam or misleading content"),
+        ("harassment", "Harassment or bullying"),
+        ("hate", "Hate or dehumanizing content"),
+        ("violence", "Violence, threats, or encouragement of harm"),
+        ("sexual_content", "Nudity or sexual content"),
+        ("personal_information", "Personal or private information"),
+        ("fraud", "Scam, fraud, or unsafe transaction"),
+        ("illegal_content", "Illegal or dangerous activity"),
+        ("dangerous_vehicle_advice", "Dangerous vehicle or repair advice"),
+        ("intellectual_property", "Copyright or other intellectual-property issue"),
         ("other", "Other")
     ]
+    private static let reasonsRequiringDetails: Set<String> = ["other", "intellectual_property"]
+    private static let detailsMinLength = 10
+    private static let detailsMaxLength = 500
 
     private var trimmedDetails: String {
         details.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var detailsRequired: Bool {
+        Self.reasonsRequiringDetails.contains(reasonCode)
+    }
+
     private var canSubmit: Bool {
-        !reasonCode.isEmpty && (reasonCode != "other" || trimmedDetails.count >= 10)
+        guard !reasonCode.isEmpty, trimmedDetails.count <= Self.detailsMaxLength else { return false }
+        return !detailsRequired || trimmedDetails.count >= Self.detailsMinLength
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Text("Tell us what is wrong. When you submit, this content will be hidden while the PerfectPPI team reviews it. The author will not be told who reported it.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
                 Section("Why are you reporting this?") {
                     Picker("Reason", selection: $reasonCode) {
                         Text("Choose a reason").tag("")
@@ -723,14 +757,20 @@ private struct CommunityReportSheet: View {
                 Section("Details") {
                     TextEditor(text: $details)
                         .frame(minHeight: 100)
-                    Text(reasonCode == "other"
-                         ? "Please provide at least 10 characters."
+                        .accessibilityLabel("Report details")
+                    Text(detailsRequired
+                         ? "Required for this reason. Please provide at least \(Self.detailsMinLength) characters."
                          : "Optional. Do not include sensitive personal information.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if trimmedDetails.count > Self.detailsMaxLength - 50 {
+                        Text("\(trimmedDetails.count)/\(Self.detailsMaxLength)")
+                            .font(.caption2)
+                            .foregroundStyle(trimmedDetails.count > Self.detailsMaxLength ? Theme.Palette.danger : .secondary)
+                    }
                 }
             }
-            .navigationTitle("Report Content")
+            .navigationTitle("Report")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -738,7 +778,7 @@ private struct CommunityReportSheet: View {
                         .disabled(submitting)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(submitting ? "Submitting..." : "Submit") {
+                    Button(submitting ? "Submitting..." : "Submit Report", role: .destructive) {
                         Task {
                             submitting = true
                             let accepted = await onSubmit(

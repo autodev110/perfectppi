@@ -111,12 +111,17 @@ CREATE OR REPLACE FUNCTION pg_temp.make_user(
 ) RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE v_profile_id uuid;
 BEGIN
+  -- Every completed account owns a username; the signup trigger claims the
+  -- one supplied in metadata. Without it the account stays pending and is
+  -- correctly locked out of ordinary product data by get_my_profile_id().
   INSERT INTO auth.users (
     id, instance_id, aud, role, email, encrypted_password,
-    email_confirmed_at, created_at, updated_at
+    raw_user_meta_data, email_confirmed_at, created_at, updated_at
   ) VALUES (
     p_auth_id, '00000000-0000-0000-0000-000000000000', 'authenticated',
-    'authenticated', p_email, 'x', now(), now(), now()
+    'authenticated', p_email, 'x',
+    jsonb_build_object('username', 't_' || left(md5(p_auth_id::text), 12)),
+    now(), now(), now()
   );
 
   UPDATE public.profiles SET role = p_role, display_name = p_email

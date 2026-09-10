@@ -60,6 +60,20 @@ SELECT
   position
 FROM generate_series(0, 9) AS position;
 
+-- Raw Community table reads are revoked from authenticated clients (reads go
+-- through viewer-aware server DTOs), so verify the fixture as the owner first.
+DO $$
+BEGIN
+  IF (
+    SELECT count(*)
+    FROM public.community_post_media
+    WHERE post_id = '42000000-0000-0000-0000-000000000001'
+  ) <> 10 THEN
+    RAISE EXCEPTION 'server could not create a ten-item post carousel';
+  END IF;
+END;
+$$;
+
 SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',
@@ -76,14 +90,6 @@ BEGIN
       AND profile_id = current_setting('test.owner_profile_id')::uuid
   ) <> 1 THEN
     RAISE EXCEPTION 'conversation member cannot authorize an attachment upload';
-  END IF;
-
-  IF (
-    SELECT count(*)
-    FROM public.community_post_media
-    WHERE post_id = '42000000-0000-0000-0000-000000000001'
-  ) <> 10 THEN
-    RAISE EXCEPTION 'server could not create a ten-item post carousel';
   END IF;
 
   BEGIN

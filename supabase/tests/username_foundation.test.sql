@@ -60,6 +60,34 @@ BEGIN
   IF public.get_my_profile_id() IS NOT NULL THEN
     RAISE EXCEPTION 'pending profile received an ordinary product identity';
   END IF;
+
+  -- A pending account has a NULL role. Gates written as `role <> 'admin'`
+  -- would evaluate to NULL and let it through; both must fail closed.
+  BEGIN
+    UPDATE public.profiles SET is_developer = true
+    WHERE auth_user_id = '52000000-0000-0000-0000-000000000002';
+    RAISE EXCEPTION 'FAIL - pending account granted itself is_developer';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM LIKE 'FAIL%' THEN RAISE; END IF;
+  END;
+  IF EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE auth_user_id = '52000000-0000-0000-0000-000000000002' AND is_developer
+  ) THEN
+    RAISE EXCEPTION 'pending account holds the developer flag';
+  END IF;
+
+  BEGIN
+    PERFORM public.admin_correct_username(
+      (SELECT id FROM public.profiles
+       WHERE auth_user_id = '52000000-0000-0000-0000-000000000001'),
+      'Hijacked_Name',
+      'pending accounts must not reach this'
+    );
+    RAISE EXCEPTION 'FAIL - pending account corrected another username';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
 END;
 $$;
 
@@ -102,6 +130,9 @@ SELECT public.admin_correct_username(
   'Support-approved migration correction'
 );
 
+-- The audit table is service-only, so verify it as the database owner.
+RESET ROLE;
+
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -113,8 +144,6 @@ BEGIN
   END IF;
 END;
 $$;
-
-RESET ROLE;
 
 DO $$
 BEGIN
@@ -146,6 +175,15 @@ BEGIN
       AND profile_id IS NULL
   ) THEN
     RAISE EXCEPTION 'deleted account usernames were recycled';
+  END IF;
+  -- The pending account's earlier admin_correct_username() attempt targeted
+  -- this profile; verify as the owner because RLS hides it from that caller.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE auth_user_id = '52000000-0000-0000-0000-000000000001'
+      AND username = 'RoadPilot'
+  ) THEN
+    RAISE EXCEPTION 'admin username was changed by a non-admin';
   END IF;
 END;
 $$;

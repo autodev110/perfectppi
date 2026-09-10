@@ -1,4 +1,9 @@
-"use server";
+// Server-only helpers. This module is intentionally NOT a "use server" file:
+// every export would otherwise become a client-callable action, and helpers
+// such as getBlockedProfileIds()/canProfilesInteract() accept arbitrary
+// profile IDs. Client components reach the mutations through
+// /api/social/relationships, which authenticates the caller first.
+import "server-only";
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";

@@ -340,6 +340,12 @@ ALTER TABLE public.moderation_appeals
 
 -- Migrate the existing entity-level moderation history into one initial case
 -- per current revision. moderation_items remains the compatibility aggregate.
+--
+-- The legacy delete path physically removed posts without cleaning their
+-- moderation rows, so an item may point at an entity that no longer exists.
+-- Those orphans still get a case bound to a synthetic revision ID: the report
+-- rows below become NOT NULL on case_id, and dropping them would discard the
+-- only remaining evidence that a report happened.
 INSERT INTO public.moderation_cases (
   moderation_item_id, entity_type, entity_id, revision_id, state, resolution,
   priority, sla_due_at, first_reported_at, last_reported_at, closed_at,
@@ -349,8 +355,7 @@ SELECT
   item.id,
   item.entity_type,
   item.entity_id,
-  CASE WHEN item.entity_type = 'community_post'
-    THEN post.active_revision_id ELSE comment.active_revision_id END,
+  COALESCE(post.active_revision_id, comment.active_revision_id, gen_random_uuid()),
   CASE
     WHEN item.status IN ('pending_scan', 'pending_review') THEN 'open'
     WHEN item.status = 'legal_hold' THEN 'escalated'
@@ -381,9 +386,7 @@ LEFT JOIN LATERAL (
   FROM public.moderation_reports report
   WHERE report.entity_type = item.entity_type AND report.entity_id = item.entity_id
 ) report_times ON true
-WHERE item.entity_type IN ('community_post', 'community_comment')
-  AND CASE WHEN item.entity_type = 'community_post'
-    THEN post.active_revision_id ELSE comment.active_revision_id END IS NOT NULL;
+WHERE item.entity_type IN ('community_post', 'community_comment');
 
 UPDATE public.moderation_reports report
 SET revision_id = moderation_case.revision_id,
@@ -457,8 +460,17 @@ INSERT INTO public.moderation_evidence (
 SELECT
   moderation_case.id,
   moderation_case.revision_id,
-  CASE WHEN moderation_case.entity_type = 'community_post'
-    THEN jsonb_build_object(
+  CASE
+    WHEN revision.id IS NULL AND comment_revision.id IS NULL THEN jsonb_build_object(
+      'entityType', moderation_case.entity_type,
+      'entityId', moderation_case.entity_id,
+      'revisionId', moderation_case.revision_id,
+      'orphaned', true,
+      'content', item.content_preview,
+      'authorId', item.author_id,
+      'createdAt', item.created_at
+    )
+    WHEN moderation_case.entity_type = 'community_post' THEN jsonb_build_object(
       'entityType', moderation_case.entity_type,
       'entityId', moderation_case.entity_id,
       'revisionId', revision.id,
@@ -483,10 +495,13 @@ SELECT
     ), '[]'::jsonb)
     ELSE '[]'::jsonb
   END,
-  encode(extensions.digest(CASE WHEN moderation_case.entity_type = 'community_post'
-    THEN revision.content ELSE comment_revision.content END, 'sha256'), 'hex'),
+  encode(extensions.digest(
+    COALESCE(revision.content, comment_revision.content, item.content_preview, ''),
+    'sha256'
+  ), 'hex'),
   moderation_case.created_at
 FROM public.moderation_cases moderation_case
+JOIN public.moderation_items item ON item.id = moderation_case.moderation_item_id
 LEFT JOIN public.community_post_revisions revision
   ON moderation_case.entity_type = 'community_post' AND revision.id = moderation_case.revision_id
 LEFT JOIN public.community_comment_revisions comment_revision

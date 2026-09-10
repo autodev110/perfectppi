@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { createCommunityComment } from "@/features/community/actions";
 import { reportCommunityContentForm } from "@/features/moderation/actions";
+import {
+  REPORT_DETAILS_MAX_LENGTH,
+  REPORT_REASON_CODES,
+  REPORT_REASON_LABELS,
+  REPORT_REASONS_REQUIRING_DETAILS,
+} from "@/features/moderation/report-reasons";
 import { getCommunityPosts } from "@/features/community/queries";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -221,17 +227,14 @@ function ReportControl({
         <p className="text-sm font-bold">Report content</p>
         <select name="reason_code" required defaultValue="" className="h-10 w-full rounded-md border bg-background px-3 text-sm">
           <option value="" disabled>Choose a reason</option>
-          <option value="spam">Spam</option>
-          <option value="harassment">Harassment</option>
-          <option value="hate">Hate or abuse</option>
-          <option value="violence">Violence</option>
-          <option value="sexual_content">Sexual content</option>
-          <option value="personal_information">Personal information</option>
-          <option value="fraud">Fraud or scam</option>
-          <option value="illegal_content">Illegal content</option>
-          <option value="other">Other</option>
+          {REPORT_REASON_CODES.map((code) => (
+            <option key={code} value={code}>{REPORT_REASON_LABELS[code]}</option>
+          ))}
         </select>
-        <Textarea name="details" rows={2} maxLength={500} placeholder="Optional details" />
+        <Textarea name="details" rows={2} maxLength={REPORT_DETAILS_MAX_LENGTH} placeholder="Details (required for Other and intellectual-property reports)" />
+        <p className="text-xs text-muted-foreground">
+          Required for: {[...REPORT_REASONS_REQUIRING_DETAILS].map((code) => REPORT_REASON_LABELS[code]).join(", ")}.
+        </p>
         <Button size="sm" type="submit">Submit report</Button>
       </form>
     </details>

@@ -18,17 +18,86 @@ import { UPLOAD_LIMITS } from "@/config/constants";
 import { extensionForContentType, moderateMediaBytes } from "@/lib/moderation/media-safety";
 import { recordModeration } from "@/lib/moderation";
 import { verifyReportContext } from "@/features/moderation/report-context";
+import {
+  REPORT_DETAILS_MAX_LENGTH,
+  REPORT_DETAILS_MIN_LENGTH,
+  REPORT_REASON_CODES,
+  reportReasonRequiresDetails,
+} from "@/features/moderation/report-reasons";
 
 const reportSchema = z.object({
   entityType: z.enum(["community_post", "community_comment"]),
   entityId: z.string().uuid(),
-  reasonCode: z.enum([
-    "spam", "harassment", "hate", "violence", "sexual_content",
-    "personal_information", "fraud", "illegal_content", "other",
-  ]),
-  details: z.string().trim().max(500).optional(),
+  reasonCode: z.enum(REPORT_REASON_CODES),
+  details: z.string().trim().max(REPORT_DETAILS_MAX_LENGTH).optional(),
   contextToken: z.string().min(40).max(2000),
+}).superRefine((value, ctx) => {
+  if (reportReasonRequiresDetails(value.reasonCode)
+    && (value.details ?? "").length < REPORT_DETAILS_MIN_LENGTH) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["details"],
+      message: `Please describe the problem in at least ${REPORT_DETAILS_MIN_LENGTH} characters`,
+    });
+  }
 });
+
+// Stable client-facing categories (plan section 30.1). The database raises
+// short fixed messages; map them here so no client infers state from prose.
+export type ReportErrorCode =
+  | "validation"
+  | "unauthenticated"
+  | "content_unavailable"
+  | "rate_limited"
+  | "reporting_restricted"
+  | "unavailable";
+
+export type ReportCommunityContentResult =
+  | { error: string; code: ReportErrorCode }
+  | {
+      data: {
+        submitted: true;
+        duplicate: boolean;
+        reportId: string;
+        caseId: string;
+        entityType: "community_post" | "community_comment";
+        entityId: string;
+        revisionId: string;
+        caseState: string | null;
+        contentStatus: string | null;
+        moderationStatus: string | null;
+        hiddenGlobally: boolean;
+      };
+    };
+
+const reportResultSchema = z.object({
+  reportId: z.string().uuid(),
+  caseId: z.string().uuid(),
+  entityType: z.enum(["community_post", "community_comment"]),
+  entityId: z.string().uuid(),
+  revisionId: z.string().uuid(),
+  caseState: z.string().nullable(),
+  contentStatus: z.string().nullable(),
+  moderationStatus: z.string().nullable(),
+  hiddenGlobally: z.boolean(),
+  duplicate: z.boolean(),
+});
+
+function classifyReportError(message: string): { error: string; code: ReportErrorCode } {
+  if (message.includes("rate limit")) {
+    return { error: "You have submitted too many reports recently. Please try again later.", code: "rate_limited" };
+  }
+  if (message.includes("reporting is unavailable")) {
+    return { error: "Reporting is not available for this account right now.", code: "reporting_restricted" };
+  }
+  if (message.includes("report is not available") || message.includes("revision evidence")) {
+    return { error: "This content is no longer available to report", code: "content_unavailable" };
+  }
+  if (message.includes("invalid report reason") || message.includes("details are")) {
+    return { error: "Please choose a reason and add any required details.", code: "validation" };
+  }
+  return { error: "Your report could not be submitted. Please try again.", code: "unavailable" };
+}
 
 async function currentProfile() {
   const supabase = await createClient();
@@ -42,7 +111,7 @@ async function currentProfile() {
   return data;
 }
 
-export async function reportCommunityContent(formData: FormData) {
+export async function reportCommunityContent(formData: FormData): Promise<ReportCommunityContentResult> {
   const profile = await currentProfile();
   if (!profile) redirect("/login?redirect=/community");
 
@@ -53,14 +122,16 @@ export async function reportCommunityContent(formData: FormData) {
     details: String(formData.get("details") ?? "") || undefined,
     contextToken: formData.get("report_context"),
   });
-  if (!parsed.success) return { error: parsed.error.errors[0].message };
+  if (!parsed.success) return { error: parsed.error.errors[0].message, code: "validation" };
 
   const reportContext = verifyReportContext(parsed.data.contextToken, {
     viewerId: profile.id,
     entityType: parsed.data.entityType,
     entityId: parsed.data.entityId,
   });
-  if (!reportContext) return { error: "This content is no longer available to report" };
+  if (!reportContext) {
+    return { error: "This content is no longer available to report", code: "content_unavailable" };
+  }
 
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("submit_moderation_report", {
@@ -72,9 +143,16 @@ export async function reportCommunityContent(formData: FormData) {
     p_details: parsed.data.details ?? null,
     p_idempotency_key: createHash("sha256").update(parsed.data.contextToken).digest("hex"),
   });
-  if (error) return { error: error.message };
+  if (error) return classifyReportError(error.message);
+
+  const result = reportResultSchema.safeParse(data);
+  if (!result.success) {
+    console.error("submit_moderation_report returned an unexpected payload", result.error.flatten());
+    return { error: "Your report could not be confirmed. Please try again.", code: "unavailable" };
+  }
+
   revalidateModerationPaths();
-  return { data: { submitted: true, ...(data && typeof data === "object" ? data : {}) } };
+  return { data: { submitted: true, ...result.data } };
 }
 
 export async function reportCommunityContentForm(formData: FormData): Promise<void> {
