@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalDocument } from "@/components/legal/legal-document";
-import { CANONICAL_ORIGIN } from "@/lib/legal/constants";
+import { CANONICAL_ORIGIN, DISCLOSURES_LAST_UPDATED } from "@/lib/legal/constants";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -14,6 +14,7 @@ export default function PrivacyPage() {
     <LegalDocument
       title="Privacy Policy"
       description="This policy explains PerfectPPI's data practices across the website, iOS application, inspections, marketplace, community, messaging, and related services."
+      updated={DISCLOSURES_LAST_UPDATED}
     >
       <h2>1. Scope and our role</h2>
       <p>
@@ -31,7 +32,11 @@ export default function PrivacyPage() {
       </p>
       <h3>Marketplace, community, and communications</h3>
       <p>
-        We collect listings, prices, approximate listing location, reviews, posts, comments, reports, appeals, messages, attachments, and media packages. Content marked public can be viewed by anyone. Messages are limited to conversation participants and authorized administrators, subject to safety, legal, and moderation needs.
+        We collect listings, prices, approximate listing location, reviews, posts, comments, reports, appeals, messages, attachments, and media packages. Active public listings can be viewed by anyone. Community posts, comments, profiles, and their media are available only to signed-in PerfectPPI members, subject to the audience and privacy settings described in section 7. Messages are limited to conversation participants and authorized administrators, subject to safety, legal, and moderation needs.
+      </p>
+      <h3>Social identity, relationships, and reports</h3>
+      <p>
+        Every account has a unique username, which is public and, in this release, cannot be changed by you after it is chosen; an existing account without one received a randomly generated username. We store your profile privacy setting (public inside PerfectPPI or private), default post audience, discoverability preferences, accepted friend relationships, and the members you block or mute. Blocking and muting are visible only to you. When you report content we record the report reason, optional details, the exact version of the content you saw, and the time; your identity is stored with the report for abuse prevention and is never shown to the author or to other members.
       </p>
       <h3>Technician and organization information</h3>
       <p>
@@ -69,7 +74,7 @@ export default function PrivacyPage() {
 
       <h2>5. AI processing</h2>
       <p>
-        PerfectPPI sends relevant vehicle, VIN, inspection-answer, diagnostic, and report context to Google Gemini to assist with structured inspection reports and coverage-related outputs. VIN images may also be sent to Gemini to read a VIN. Community media is checked through a configured specialist illegal-content scanning service before it can be published. Community text and cleared still images are sent to Gemini 2.5 Flash to identify content requiring blocking or human review; cleared video remains held for manual review in the current implementation. We minimize inputs to what the feature needs and do not intentionally send account passwords or payment-card data to these services.
+        PerfectPPI sends relevant vehicle, VIN, inspection-answer, diagnostic, and report context to Google Gemini to assist with structured inspection reports and coverage-related outputs. VIN images may also be sent to Gemini to read a VIN. In the current release, ordinary Community text posts and comments are not sent to Gemini or another general-purpose AI classifier before they publish; they pass deterministic server checks and publish immediately. Still photos are checked through a configured specialist illegal-content scanning service and re-encoded with metadata removed before they publish; Community video uploads are disabled. A general-purpose AI publication gate for Community content exists as a server-controlled capability that is switched off and would be disclosed here before use. We minimize inputs to what the feature needs and do not intentionally send account passwords or payment-card data to these services.
       </p>
       <p>
         AI output can be incomplete or wrong. It is not a substitute for a physical inspection, diagnostic procedure, safety decision, repair advice, appraisal, insurance decision, or the binding terms of a service contract. Users may request correction or human review through <Link href="/support">Support</Link>. See the <Link href="/ai-disclosure">AI Processing Disclosure</Link> for more detail.
@@ -85,7 +90,11 @@ export default function PrivacyPage() {
 
       <h2>7. Public content and sharing links</h2>
       <p>
-        Public profiles, active public vehicle listings, community posts, comments, reviews, and their approved media can be available without signing in. A share link acts like a bearer link: anyone who receives it may access the linked package until it is revoked or expires. Do not post documents, faces, plates, location details, or other personal information you do not want disclosed. PerfectPPI may remove metadata from images, but you should not rely on metadata removal as your only privacy protection.
+        Active public vehicle listings can be available without signing in. Community posts, comments, member profiles, and their media require a signed-in PerfectPPI account and are shown only to the audience you chose: a post is either visible to all signed-in members or to accepted friends only, a private profile can publish to friends only, and changing your profile to private immediately limits your earlier public posts to friends. Community content is not published to the open web or to search engines in this release. Community photos are stored privately and delivered only through an authenticated request that re-checks the post&apos;s status and audience each time; there is no permanent public image address. A share link for a media package acts like a bearer link: anyone who receives it may access the linked package until it is revoked or expires. Do not post documents, faces, plates, location details, or other personal information you do not want disclosed. PerfectPPI removes location and device metadata from published Community photos, but you should not rely on metadata removal as your only privacy protection, and PerfectPPI cannot recall copies that other members already saved.
+      </p>
+      <h3>Reports, moderation, and moderator access</h3>
+      <p>
+        A valid first report hides a post or comment from all members while a trained member of the PerfectPPI team reviews it. Moderators see the reported content, its version history, attached media, the report reasons, the author&apos;s prior moderation history, and internal notes; reporter identity is visible only to team members holding a separately granted permission. Every moderator view of restricted media and every decision, note, claim, and enforcement action is logged. Decisions are made by people, not by automated systems, and authors can appeal removals.
       </p>
 
       <h2>8. Cookies, analytics, sale, sharing, and opt-out signals</h2>
@@ -98,7 +107,7 @@ export default function PrivacyPage() {
 
       <h2>9. Retention and deletion</h2>
       <p>
-        We keep each category only as long as reasonably necessary for the feature, account, transaction, security, moderation, dispute, contractual, and legal purposes described here. Authenticated account deletion removes the account and account-owned application data and managed media, normally beginning within 24 hours, unless affected evidence is subject to a documented legal hold. We keep minimized privacy-request records for 24 months. Unattached quarantined uploads expire after 30 minutes and enter retryable cleanup. Reported illegal-content evidence is preserved for the period required by law. Backups and independent processor copies may persist according to their deletion cycles; contract, payment, tax, ordinary moderation, and provider-specific periods remain subject to applicable requirements and approved schedules.
+        We keep each category only as long as reasonably necessary for the feature, account, transaction, security, moderation, dispute, contractual, and legal purposes described here. Authenticated account deletion removes the account and account-owned application data and managed media, normally beginning within 24 hours, unless affected evidence is subject to a documented legal hold. We keep minimized privacy-request records for 24 months. Unattached quarantined uploads expire after 30 minutes and enter retryable cleanup. A post you archive yourself can be restored for 30 days and is then eligible for controlled disposal. Content that was reported keeps a restricted evidence record (the reported version, attached media, reports, and the decision history) after the case closes for the period set in our retention schedule and is then disposed of through an audited process; until a period is approved for a record class, that evidence stays under restricted access, and a legal hold keeps evidence for as long as the hold applies. Deleting your account removes your public identity immediately, but evidence tied to an open case, a confirmed violation, an appeal, or a legal hold is retained under restricted access until its period ends, with reporter identity minimized. Reported illegal-content evidence is preserved for the period required by law. Backups and independent processor copies may persist according to their deletion cycles; contract, payment, tax, and provider-specific periods remain subject to applicable requirements and approved schedules.
       </p>
 
       <h2>10. Security</h2>

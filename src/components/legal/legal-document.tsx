@@ -22,10 +22,15 @@ const legalLinks = [
 export function LegalDocument({
   title,
   description,
+  updated = LEGAL_LAST_UPDATED,
+  version = LEGAL_VERSION,
   children,
 }: {
   title: string;
   description: string;
+  /** Documents outside the Terms assent record carry their own revision date. */
+  updated?: string;
+  version?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -42,8 +47,8 @@ export function LegalDocument({
         </p>
         <dl className="mt-7 flex flex-wrap gap-x-8 gap-y-2 text-sm text-on-surface-variant">
           <div><dt className="inline font-semibold text-on-surface">Effective: </dt><dd className="inline">{LEGAL_EFFECTIVE_DATE}</dd></div>
-          <div><dt className="inline font-semibold text-on-surface">Updated: </dt><dd className="inline">{LEGAL_LAST_UPDATED}</dd></div>
-          <div><dt className="inline font-semibold text-on-surface">Version: </dt><dd className="inline">{LEGAL_VERSION}</dd></div>
+          <div><dt className="inline font-semibold text-on-surface">Updated: </dt><dd className="inline">{updated}</dd></div>
+          <div><dt className="inline font-semibold text-on-surface">Version: </dt><dd className="inline">{version}</dd></div>
         </dl>
       </header>
 

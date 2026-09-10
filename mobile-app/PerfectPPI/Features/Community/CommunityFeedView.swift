@@ -7,6 +7,7 @@ struct CommunityFeedView: View {
     @State private var reloadToken = UUID()
     @State private var showingComposer = false
     @State private var showingMyPosts = false
+    @State private var showingGuidelines = false
 
     var body: some View {
         AsyncContent(
@@ -48,9 +49,17 @@ struct CommunityFeedView: View {
                         } label: {
                             Label("My Posts and Reviews", systemImage: "person.crop.rectangle.stack")
                         }
+                        Button {
+                            showingGuidelines = true
+                        } label: {
+                            Label("Community Guidelines", systemImage: "checklist")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                }
+                .sheet(isPresented: $showingGuidelines) {
+                    SafariWebView(url: PolicyPage.communityGuidelines.url)
                 }
                 .sheet(isPresented: $showingComposer) {
                     NewCommunityPostView {

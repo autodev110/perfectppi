@@ -74,6 +74,18 @@ struct ProfileView: View {
                 }
             }
 
+            // Plan 4 / 31.4: Community Guidelines and a monitored Help & Safety
+            // path must be reachable inside the app, not only on the website.
+            Section {
+                ForEach(PolicyPage.allCases) { page in
+                    PolicyLinkRow(page: page)
+                }
+            } header: {
+                Text("Help & Safety")
+            } footer: {
+                Text("PerfectPPI is not an emergency service. For immediate danger, contact local emergency services.")
+            }
+
             // Mirrors the web switcher, which appears in every portal's
             // settings page. Hidden entirely for ordinary accounts.
             if currentProfile.canSwitchRoles {

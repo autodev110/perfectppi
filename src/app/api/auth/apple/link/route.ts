@@ -7,6 +7,7 @@ import {
   encryptAppleToken,
   exchangeAppleAuthorizationCode,
   readAppleSignInConfig,
+  revokeAppleRefreshToken,
 } from "@/lib/auth/apple";
 
 // Called by the iOS app right after a native Sign in with Apple. Exchanges
@@ -54,6 +55,9 @@ export async function POST(request: Request) {
   try {
     const exchange = await exchangeAppleAuthorizationCode(parsed.data.authorizationCode, config);
     if (exchange.appleUserId !== expectedAppleUserId) {
+      // The code is spent and Apple issued a token we will not keep; revoke
+      // it so nothing usable is left behind by a mismatched submission.
+      await revokeAppleRefreshToken(exchange.refreshToken, config).catch(() => undefined);
       throw new AppleSignInError("Authorization code belongs to a different Apple account", "identity_mismatch");
     }
     const { error } = await admin.from("apple_sign_in_tokens").upsert({

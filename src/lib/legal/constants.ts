@@ -5,6 +5,15 @@ export const TERMS_SHA256 =
 export const PRIVACY_VERSION = `privacy-${LEGAL_VERSION}`;
 export const LEGAL_EFFECTIVE_DATE = "September 2, 2026";
 export const LEGAL_LAST_UPDATED = "September 2, 2026";
+// Non-assent disclosures (Community Guidelines, AI Processing Disclosure,
+// Privacy Policy, Support & Safety) are revised to match the shipped social
+// configuration without changing the Terms version users accepted.
+export const DISCLOSURES_LAST_UPDATED = "September 10, 2026";
+export const MODERATION_RESPONSE_TARGETS = {
+  urgentHours: 4,
+  ordinaryHours: 24,
+  appealHours: 72,
+} as const;
 export const COMPANY_NOTICE =
   "PerfectPPI is a product managed by DnD Solutions & Optimization LLC.";
 export const LEGAL_CONTACT_EMAIL = "info@dndsolutions.io";

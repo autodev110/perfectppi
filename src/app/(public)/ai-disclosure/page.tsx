@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LegalDocument } from "@/components/legal/legal-document";
-import { CANONICAL_ORIGIN } from "@/lib/legal/constants";
+import { CANONICAL_ORIGIN, DISCLOSURES_LAST_UPDATED } from "@/lib/legal/constants";
 
 export const metadata: Metadata = {
   title: "AI Processing Disclosure",
@@ -10,7 +10,12 @@ export const metadata: Metadata = {
 
 export default function AiDisclosurePage() {
   return (
-    <LegalDocument title="AI Processing Disclosure" description="Where AI is used, what information it receives, and why human review remains important.">
+    <LegalDocument
+      title="AI Processing Disclosure"
+      description="Where AI is used, what information it receives, and why human review remains important."
+      updated={DISCLOSURES_LAST_UPDATED}
+      version="ai-disclosure-2026-09-10"
+    >
       <h2>Inspection and VIN features</h2>
       <p>
         PerfectPPI uses Google Gemini 2.5 Flash to read VIN images and to generate structured inspection and coverage-related outputs. Depending on the feature, inputs can include VIN, vehicle details, mileage, inspection questions and answers, technician notes, OBD trouble codes, warning-light status, readiness monitors, live readings, and report context.
@@ -18,7 +23,10 @@ export default function AiDisclosurePage() {
 
       <h2>Community moderation</h2>
       <p>
-        Community media must first pass a configured specialist illegal-content scan. PerfectPPI then uses Gemini 2.5 Flash to moderate community text and cleared still images. Results can allow content, hold it for review, block it, or place it under restricted legal review. Cleared videos are still held for manual review in the current implementation. Missing, failed, matched, or uncertain specialist scans do not publish. Native anti-spam rules also evaluate limited content patterns.
+        In the current release, ordinary Community text posts and comments are <strong>not</strong> sent to Gemini or any other general-purpose AI classifier before they publish. They pass deterministic server checks (length, link safety, duplicate and rapid posting, and a versioned list of high-confidence disallowed patterns such as exposed personal information, direct threats, and known scam phrasing) and then appear immediately. Still photos are checked by a configured specialist illegal-content safeguard that matches against known illegal material and are re-encoded with metadata removed; a matched, uncertain, or unavailable safeguard result means the photo is not published. Community video uploads are disabled.
+      </p>
+      <p>
+        Moderation decisions on reported content are made by people. Member reports hide content pending human review; automated systems do not remove reported Community content on their own. A general-purpose AI publication gate for Community text and photos exists as a server-controlled capability that is switched off; if it is enabled, this disclosure and the Community Guidelines will be updated first.
       </p>
 
       <h2>Important limitations</h2>
@@ -28,7 +36,7 @@ export default function AiDisclosurePage() {
 
       <h2>Human review and correction</h2>
       <p>
-        You may report an inaccurate inspection output through Support. Content authors may appeal eligible moderation decisions. PerfectPPI should not rely solely on AI for technician access, claims, safety determinations, warranty eligibility, or another decision producing legal or similarly significant effects.
+        You may report an inaccurate inspection output through Support. Content authors are notified of moderation decisions and may appeal removals. PerfectPPI does not rely solely on AI for technician access, claims, safety determinations, warranty eligibility, Community removals, account enforcement, or another decision producing legal or similarly significant effects.
       </p>
 
       <h2>Vendor controls</h2>
