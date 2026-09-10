@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
+import { getBlockedProfileIds, getCurrentSocialProfileId } from "@/features/social/relationships";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -117,6 +118,7 @@ async function cleanListingMedia(listing: MarketplaceListing, publicOnly = true)
 
 export async function getMarketplaceListings(filters?: MarketplaceFilters) {
   const supabase = createAdminClient();
+  const viewerId = await getCurrentSocialProfileId();
 
   const { data } = await supabase
     .from("marketplace_listings")
@@ -124,8 +126,12 @@ export async function getMarketplaceListings(filters?: MarketplaceFilters) {
     .eq("status", "active")
     .order("created_at", { ascending: false });
 
-  const publicListings = ((data ?? []) as MarketplaceListing[]).filter(
-    (listing) => listing.vehicle?.visibility === "public"
+  const rows = (data ?? []) as MarketplaceListing[];
+  const blockedIds = viewerId
+    ? await getBlockedProfileIds(viewerId, rows.map((listing) => listing.seller_id))
+    : new Set<string>();
+  const publicListings = rows.filter(
+    (listing) => listing.vehicle?.visibility === "public" && !blockedIds.has(listing.seller_id)
   );
 
   return applyFilters(await Promise.all(publicListings.map((item) => cleanListingMedia(item))), filters ?? {});
@@ -133,6 +139,7 @@ export async function getMarketplaceListings(filters?: MarketplaceFilters) {
 
 export async function getVehicleActiveListing(vehicleId: string) {
   const supabase = createAdminClient();
+  const viewerId = await getCurrentSocialProfileId();
 
   const { data } = await supabase
     .from("marketplace_listings")
@@ -142,11 +149,13 @@ export async function getVehicleActiveListing(vehicleId: string) {
     .maybeSingle();
 
   const listing = (data as MarketplaceListing | null) ?? null;
+  if (listing && viewerId && (await getBlockedProfileIds(viewerId, [listing.seller_id])).has(listing.seller_id)) return null;
   return listing ? cleanListingMedia(listing) : null;
 }
 
 export async function getMarketplaceListing(listingId: string) {
   const supabase = createAdminClient();
+  const viewerId = await getCurrentSocialProfileId();
 
   const { data } = await supabase
     .from("marketplace_listings")
@@ -156,6 +165,7 @@ export async function getMarketplaceListing(listingId: string) {
 
   const listing = (data as MarketplaceListing | null) ?? null;
   if (!listing) return null;
+  if (viewerId && (await getBlockedProfileIds(viewerId, [listing.seller_id])).has(listing.seller_id)) return null;
 
   const isPublicActive =
     listing.status === "active" && listing.vehicle?.visibility === "public";

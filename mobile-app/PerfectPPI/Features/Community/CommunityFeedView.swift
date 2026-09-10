@@ -271,6 +271,7 @@ private struct CommunityPostDetailView: View {
     let onChanged: () -> Void
 
     @EnvironmentObject private var auth: AuthStore
+    @Environment(\.dismiss) private var dismiss
     @State private var comments: [CommunityComment]
     @State private var media: [CommunityPostMedia]
     @State private var comment = ""
@@ -281,6 +282,7 @@ private struct CommunityPostDetailView: View {
     @State private var removingMediaId: String?
     @StateObject private var uploadProgress = UploadProgressModel()
     @State private var reportSubmitted = false
+    @State private var confirmingBlock = false
 
     init(post: CommunityPost, onChanged: @escaping () -> Void) {
         self.post = post
@@ -327,6 +329,12 @@ private struct CommunityPostDetailView: View {
         } message: {
             Text("Thank you. The moderation team will review this content.")
         }
+        .confirmationDialog("Block this member?", isPresented: $confirmingBlock, titleVisibility: .visible) {
+            Button("Block Member", role: .destructive) { Task { await setAuthorRelationship(kind: "block") } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You will no longer see or be able to contact each other.")
+        }
     }
 
     private var postSection: some View {
@@ -338,6 +346,19 @@ private struct CommunityPostDetailView: View {
                     .font(.body)
                 ReportMenu { reasonCode in
                     Task { await report(entityType: "community_post", entityId: post.id, reasonCode: reasonCode) }
+                }
+                if !isMyPost {
+                    Menu {
+                        Button("Mute Member", systemImage: "speaker.slash") {
+                            Task { await setAuthorRelationship(kind: "mute") }
+                        }
+                        Button("Block Member", systemImage: "hand.raised", role: .destructive) {
+                            confirmingBlock = true
+                        }
+                    } label: {
+                        Label("Member options", systemImage: "ellipsis.circle")
+                            .font(.caption)
+                    }
                 }
                 if !media.isEmpty {
                     CommunityMediaCarousel(media: media)
@@ -542,6 +563,16 @@ private struct CommunityPostDetailView: View {
             self.error = error.localizedDescription
         }
     }
+
+    private func setAuthorRelationship(kind: String) async {
+        do {
+            try await ProfilesAPI.setRelationship(profileId: post.authorId, kind: kind, enabled: true)
+            onChanged()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
 }
 
 private struct ReportMenu: View {
@@ -571,6 +602,8 @@ struct NewCommunityPostView: View {
     let onCreated: () -> Void
 
     @State private var content = ""
+    @State private var audience: CommunityPostAudience = .friends
+    @State private var loadedDefaultAudience = false
     @State private var selectedVehicleId = ""
     @State private var selectedListingId = ""
     @State private var saving = false
@@ -601,6 +634,20 @@ struct NewCommunityPostView: View {
                         Section("Post") {
                             TextEditor(text: $content)
                                 .frame(minHeight: 140)
+                        }
+
+                        Section("Audience") {
+                            Picker("Who can see this?", selection: $audience) {
+                                Text("Friends").tag(CommunityPostAudience.friends)
+                                if options.canPostPublic {
+                                    Text("Public inside PerfectPPI").tag(CommunityPostAudience.public)
+                                }
+                            }
+                            Text(options.canPostPublic
+                                 ? "Public posts are visible only to signed-in PerfectPPI members."
+                                 : "Your private profile can publish to Friends only.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
 
                         Section("Attach") {
@@ -667,6 +714,11 @@ struct NewCommunityPostView: View {
                                 }
                             }
                         }
+                    }
+                    .onAppear {
+                        guard !loadedDefaultAudience else { return }
+                        audience = options.canPostPublic ? options.defaultAudience : .friends
+                        loadedDefaultAudience = true
                     }
                 },
                 failure: { error, retry in
@@ -755,6 +807,7 @@ struct NewCommunityPostView: View {
                 let response = try await CommunityAPI.createPost(
                     .init(
                         content: trimmed,
+                        audience: audience,
                         vehicleId: listingId == nil ? vehicleId : nil,
                         listingId: listingId
                     )

@@ -57,6 +57,10 @@ final class APIClient {
         try await send(method: "PATCH", path: path, query: [], body: body, encoder: encoder)
     }
 
+    func patchCamel<B: Encodable, T: Decodable>(_ path: String, body: B) async throws -> T {
+        try await send(method: "PATCH", path: path, query: [], body: body, encoder: camelEncoder)
+    }
+
     func delete<B: Encodable, T: Decodable>(_ path: String, body: B) async throws -> T {
         try await send(method: "DELETE", path: path, query: [], body: body, encoder: encoder)
     }

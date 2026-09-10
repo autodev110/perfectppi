@@ -177,6 +177,13 @@ enum CommunityContentStatus: String, Codable {
     case active, hidden, archived
 }
 
+enum CommunityPostAudience: String, Codable, CaseIterable, Identifiable {
+    case `public`, friends
+
+    var id: String { rawValue }
+    var label: String { self == .public ? "Public" : "Friends" }
+}
+
 enum ReviewStatus: String, Codable {
     case active, hidden
 }

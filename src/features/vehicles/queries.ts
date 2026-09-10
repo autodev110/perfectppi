@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
+import { getBlockedProfileIds, getCurrentSocialProfileId } from "@/features/social/relationships";
 
 async function authorizeVehicleMedia<T extends { url: string }>(media: T[]): Promise<T[]> {
   return Promise.all(media.map(async (item) => ({
@@ -97,6 +98,7 @@ export async function getOwnedVehicle(id: string) {
 
 export async function getPublicVehicle(id: string) {
   const admin = createAdminClient();
+  const viewerId = await getCurrentSocialProfileId();
 
   const { data: vehicle } = await admin
     .from("vehicles")
@@ -110,6 +112,10 @@ export async function getPublicVehicle(id: string) {
     .single();
 
   if (!vehicle) return null;
+  if (viewerId && vehicle.owner_id) {
+    const blockedIds = await getBlockedProfileIds(viewerId, [vehicle.owner_id]);
+    if (blockedIds.has(vehicle.owner_id)) return null;
+  }
   return {
     ...vehicle,
     vehicle_media: (vehicle.vehicle_media ?? []).filter((media) => media.moderation_status === "active"),

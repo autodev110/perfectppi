@@ -8,7 +8,7 @@ export default async function NewDashboardPostPage({
   searchParams: Promise<{ vehicle?: string }>;
 }) {
   const { vehicle: requestedVehicleId } = await searchParams;
-  const { vehicles, listings } = await getCommunityPostOptions();
+  const { vehicles, listings, defaultAudience, canPostPublic } = await getCommunityPostOptions();
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -23,7 +23,13 @@ export default async function NewDashboardPostPage({
           <CardTitle>Post Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <NewPostForm vehicles={vehicles} listings={listings} selectedVehicleId={requestedVehicleId} />
+          <NewPostForm
+            vehicles={vehicles}
+            listings={listings}
+            selectedVehicleId={requestedVehicleId}
+            defaultAudience={defaultAudience}
+            canPostPublic={canPostPublic}
+          />
         </CardContent>
       </Card>
     </div>

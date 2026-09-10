@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getBlockedProfileIds, getCurrentSocialProfileId } from "@/features/social/relationships";
 
 export async function getDirectory(filters?: {
   certification?: string;
@@ -7,6 +8,7 @@ export async function getDirectory(filters?: {
   isIndependent?: boolean;
 }) {
   const supabase = await createClient();
+  const viewerId = await getCurrentSocialProfileId();
 
   let query = supabase
     .from("technician_profiles")
@@ -20,6 +22,7 @@ export async function getDirectory(filters?: {
     `
     )
     .eq("profile.is_public", true)
+    .eq("profile.discoverable", true)
     .order("total_inspections", { ascending: false });
 
   if (filters?.certification) {
@@ -35,12 +38,17 @@ export async function getDirectory(filters?: {
   }
 
   const { data } = await query;
-  return data ?? [];
+  const rows = data ?? [];
+  if (!viewerId) return rows;
+  const profileIds = rows.flatMap((row) => row.profile ? [row.profile.id] : []);
+  const blockedIds = await getBlockedProfileIds(viewerId, profileIds);
+  return rows.filter((row) => !row.profile || !blockedIds.has(row.profile.id));
 }
 
 // id = technician_profiles.id (the PK used in /technicians/[id] URLs)
 export async function getTechProfile(id: string) {
   const supabase = await createClient();
+  const viewerId = await getCurrentSocialProfileId();
 
   const { data } = await supabase
     .from("technician_profiles")
@@ -57,7 +65,9 @@ export async function getTechProfile(id: string) {
     .eq("profile.is_public", true)
     .single();
 
-  return data;
+  if (!data?.profile || !viewerId) return data;
+  const blockedIds = await getBlockedProfileIds(viewerId, [data.profile.id]);
+  return blockedIds.has(data.profile.id) ? null : data;
 }
 
 export async function getMyTechProfile() {

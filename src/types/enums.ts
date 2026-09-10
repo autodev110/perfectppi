@@ -42,6 +42,7 @@ export const USER_ROLE_DESCRIPTIONS: Record<UserRole, string> = {
 // Domain B: Vehicles
 export type VehicleVisibility = "public" | "private";
 export type MediaType = "image" | "video";
+export type CommunityPostAudience = "public" | "friends";
 
 // Domain C: PPI Engine
 export type WhoseCar = "own" | "other";

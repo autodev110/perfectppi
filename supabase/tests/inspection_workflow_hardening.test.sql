@@ -8,19 +8,19 @@ INSERT INTO auth.users (
     '10000000-0000-0000-0000-000000000001',
     '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated', 'owner@example.test', '',
-    '{}', '{}', now(), now()
+    '{}', '{"username":"FlowOwner"}', now(), now()
   ),
   (
     '10000000-0000-0000-0000-000000000002',
     '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated', 'assigned@example.test', '',
-    '{}', '{}', now(), now()
+    '{}', '{"username":"FlowTech"}', now(), now()
   ),
   (
     '10000000-0000-0000-0000-000000000003',
     '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated', 'unassigned@example.test', '',
-    '{}', '{}', now(), now()
+    '{}', '{"username":"FlowStranger"}', now(), now()
   );
 
 UPDATE public.profiles

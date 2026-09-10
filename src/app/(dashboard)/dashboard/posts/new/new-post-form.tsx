@@ -17,13 +17,15 @@ type NewPostFormProps = {
   vehicles: CommunityPostOptionVehicle[];
   listings: CommunityPostOptionListing[];
   selectedVehicleId?: string;
+  defaultAudience: "public" | "friends";
+  canPostPublic: boolean;
 };
 
 function vehicleLabel(vehicle: CommunityPostOptionVehicle | null) {
   return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ") || "Vehicle";
 }
 
-export function NewPostForm({ vehicles, listings, selectedVehicleId }: NewPostFormProps) {
+export function NewPostForm({ vehicles, listings, selectedVehicleId, defaultAudience, canPostPublic }: NewPostFormProps) {
   const router = useRouter();
   const requestedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
   const [attachmentType, setAttachmentType] = useState(requestedVehicle ? "vehicle" : "none");
@@ -126,6 +128,22 @@ export function NewPostForm({ vehicles, listings, selectedVehicleId }: NewPostFo
           required
           placeholder="Share a vehicle update, listing context, or inspection question. Keep it factual and tied to what you can verify."
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="audience">Audience</Label>
+        <select
+          id="audience"
+          name="audience"
+          defaultValue={canPostPublic ? defaultAudience : "friends"}
+          className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+        >
+          <option value="friends">Friends</option>
+          {canPostPublic ? <option value="public">Public inside PerfectPPI</option> : null}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          {canPostPublic ? "Public posts are visible only to signed-in PerfectPPI members." : "Your private profile can publish to Friends only."}
+        </p>
       </div>
 
       <div className="space-y-3">

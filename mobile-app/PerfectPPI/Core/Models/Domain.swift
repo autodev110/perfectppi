@@ -22,6 +22,9 @@ struct Profile: Codable, Identifiable, Hashable {
     let avatarUrl: String?
     let bio: String?
     let isPublic: Bool?
+    let defaultPostAudience: CommunityPostAudience?
+    let discoverable: Bool?
+    let allowExactUsernameLookup: Bool?
     let phone: String?
     let createdAt: Date?
 
@@ -112,6 +115,7 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let vehicleId: String?
     let marketplaceListingId: String?
     let content: String
+    let audience: CommunityPostAudience
     let status: CommunityContentStatus
     let moderationStatus: String?
     let moderationReason: String?
@@ -172,6 +176,8 @@ struct CommunityComment: Codable, Identifiable, Hashable {
 struct CommunityPostOptions: Codable, Hashable {
     let vehicles: [CommunityPostOptionVehicle]
     let listings: [CommunityPostOptionListing]
+    let defaultAudience: CommunityPostAudience
+    let canPostPublic: Bool
 }
 
 struct CommunityPostOptionVehicle: Codable, Identifiable, Hashable {

@@ -52,7 +52,7 @@ describe("social username foundation", () => {
     ]);
     assert.match(route, /requireApiRole/);
     assert.match(queries, /COMMUNITY_FEED_SELECT/);
-    assert.match(queries, /hasCommunityViewer/);
+    assert.match(queries, /getCommunityViewerId/);
     assert.doesNotMatch(
       queries.match(/const COMMUNITY_FEED_SELECT = `[\s\S]*?`;/)?.[0] ?? "",
       /\bvin\b|moderation_reason|organization_id/,

@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
+import { getBlockedProfileIds, getVisibleCommunityPostIds } from "@/features/social/relationships";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -40,7 +41,7 @@ type CommunityFeedComment = Pick<
 
 export type CommunityFeedPost = Pick<
   CommunityPostRow,
-  "id" | "author_id" | "vehicle_id" | "marketplace_listing_id" | "content" | "status" | "created_at" | "updated_at"
+  "id" | "author_id" | "vehicle_id" | "marketplace_listing_id" | "content" | "audience" | "status" | "created_at" | "updated_at"
 > & {
   author: CommunityFeedProfile | null;
   vehicle: CommunityFeedVehicle | null;
@@ -89,7 +90,7 @@ const COMMUNITY_POST_SELECT = `
 // are selected only where the server needs them to filter nested rows, then
 // removed before serialization.
 const COMMUNITY_FEED_SELECT = `
-  id, author_id, vehicle_id, marketplace_listing_id, content, status, created_at, updated_at,
+  id, author_id, vehicle_id, marketplace_listing_id, content, audience, status, created_at, updated_at,
   author:profiles!community_posts_author_id_fkey(id, display_name, username, avatar_url, is_public),
   vehicle:vehicles!community_posts_vehicle_id_fkey(
     id, year, make, model, trim, mileage, visibility,
@@ -111,7 +112,7 @@ function getProfileIdFromAuthUserId(authUserId: string) {
   const admin = createAdminClient();
   return admin
     .from("profiles")
-    .select("id")
+    .select("id, is_public, default_post_audience")
     .eq("auth_user_id", authUserId)
     .single();
 }
@@ -165,6 +166,7 @@ function toCommunityFeedPost(post: CommunityPost): CommunityFeedPost {
         ? post.marketplace_listing_id
         : null,
     content: post.content,
+    audience: post.audience,
     status: post.status,
     created_at: post.created_at,
     updated_at: post.updated_at,
@@ -221,40 +223,57 @@ function toCommunityFeedPost(post: CommunityPost): CommunityFeedPost {
   };
 }
 
-async function hasCommunityViewer() {
+async function getCommunityViewerId() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
+  if (!user) return null;
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("username_state")
+    .select("id, username_state")
     .eq("auth_user_id", user.id)
     .maybeSingle();
-  return profile?.username_state === "claimed";
+  return profile?.username_state === "claimed" ? profile.id : null;
 }
 
 export async function getCommunityPosts(page = 1, perPage = 20) {
-  if (!await hasCommunityViewer()) return [];
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId) return [];
 
   const admin = createAdminClient();
-  const from = (Math.max(page, 1) - 1) * perPage;
+  const postIds = await getVisibleCommunityPostIds({ viewerId, page, perPage });
+  if (postIds.length === 0) return [];
   const { data } = await admin
     .from("community_posts")
     .select(COMMUNITY_FEED_SELECT)
-    .eq("status", "active")
-    .eq("moderation_status", "active")
-    .order("created_at", { ascending: false })
+    .in("id", postIds)
     .order("created_at", { ascending: true, referencedTable: "community_comments" })
-    .range(from, from + perPage - 1);
+    .limit(perPage);
 
-  return ((data ?? []) as unknown as CommunityPost[])
-    .filter((post) => !post.vehicle || post.vehicle.visibility === "public")
-    .map(toCommunityFeedPost);
+  const posts = (data ?? []) as unknown as CommunityPost[];
+  const blockedCommentAuthors = await getBlockedProfileIds(
+    viewerId,
+    posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id)),
+  );
+  const byId = new Map(posts.map((post) => [post.id, {
+    ...post,
+    comments: (post.comments ?? []).filter((comment) => !blockedCommentAuthors.has(comment.author_id)),
+  }]));
+  return postIds.flatMap((id) => {
+    const post = byId.get(id);
+    return post ? [toCommunityFeedPost(post)] : [];
+  });
 }
 
 export async function getCommunityPostById(id: string) {
-  if (!await hasCommunityViewer()) return null;
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId) return null;
+  const { data: canView } = await createAdminClient().rpc("social_can_view_community_post", {
+    p_viewer_id: viewerId,
+    p_post_id: id,
+    p_include_muted: false,
+  });
+  if (!canView) return null;
 
   const { data } = await createAdminClient()
     .from("community_posts")
@@ -266,7 +285,14 @@ export async function getCommunityPostById(id: string) {
 
   const post = data as unknown as CommunityPost | null;
   if (!post || (post.vehicle && post.vehicle.visibility !== "public")) return null;
-  return toCommunityFeedPost(post);
+  const blockedAuthors = await getBlockedProfileIds(
+    viewerId,
+    (post.comments ?? []).map((comment) => comment.author_id),
+  );
+  return toCommunityFeedPost({
+    ...post,
+    comments: (post.comments ?? []).filter((comment) => !blockedAuthors.has(comment.author_id)),
+  });
 }
 
 const ARCHIVE_EXPIRY_DAYS = 30;
@@ -352,10 +378,10 @@ export async function getCommunityPostOptions() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return { vehicles: [], listings: [] };
+  if (!user) return { vehicles: [], listings: [], defaultAudience: "friends" as const, canPostPublic: false };
 
   const { data: profile } = await getProfileIdFromAuthUserId(user.id);
-  if (!profile) return { vehicles: [], listings: [] };
+  if (!profile) return { vehicles: [], listings: [], defaultAudience: "friends" as const, canPostPublic: false };
 
   const admin = createAdminClient();
   const [{ data: vehicles }, { data: listings }] = await Promise.all([
@@ -376,23 +402,31 @@ export async function getCommunityPostOptions() {
   return {
     vehicles: (vehicles ?? []) as CommunityPostOptionVehicle[],
     listings: (listings ?? []) as CommunityPostOptionListing[],
+    defaultAudience: profile.default_post_audience,
+    canPostPublic: profile.is_public,
   };
 }
 
 export async function getVehicleDiscussionPosts(vehicleId: string) {
-  if (!await hasCommunityViewer()) return [];
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId) return [];
 
   const admin = createAdminClient();
+  const postIds = await getVisibleCommunityPostIds({ viewerId, perPage: 100, vehicleId });
+  if (postIds.length === 0) return [];
   const { data } = await admin
     .from("community_posts")
     .select(COMMUNITY_FEED_SELECT)
-    .eq("status", "active")
-    .eq("moderation_status", "active")
-    .eq("vehicle_id", vehicleId)
+    .in("id", postIds)
     .order("created_at", { ascending: false })
     .order("created_at", { ascending: true, referencedTable: "community_comments" });
 
-  return ((data ?? []) as unknown as CommunityPost[])
-    .filter((post) => !post.vehicle || post.vehicle.visibility === "public")
+  const posts = (data ?? []) as unknown as CommunityPost[];
+  const blockedAuthors = await getBlockedProfileIds(
+    viewerId,
+    posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id)),
+  );
+  return posts
+    .map((post) => ({ ...post, comments: post.comments.filter((comment) => !blockedAuthors.has(comment.author_id)) }))
     .map(toCommunityFeedPost);
 }

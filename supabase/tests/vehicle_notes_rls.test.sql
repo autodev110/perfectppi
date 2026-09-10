@@ -9,13 +9,13 @@ INSERT INTO auth.users (
     '51000000-0000-0000-0000-000000000001',
     '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated', 'vehicle-notes-owner@example.test', '',
-    '{}', '{}', now(), now()
+    '{}', '{"username":"NotesOwner"}', now(), now()
   ),
   (
     '51000000-0000-0000-0000-000000000002',
     '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated', 'vehicle-notes-stranger@example.test', '',
-    '{}', '{}', now(), now()
+    '{}', '{"username":"NotesStranger"}', now(), now()
   );
 
 UPDATE public.profiles

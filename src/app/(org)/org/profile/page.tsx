@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { Database } from "@/types/database";
+import { SocialPrivacyFields } from "@/components/shared/social-privacy-fields";
+import { SafetyRelationships } from "@/components/shared/safety-relationships";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type TechProfile = Database["public"]["Tables"]["technician_profiles"]["Row"];
@@ -145,17 +147,7 @@ export default function OrgProfilePage() {
                 defaultValue={profile?.bio ?? ""}
               />
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="is_public"
-                name="is_public"
-                value="true"
-                defaultChecked={profile?.is_public ?? false}
-                className="rounded"
-              />
-              <Label htmlFor="is_public">Show profile publicly</Label>
-            </div>
+            <SocialPrivacyFields profile={profile} />
             {profileMessage && (
               <p className="text-sm text-muted-foreground">{profileMessage}</p>
             )}
@@ -164,6 +156,10 @@ export default function OrgProfilePage() {
             </Button>
           </form>
         </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>Privacy &amp; Safety</CardTitle></CardHeader>
+        <CardContent><SafetyRelationships /></CardContent>
       </Card>
 
       <Card>

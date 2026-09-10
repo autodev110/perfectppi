@@ -18,6 +18,8 @@ import {
   ArrowRight,
   Shield,
 } from "lucide-react";
+import { MemberSafetyActions } from "@/components/shared/member-safety-actions";
+import { getSocialRelationshipState } from "@/features/social/relationships";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,9 +52,10 @@ export default async function PublicProfilePage({ params }: PageProps) {
   const profile = await getPublicProfile(username);
   if (!profile) notFound();
 
-  const [content, allTechEntries] = await Promise.all([
+  const [content, allTechEntries, relationship] = await Promise.all([
     getProfilePublicContent(profile.id),
     profile.role === "technician" ? getDirectory() : Promise.resolve([]),
+    getSocialRelationshipState(profile.id),
   ]);
 
   const tech = profile.role === "technician"
@@ -140,6 +143,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
                 Message
               </Link>
             </Button>
+            {relationship ? <MemberSafetyActions profileId={profile.id} muted={relationship.mutedByMe} /> : null}
           </div>
         </div>
       </section>

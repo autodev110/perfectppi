@@ -10,6 +10,9 @@ enum ProfilesAPI {
         let bio: String?
         let avatarUrl: String?
         let isPublic: Bool?
+        let defaultPostAudience: CommunityPostAudience?
+        let discoverable: Bool?
+        let allowExactUsernameLookup: Bool?
     }
 
     static func updateMe(_ payload: UpdatePayload) async throws -> Profile {
@@ -36,6 +39,34 @@ enum ProfilesAPI {
         try await APIClient.shared.post(
             "/api/profiles/username",
             body: UsernamePayload(username: username)
+        )
+    }
+
+    struct SafetyPerson: Decodable, Identifiable {
+        let id: String
+        let displayName: String?
+        let username: String?
+    }
+
+    struct SafetyRelationships: Decodable {
+        let blocked: [SafetyPerson]
+        let muted: [SafetyPerson]
+    }
+
+    private struct RelationshipPayload: Encodable {
+        let profileId: String
+        let kind: String
+        let enabled: Bool
+    }
+
+    static func safetyRelationships() async throws -> SafetyRelationships {
+        try await APIClient.shared.get("/api/social/relationships")
+    }
+
+    static func setRelationship(profileId: String, kind: String, enabled: Bool) async throws {
+        let _: Empty = try await APIClient.shared.patchCamel(
+            "/api/social/relationships",
+            body: RelationshipPayload(profileId: profileId, kind: kind, enabled: enabled)
         )
     }
 

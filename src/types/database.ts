@@ -237,6 +237,7 @@ export type Database = {
       }
       community_posts: {
         Row: {
+          audience: Database["public"]["Enums"]["community_post_audience"]
           author_id: string
           content: string
           created_at: string
@@ -251,6 +252,7 @@ export type Database = {
           vehicle_id: string | null
         }
         Insert: {
+          audience?: Database["public"]["Enums"]["community_post_audience"]
           author_id: string
           content: string
           created_at?: string
@@ -265,6 +267,7 @@ export type Database = {
           vehicle_id?: string | null
         }
         Update: {
+          audience?: Database["public"]["Enums"]["community_post_audience"]
           author_id?: string
           content?: string
           created_at?: string
@@ -2324,13 +2327,73 @@ export type Database = {
           },
         ]
       }
+      friend_relationships: {
+        Row: {
+          created_at: string
+          profile_high_id: string
+          profile_low_id: string
+          requested_by: string
+          responded_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          profile_high_id: string
+          profile_low_id: string
+          requested_by: string
+          responded_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          profile_high_id?: string
+          profile_low_id?: string
+          requested_by?: string
+          responded_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profile_blocks: {
+        Row: { blocked_id: string; blocker_id: string; created_at: string }
+        Insert: { blocked_id: string; blocker_id: string; created_at?: string }
+        Update: { blocked_id?: string; blocker_id?: string; created_at?: string }
+        Relationships: []
+      }
+      profile_mutes: {
+        Row: {
+          created_at: string
+          mute_notifications: boolean
+          muted_id: string
+          muter_id: string
+        }
+        Insert: {
+          created_at?: string
+          mute_notifications?: boolean
+          muted_id: string
+          muter_id: string
+        }
+        Update: {
+          created_at?: string
+          mute_notifications?: boolean
+          muted_id?: string
+          muter_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
+          allow_exact_username_lookup: boolean
           auth_user_id: string
           avatar_url: string | null
           bio: string | null
           created_at: string
+          default_post_audience: Database["public"]["Enums"]["community_post_audience"]
           display_name: string | null
+          discoverable: boolean
           id: string
           is_developer: boolean
           is_public: boolean
@@ -2341,11 +2404,14 @@ export type Database = {
           username_state: string
         }
         Insert: {
+          allow_exact_username_lookup?: boolean
           auth_user_id: string
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          default_post_audience?: Database["public"]["Enums"]["community_post_audience"]
           display_name?: string | null
+          discoverable?: boolean
           id?: string
           is_developer?: boolean
           is_public?: boolean
@@ -2356,11 +2422,14 @@ export type Database = {
           username_state?: string
         }
         Update: {
+          allow_exact_username_lookup?: boolean
           auth_user_id?: string
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          default_post_audience?: Database["public"]["Enums"]["community_post_audience"]
           display_name?: string | null
+          discoverable?: boolean
           id?: string
           is_developer?: boolean
           is_public?: boolean
@@ -3227,6 +3296,64 @@ export type Database = {
         Args: { p_role: Database["public"]["Enums"]["user_role"] }
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      set_own_profile_block: {
+        Args: { p_blocked: boolean; p_target_profile_id: string }
+        Returns: boolean
+      }
+      set_own_profile_mute: {
+        Args: { p_muted: boolean; p_target_profile_id: string }
+        Returns: boolean
+      }
+      set_own_social_privacy: {
+        Args: {
+          p_allow_exact_username_lookup?: boolean
+          p_default_post_audience: Database["public"]["Enums"]["community_post_audience"]
+          p_discoverable?: boolean
+          p_is_public: boolean
+        }
+        Returns: Database["public"]["Tables"]["profiles"]["Row"]
+      }
+      social_can_view_community_post: {
+        Args: { p_include_muted?: boolean; p_post_id: string; p_viewer_id: string }
+        Returns: boolean
+      }
+      social_can_current_user_view_community_post: {
+        Args: { p_include_muted?: boolean; p_post_id: string }
+        Returns: boolean
+      }
+      social_current_user_is_blocked_with: {
+        Args: { p_profile_id: string }
+        Returns: boolean
+      }
+      social_current_user_can_view_profile: {
+        Args: { p_profile_id: string }
+        Returns: boolean
+      }
+      social_can_view_profile: {
+        Args: { p_profile_id: string; p_viewer_id: string }
+        Returns: boolean
+      }
+      social_profile_is_available: {
+        Args: { p_profile_id: string }
+        Returns: boolean
+      }
+      social_profiles_are_blocked: {
+        Args: { p_first_id: string; p_second_id: string }
+        Returns: boolean
+      }
+      social_profiles_are_friends: {
+        Args: { p_first_id: string; p_second_id: string }
+        Returns: boolean
+      }
+      social_visible_community_post_ids: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_vehicle_id?: string | null
+          p_viewer_id: string
+        }
+        Returns: { post_id: string }[]
+      }
       get_my_is_developer: { Args: never; Returns: boolean }
       get_my_org_id: { Args: never; Returns: string }
       get_my_profile_id: { Args: never; Returns: string }
@@ -3429,6 +3556,7 @@ export type Database = {
         | "submission_resubmitted"
       certification_level: "none" | "ase" | "master" | "oem_qualified"
       community_content_status: "active" | "hidden" | "archived"
+      community_post_audience: "public" | "friends"
       community_media_type: "image" | "video"
       completion_state: "not_started" | "in_progress" | "completed"
       device_env: "prod" | "sandbox"
@@ -3638,6 +3766,7 @@ export const Constants = {
       ],
       certification_level: ["none", "ase", "master", "oem_qualified"],
       community_content_status: ["active", "hidden", "archived"],
+      community_post_audience: ["public", "friends"],
       community_media_type: ["image", "video"],
       completion_state: ["not_started", "in_progress", "completed"],
       device_env: ["prod", "sandbox"],

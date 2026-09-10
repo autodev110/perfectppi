@@ -34,6 +34,7 @@ import {
 
 const postSchema = z.object({
   content: z.string().trim().min(1, "Write something before posting").max(1200),
+  audience: z.enum(["public", "friends"]).optional(),
   vehicleId: z.string().uuid().optional().nullable(),
   listingId: z.string().uuid().optional().nullable(),
 });
@@ -75,13 +76,18 @@ async function getCurrentProfileId() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role")
+    .select("id, role, is_public, default_post_audience")
     .eq("auth_user_id", user.id)
     .single();
 
   if (!profile) return { error: "Profile not found" as const };
 
-  return { profileId: profile.id, role: profile.role };
+  return {
+    profileId: profile.id,
+    role: profile.role,
+    is_public: profile.is_public,
+    default_post_audience: profile.default_post_audience,
+  };
 }
 
 function nullableUuid(value: FormDataEntryValue | null) {
@@ -92,6 +98,7 @@ function nullableUuid(value: FormDataEntryValue | null) {
 export async function createCommunityPost(formData: FormData) {
   return createCommunityPostFromInput({
     content: formData.get("content"),
+    audience: formData.get("audience") || undefined,
     vehicleId: nullableUuid(formData.get("vehicle_id")),
     listingId: nullableUuid(formData.get("listing_id")),
   });
@@ -115,6 +122,10 @@ export async function createCommunityPostFromInput(input: unknown) {
   }
 
   const admin = createAdminClient();
+  const audience = parsed.data.audience ?? profile.default_post_audience;
+  if (audience === "public" && !profile.is_public) {
+    return { error: "Make your profile public before publishing a Public post" };
+  }
   let vehicleId = parsed.data.vehicleId ?? null;
   const listingId = parsed.data.listingId ?? null;
 
@@ -146,6 +157,7 @@ export async function createCommunityPostFromInput(input: unknown) {
 
   const { data, error } = await admin.from("community_posts").insert({
     author_id: profile.profileId,
+    audience,
     vehicle_id: vehicleId,
     marketplace_listing_id: listingId,
     content: parsed.data.content,
@@ -526,12 +538,18 @@ export async function createCommunityCommentFromInput(input: unknown) {
   const admin = createAdminClient();
   const { data: post } = await admin
     .from("community_posts")
-    .select("id, status, moderation_status")
+    .select("id, author_id, status, moderation_status")
     .eq("id", parsed.data.postId)
     .eq("status", "active")
     .maybeSingle();
 
   if (!post || post.moderation_status !== "active") return { error: "Post not found" };
+  const { data: canView } = await admin.rpc("social_can_view_community_post", {
+    p_viewer_id: profile.profileId,
+    p_post_id: post.id,
+    p_include_muted: false,
+  });
+  if (!canView) return { error: "Post not found" };
 
   const { data, error } = await admin.from("community_comments").insert({
     post_id: post.id,

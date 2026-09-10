@@ -11,6 +11,9 @@ const updateProfileSchema = z.object({
   bio: z.string().max(500).optional(),
   avatar_url: z.string().url().optional().or(z.literal("")),
   is_public: z.boolean().optional(),
+  default_post_audience: z.enum(["public", "friends"]).optional(),
+  discoverable: z.boolean().optional(),
+  allow_exact_username_lookup: z.boolean().optional(),
 });
 
 const certificationLevelSchema = z.enum([
@@ -75,6 +78,11 @@ export async function updateProfile(formData: FormData) {
   }
   raw.is_public =
     formData.get("is_public") === "true" || formData.get("is_public") === "on";
+  raw.discoverable =
+    formData.get("discoverable") === "true" || formData.get("discoverable") === "on";
+  raw.allow_exact_username_lookup =
+    formData.get("allow_exact_username_lookup") === "true" ||
+    formData.get("allow_exact_username_lookup") === "on";
 
   const parsed = updateProfileSchema.safeParse(raw);
   if (!parsed.success) {
@@ -90,14 +98,32 @@ export async function updateProfile(formData: FormData) {
     return { error: "Not authenticated" };
   }
 
+  const {
+    is_public,
+    default_post_audience,
+    discoverable,
+    allow_exact_username_lookup,
+    ...profileUpdates
+  } = parsed.data;
+
   const { error } = await supabase
     .from("profiles")
-    .update(parsed.data)
+    .update(profileUpdates)
     .eq("auth_user_id", user.id);
 
   if (error) {
     return { error: error.message };
   }
+
+  const { error: privacyError } = await supabase.rpc("set_own_social_privacy", {
+    p_is_public: is_public ?? false,
+    p_default_post_audience: is_public
+      ? (default_post_audience ?? "public")
+      : "friends",
+    p_discoverable: discoverable ?? true,
+    p_allow_exact_username_lookup: allow_exact_username_lookup ?? true,
+  });
+  if (privacyError) return { error: "Privacy settings could not be updated" };
 
   revalidatePath("/dashboard/profile");
   revalidatePath("/tech/profile");

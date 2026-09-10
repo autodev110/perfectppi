@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { uploadedUrlSchema } from "@/features/uploads/url";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
+import { canProfilesInteract } from "@/features/social/relationships";
 
 const createConversationSchema = z.object({
   participantId: z.string().uuid(),
@@ -76,13 +77,16 @@ export async function createConversation(input: {
     return { error: "Cannot start a conversation with yourself" };
   }
 
-  const { data: participant } = await admin
-    .from("profiles")
-    .select("id")
-    .eq("id", participantId)
-    .maybeSingle();
+  if (!await canProfilesInteract(profile.id, participantId)) {
+    return { error: "Profile unavailable" };
+  }
 
-  if (!participant) return { error: "Participant not found" };
+  const [{ data: participant }, { data: participantAvailable }] = await Promise.all([
+    admin.from("profiles").select("id").eq("id", participantId).maybeSingle(),
+    admin.rpc("social_profile_is_available", { p_profile_id: participantId }),
+  ]);
+
+  if (!participant || !participantAvailable) return { error: "Profile unavailable" };
 
   // Use the admin client for the existence check so recursive RLS policies
   // on conversation_participants don't mask existing threads and cause
@@ -221,6 +225,17 @@ export async function sendMessage(input: {
 
   if (!membership) return { error: "Not authorized for this conversation" };
 
+  const { data: participants } = await admin
+    .from("conversation_participants")
+    .select("profile_id")
+    .eq("conversation_id", parsed.data.conversationId)
+    .neq("profile_id", profile.id);
+  if (!participants?.length) return { error: "Conversation unavailable" };
+  const allowed = await Promise.all(
+    participants.map((participant) => canProfilesInteract(profile.id, participant.profile_id)),
+  );
+  if (allowed.some((value) => !value)) return { error: "Conversation unavailable" };
+
   const hasAttachment = !!parsed.data.attachmentUrl;
   if (parsed.data.attachmentUrl) {
     const expectedPrefix = `r2-private:///message_attachment/${profile.id}/${parsed.data.conversationId}/`;
@@ -248,11 +263,7 @@ export async function sendMessage(input: {
     return { error: "Failed to send message" };
   }
 
-  const { data: recipients } = await admin
-    .from("conversation_participants")
-    .select("profile_id")
-    .eq("conversation_id", parsed.data.conversationId)
-    .neq("profile_id", profile.id);
+  const recipients = participants;
 
   if (recipients && recipients.length > 0) {
     const senderName = profile.display_name || "New message";

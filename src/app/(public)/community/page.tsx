@@ -10,6 +10,7 @@ import { formatCurrency, formatDate, formatMileage, getInitials } from "@/lib/ut
 import { Car, Flag, MessageSquare, Plus, Tag, Users } from "lucide-react";
 import { PostMediaCarousel } from "@/components/shared/post-media-carousel";
 import { requireRole } from "@/features/auth/guards";
+import { MemberSafetyActions } from "@/components/shared/member-safety-actions";
 
 export const metadata = {
   title: "Community — PerfectPPI",
@@ -23,7 +24,7 @@ function getVehicleName(vehicle: { year: number | null; make: string | null; mod
 }
 
 export default async function CommunityPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
-  await requireRole(["consumer", "technician", "org_manager", "admin"]);
+  const viewer = await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const requestedPage = Number((await searchParams).page ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const posts = await getCommunityPosts(page, 20);
@@ -92,7 +93,8 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="rounded-full">Discussion</Badge>
+                        <Badge variant="outline" className="rounded-full capitalize">{post.audience}</Badge>
+                        {post.author_id !== viewer.id ? <MemberSafetyActions profileId={post.author_id} compact /> : null}
                         <ReportControl entityType="community_post" entityId={post.id} />
                       </div>
                     </div>

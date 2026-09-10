@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExternalLink } from "lucide-react";
 import type { Database } from "@/types/database";
+import { SocialPrivacyFields } from "@/components/shared/social-privacy-fields";
+import { SafetyRelationships } from "@/components/shared/safety-relationships";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -101,17 +103,7 @@ export default function ProfilePage() {
                 placeholder="Tell us about yourself..."
               />
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="is_public"
-                name="is_public"
-                value="true"
-                defaultChecked={profile?.is_public ?? false}
-                className="rounded"
-              />
-              <Label htmlFor="is_public">Make profile public</Label>
-            </div>
+            <SocialPrivacyFields profile={profile} />
             {message && (
               <p
                 className={`text-sm ${message.includes("error") || message.includes("taken") ? "text-destructive" : "text-teal"}`}
@@ -124,6 +116,10 @@ export default function ProfilePage() {
             </Button>
           </form>
         </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>Privacy &amp; Safety</CardTitle></CardHeader>
+        <CardContent><SafetyRelationships /></CardContent>
       </Card>
     </div>
   );

@@ -30,6 +30,9 @@ const updateSchema = z.object({
   bio: z.string().max(500).optional(),
   avatar_url: z.string().url().optional().or(z.literal("")),
   is_public: z.boolean().optional(),
+  default_post_audience: z.enum(["public", "friends"]).optional(),
+  discoverable: z.boolean().optional(),
+  allow_exact_username_lookup: z.boolean().optional(),
 });
 
 export async function PATCH(request: Request) {
@@ -53,7 +56,7 @@ export async function PATCH(request: Request) {
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("username_state")
+    .select("username_state, is_public, default_post_audience, discoverable, allow_exact_username_lookup")
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (!currentProfile) {
@@ -66,15 +69,36 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const { data, error } = await supabase
+  const {
+    is_public,
+    default_post_audience,
+    discoverable,
+    allow_exact_username_lookup,
+    ...profileUpdates
+  } = parsed.data;
+  const { error } = await supabase
     .from("profiles")
-    .update(parsed.data)
+    .update(profileUpdates)
     .eq("auth_user_id", user.id)
-    .select()
+    .select("id")
     .single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const nextPublic = is_public ?? currentProfile.is_public;
+  const { data, error: privacyError } = await supabase.rpc("set_own_social_privacy", {
+    p_is_public: nextPublic,
+    p_default_post_audience: nextPublic
+      ? (default_post_audience ?? currentProfile.default_post_audience)
+      : "friends",
+    p_discoverable: discoverable ?? currentProfile.discoverable,
+    p_allow_exact_username_lookup:
+      allow_exact_username_lookup ?? currentProfile.allow_exact_username_lookup,
+  });
+  if (privacyError) {
+    return NextResponse.json({ error: "Privacy settings could not be updated" }, { status: 500 });
   }
 
   return NextResponse.json(data);

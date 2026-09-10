@@ -18,6 +18,7 @@ enum CommunityAPI {
 
     struct CreatePostPayload: Encodable {
         let content: String
+        let audience: CommunityPostAudience
         let vehicleId: String?
         let listingId: String?
     }

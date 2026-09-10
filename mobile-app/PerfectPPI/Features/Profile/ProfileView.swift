@@ -157,6 +157,7 @@ private struct PrivacyCenterView: View {
     @State private var deletionConfirmation = ""
     @State private var requests: [PrivacyRequestRecord] = []
     @State private var identities: [ConnectedIdentity] = []
+    @State private var safetyRelationships = ProfilesAPI.SafetyRelationships(blocked: [], muted: [])
     @State private var working = false
     @State private var message: String?
     @State private var exportDocument: PrivacyExportDocument?
@@ -225,6 +226,36 @@ private struct PrivacyCenterView: View {
                 }
             }
 
+            Section("Blocked Accounts") {
+                if safetyRelationships.blocked.isEmpty {
+                    Text("No blocked accounts").foregroundStyle(.secondary)
+                } else {
+                    ForEach(safetyRelationships.blocked) { person in
+                        HStack {
+                            Text(person.displayName ?? person.username.map { "@\($0)" } ?? "PerfectPPI member")
+                            Spacer()
+                            Button("Unblock") { Task { await removeSafetySetting(person.id, kind: "block") } }
+                                .disabled(working)
+                        }
+                    }
+                }
+            }
+
+            Section("Muted Accounts") {
+                if safetyRelationships.muted.isEmpty {
+                    Text("No muted accounts").foregroundStyle(.secondary)
+                } else {
+                    ForEach(safetyRelationships.muted) { person in
+                        HStack {
+                            Text(person.displayName ?? person.username.map { "@\($0)" } ?? "PerfectPPI member")
+                            Spacer()
+                            Button("Unmute") { Task { await removeSafetySetting(person.id, kind: "mute") } }
+                                .disabled(working)
+                        }
+                    }
+                }
+            }
+
             Section {
                 TextField("Type DELETE to confirm", text: $deletionConfirmation)
                     .textInputAutocapitalization(.characters)
@@ -262,8 +293,21 @@ private struct PrivacyCenterView: View {
         do {
             async let requestLoad: [PrivacyRequestRecord] = APIClient.shared.get("/api/privacy/requests")
             async let identityLoad: [ConnectedIdentity] = APIClient.shared.get("/api/account/identities")
+            async let safetyLoad = ProfilesAPI.safetyRelationships()
             requests = try await requestLoad
             identities = try await identityLoad
+            safetyRelationships = try await safetyLoad
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func removeSafetySetting(_ profileId: String, kind: String) async {
+        working = true
+        defer { working = false }
+        do {
+            try await ProfilesAPI.setRelationship(profileId: profileId, kind: kind, enabled: false)
+            safetyRelationships = try await ProfilesAPI.safetyRelationships()
         } catch {
             message = error.localizedDescription
         }
@@ -387,6 +431,9 @@ private struct EditProfileView: View {
     @State private var displayName: String
     @State private var bio: String
     @State private var isPublic: Bool
+    @State private var defaultAudience: CommunityPostAudience
+    @State private var discoverable: Bool
+    @State private var allowExactUsernameLookup: Bool
     @State private var saving = false
     @State private var error: String?
 
@@ -396,6 +443,9 @@ private struct EditProfileView: View {
         _displayName = State(initialValue: profile.displayName ?? "")
         _bio = State(initialValue: profile.bio ?? "")
         _isPublic = State(initialValue: profile.isPublic ?? true)
+        _defaultAudience = State(initialValue: profile.defaultPostAudience ?? .friends)
+        _discoverable = State(initialValue: profile.discoverable ?? true)
+        _allowExactUsernameLookup = State(initialValue: profile.allowExactUsernameLookup ?? true)
     }
 
     var body: some View {
@@ -411,6 +461,18 @@ private struct EditProfileView: View {
                 TextField("Bio", text: $bio, axis: .vertical)
                     .lineLimit(3...6)
                 Toggle("Public profile", isOn: $isPublic)
+                Picker("Default post audience", selection: $defaultAudience) {
+                    Text("Friends").tag(CommunityPostAudience.friends)
+                    if isPublic { Text("Public inside PerfectPPI").tag(CommunityPostAudience.public) }
+                }
+                Toggle("Appear in discovery", isOn: $discoverable)
+                Toggle("Allow exact username lookup", isOn: $allowExactUsernameLookup)
+                Text("Turning your profile private immediately changes Public profile posts to Friends.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .onChange(of: isPublic) { _, value in
+                if !value { defaultAudience = .friends }
             }
 
             if let error {
@@ -446,7 +508,10 @@ private struct EditProfileView: View {
                     displayName: trimmedDisplayName.isEmpty ? nil : trimmedDisplayName,
                     bio: trimmedBio.isEmpty ? nil : trimmedBio,
                     avatarUrl: nil,
-                    isPublic: isPublic
+                    isPublic: isPublic,
+                    defaultPostAudience: isPublic ? defaultAudience : .friends,
+                    discoverable: discoverable,
+                    allowExactUsernameLookup: allowExactUsernameLookup
                 )
             )
             onSave(updated)

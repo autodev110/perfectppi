@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/database";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
+import { canProfilesInteract, getBlockedProfileIds } from "@/features/social/relationships";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -251,28 +252,50 @@ export async function getConversations(limit = 50): Promise<ConversationSummary[
     }
   }
 
-  return Array.from(dedupedByParticipantSet.values()).sort((a, b) => {
+  const blockedIds = await getBlockedProfileIds(
+    profileId,
+    Array.from(dedupedByParticipantSet.values()).flatMap((summary) => summary.other_participants.map((profile) => profile.id)),
+  );
+
+  return Array.from(dedupedByParticipantSet.values())
+    .filter((summary) => summary.other_participants.every((profile) => !blockedIds.has(profile.id)))
+    .sort((a, b) => {
     const aActivityAt = a.last_message?.created_at ?? a.created_at;
     const bActivityAt = b.last_message?.created_at ?? b.created_at;
     return new Date(bActivityAt).getTime() - new Date(aActivityAt).getTime();
-  });
+    });
 }
 
 export async function getMessageRecipientsDirectory(limit = 100): Promise<MessageRecipient[]> {
   const { profileId } = await getMyProfileId();
   if (!profileId) return [];
 
-  // Use admin client so recipient directory is not restricted to only public profiles.
-  // Messaging permissions are enforced later during conversation creation/sending flows.
   const admin = createAdminClient();
   const { data } = await admin
     .from("profiles")
     .select("id, display_name, username, role")
     .neq("id", profileId)
+    .eq("discoverable", true)
+    .eq("username_state", "claimed")
     .order("display_name", { ascending: true, nullsFirst: false })
     .limit(limit);
 
-  return (data ?? []) as MessageRecipient[];
+  const profiles = (data ?? []) as MessageRecipient[];
+  const [blockedIds, { data: enforcementActions }] = await Promise.all([
+    getBlockedProfileIds(profileId, profiles.map((profile) => profile.id)),
+    profiles.length
+      ? admin
+          .from("user_enforcement_actions")
+          .select("profile_id, starts_at, ends_at")
+          .in("profile_id", profiles.map((profile) => profile.id))
+          .in("action_type", ["suspension", "ban"])
+      : Promise.resolve({ data: [] as Array<{ profile_id: string; starts_at: string; ends_at: string | null }> }),
+  ]);
+  const now = Date.now();
+  const unavailableIds = new Set((enforcementActions ?? [])
+    .filter((action) => new Date(action.starts_at).getTime() <= now && (!action.ends_at || new Date(action.ends_at).getTime() > now))
+    .map((action) => action.profile_id));
+  return profiles.filter((profile) => !blockedIds.has(profile.id) && !unavailableIds.has(profile.id));
 }
 
 export async function getConversation(conversationId: string): Promise<ConversationThread | null> {
@@ -292,6 +315,16 @@ export async function getConversation(conversationId: string): Promise<Conversat
     .maybeSingle();
 
   if (!membership) return null;
+
+  const { data: counterpartRows } = await admin
+    .from("conversation_participants")
+    .select("profile_id")
+    .eq("conversation_id", conversationId)
+    .neq("profile_id", profileId);
+  const canOpen = await Promise.all(
+    (counterpartRows ?? []).map((row) => canProfilesInteract(profileId, row.profile_id)),
+  );
+  if (canOpen.some((allowed) => !allowed)) return null;
 
   const [{ data: conversation }, { data: participants }, { data: messages }] = await Promise.all([
     admin
