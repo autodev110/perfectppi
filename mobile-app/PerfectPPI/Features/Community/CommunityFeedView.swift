@@ -1114,7 +1114,16 @@ private struct CommunityMediaCarousel: View {
             ForEach(media.sorted(by: { $0.sortOrder < $1.sortOrder })) { item in
                 ZStack(alignment: .topTrailing) {
                     Color.black
-                    if item.mediaType == "video", let url = URL(string: item.url) {
+                    // Community media is delivered through the authenticated,
+                    // status-aware API path (plan 19.2); legacy absolute URLs
+                    // are only still possible for vehicle media elsewhere.
+                    if item.url.hasPrefix("/") {
+                        if item.mediaType == "video" {
+                            SecureVideoPlayer(path: item.url)
+                        } else {
+                            SecureImage(path: item.url, contentMode: .fit)
+                        }
+                    } else if item.mediaType == "video", let url = URL(string: item.url) {
                         RemoteVideoPlayer(url: url)
                     } else if let url = URL(string: item.url) {
                         AsyncImage(url: url) { phase in

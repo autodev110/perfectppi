@@ -57,6 +57,12 @@ export default async function AdminFlagsPage() {
     .order("created_at", { ascending: false })
     .limit(25);
   const byCode = new Map((rows ?? []).map((row) => [row.flag_code, row]));
+  const { data: storageStatus } = await createAdminClient().rpc("community_media_storage_status");
+  const storage = storageStatus && typeof storageStatus === "object" && !Array.isArray(storageStatus)
+    ? Object.fromEntries(Object.entries(storageStatus).map(([key, value]) => [key, Number(value ?? 0)]))
+    : {};
+  const legacyPublic = storage.legacyPublicObjects ?? 0;
+  const unverified = storage.unverifiedRetirements ?? 0;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -77,6 +83,24 @@ export default async function AdminFlagsPage() {
           </p>
         ) : null}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Community media storage</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p className={legacyPublic > 0 || unverified > 0 ? "text-destructive" : "text-muted-foreground"}>
+            {legacyPublic > 0
+              ? `${legacyPublic} object(s) still have a permanent public URL. The social beta must stay closed until this reaches zero (plan 19.2). The retirement worker runs every 15 minutes.`
+              : unverified > 0
+                ? `${unverified} retired URL(s) are awaiting external verification that they no longer resolve.`
+                : "No Community object has a permanent public URL. Delivery is private and status-aware."}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            private: {storage.privateObjects ?? 0} · quarantined: {storage.quarantinedObjects ?? 0} · legacy public: {legacyPublic} · unverified retirements: {unverified}
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="space-y-3">
         {FEATURE_FLAG_CODES.map((code) => {

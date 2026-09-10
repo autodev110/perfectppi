@@ -17,6 +17,7 @@ import {
 import { UPLOAD_LIMITS } from "@/config/constants";
 import { extensionForContentType, moderateMediaBytes } from "@/lib/moderation/media-safety";
 import { recordModeration } from "@/lib/moderation";
+import { publishCommunityMedia } from "@/lib/storage/community-media";
 import { verifyReportContext } from "@/features/moderation/report-context";
 import {
   REPORT_DETAILS_MAX_LENGTH,
@@ -214,6 +215,7 @@ export async function reviewModerationItem(formData: FormData) {
   const isMedia = item.entity_type === "community_post_media" || item.entity_type === "vehicle_media";
   let sourceUrl: string | null = null;
   let promotedUrl: string | null = null;
+  let communityPublication: Awaited<ReturnType<typeof publishCommunityMedia>> | null = null;
   if (isMedia && nextStatus === "active") {
     const mediaResult = item.entity_type === "vehicle_media"
       ? await admin.from("vehicle_media")
@@ -261,16 +263,33 @@ export async function reviewModerationItem(formData: FormData) {
     if (isPrivateStorageReference(media.url)) {
       if (!item.author_id) throw new Error("Moderated media has no retained owner");
       sourceUrl = media.url;
-      const promoted = await promoteQuarantinedObject({
-        storageReference: media.url,
-        destinationKey: buildStorageKey({
-          entity: item.entity_type === "vehicle_media" ? "vehicle_media" : "community_post",
+      if ("post_id" in media) {
+        // Community media stays private (plan 19.2): immutable original plus a
+        // metadata-stripped display variant, both behind status-aware delivery.
+        const object = await getObjectFromStoredUrl(media.url, { maxBytes: UPLOAD_LIMITS.maxVideoSize });
+        const published = await publishCommunityMedia({
+          mediaId: item.entity_id,
+          postId: media.post_id,
           ownerId: item.author_id,
-          recordId: "vehicle_id" in media ? media.vehicle_id : media.post_id,
-          filename: `${item.entity_id}.${extensionForContentType(contentType)}`,
-        }),
-      });
-      promotedUrl = promoted.publicUrl;
+          mediaType: media.media_type,
+          contentType,
+          sourceReference: media.url,
+          bytes: object.bytes,
+        });
+        promotedUrl = published.storageReference;
+        communityPublication = published;
+      } else {
+        const promoted = await promoteQuarantinedObject({
+          storageReference: media.url,
+          destinationKey: buildStorageKey({
+            entity: "vehicle_media",
+            ownerId: item.author_id,
+            recordId: media.vehicle_id,
+            filename: `${item.entity_id}.${extensionForContentType(contentType)}`,
+          }),
+        });
+        promotedUrl = promoted.publicUrl;
+      }
     }
   }
 
@@ -288,7 +307,20 @@ export async function reviewModerationItem(formData: FormData) {
   });
   if (reviewError) {
     if (promotedUrl) await deleteStoredObject(promotedUrl).catch(() => undefined);
+    if (communityPublication?.displayReference) {
+      await deleteStoredObject(communityPublication.displayReference).catch(() => undefined);
+    }
     throw new Error(reviewError.message);
+  }
+  if (communityPublication) {
+    const { error: variantError } = await admin
+      .from("community_post_media")
+      .update({
+        display_reference: communityPublication.displayReference,
+        content_sha256: communityPublication.sha256,
+      })
+      .eq("id", item.entity_id);
+    if (variantError) throw new Error(variantError.message);
   }
   if (sourceUrl) await deleteOrQueue(sourceUrl, "approved_media_promoted");
 

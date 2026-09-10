@@ -70,6 +70,23 @@ final class APIClient {
     }
 
     /// Raw bytes endpoint — used for the media proxy + PDF download.
+    /// Absolute URL for an API-relative path (used by players that fetch on
+    /// their own, such as AVPlayer, which cannot go through `bytes`).
+    func absoluteURL(for path: String) -> URL? {
+        var comps = URLComponents()
+        comps.scheme = baseURL.scheme
+        comps.host = baseURL.host
+        comps.port = baseURL.port
+        comps.path = (baseURL.path.isEmpty ? "" : baseURL.path) + path
+        return comps.url
+    }
+
+    /// Current bearer token, if signed in. Only for attaching to non-URLSession
+    /// loaders (AVURLAsset headers); never embed it in a URL.
+    func currentBearerToken() async -> String? {
+        await tokenProvider()
+    }
+
     func bytes(_ path: String) async throws -> (Data, String?) {
         let req = try await buildRequest(method: "GET", path: path, query: [], body: Optional<Empty>.none, encoder: encoder)
         let (data, response) = try await session.data(for: req)

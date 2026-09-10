@@ -23,15 +23,13 @@ import {
 import type { ModerationResult, ModerationStatus } from "@/lib/moderation";
 import {
   blockedMediaResult,
-  extensionForContentType,
   hasExpectedMediaSignature,
 } from "@/lib/moderation/media-safety";
 import {
-  buildStorageKey,
   deleteStoredObject,
   getObjectFromStoredUrl,
-  promoteQuarantinedObject,
 } from "@/lib/storage/r2";
+import { communityMediaDeliveryPath, publishCommunityMedia } from "@/lib/storage/community-media";
 import {
   LAUNCH_POLICY_VERSION,
   PUBLICATION_OUTCOME_MESSAGES,
@@ -482,19 +480,23 @@ export async function addCommunityPostMedia(input: unknown) {
         evidenceReference: result.decision === "legal_hold" ? media.url : null,
       });
 
+      // Approved media moves to its immutable private home and gets a
+      // metadata-stripped display variant (plan 19.2 / 21.2). No public URL
+      // is ever written; viewers fetch through the status-aware endpoint.
       let storedUrl = media.url;
+      let displayReference: string | null = null;
       if (result.decision === "allow") {
-        const extension = extensionForContentType(media.content_type);
-        const promoted = await promoteQuarantinedObject({
-          storageReference: media.url,
-          destinationKey: buildStorageKey({
-            entity: "community_post",
-            ownerId: profile.profileId,
-            recordId: post.id,
-            filename: `${media.id}.${extension}`,
-          }),
+        const published = await publishCommunityMedia({
+          mediaId: media.id,
+          postId: post.id,
+          ownerId: profile.profileId,
+          mediaType: media.media_type,
+          contentType: media.content_type,
+          sourceReference: media.url,
+          bytes,
         });
-        storedUrl = promoted.publicUrl;
+        storedUrl = published.storageReference;
+        displayReference = published.displayReference;
       }
 
       const moderationStatus = statusForDecision(result.decision);
@@ -502,6 +504,8 @@ export async function addCommunityPostMedia(input: unknown) {
         .from("community_post_media")
         .update({
           url: storedUrl,
+          display_reference: displayReference,
+          content_sha256: sha256,
           moderation_status: moderationStatus,
           moderation_reason: result.reasonCodes[0] ?? null,
           moderation_checked_at: new Date().toISOString(),
@@ -512,6 +516,7 @@ export async function addCommunityPostMedia(input: unknown) {
         .single();
       if (updateError) {
         if (storedUrl !== media.url) await deleteOrQueue(storedUrl, "failed_media_promotion_commit");
+        if (displayReference) await deleteOrQueue(displayReference, "failed_media_promotion_commit");
         throw new Error(updateError.message);
       }
       if (storedUrl !== media.url) await deleteOrQueue(media.url, "promoted_quarantine_source");
@@ -550,7 +555,8 @@ export async function addCommunityPostMedia(input: unknown) {
       console.error("community media moderation failed", scanError);
       return updated ?? null;
     }
-  }))).filter((item): item is NonNullable<typeof item> => item !== null);
+  }))).filter((item): item is NonNullable<typeof item> => item !== null)
+    .map((item) => ({ ...item, url: communityMediaDeliveryPath(item.id) }));
 
   revalidatePath("/community");
   revalidatePath("/dashboard/posts");
@@ -587,7 +593,7 @@ export async function removeCommunityPostMedia(input: unknown) {
 
   const { data: media } = await admin
     .from("community_post_media")
-    .select("id, url")
+    .select("id, url, display_reference")
     .eq("id", parsed.data.mediaId)
     .eq("post_id", post.id)
     .maybeSingle();
@@ -601,6 +607,17 @@ export async function removeCommunityPostMedia(input: unknown) {
     .maybeSingle();
   if (held) return { error: "This media is preserved for legal review and cannot be deleted" };
 
+  // Plan 19.3: an object referenced by an open report, confirmed violation,
+  // appeal, or hold is evidence and cannot be physically removed by its author.
+  const { data: retainedCase } = await admin.from("moderation_cases")
+    .select("id")
+    .eq("entity_type", "community_post")
+    .eq("entity_id", post.id)
+    .or("state.in.(monitoring,open,claimed,escalated,appeal_open),resolution.eq.violation_removed,legal_hold.eq.true")
+    .limit(1)
+    .maybeSingle();
+  if (retainedCase) return { error: "This media is part of a moderation case and cannot be removed right now" };
+
   const { data: deleted, error } = await admin
     .from("community_post_media")
     .delete()
@@ -612,6 +629,7 @@ export async function removeCommunityPostMedia(input: unknown) {
   if (error) return { error: error.message };
   if (!deleted) return { error: "Media not found" };
   await deleteOrQueue(media.url, "community_media_deleted");
+  if (media.display_reference) await deleteOrQueue(media.display_reference, "community_media_deleted");
 
   // `sort_order` has to stay contiguous 0..n-1: it is unique per post and
   // capped at 9, so a gap would eventually push a later insert past the check

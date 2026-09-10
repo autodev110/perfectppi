@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 import { getBlockedProfileIds, getVisibleCommunityPostIds } from "@/features/social/relationships";
 import { createReportContext } from "@/features/moderation/report-context";
+import { communityMediaDeliveryPath } from "@/lib/storage/community-media";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -119,6 +120,12 @@ function getProfileIdFromAuthUserId(authUserId: string) {
     .single();
 }
 
+// Clients never receive a storage reference or object URL for Community
+// media (plan 19.2): `url` becomes the status-aware delivery path.
+function withDeliveryPath<T extends { id: string; url: string }>(media: T): T {
+  return { ...media, url: communityMediaDeliveryPath(media.id) };
+}
+
 function cleanPosts(posts: CommunityPost[], includeModerated = false) {
   return posts.map((post) => ({
     ...post,
@@ -128,7 +135,8 @@ function cleanPosts(posts: CommunityPost[], includeModerated = false) {
     } : null,
     media: [...(post.media ?? [])]
       .filter((media) => includeModerated || media.moderation_status === "active")
-      .sort((a, b) => a.sort_order - b.sort_order),
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(withDeliveryPath),
     comments: (post.comments ?? []).filter((comment) =>
       comment.status === "active" && comment.moderation_status === "active"
     ),
@@ -205,7 +213,7 @@ function toCommunityFeedPost(post: CommunityPost, viewerId: string): CommunityFe
       .map((item) => ({
         id: item.id,
         post_id: item.post_id,
-        url: item.url,
+        url: communityMediaDeliveryPath(item.id),
         media_type: item.media_type,
         content_type: item.content_type,
         sort_order: item.sort_order,

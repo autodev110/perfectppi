@@ -376,6 +376,10 @@ export type Database = {
       }
       community_post_media: {
         Row: {
+          content_sha256: string | null
+          display_reference: string | null
+          legacy_public_url: string | null
+          storage_migrated_at: string | null
           content_type: string
           created_at: string
           id: string
@@ -390,6 +394,10 @@ export type Database = {
           url: string
         }
         Insert: {
+          content_sha256?: string | null
+          display_reference?: string | null
+          legacy_public_url?: string | null
+          storage_migrated_at?: string | null
           content_type: string
           created_at?: string
           id?: string
@@ -404,6 +412,10 @@ export type Database = {
           url: string
         }
         Update: {
+          content_sha256?: string | null
+          display_reference?: string | null
+          legacy_public_url?: string | null
+          storage_migrated_at?: string | null
           content_type?: string
           created_at?: string
           id?: string
@@ -3607,6 +3619,10 @@ export type Database = {
       set_own_profile_block: {
         Args: { p_blocked: boolean; p_target_profile_id: string }
         Returns: boolean
+      }
+      community_media_storage_status: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       set_product_feature_flag: {
         Args: {

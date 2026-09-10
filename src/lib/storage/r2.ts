@@ -209,6 +209,92 @@ export async function promoteQuarantinedObject(params: {
   };
 }
 
+/**
+ * Copies a private object to another private key (plan 19.2: approved
+ * Community media moves from the expiring quarantine keyspace to an immutable
+ * hash-keyed location in the same private bucket). The caller deletes the
+ * source after its database commit.
+ */
+export async function copyPrivateObject(params: {
+  sourceReference: string;
+  destinationKey: string;
+}): Promise<{ storageReference: string }> {
+  if (!isPrivateStorageReference(params.sourceReference)) {
+    throw new Error("Expected a private storage reference");
+  }
+  if (!isPrivateR2Configured()) {
+    throw new Error("Private R2 storage is not configured");
+  }
+  const bucket = process.env.R2_PRIVATE_BUCKET_NAME!;
+  const sourceKey = params.sourceReference
+    .slice(PRIVATE_STORAGE_PREFIX.length)
+    .replace(/^\/+/, "");
+  const destinationKey = params.destinationKey.replace(/^\/+/, "");
+  const source = [bucket, ...sourceKey.split("/")].map(encodeURIComponent).join("/");
+
+  await getS3Client().send(new CopyObjectCommand({
+    Bucket: bucket,
+    Key: destinationKey,
+    CopySource: source,
+    MetadataDirective: "COPY",
+  }));
+  return { storageReference: privateStorageReference(destinationKey) };
+}
+
+/**
+ * Verifies from the outside that a retired public URL no longer resolves
+ * (plan 19.2: "prove the old URL no longer resolves"). Uses a plain HTTP
+ * request, not the S3 API, so a CDN or bucket-policy cache is caught too.
+ */
+export async function publicUrlStillResolves(url: string): Promise<boolean> {
+  const response = await fetch(url, { method: "HEAD", cache: "no-store", redirect: "manual" });
+  return response.status >= 200 && response.status < 400;
+}
+
+/**
+ * Reads all or part of a stored object for status-aware delivery. A Range
+ * request is forwarded to R2 so video players can seek; the response shape
+ * mirrors what an HTTP handler needs to answer with 200 or 206.
+ */
+export async function getStoredObjectRange(
+  storedValue: string,
+  rangeHeader: string | null,
+  limits: { maxBytes?: number } = {},
+): Promise<{
+  bytes: Uint8Array;
+  contentType: string;
+  etag?: string;
+  totalSize?: number;
+  contentRange?: string;
+  partial: boolean;
+}> {
+  const client = getS3Client();
+  const { bucket, key } = resolveStoredObject(storedValue);
+  const range = rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader.trim()) ? rangeHeader.trim() : undefined;
+
+  const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key, Range: range }));
+  const body = response.Body;
+  if (!body) throw new Error("Empty response body from R2");
+
+  const contentRange = response.ContentRange;
+  const totalSize = contentRange
+    ? Number(contentRange.split("/")[1])
+    : response.ContentLength;
+  if (limits.maxBytes !== undefined && totalSize !== undefined && totalSize > limits.maxBytes) {
+    throw new Error("Stored object exceeds the allowed size");
+  }
+
+  const bytes = await (body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray();
+  return {
+    bytes,
+    contentType: response.ContentType ?? "application/octet-stream",
+    etag: response.ETag,
+    totalSize: Number.isFinite(totalSize) ? totalSize : undefined,
+    contentRange,
+    partial: Boolean(range && contentRange),
+  };
+}
+
 /** Deletes a public URL or private storage reference created by this module. */
 export async function deleteStoredObject(storedValue: string): Promise<void> {
   const { bucket, key } = resolveStoredObject(storedValue);

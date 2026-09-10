@@ -12,6 +12,10 @@
     {
       "path": "/api/internal/workers/storage-cleanup",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/internal/workers/community-media-migration",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
