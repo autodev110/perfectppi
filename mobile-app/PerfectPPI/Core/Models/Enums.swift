@@ -194,6 +194,8 @@ enum NotificationType: String, Codable {
     case friendRequestAccepted = "friend_request_accepted"
     case postComment = "post_comment"
     case postLikes = "post_likes"
+    case groupPostRemoved = "group_post_removed"
+    case groupRoleChanged = "group_role_changed"
     /// Server-side categories grow over time (plan 22.1); an unrecognized
     /// value must not fail decoding of the whole inbox on an older build.
     case unknown

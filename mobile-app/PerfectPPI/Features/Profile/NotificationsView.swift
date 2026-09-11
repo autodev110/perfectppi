@@ -198,6 +198,7 @@ private struct NotificationRow: View {
         switch item.type {
         case .friendRequest, .friendRequestAccepted: "person.2"
         case .postComment: "bubble.left"
+        case .groupPostRemoved, .groupRoleChanged: "person.3"
         case .postLikes: "heart"
         case .answerAccepted, .acceptedAnswerUnavailable: "checkmark.circle"
         case .messageReceived: "envelope"
@@ -217,6 +218,7 @@ enum NotificationRoute: Hashable, Identifiable {
     case conversation(id: String)
     case inspectionRequest(id: String)
     case myPosts
+    case group(slug: String)
 
     var id: String {
         switch self {
@@ -226,6 +228,7 @@ enum NotificationRoute: Hashable, Identifiable {
         case .conversation(let id): "conversation:\(id)"
         case .inspectionRequest(let id): "inspection:\(id)"
         case .myPosts: "my_posts"
+        case .group(let slug): "group:\(slug)"
         }
     }
 
@@ -240,6 +243,7 @@ enum NotificationRoute: Hashable, Identifiable {
         case ("conversation", let id?): self = .conversation(id: id)
         case ("inspection_request", let id?): self = .inspectionRequest(id: id)
         case ("my_posts", _): self = .myPosts
+        case ("group", let slug?): self = .group(slug: slug)
         default: return nil
         }
     }
@@ -275,6 +279,8 @@ struct NotificationRouteView: View {
             ConsumerPpiDetailView(requestId: id)
         case .myPosts:
             ModeratedPostsView(onChanged: onChanged)
+        case .group(let slug):
+            CommunityGroupDetailView(slug: slug)
         }
     }
 }

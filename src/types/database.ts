@@ -552,6 +552,8 @@ export type Database = {
           content: string
           created_at: string
           group_id: string | null
+          group_pinned_at: string | null
+          group_pinned_by: string | null
           group_status: Database["public"]["Enums"]["community_group_post_status"]
           id: string
           marketplace_listing_id: string | null
@@ -572,6 +574,8 @@ export type Database = {
           content: string
           created_at?: string
           group_id?: string | null
+          group_pinned_at?: string | null
+          group_pinned_by?: string | null
           group_status?: Database["public"]["Enums"]["community_group_post_status"]
           id?: string
           marketplace_listing_id?: string | null
@@ -592,6 +596,8 @@ export type Database = {
           content?: string
           created_at?: string
           group_id?: string | null
+          group_pinned_at?: string | null
+          group_pinned_by?: string | null
           group_status?: Database["public"]["Enums"]["community_group_post_status"]
           id?: string
           marketplace_listing_id?: string | null
@@ -3144,6 +3150,42 @@ export type Database = {
         }
         Relationships: []
       }
+      community_group_moderation_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          group_id: string
+          id: number
+          metadata: Json
+          post_id: string | null
+          reason: string | null
+          target_profile_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          group_id: string
+          id?: never
+          metadata?: Json
+          post_id?: string | null
+          reason?: string | null
+          target_profile_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          group_id?: string
+          id?: never
+          metadata?: Json
+          post_id?: string | null
+          reason?: string | null
+          target_profile_id?: string | null
+        }
+        Relationships: []
+      }
       community_post_saves: {
         Row: {
           created_at: string
@@ -4560,13 +4602,55 @@ export type Database = {
         Returns: { post_id: string }[]
       }
       social_visible_community_group_post_ids: {
-        Args: {
-          p_group_id: string
-          p_limit?: number
-          p_offset?: number
-          p_viewer_id: string
-        }
+        Args: { p_viewer_id: string; p_group_id: string; p_limit?: number; p_offset?: number; p_exclude_pinned?: boolean }
         Returns: { post_id: string }[]
+      }
+      social_visible_community_group_pinned_post_ids: {
+        Args: { p_viewer_id: string; p_group_id: string }
+        Returns: { post_id: string }[]
+      }
+      search_group_posts: {
+        Args: { p_viewer_id: string; p_group_id: string; p_query: string; p_limit?: number; p_offset?: number }
+        Returns: { post_id: string }[]
+      }
+      list_group_members: {
+        Args: { p_viewer_id: string; p_group_id: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          profile_id: string
+          username: string | null
+          display_name: string | null
+          avatar_url: string | null
+          role: Database["public"]["Enums"]["community_group_role"]
+          joined_at: string
+        }[]
+      }
+      community_group_role_of: {
+        Args: { p_profile_id: string; p_group_id: string }
+        Returns: Database["public"]["Enums"]["community_group_role"] | null
+      }
+      set_group_post_pinned: {
+        Args: { p_actor_profile_id: string; p_post_id: string; p_pinned: boolean }
+        Returns: Json
+      }
+      set_group_post_destination: {
+        Args: { p_actor_profile_id: string; p_post_id: string; p_state: Database["public"]["Enums"]["community_group_post_status"]; p_reason?: string | null }
+        Returns: Json
+      }
+      set_group_member_status: {
+        Args: { p_actor_profile_id: string; p_group_id: string; p_target_profile_id: string; p_status: Database["public"]["Enums"]["community_group_membership_status"]; p_reason?: string | null }
+        Returns: Json
+      }
+      set_group_member_role: {
+        Args: { p_actor_profile_id: string; p_group_id: string; p_target_profile_id: string; p_role: Database["public"]["Enums"]["community_group_role"] }
+        Returns: Json
+      }
+      transfer_group_ownership: {
+        Args: { p_actor_profile_id: string; p_group_id: string; p_new_owner_profile_id: string }
+        Returns: Json
+      }
+      archive_group: {
+        Args: { p_actor_profile_id: string; p_group_id: string; p_reason?: string | null }
+        Returns: Json
       }
       join_curated_community_group: {
         Args: { p_actor_profile_id: string; p_group_id: string }
@@ -4801,6 +4885,8 @@ export type Database = {
         | "listing_inspection_requested"
         | "post_comment"
         | "post_likes"
+        | "group_post_removed"
+        | "group_role_changed"
         | "moderation_decision"
         | "moderation_case"
         | "report_received"

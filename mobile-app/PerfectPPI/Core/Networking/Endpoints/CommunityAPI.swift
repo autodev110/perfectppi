@@ -249,4 +249,53 @@ enum CommunityAPI {
             body: GroupMembershipPayload(joined: joined)
         )
     }
+
+    static func groupMembers(slug: String, page: Int = 1) async throws -> CommunityGroupMembersPage {
+        try await APIClient.shared.get(
+            "/api/community/groups/\(slug)/members",
+            query: [URLQueryItem(name: "page", value: String(max(page, 1)))]
+        )
+    }
+
+    static func searchGroupPosts(slug: String, query: String, page: Int = 1) async throws -> CommunityGroupSearchPage {
+        try await APIClient.shared.get(
+            "/api/community/groups/\(slug)/search",
+            query: [URLQueryItem(name: "q", value: query), URLQueryItem(name: "page", value: String(max(page, 1)))]
+        )
+    }
+
+    enum GroupModerationAction: String, Encodable {
+        case pin, unpin
+        case removePost = "remove_post"
+        case restorePost = "restore_post"
+        case removeMember = "remove_member"
+        case banMember = "ban_member"
+        case unbanMember = "unban_member"
+        case makeModerator = "make_moderator"
+        case makeMember = "make_member"
+        case transferOwnership = "transfer_ownership"
+        case archive
+    }
+
+    private struct GroupModerationPayload: Encodable {
+        let action: GroupModerationAction
+        let postId: String?
+        let profileId: String?
+        let reason: String?
+    }
+
+    /// Owner/moderator tools (plan 13.4 / 13.7). The server decides what the
+    /// caller may do; a 403 means the role does not allow it.
+    static func moderateGroup(
+        slug: String,
+        action: GroupModerationAction,
+        postId: String? = nil,
+        profileId: String? = nil,
+        reason: String? = nil
+    ) async throws {
+        let _: Empty = try await APIClient.shared.postCamel(
+            "/api/community/groups/\(slug)/moderation",
+            body: GroupModerationPayload(action: action, postId: postId, profileId: profileId, reason: reason)
+        )
+    }
 }

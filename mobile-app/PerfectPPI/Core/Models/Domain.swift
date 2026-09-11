@@ -338,6 +338,10 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let likedByViewer: Bool?
     /// Private bookmark state for the viewer (plan Phase 1B).
     let savedByViewer: Bool?
+    /// Plan 13.5: pinned by a group moderator.
+    let groupPinned: Bool?
+    /// Viewer is owner or moderator of this post's group (plan 13.4).
+    let canModerateGroup: Bool?
 }
 
 /// Counts behind navigation badges (plan 7.1 / 22.2), from /api/me/badges.
@@ -494,6 +498,34 @@ struct CommunityGroupDirectory: Codable, Hashable {
 
 struct CommunityGroupDetail: Codable, Hashable {
     let group: CommunityGroupSummary
+    /// Moderator-pinned posts (plan 13.5); absent on old servers.
+    let pinned: [CommunityPost]?
+    let posts: [CommunityPost]
+    let page: Int
+    let hasMore: Bool
+}
+
+struct CommunityGroupMember: Codable, Identifiable, Hashable {
+    let id: String
+    let username: String?
+    let displayName: String?
+    let avatarUrl: String?
+    let role: String
+    let joinedAt: Date?
+
+    var person: PersonSummary {
+        PersonSummary(id: id, username: username, displayName: displayName, avatarUrl: avatarUrl)
+    }
+}
+
+struct CommunityGroupMembersPage: Codable {
+    let members: [CommunityGroupMember]
+    let page: Int
+    let hasMore: Bool
+}
+
+struct CommunityGroupSearchPage: Codable {
+    let query: String
     let posts: [CommunityPost]
     let page: Int
     let hasMore: Bool

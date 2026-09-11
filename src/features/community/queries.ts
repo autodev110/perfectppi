@@ -61,6 +61,10 @@ export type CommunityFeedPost = Pick<
   media: CommunityFeedMedia[];
   comments: CommunityFeedComment[];
   group: CommunityFeedGroup | null;
+  /** Plan 13.5: pinned by a group moderator; rendered ahead of the timeline. */
+  group_pinned: boolean;
+  /** Viewer is owner or moderator of the post's group (plan 13.4 tools). */
+  can_moderate_group: boolean;
   can_interact: boolean;
   can_like: boolean;
   can_manage_accepted_answer: boolean;
@@ -117,7 +121,7 @@ const COMMUNITY_POST_SELECT = `
 // are selected only where the server needs them to filter nested rows, then
 // removed before serialization.
 const COMMUNITY_FEED_SELECT = `
-  id, author_id, vehicle_id, marketplace_listing_id, group_id, active_revision_id, content, audience, post_type, accepted_answer_comment_id, status, created_at, updated_at,
+  id, author_id, vehicle_id, marketplace_listing_id, group_id, group_status, group_pinned_at, active_revision_id, content, audience, post_type, accepted_answer_comment_id, status, created_at, updated_at,
   author:profiles!community_posts_author_id_fkey(id, display_name, username, avatar_url, is_public),
   vehicle:vehicles!community_posts_vehicle_id_fkey(
     id, year, make, model, trim, mileage, visibility,
@@ -168,10 +172,12 @@ function cleanPosts(posts: CommunityPost[], includeModerated = false) {
   }));
 }
 
+type GroupRole = Database["public"]["Enums"]["community_group_role"];
+
 function toCommunityFeedPost(
   post: CommunityPost,
   viewerId: string,
-  memberGroupIds: ReadonlySet<string> = new Set(),
+  memberGroupIds: ReadonlyMap<string, GroupRole> = new Map(),
 ): CommunityFeedPost {
   const visibleComments = (post.comments ?? [])
     .filter((comment) => comment.status === "active" && comment.moderation_status === "active");
@@ -217,6 +223,9 @@ function toCommunityFeedPost(
     status: post.status,
     created_at: post.created_at,
     updated_at: post.updated_at,
+    group_pinned: post.group_pinned_at !== null && post.group_status === "active",
+    can_moderate_group: Boolean(post.group_id)
+      && ["owner", "moderator"].includes(memberGroupIds.get(post.group_id ?? "") ?? ""),
     can_interact: !post.group_id || memberGroupIds.has(post.group_id),
     can_like: post.author_id !== viewerId,
     can_manage_accepted_answer: post.post_type === "question" && post.author_id === viewerId,
@@ -355,16 +364,17 @@ export async function getSavedCommunityPosts(page = 1, perPage = 20) {
   return withPostLikeState(ordered, viewerId);
 }
 
+// group id → the viewer's active role, for interaction and moderation flags.
 async function activeMembershipGroupIds(viewerId: string, posts: CommunityPost[]) {
   const groupIds = [...new Set(posts.flatMap((post) => post.group_id ? [post.group_id] : []))];
-  if (groupIds.length === 0) return new Set<string>();
+  if (groupIds.length === 0) return new Map<string, GroupRole>();
   const { data } = await createAdminClient()
     .from("community_group_memberships")
-    .select("group_id")
+    .select("group_id, role")
     .eq("profile_id", viewerId)
     .eq("status", "active")
     .in("group_id", groupIds);
-  return new Set((data ?? []).map((membership) => membership.group_id));
+  return new Map((data ?? []).map((membership) => [membership.group_id, membership.role]));
 }
 
 async function getCommunityViewerId() {
@@ -644,6 +654,64 @@ export async function getCommunityPostOptions() {
     defaultAudience: profile.default_post_audience,
     canPostPublic: profile.is_public,
   };
+}
+
+// Shared hydration for a list of visible post ids in a group.
+async function hydrateGroupPostIds(viewerId: string, postIds: string[]) {
+  if (postIds.length === 0) return [];
+  const { data } = await createAdminClient()
+    .from("community_posts")
+    .select(COMMUNITY_FEED_SELECT)
+    .in("id", postIds)
+    .order("created_at", { ascending: true, referencedTable: "community_comments" });
+  const posts = (data ?? []) as unknown as CommunityPost[];
+  const [blockedAuthors, memberGroupIds] = await Promise.all([
+    getBlockedProfileIds(viewerId, posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id))),
+    activeMembershipGroupIds(viewerId, posts),
+  ]);
+  const byId = new Map(posts.map((post) => [post.id, {
+    ...post,
+    comments: (post.comments ?? []).filter((comment) => !blockedAuthors.has(comment.author_id)),
+  }]));
+  const visiblePosts = postIds.flatMap((id) => {
+    const post = byId.get(id);
+    return post ? [toCommunityFeedPost(post, viewerId, memberGroupIds)] : [];
+  });
+  return withPostLikeState(visiblePosts, viewerId);
+}
+
+/** Up to three moderator-pinned posts (plan 13.5), newest pin first. */
+export async function getCommunityGroupPinnedPosts(groupId: string) {
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId || !(await getFeatureFlags()).flags.groups) return [];
+  const { data, error } = await createAdminClient().rpc("social_visible_community_group_pinned_post_ids", {
+    p_viewer_id: viewerId,
+    p_group_id: groupId,
+  });
+  if (error) {
+    console.error("pinned group posts failed", error.message);
+    return [];
+  }
+  return hydrateGroupPostIds(viewerId, (data ?? []).map((row) => row.post_id));
+}
+
+/** Search within a group (plan 13.5); every hit re-checked for visibility. */
+export async function searchCommunityGroupPosts(groupId: string, query: string, page = 1, perPage = 20) {
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId || !(await getFeatureFlags()).flags.groups) return [];
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const { data, error } = await createAdminClient().rpc("search_group_posts", {
+    p_viewer_id: viewerId,
+    p_group_id: groupId,
+    p_query: query.trim().slice(0, 100),
+    p_limit: perPage,
+    p_offset: (safePage - 1) * perPage,
+  });
+  if (error) {
+    console.error("search_group_posts failed", error.message);
+    return [];
+  }
+  return hydrateGroupPostIds(viewerId, (data ?? []).map((row) => row.post_id));
 }
 
 export async function getCommunityGroupPosts(groupId: string, page = 1, perPage = 20) {

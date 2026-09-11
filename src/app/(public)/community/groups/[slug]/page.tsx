@@ -11,11 +11,20 @@ import { PostMediaCarousel } from "@/components/shared/post-media-carousel";
 import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-control";
 import { CommunityLikeButton } from "@/components/shared/community-like-button";
 import { createCommunityComment } from "@/features/community/actions";
-import { getCommunityGroupPosts } from "@/features/community/queries";
+import {
+  getCommunityGroupPinnedPosts,
+  getCommunityGroupPosts,
+  searchCommunityGroupPosts,
+  type CommunityFeedPost,
+} from "@/features/community/queries";
 import { requireRole } from "@/features/auth/guards";
 import { getCommunityGroup } from "@/features/social/groups";
-import { formatDate } from "@/lib/utils/formatting";
-import { ArrowLeft, MessageSquare, Plus, ShieldCheck, Users } from "lucide-react";
+import { getGroupMembers, getViewerGroupRole } from "@/features/social/group-tools";
+import { GroupArchiveButton, GroupMemberModerationMenu, GroupPostModerationMenu } from "@/components/shared/group-moderation-controls";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { formatDate, getInitials } from "@/lib/utils/formatting";
+import { ArrowLeft, MessageSquare, Pin, Plus, Search, ShieldCheck, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -24,15 +33,26 @@ export default async function CommunityGroupPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; q?: string; tab?: string }>;
 }) {
   const viewer = await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const { slug } = await params;
   const group = await getCommunityGroup(slug);
   if (!group) notFound();
-  const requestedPage = Number((await searchParams).page ?? "1");
+  const query = await searchParams;
+  const requestedPage = Number(query.page ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const posts = await getCommunityGroupPosts(group.id, page, 20);
+  const search = (query.q ?? "").trim();
+  const showMembers = query.tab === "members";
+  const [posts, pinned, viewerRole, members] = await Promise.all([
+    search ? searchCommunityGroupPosts(group.id, search, page, 20) : getCommunityGroupPosts(group.id, page, 20),
+    search || page > 1 ? Promise.resolve([] as CommunityFeedPost[]) : getCommunityGroupPinnedPosts(group.id),
+    getViewerGroupRole(group.id),
+    showMembers ? getGroupMembers(group.id, 1, 100) : Promise.resolve([]),
+  ]);
+  const canModerate = viewerRole === "owner" || viewerRole === "moderator";
+  const baseHref = `/community/groups/${group.slug}`;
+  const pageHref = (nextPage: number) => `${baseHref}?${new URLSearchParams({ ...(search ? { q: search } : {}), page: String(nextPage) })}`;
 
   return (
     <main className="min-h-screen bg-surface px-6 pb-20 pt-24 sm:px-8">
@@ -48,7 +68,10 @@ export default async function CommunityGroupPage({
                 <p className="mt-3 leading-relaxed text-on-surface-variant">{group.description}</p>
                 <p className="mt-4 flex items-center gap-2 text-sm text-on-surface-variant"><Users className="h-4 w-4" />{group.member_count} member{group.member_count === 1 ? "" : "s"}</p>
               </div>
-              <GroupMembershipButton groupId={group.id} initialJoined={group.is_member} owner={group.membership_role === "owner"} />
+              <div className="flex flex-col items-end gap-2">
+                <GroupMembershipButton groupId={group.id} initialJoined={group.is_member} owner={group.membership_role === "owner"} />
+                {viewerRole === "owner" ? <GroupArchiveButton slug={group.slug} /> : null}
+              </div>
             </div>
             {group.rules.length ? (
               <div className="mt-7 rounded-2xl bg-surface-container p-5">
@@ -59,19 +82,69 @@ export default async function CommunityGroupPage({
           </div>
         </section>
 
-        <div className="mt-8 flex items-center justify-between gap-4">
-          <h2 className="font-heading text-2xl font-extrabold">Group posts</h2>
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
+          <nav className="flex gap-1 rounded-2xl bg-surface-container-low p-1.5 ghost-border" aria-label="Group sections">
+            <Link href={baseHref} className={`rounded-xl px-4 py-2 text-sm font-bold ${!showMembers ? "bg-surface-container-lowest shadow-sm" : "text-on-surface-variant"}`}>Posts</Link>
+            <Link href={`${baseHref}?tab=members`} className={`rounded-xl px-4 py-2 text-sm font-bold ${showMembers ? "bg-surface-container-lowest shadow-sm" : "text-on-surface-variant"}`}>Members</Link>
+          </nav>
           {group.is_member ? <Button asChild><Link href={`/dashboard/posts/new?group=${group.slug}`}><Plus className="mr-2 h-4 w-4" />Post to group</Link></Button> : <p className="text-sm text-on-surface-variant">Join to post or comment</p>}
         </div>
 
-        <div className="mt-5 space-y-5">
-          {posts.length === 0 ? (
+        {showMembers ? (
+          <section className="mt-5 space-y-2" aria-label="Group members">
+            {members.length === 0 ? (
+              <p className="rounded-3xl bg-surface-container-lowest p-8 text-center text-sm text-on-surface-variant ghost-border">No members to show.</p>
+            ) : members.map((member) => (
+              <div key={member.id} className="flex items-center justify-between gap-3 rounded-2xl bg-surface-container-lowest px-4 py-3 shadow-sm ghost-border">
+                <Link href={member.username ? `/profile/${member.username}` : "#"} className="flex min-w-0 items-center gap-3">
+                  <Avatar className="h-9 w-9"><AvatarImage src={member.avatar_url ?? ""} /><AvatarFallback className="text-xs">{getInitials(member.display_name ?? member.username ?? "U")}</AvatarFallback></Avatar>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold">{member.display_name ?? member.username ?? "PerfectPPI member"}</span>
+                    <span className="block text-xs text-on-surface-variant">{member.username ? `@${member.username} · ` : ""}{member.role === "owner" ? "Owner" : member.role === "moderator" ? "Moderator" : "Member"} · since {formatDate(member.joined_at)}</span>
+                  </span>
+                </Link>
+                {canModerate && member.id !== viewer.id ? (
+                  <GroupMemberModerationMenu slug={group.slug} profileId={member.id} role={member.role} viewerRole={viewerRole as "owner" | "moderator"} />
+                ) : null}
+              </div>
+            ))}
+          </section>
+        ) : null}
+
+        {!showMembers ? (
+          <form action={baseHref} method="get" role="search" className="mt-5 flex gap-2">
+            <Input name="q" defaultValue={search} placeholder="Search this group" maxLength={100} aria-label="Search this group" />
+            <Button type="submit" variant="outline"><Search className="mr-2 h-4 w-4" />Search</Button>
+            {search ? <Button asChild variant="ghost"><Link href={baseHref}>Clear</Link></Button> : null}
+          </form>
+        ) : null}
+
+        {!showMembers && pinned.length > 0 ? (
+          <section className="mt-5 space-y-3" aria-label="Pinned posts">
+            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-on-surface-variant"><Pin className="h-4 w-4" />Pinned</h2>
+            {pinned.map((post) => (
+              <article key={post.id} className="rounded-[1.5rem] border-l-4 border-teal bg-surface-container-lowest p-5 shadow-sm ghost-border">
+                <div className="flex items-start justify-between gap-3">
+                  <div><p className="font-bold">{post.author?.display_name ?? post.author?.username ?? "PerfectPPI member"}</p><p className="text-xs text-on-surface-variant">{formatDate(post.created_at)}</p></div>
+                  {canModerate ? <GroupPostModerationMenu slug={group.slug} postId={post.id} pinned removed={false} /> : null}
+                </div>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">{post.content}</p>
+                {post.safety_notice ? <div className="mt-3"><SafetyNotice notice={post.safety_notice} compact /></div> : null}
+              </article>
+            ))}
+          </section>
+        ) : null}
+
+        <div className={`mt-5 space-y-5 ${showMembers ? "hidden" : ""}`}>
+          {search && posts.length === 0 ? (
+            <div className="rounded-3xl bg-surface-container-lowest p-10 text-center ghost-border"><Search className="mx-auto mb-3 h-9 w-9 text-on-surface-variant/40" /><p className="font-semibold">No posts match &ldquo;{search}&rdquo;.</p></div>
+          ) : posts.length === 0 ? (
             <div className="rounded-3xl bg-surface-container-lowest p-10 text-center ghost-border"><MessageSquare className="mx-auto mb-3 h-9 w-9 text-on-surface-variant/40" /><p className="font-semibold">No posts in this group yet.</p></div>
           ) : posts.map((post) => (
             <article key={post.id} className="rounded-[1.5rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
               <div className="flex items-start justify-between gap-4">
                 <div><div className="flex flex-wrap items-center gap-2"><p className="font-bold">{post.author?.display_name ?? post.author?.username ?? "PerfectPPI member"}</p>{post.post_type === "question" ? <Badge className="bg-teal/10 text-teal hover:bg-teal/10">{post.accepted_answer_comment_id ? "Solved" : "Question"}</Badge> : null}</div><p className="text-xs text-on-surface-variant">{formatDate(post.created_at)}</p></div>
-                <div className="flex items-center gap-1">{post.author_id === viewer.id ? <Badge variant="outline">Your post</Badge> : <MemberSafetyActions profileId={post.author_id} compact />}{post.report_context ? <CommunityReportControl entityType="community_post" entityId={post.id} reportContext={post.report_context} /> : null}</div>
+                <div className="flex items-center gap-1">{post.author_id === viewer.id ? <Badge variant="outline">Your post</Badge> : <MemberSafetyActions profileId={post.author_id} compact />}{post.report_context ? <CommunityReportControl entityType="community_post" entityId={post.id} reportContext={post.report_context} /> : null}{post.can_moderate_group ? <GroupPostModerationMenu slug={group.slug} postId={post.id} pinned={post.group_pinned} removed={false} /> : null}</div>
               </div>
               <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">{post.content}</p>
               {post.safety_notice ? <div className="mt-4"><SafetyNotice notice={post.safety_notice} /></div> : null}
@@ -84,7 +157,7 @@ export default async function CommunityGroupPage({
             </article>
           ))}
         </div>
-        <nav className="mt-6 flex justify-between" aria-label="Group post pages">{page > 1 ? <Button asChild variant="outline"><Link href={`/community/groups/${group.slug}?page=${page - 1}`}>Previous</Link></Button> : <span />}{posts.length === 20 ? <Button asChild variant="outline"><Link href={`/community/groups/${group.slug}?page=${page + 1}`}>Next</Link></Button> : <span />}</nav>
+        {!showMembers ? <nav className="mt-6 flex justify-between" aria-label="Group post pages">{page > 1 ? <Button asChild variant="outline"><Link href={pageHref(page - 1)}>Previous</Link></Button> : <span />}{posts.length === 20 ? <Button asChild variant="outline"><Link href={pageHref(page + 1)}>Next</Link></Button> : <span />}</nav> : null}
       </div>
     </main>
   );

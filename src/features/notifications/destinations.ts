@@ -40,6 +40,16 @@ async function intentAvailable(intent: NotificationDestinationIntent, viewerId: 
       if (post?.group_id && !(await getFeatureFlags()).flags.groups) return false;
       return true;
     }
+    case "group": {
+      if (!intent.id) return false;
+      if (!(await getFeatureFlags()).flags.groups) return false;
+      const { data } = await admin
+        .from("community_groups")
+        .select("id, status, visibility")
+        .eq("slug", intent.id.toLowerCase())
+        .maybeSingle();
+      return Boolean(data && data.status === "active" && data.visibility === "public");
+    }
     case "profile": {
       if (!intent.id) return false;
       const { data: target } = await admin

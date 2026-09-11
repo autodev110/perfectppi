@@ -36,8 +36,8 @@ DO $$
 DECLARE
   hit boolean := false;
 BEGIN
-  IF (SELECT count(*) FROM public.list_notification_preferences((SELECT author FROM n_ids))) <> 6 THEN
-    RAISE EXCEPTION 'expected six categories';
+  IF (SELECT count(*) FROM public.list_notification_preferences((SELECT author FROM n_ids))) <> 7 THEN
+    RAISE EXCEPTION 'expected seven categories';
   END IF;
   IF EXISTS (SELECT 1 FROM public.list_notification_preferences((SELECT author FROM n_ids)) WHERE NOT in_app OR NOT push) THEN
     RAISE EXCEPTION 'everything should default to enabled';
