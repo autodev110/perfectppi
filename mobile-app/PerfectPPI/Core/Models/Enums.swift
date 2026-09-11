@@ -90,6 +90,40 @@ enum VehicleOwnershipState: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum VehicleBuildStatus: String, Codable, CaseIterable, Identifiable {
+    case planned, installed, removed, sold
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+}
+
+enum VehicleInstallationKind: String, Codable, CaseIterable, Identifiable {
+    case unknown
+    case selfInstalled = "self_installed"
+    case shopInstalled = "shop_installed"
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .unknown: "Not specified"
+        case .selfInstalled: "Self-installed"
+        case .shopInstalled: "Installed by a shop"
+        }
+    }
+}
+
+enum VehicleFitmentConfidence: String, Codable {
+    case ownerReported = "owner_reported"
+    case communityConfirmed = "community_confirmed"
+    case manufacturerVerified = "manufacturer_verified"
+
+    var label: String {
+        switch self {
+        case .ownerReported: "Owner-reported"
+        case .communityConfirmed: "Community-confirmed"
+        case .manufacturerVerified: "Manufacturer verified"
+        }
+    }
+}
+
 enum WhoseCar: String, Codable { case own, other }
 enum RequesterRole: String, Codable { case buying, selling, documenting }
 enum PerformerType: String, Codable { case selfInspection = "self", technician }

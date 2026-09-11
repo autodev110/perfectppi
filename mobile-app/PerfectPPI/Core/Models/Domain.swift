@@ -91,6 +91,51 @@ struct VehicleMedia: Codable, Identifiable, Hashable {
     let sortOrder: Int?
 }
 
+struct VehicleBuildEntry: Codable, Identifiable, Hashable {
+    let id: String
+    let vehicleId: String
+    let category: String
+    let title: String
+    let manufacturer: String?
+    let partNumber: String?
+    let vehicleConfiguration: String?
+    let wheelSize: String?
+    let wheelWidth: Double?
+    let wheelOffsetMm: Double?
+    let tireSize: String?
+    let suspensionDrop: String?
+    let installedOn: String?
+    let mileage: Int?
+    let installationKind: VehicleInstallationKind
+    let shopName: String?
+    let costCents: Int?
+    let publicNotes: String?
+    let privateNotes: String?
+    let status: VehicleBuildStatus
+    let fitmentConfidence: VehicleFitmentConfidence
+    let isPublic: Bool
+    let createdAt: Date
+    let updatedAt: Date
+}
+
+struct VehicleMaintenanceEvent: Codable, Identifiable, Hashable {
+    let id: String
+    let vehicleId: String
+    let serviceType: String
+    let servicedOn: String
+    let mileage: Int?
+    let partsFluids: String?
+    let provider: String?
+    let costCents: Int?
+    let publicNotes: String?
+    let privateNotes: String?
+    let nextDueOn: String?
+    let nextDueMileage: Int?
+    let isPublic: Bool
+    let createdAt: Date
+    let updatedAt: Date
+}
+
 // MARK: - Technician
 
 struct TechnicianProfile: Codable, Identifiable, Hashable {

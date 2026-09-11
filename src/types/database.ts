@@ -4003,6 +4003,197 @@ export type Database = {
           },
         ]
       }
+      vehicle_build_entries: {
+        Row: {
+          category: string
+          cost_cents: number | null
+          created_at: string
+          fitment_confidence: Database["public"]["Enums"]["vehicle_fitment_confidence"]
+          id: string
+          installation_kind: Database["public"]["Enums"]["vehicle_installation_kind"]
+          installed_on: string | null
+          is_public: boolean
+          manufacturer: string | null
+          mileage: number | null
+          owner_id: string
+          part_number: string | null
+          private_notes: string | null
+          public_notes: string | null
+          related_post_id: string | null
+          shop_name: string | null
+          status: Database["public"]["Enums"]["vehicle_build_status"]
+          suspension_drop: string | null
+          tire_size: string | null
+          title: string
+          updated_at: string
+          vehicle_configuration: string | null
+          vehicle_id: string
+          wheel_offset_mm: number | null
+          wheel_size: string | null
+          wheel_width: number | null
+        }
+        Insert: {
+          category: string
+          cost_cents?: number | null
+          created_at?: string
+          fitment_confidence?: Database["public"]["Enums"]["vehicle_fitment_confidence"]
+          id?: string
+          installation_kind?: Database["public"]["Enums"]["vehicle_installation_kind"]
+          installed_on?: string | null
+          is_public?: boolean
+          manufacturer?: string | null
+          mileage?: number | null
+          owner_id: string
+          part_number?: string | null
+          private_notes?: string | null
+          public_notes?: string | null
+          related_post_id?: string | null
+          shop_name?: string | null
+          status?: Database["public"]["Enums"]["vehicle_build_status"]
+          suspension_drop?: string | null
+          tire_size?: string | null
+          title: string
+          updated_at?: string
+          vehicle_configuration?: string | null
+          vehicle_id: string
+          wheel_offset_mm?: number | null
+          wheel_size?: string | null
+          wheel_width?: number | null
+        }
+        Update: {
+          category?: string
+          cost_cents?: number | null
+          created_at?: string
+          fitment_confidence?: Database["public"]["Enums"]["vehicle_fitment_confidence"]
+          id?: string
+          installation_kind?: Database["public"]["Enums"]["vehicle_installation_kind"]
+          installed_on?: string | null
+          is_public?: boolean
+          manufacturer?: string | null
+          mileage?: number | null
+          owner_id?: string
+          part_number?: string | null
+          private_notes?: string | null
+          public_notes?: string | null
+          related_post_id?: string | null
+          shop_name?: string | null
+          status?: Database["public"]["Enums"]["vehicle_build_status"]
+          suspension_drop?: string | null
+          tire_size?: string | null
+          title?: string
+          updated_at?: string
+          vehicle_configuration?: string | null
+          vehicle_id?: string
+          wheel_offset_mm?: number | null
+          wheel_size?: string | null
+          wheel_width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_build_entries_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_build_entries_related_post_id_fkey"
+            columns: ["related_post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_build_entries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_maintenance_events: {
+        Row: {
+          cost_cents: number | null
+          created_at: string
+          id: string
+          is_public: boolean
+          mileage: number | null
+          next_due_mileage: number | null
+          next_due_on: string | null
+          owner_id: string
+          parts_fluids: string | null
+          private_notes: string | null
+          provider: string | null
+          public_notes: string | null
+          related_post_id: string | null
+          service_type: string
+          serviced_on: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          cost_cents?: number | null
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          mileage?: number | null
+          next_due_mileage?: number | null
+          next_due_on?: string | null
+          owner_id: string
+          parts_fluids?: string | null
+          private_notes?: string | null
+          provider?: string | null
+          public_notes?: string | null
+          related_post_id?: string | null
+          service_type: string
+          serviced_on: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          cost_cents?: number | null
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          mileage?: number | null
+          next_due_mileage?: number | null
+          next_due_on?: string | null
+          owner_id?: string
+          parts_fluids?: string | null
+          private_notes?: string | null
+          provider?: string | null
+          public_notes?: string | null
+          related_post_id?: string | null
+          service_type?: string
+          serviced_on?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_maintenance_events_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_events_related_post_id_fkey"
+            columns: ["related_post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_media: {
         Row: {
           content_type: string | null
@@ -5563,6 +5754,9 @@ export type Database = {
         | "developer"
       vehicle_visibility: "public" | "friends" | "private"
       vehicle_ownership_state: "owned" | "previously_owned" | "considering" | "project"
+      vehicle_build_status: "planned" | "installed" | "removed" | "sold"
+      vehicle_installation_kind: "unknown" | "self_installed" | "shop_installed"
+      vehicle_fitment_confidence: "owner_reported" | "community_confirmed" | "manufacturer_verified"
       warranty_status:
         | "not_offered"
         | "offered"
@@ -5800,6 +5994,9 @@ export const Constants = {
       ],
       vehicle_visibility: ["public", "friends", "private"],
       vehicle_ownership_state: ["owned", "previously_owned", "considering", "project"],
+      vehicle_build_status: ["planned", "installed", "removed", "sold"],
+      vehicle_installation_kind: ["unknown", "self_installed", "shop_installed"],
+      vehicle_fitment_confidence: ["owner_reported", "community_confirmed", "manufacturer_verified"],
       warranty_status: [
         "not_offered",
         "offered",

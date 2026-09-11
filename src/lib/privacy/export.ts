@@ -158,8 +158,10 @@ export async function buildAccountDataExport(profileId: string, user: User) {
   const submissions = mergeById(performedSubmissions, submissionsForRequests);
   const submissionIds = ids(submissions);
 
-  const [vehicleMedia, marketplaceListings, sections, obdSnapshots, standardizedOutputs, vscOutputs] = await Promise.all([
+  const [vehicleMedia, vehicleBuildEntries, vehicleMaintenanceEvents, marketplaceListings, sections, obdSnapshots, standardizedOutputs, vscOutputs] = await Promise.all([
     rowsForIds("vehicle media", "vehicle_media", "vehicle_id", vehicleIds),
+    rowsForIds("vehicle build entries", "vehicle_build_entries", "vehicle_id", vehicleIds),
+    rowsForIds("vehicle maintenance events", "vehicle_maintenance_events", "vehicle_id", vehicleIds),
     rowsForIds("marketplace listings", "marketplace_listings", "vehicle_id", vehicleIds),
     rowsForIds("inspection sections", "ppi_sections", "ppi_submission_id", submissionIds),
     rowsForIds("OBD snapshots", "obd_snapshots", "ppi_submission_id", submissionIds),
@@ -262,6 +264,8 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     vehicles: {
       records: vehicles,
       media: vehicleMedia,
+      buildEntries: vehicleBuildEntries,
+      maintenanceEvents: vehicleMaintenanceEvents,
       listings: marketplaceListings,
       ownershipEvents: vehicleOwnershipEvents,
     },

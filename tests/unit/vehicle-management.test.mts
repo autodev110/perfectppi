@@ -29,4 +29,21 @@ describe("vehicle management hardening", () => {
     assert.match(deletion, /from\("integration_artifacts"\)/);
     assert.match(deletion, /deleteStoredObjectOrQueue/);
   });
+
+  test("keeps Vehicle Passport timeline secrets server-routed and exportable", async () => {
+    const migration = await source("supabase/migrations/20260911230332_vehicle_build_maintenance_timelines.sql");
+    const queries = await source("src/features/vehicles/timelines.ts");
+    const accountExport = await source("src/lib/privacy/export.ts");
+
+    assert.match(migration, /ENABLE ROW LEVEL SECURITY/g);
+    assert.match(migration, /REVOKE ALL ON public\.vehicle_build_entries FROM PUBLIC, anon, authenticated/);
+    assert.match(migration, /REVOKE ALL ON public\.vehicle_maintenance_events FROM PUBLIC, anon, authenticated/);
+    assert.match(queries, /\.select\("id, vehicle_id, category,[^\n]+"\)/);
+    assert.doesNotMatch(
+      queries.match(/export async function getPublicVehicleTimelines[\s\S]+$/)?.[0] ?? "",
+      /\.select\("[^\n]*(?:cost_cents|private_notes)/,
+    );
+    assert.match(accountExport, /vehicleBuildEntries/);
+    assert.match(accountExport, /vehicleMaintenanceEvents/);
+  });
 });

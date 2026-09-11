@@ -288,6 +288,15 @@ struct ChipFlow: Layout {
 }
 
 struct VehicleDetailView: View {
+    private enum PassportTab: String, CaseIterable, Identifiable {
+        case overview = "Overview"
+        case posts = "Posts"
+        case build = "Build"
+        case maintenance = "Maintenance"
+        case inspections = "Inspections"
+        var id: String { rawValue }
+    }
+
     let vehicleId: String
     private let onDelete: () -> Void
     /// Preview/test injection: skips the network load.
@@ -329,6 +338,12 @@ struct VehicleDetailView: View {
     @State private var deletingVehicle = false
     @State private var error: Error?
     @State private var inlineAlert: String?
+    @State private var selectedTab: PassportTab = .overview
+    @State private var buildEntries: [VehicleBuildEntry] = []
+    @State private var maintenanceEvents: [VehicleMaintenanceEvent] = []
+    @State private var loadingTimeline = false
+    @State private var showingBuildForm = false
+    @State private var showingMaintenanceForm = false
 
     var body: some View {
         Group {
@@ -361,6 +376,16 @@ struct VehicleDetailView: View {
                         .padding(.vertical, 4)
                     }
 
+                    Section {
+                        Picker("Vehicle Passport section", selection: $selectedTab) {
+                            ForEach(PassportTab.allCases) { tab in
+                                Text(tab.rawValue).tag(tab)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+
+                    if selectedTab == .overview {
                     if let media = vehicle.vehicleMedia, !media.isEmpty {
                         Section("Photos and videos") {
                             ScrollView(.horizontal, showsIndicators: false) {
@@ -513,6 +538,84 @@ struct VehicleDetailView: View {
                     } footer: {
                         Text("Deleting this vehicle also removes its inspections, reports, listings, and uploaded media.")
                     }
+                    } else if selectedTab == .posts {
+                        Section("Vehicle Posts") {
+                            if vehicle.visibility == .public {
+                                NavigationLink {
+                                    VehicleCommunityPostsView(vehicle: vehicle)
+                                } label: {
+                                    Label("View Posts About This Vehicle", systemImage: "text.bubble")
+                                }
+                                Button("Create Post", systemImage: "square.and.pencil") {
+                                    showingPost = true
+                                }
+                            } else {
+                                Text("Make this vehicle Public before attaching it to a Community post.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    } else if selectedTab == .build {
+                        Section {
+                            Button("Add Build Entry", systemImage: "plus") { showingBuildForm = true }
+                        } footer: {
+                            Text("Costs and private notes stay visible only to you, even when an entry is shared.")
+                        }
+                        if loadingTimeline {
+                            Section { ProgressView().frame(maxWidth: .infinity) }
+                        } else if buildEntries.isEmpty {
+                            Section { Text("No build entries yet.").foregroundStyle(.secondary) }
+                        } else {
+                            Section("Build Journal") {
+                                ForEach(buildEntries) { entry in
+                                    VehicleBuildEntryRow(entry: entry)
+                                        .swipeActions {
+                                            Button("Delete", role: .destructive) {
+                                                Task { await deleteBuildEntry(entry) }
+                                            }
+                                        }
+                                }
+                            }
+                        }
+                    } else if selectedTab == .maintenance {
+                        Section {
+                            Button("Add Maintenance Event", systemImage: "plus") { showingMaintenanceForm = true }
+                        } footer: {
+                            Text("Private costs and notes never appear on the public Vehicle Passport.")
+                        }
+                        if loadingTimeline {
+                            Section { ProgressView().frame(maxWidth: .infinity) }
+                        } else if maintenanceEvents.isEmpty {
+                            Section { Text("No maintenance events yet.").foregroundStyle(.secondary) }
+                        } else {
+                            Section("Maintenance Timeline") {
+                                ForEach(maintenanceEvents) { event in
+                                    VehicleMaintenanceEventRow(event: event)
+                                        .swipeActions {
+                                            Button("Delete", role: .destructive) {
+                                                Task { await deleteMaintenanceEvent(event) }
+                                            }
+                                        }
+                                }
+                            }
+                        }
+                    } else {
+                        Section("Inspections and Reports") {
+                            if let inspections = vehicle.ppiRequests, !inspections.isEmpty {
+                                ForEach(inspections.sorted { $0.createdAt > $1.createdAt }) { inspection in
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(inspection.createdAt.formatted(date: .abbreviated, time: .omitted)).font(.headline)
+                                        Text(inspection.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                            } else {
+                                Text("No inspections yet for this vehicle.").foregroundStyle(.secondary)
+                            }
+                            Button("View Inspections and Reports", systemImage: "doc.text.magnifyingglass") { showingInspections = true }
+                            Button("New Inspection", systemImage: "checkmark.seal") { showingInspectionWizard = true }
+                        }
+                    }
                 }
                 .listSectionSpacing(18)
             } else if let error {
@@ -526,6 +629,9 @@ struct VehicleDetailView: View {
         .navigationTitle(vehicle.map { $0.nickname?.isEmpty == false ? ($0.nickname ?? "Vehicle") : vehicleName($0) } ?? "Vehicle")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .task(id: selectedTab) {
+            if selectedTab == .build || selectedTab == .maintenance { await loadTimelines() }
+        }
         .refreshable { await load() }
         .photosPicker(
             isPresented: $showingPhotoPicker,
@@ -562,6 +668,18 @@ struct VehicleDetailView: View {
         }
         .sheet(isPresented: $showingPost) {
             NewCommunityPostView(preselectedVehicleId: vehicleId) {}
+        }
+        .sheet(isPresented: $showingBuildForm) {
+            VehicleBuildEntryForm(vehicleId: vehicleId) {
+                showingBuildForm = false
+                Task { await loadTimelines() }
+            }
+        }
+        .sheet(isPresented: $showingMaintenanceForm) {
+            VehicleMaintenanceEventForm(vehicleId: vehicleId) {
+                showingMaintenanceForm = false
+                Task { await loadTimelines() }
+            }
         }
         .alert("Vehicle",
                isPresented: .constant(inlineAlert != nil),
@@ -654,6 +772,38 @@ struct VehicleDetailView: View {
             // Setting `self.error` would replace the whole view with ErrorView,
             // which is too aggressive for a sub-action — use an alert instead.
             self.inlineAlert = error.localizedDescription
+        }
+    }
+
+    private func loadTimelines() async {
+        guard !loadingTimeline, preloaded == nil else { return }
+        loadingTimeline = true
+        defer { loadingTimeline = false }
+        do {
+            async let build = VehiclesAPI.buildEntries(id: vehicleId)
+            async let maintenance = VehiclesAPI.maintenanceEvents(id: vehicleId)
+            buildEntries = try await build
+            maintenanceEvents = try await maintenance
+        } catch {
+            inlineAlert = error.localizedDescription
+        }
+    }
+
+    private func deleteBuildEntry(_ entry: VehicleBuildEntry) async {
+        do {
+            _ = try await VehiclesAPI.deleteBuildEntry(vehicleId: vehicleId, entryId: entry.id)
+            await loadTimelines()
+        } catch {
+            inlineAlert = error.localizedDescription
+        }
+    }
+
+    private func deleteMaintenanceEvent(_ event: VehicleMaintenanceEvent) async {
+        do {
+            _ = try await VehiclesAPI.deleteMaintenanceEvent(vehicleId: vehicleId, eventId: event.id)
+            await loadTimelines()
+        } catch {
+            inlineAlert = error.localizedDescription
         }
     }
 
@@ -845,6 +995,269 @@ private struct VehicleMediaTile: View {
             .padding(8)
         }
     }
+}
+
+private struct VehicleBuildEntryRow: View {
+    let entry: VehicleBuildEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(entry.title).font(.headline)
+                Spacer()
+                Text(entry.isPublic ? "Shared" : "Private")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Text("\(entry.category) · \(entry.status.label)")
+                .font(.subheadline).foregroundStyle(.secondary)
+            if let manufacturer = entry.manufacturer {
+                Text([manufacturer, entry.partNumber].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption)
+            }
+            HStack(spacing: 10) {
+                if let date = entry.installedOn { Text(date) }
+                if let mileage = entry.mileage { Text("\(mileage.formatted()) mi") }
+                Text(entry.fitmentConfidence.label)
+            }
+            .font(.caption).foregroundStyle(.secondary)
+            if let notes = entry.publicNotes, !notes.isEmpty { Text(notes).font(.subheadline) }
+            if let notes = entry.privateNotes, !notes.isEmpty {
+                Text("Private: \(notes)").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 3)
+    }
+}
+
+private struct VehicleMaintenanceEventRow: View {
+    let event: VehicleMaintenanceEvent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(event.serviceType).font(.headline)
+                Spacer()
+                Text(event.isPublic ? "Shared" : "Private")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Text(event.servicedOn).font(.subheadline).foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                if let mileage = event.mileage { Text("\(mileage.formatted()) mi") }
+                if let provider = event.provider { Text(provider) }
+            }
+            .font(.caption).foregroundStyle(.secondary)
+            if let parts = event.partsFluids, !parts.isEmpty { Text("Parts/fluids: \(parts)").font(.subheadline) }
+            if let notes = event.publicNotes, !notes.isEmpty { Text(notes).font(.subheadline) }
+            if let notes = event.privateNotes, !notes.isEmpty {
+                Text("Private: \(notes)").font(.caption).foregroundStyle(.secondary)
+            }
+            if event.nextDueOn != nil || event.nextDueMileage != nil {
+                Text([event.nextDueOn.map { "Next due \($0)" }, event.nextDueMileage.map { "at \($0.formatted()) mi" }].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption.weight(.semibold)).foregroundStyle(Theme.Palette.primary)
+            }
+        }
+        .padding(.vertical, 3)
+    }
+}
+
+private struct VehicleBuildEntryForm: View {
+    let vehicleId: String
+    let onSaved: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var category = ""
+    @State private var manufacturer = ""
+    @State private var partNumber = ""
+    @State private var status: VehicleBuildStatus = .installed
+    @State private var installationKind: VehicleInstallationKind = .unknown
+    @State private var includeDate = true
+    @State private var installedOn = Date()
+    @State private var mileage = ""
+    @State private var shopName = ""
+    @State private var cost = ""
+    @State private var publicNotes = ""
+    @State private var privateNotes = ""
+    @State private var isPublic = false
+    @State private var saving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Modification") {
+                    TextField("Title", text: $title)
+                    TextField("Category", text: $category)
+                    TextField("Manufacturer", text: $manufacturer)
+                    TextField("Part number", text: $partNumber)
+                    Picker("Status", selection: $status) {
+                        ForEach(VehicleBuildStatus.allCases) { Text($0.label).tag($0) }
+                    }
+                    Picker("Installed by", selection: $installationKind) {
+                        ForEach(VehicleInstallationKind.allCases) { Text($0.label).tag($0) }
+                    }
+                    Toggle("Include install date", isOn: $includeDate)
+                    if includeDate { DatePicker("Install date", selection: $installedOn, displayedComponents: .date) }
+                    TextField("Mileage", text: $mileage).keyboardType(.numberPad)
+                    TextField("Shop", text: $shopName)
+                    TextField("Cost in USD (private)", text: $cost).keyboardType(.decimalPad)
+                }
+                Section("Notes") {
+                    TextField("Public notes", text: $publicNotes, axis: .vertical).lineLimit(3...8)
+                    TextField("Private notes", text: $privateNotes, axis: .vertical).lineLimit(3...8)
+                }
+                Section {
+                    Toggle("Show on public Vehicle Passport", isOn: $isPublic)
+                } footer: {
+                    Text("Cost and private notes always remain private.")
+                }
+                if let error { Section { Text(error).foregroundStyle(Theme.Palette.danger) } }
+            }
+            .navigationTitle("Build Entry")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "Saving…" : "Save") { Task { await save() } }
+                        .disabled(saving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        if !mileage.trimmed.isEmpty && Int(mileage) == nil {
+            error = "Enter mileage as a whole number."
+            return
+        }
+        if !cost.trimmed.isEmpty && garageCostCents(cost) == nil {
+            error = "Enter a valid non-negative cost."
+            return
+        }
+        saving = true
+        error = nil
+        defer { saving = false }
+        do {
+            _ = try await VehiclesAPI.addBuildEntry(id: vehicleId, payload: .init(
+                category: category.trimmed, title: title.trimmed,
+                manufacturer: manufacturer.nilIfBlank, partNumber: partNumber.nilIfBlank,
+                installedOn: includeDate ? garageDateString(installedOn) : nil,
+                mileage: Int(mileage), installationKind: installationKind,
+                shopName: shopName.nilIfBlank, costCents: garageCostCents(cost),
+                publicNotes: publicNotes.nilIfBlank, privateNotes: privateNotes.nilIfBlank,
+                status: status, isPublic: isPublic
+            ))
+            onSaved()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+private struct VehicleMaintenanceEventForm: View {
+    let vehicleId: String
+    let onSaved: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var serviceType = ""
+    @State private var servicedOn = Date()
+    @State private var mileage = ""
+    @State private var partsFluids = ""
+    @State private var provider = ""
+    @State private var cost = ""
+    @State private var publicNotes = ""
+    @State private var privateNotes = ""
+    @State private var hasNextDueDate = false
+    @State private var nextDueOn = Date()
+    @State private var nextDueMileage = ""
+    @State private var isPublic = false
+    @State private var saving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Service") {
+                    TextField("Service type", text: $serviceType)
+                    DatePicker("Service date", selection: $servicedOn, displayedComponents: .date)
+                    TextField("Mileage", text: $mileage).keyboardType(.numberPad)
+                    TextField("Provider", text: $provider)
+                    TextField("Cost in USD (private)", text: $cost).keyboardType(.decimalPad)
+                    TextField("Parts and fluids", text: $partsFluids, axis: .vertical).lineLimit(2...6)
+                }
+                Section("Next Service") {
+                    Toggle("Set due date", isOn: $hasNextDueDate)
+                    if hasNextDueDate { DatePicker("Due date", selection: $nextDueOn, displayedComponents: .date) }
+                    TextField("Due mileage", text: $nextDueMileage).keyboardType(.numberPad)
+                }
+                Section("Notes") {
+                    TextField("Public notes", text: $publicNotes, axis: .vertical).lineLimit(3...8)
+                    TextField("Private notes", text: $privateNotes, axis: .vertical).lineLimit(3...8)
+                }
+                Section {
+                    Toggle("Show on public Vehicle Passport", isOn: $isPublic)
+                } footer: {
+                    Text("Cost and private notes always remain private.")
+                }
+                if let error { Section { Text(error).foregroundStyle(Theme.Palette.danger) } }
+            }
+            .navigationTitle("Maintenance Event")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "Saving…" : "Save") { Task { await save() } }
+                        .disabled(saving || serviceType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        if !mileage.trimmed.isEmpty && Int(mileage) == nil {
+            error = "Enter mileage as a whole number."
+            return
+        }
+        if !nextDueMileage.trimmed.isEmpty && Int(nextDueMileage) == nil {
+            error = "Enter next due mileage as a whole number."
+            return
+        }
+        if !cost.trimmed.isEmpty && garageCostCents(cost) == nil {
+            error = "Enter a valid non-negative cost."
+            return
+        }
+        saving = true
+        error = nil
+        defer { saving = false }
+        do {
+            _ = try await VehiclesAPI.addMaintenanceEvent(id: vehicleId, payload: .init(
+                serviceType: serviceType.trimmed, servicedOn: garageDateString(servicedOn),
+                mileage: Int(mileage), partsFluids: partsFluids.nilIfBlank,
+                provider: provider.nilIfBlank, costCents: garageCostCents(cost),
+                publicNotes: publicNotes.nilIfBlank, privateNotes: privateNotes.nilIfBlank,
+                nextDueOn: hasNextDueDate ? garageDateString(nextDueOn) : nil,
+                nextDueMileage: Int(nextDueMileage), isPublic: isPublic
+            ))
+            onSaved()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+private func garageDateString(_ date: Date) -> String {
+    let components = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day], from: date)
+    return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
+}
+
+private func garageCostCents(_ value: String) -> Int? {
+    guard let amount = Decimal(string: value.trimmed), amount >= 0 else { return nil }
+    return NSDecimalNumber(decimal: amount * 100).intValue
+}
+
+private extension String {
+    var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
+    var nilIfBlank: String? { trimmed.isEmpty ? nil : trimmed }
 }
 
 private struct VehicleInspectionsView: View {

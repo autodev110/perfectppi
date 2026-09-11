@@ -13,6 +13,7 @@ import {
 import { getPublicVehicleWarrantySnapshot } from "@/features/warranty/queries";
 import { createCommunityComment } from "@/features/community/actions";
 import { getVehicleDiscussionPosts } from "@/features/community/queries";
+import { getPublicVehicleTimelines } from "@/features/vehicles/timelines";
 import { SafetyNotice } from "@/components/shared/safety-notice";
 import { ShareButton } from "@/components/shared/share-button";
 import { sharePath } from "@/lib/share/links";
@@ -102,20 +103,21 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
     inspection_error: inspectionError,
     inspection_requested: inspectionRequested,
   } = await searchParams;
-  const activeTab =
-    tab === "ppi-history" ||
-    tab === "marketplace" ||
-    tab === "warranty" ||
-    tab === "discussion"
+  const activeTab = tab === "posts" || tab === "discussion"
+    ? "posts"
+    : tab === "build" || tab === "maintenance"
       ? tab
-      : "overview";
+      : tab === "inspections" || tab === "ppi-history"
+        ? "inspections"
+        : "overview";
 
-  const [vehicle, ppiHistory, activeListing, warrantySnapshot, discussionPosts] = await Promise.all([
+  const [vehicle, ppiHistory, activeListing, warrantySnapshot, discussionPosts, timelines] = await Promise.all([
     getPublicVehicle(id),
     getVehiclePpiHistory(id),
     getVehicleActiveListing(id),
     getPublicVehicleWarrantySnapshot(id),
     getVehicleDiscussionPosts(id),
+    getPublicVehicleTimelines(id),
   ]);
 
   if (!vehicle) notFound();
@@ -170,8 +172,9 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
         <div className="px-7 py-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
           <div className="min-w-0">
             <h1 className="font-heading text-2xl font-extrabold tracking-tight text-on-surface mb-1 break-words">
-              {vehicleName || "Unknown Vehicle"}
+              {vehicle.nickname || vehicleName || "Unknown Vehicle"}
             </h1>
+            {vehicle.nickname && <p className="text-sm text-on-surface-variant mb-1">{vehicleName}</p>}
             {vehicle.trim && (
               <p className="text-sm text-on-surface-variant mb-3">{vehicle.trim}</p>
             )}
@@ -236,10 +239,10 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
       <div className="flex max-w-full gap-1 overflow-x-auto p-1 bg-surface-container rounded-xl ghost-border mb-6 w-full sm:w-fit">
         {[
           { key: "overview", label: "Overview" },
-          { key: "ppi-history", label: `PPI History${ppiHistory.length > 0 ? ` (${ppiHistory.length})` : ""}` },
-          { key: "marketplace", label: "Marketplace Listing" },
-          { key: "warranty", label: "Warranty Status" },
-          { key: "discussion", label: `Posts & Discussion${discussionPosts.length > 0 ? ` (${discussionPosts.length})` : ""}` },
+          { key: "posts", label: `Posts${discussionPosts.length > 0 ? ` (${discussionPosts.length})` : ""}` },
+          { key: "build", label: `Build${timelines.build.length > 0 ? ` (${timelines.build.length})` : ""}` },
+          { key: "maintenance", label: `Maintenance${timelines.maintenance.length > 0 ? ` (${timelines.maintenance.length})` : ""}` },
+          { key: "inspections", label: `Inspections${ppiHistory.length > 0 ? ` (${ppiHistory.length})` : ""}` },
         ].map(({ key, label }) => (
           <Link
             key={key}
@@ -321,7 +324,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                   )}
                 </div>
                 <Link
-                  href={`/vehicle/${id}?tab=ppi-history`}
+                  href={`/vehicle/${id}?tab=inspections`}
                   className="flex items-center gap-2 text-xs font-bold text-on-tertiary-container hover:gap-3 transition-all mt-2"
                 >
                   View full inspection history
@@ -363,8 +366,8 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
         </div>
       )}
 
-      {/* ── Marketplace tab ──────────────────────────────────────── */}
-      {activeTab === "marketplace" && (
+      {/* Listing is contextual passport content, not a permanent tab. */}
+      {activeTab === "overview" && activeListing && (
         <div className="bg-surface-container-lowest rounded-[1.25rem] p-6 ghost-border shadow-sm">
           {activeListing ? (
             <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr] md:items-start">
@@ -506,8 +509,8 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
         </div>
       )}
 
-      {/* ── Warranty tab ─────────────────────────────────────────── */}
-      {activeTab === "warranty" && (
+      {/* Coverage is contextual passport content, not a permanent tab. */}
+      {activeTab === "overview" && warrantySnapshot && (
         <div className="space-y-4">
           {warrantySnapshot ? (
             <>
@@ -636,8 +639,8 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
         </div>
       )}
 
-      {/* ── Discussion tab ───────────────────────────────────────── */}
-      {activeTab === "discussion" && (
+      {/* ── Posts tab ────────────────────────────────────────────── */}
+      {activeTab === "posts" && (
         <div className="space-y-4">
           {discussionPosts.length === 0 ? (
             <div className="bg-surface-container-lowest rounded-[1.25rem] p-10 ghost-border text-center">
@@ -772,8 +775,18 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
         </div>
       )}
 
-      {/* ── PPI History tab ───────────────────────────────────────── */}
-      {activeTab === "ppi-history" && (
+      {/* ── Build tab ─────────────────────────────────────────────── */}
+      {activeTab === "build" && (
+        <PublicBuildTimeline entries={timelines.build} />
+      )}
+
+      {/* ── Maintenance tab ───────────────────────────────────────── */}
+      {activeTab === "maintenance" && (
+        <PublicMaintenanceTimeline events={timelines.maintenance} />
+      )}
+
+      {/* ── Inspections tab ───────────────────────────────────────── */}
+      {activeTab === "inspections" && (
         <div className="space-y-4">
           {ppiHistory.length === 0 ? (
             <div className="bg-surface-container-lowest rounded-[1.25rem] p-10 ghost-border text-center">
@@ -857,6 +870,74 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+type PublicTimelines = Awaited<ReturnType<typeof getPublicVehicleTimelines>>;
+
+function PublicBuildTimeline({ entries }: { entries: PublicTimelines["build"] }) {
+  if (entries.length === 0) {
+    return <TimelineEmpty icon={<Wrench className="h-10 w-10" />} title="No shared build entries" message="The owner has not shared any modifications for this vehicle." />;
+  }
+  return (
+    <div className="space-y-4">
+      {entries.map((entry) => (
+        <article key={entry.id} className="rounded-[1.25rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">{entry.category}</p><h2 className="mt-1 font-heading text-lg font-extrabold text-on-surface">{entry.title}</h2></div>
+            <Badge variant="outline">{entry.status.replaceAll("_", " ")}</Badge>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs text-on-surface-variant">
+            {entry.manufacturer && <span className="rounded-lg bg-surface-container px-3 py-1.5">{entry.manufacturer}{entry.part_number ? ` · ${entry.part_number}` : ""}</span>}
+            {entry.installed_on && <span className="rounded-lg bg-surface-container px-3 py-1.5">{formatDate(entry.installed_on)}</span>}
+            {entry.mileage != null && <span className="rounded-lg bg-surface-container px-3 py-1.5">{formatMileage(entry.mileage)} mi</span>}
+            <span className="rounded-lg bg-surface-container px-3 py-1.5">{entry.fitment_confidence.replaceAll("_", " ")}</span>
+          </div>
+          {[entry.vehicle_configuration, entry.wheel_size && `Wheels: ${entry.wheel_size}`, entry.wheel_width != null && `Width: ${entry.wheel_width} in`, entry.wheel_offset_mm != null && `Offset: ${entry.wheel_offset_mm} mm`, entry.tire_size && `Tires: ${entry.tire_size}`, entry.suspension_drop && `Drop: ${entry.suspension_drop}`].filter(Boolean).length > 0 && (
+            <p className="mt-4 text-sm text-on-surface-variant">{[entry.vehicle_configuration, entry.wheel_size && `Wheels: ${entry.wheel_size}`, entry.wheel_width != null && `Width: ${entry.wheel_width} in`, entry.wheel_offset_mm != null && `Offset: ${entry.wheel_offset_mm} mm`, entry.tire_size && `Tires: ${entry.tire_size}`, entry.suspension_drop && `Drop: ${entry.suspension_drop}`].filter(Boolean).join(" · ")}</p>
+          )}
+          {entry.public_notes && <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-on-surface">{entry.public_notes}</p>}
+          <p className="mt-4 text-[11px] text-on-surface-variant">Owner-reported unless a stronger source is shown. Fitment is not guaranteed.</p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function PublicMaintenanceTimeline({ events }: { events: PublicTimelines["maintenance"] }) {
+  if (events.length === 0) {
+    return <TimelineEmpty icon={<Wrench className="h-10 w-10" />} title="No shared maintenance" message="The owner has not shared any maintenance records for this vehicle." />;
+  }
+  return (
+    <div className="space-y-4">
+      {events.map((event) => (
+        <article key={event.id} className="rounded-[1.25rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Maintenance</p><h2 className="mt-1 font-heading text-lg font-extrabold text-on-surface">{event.service_type}</h2></div>
+            <span className="text-sm font-semibold text-on-surface-variant">{formatDate(event.serviced_on)}</span>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs text-on-surface-variant">
+            {event.mileage != null && <span className="rounded-lg bg-surface-container px-3 py-1.5">{formatMileage(event.mileage)} mi</span>}
+            {event.provider && <span className="rounded-lg bg-surface-container px-3 py-1.5">{event.provider}</span>}
+            {event.next_due_on && <span className="rounded-lg bg-surface-container px-3 py-1.5">Next due {formatDate(event.next_due_on)}</span>}
+            {event.next_due_mileage != null && <span className="rounded-lg bg-surface-container px-3 py-1.5">Due at {formatMileage(event.next_due_mileage)} mi</span>}
+          </div>
+          {event.parts_fluids && <p className="mt-4 whitespace-pre-wrap text-sm text-on-surface"><strong>Parts and fluids:</strong> {event.parts_fluids}</p>}
+          {event.public_notes && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-on-surface">{event.public_notes}</p>}
+          <p className="mt-4 text-[11px] text-on-surface-variant">Owner-reported service record. Private receipts, cost, and notes are not shared.</p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function TimelineEmpty({ icon, title, message }: { icon: React.ReactNode; title: string; message: string }) {
+  return (
+    <div className="rounded-[1.25rem] bg-surface-container-lowest p-10 text-center ghost-border">
+      <div className="mx-auto mb-3 w-fit text-on-surface-variant/30">{icon}</div>
+      <p className="font-heading font-bold text-on-surface">{title}</p>
+      <p className="mt-1 text-sm text-on-surface-variant">{message}</p>
     </div>
   );
 }

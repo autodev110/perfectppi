@@ -15,14 +15,27 @@ import { VehicleNotesForm } from "./vehicle-notes-form";
 import { VehicleDeleteButton } from "./vehicle-danger-actions";
 import { InspectionDeleteButton } from "@/components/shared/inspection-delete-button";
 import { VehicleSoldAction } from "./vehicle-sold-action";
+import { getOwnedVehicleTimelines } from "@/features/vehicles/timelines";
+import { VehicleBuildManager, VehicleMaintenanceManager } from "./vehicle-timeline-manager";
 
-export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+type VehicleTab = "overview" | "posts" | "build" | "maintenance" | "inspections";
+
+export default async function VehicleDetailPage({ params, searchParams }: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { id } = await params;
-  const [vehicle, inspections] = await Promise.all([
-    getOwnedVehicle(id),
-    getMyPpiRequests({ vehicleId: id }),
-  ]);
+  const requestedTab = (await searchParams).tab;
+  const activeTab: VehicleTab = ["posts", "build", "maintenance", "inspections"].includes(requestedTab ?? "")
+    ? requestedTab as VehicleTab
+    : "overview";
+  const vehicle = await getOwnedVehicle(id);
   if (!vehicle) notFound();
+  const [inspections, timelines] = await Promise.all([
+    getMyPpiRequests({ vehicleId: id }),
+    getOwnedVehicleTimelines(vehicle.owner_id!, id),
+  ]);
+  if (!timelines) notFound();
 
   const gallery = [...(vehicle.vehicle_media ?? [])].sort((a, b) => {
     if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
@@ -58,6 +71,26 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
+      <nav aria-label="Vehicle Passport sections" className="flex max-w-full gap-1 overflow-x-auto rounded-xl border bg-muted/40 p-1">
+        {([
+          ["overview", "Overview"],
+          ["posts", "Posts"],
+          ["build", `Build${timelines.build.length ? ` (${timelines.build.length})` : ""}`],
+          ["maintenance", `Maintenance${timelines.maintenance.length ? ` (${timelines.maintenance.length})` : ""}`],
+          ["inspections", `Inspections${inspections.length ? ` (${inspections.length})` : ""}`],
+        ] as const).map(([key, label]) => (
+          <Link
+            key={key}
+            href={key === "overview" ? `/dashboard/vehicles/${id}` : `/dashboard/vehicles/${id}?tab=${key}`}
+            aria-current={activeTab === key ? "page" : undefined}
+            className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold ${activeTab === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+
+      {activeTab === "overview" && <>
       <Card>
         <CardHeader><CardTitle>Vehicle Details</CardTitle></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -75,7 +108,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       <Card>
         <CardHeader><CardTitle>Vehicle Actions</CardTitle></CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
-          <Button asChild variant="outline" className="justify-start"><Link href="#inspections"><FileText className="mr-2 h-4 w-4" />View Inspections and Reports</Link></Button>
+            <Button asChild variant="outline" className="justify-start"><Link href={`/dashboard/vehicles/${vehicle.id}?tab=inspections`}><FileText className="mr-2 h-4 w-4" />View Inspections and Reports</Link></Button>
           <Button asChild variant="outline" className="justify-start"><Link href={`/dashboard/ppi/new?vehicle=${vehicle.id}`}><ClipboardCheck className="mr-2 h-4 w-4" />New Inspection</Link></Button>
           {isPublic ? (
             <Button asChild variant="outline" className="justify-start"><Link href={`/dashboard/listings/new?vehicle=${vehicle.id}`}><Tag className="mr-2 h-4 w-4" />Create Marketplace Listing</Link></Button>
@@ -89,10 +122,10 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
             <Button variant="outline" className="justify-start" disabled title="Make the vehicle public first"><Share2 className="mr-2 h-4 w-4" />Share</Button>
           )}
           {isPublic ? (
-            <Button asChild variant="outline" className="justify-start"><Link href={`/vehicle/${vehicle.id}?tab=discussion`}><MessageSquare className="mr-2 h-4 w-4" />Community Posts About This Vehicle</Link></Button>
+            <Button asChild variant="outline" className="justify-start"><Link href={`/vehicle/${vehicle.id}?tab=posts`}><MessageSquare className="mr-2 h-4 w-4" />Community Posts About This Vehicle</Link></Button>
           ) : null}
           {isPublic ? (
-            <Button asChild variant="outline" className="justify-start"><Link href={`/vehicle/${vehicle.id}?tab=marketplace`}><Tag className="mr-2 h-4 w-4" />Marketplace Listing Page</Link></Button>
+            <Button asChild variant="outline" className="justify-start"><Link href={`/vehicle/${vehicle.id}`}><Tag className="mr-2 h-4 w-4" />Marketplace Listing Page</Link></Button>
           ) : null}
           {!isPublic && <p className="text-xs text-muted-foreground sm:col-span-2">Make this vehicle public before creating a listing or attaching it to a community post.</p>}
         </CardContent>
@@ -150,8 +183,25 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           </CardContent>
         </Card>
       )}
+      </>}
 
-      <Card id="inspections">
+      {activeTab === "posts" && (
+        <Card>
+          <CardHeader><CardTitle>Vehicle Posts</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">View Community posts attached to this vehicle or create a new update.</p>
+            <div className="flex flex-wrap gap-3">
+              {isPublic ? <Button asChild><Link href={`/dashboard/posts/new?vehicle=${vehicle.id}`}><Share2 className="mr-2 h-4 w-4" />Create Post</Link></Button> : <Button disabled>Make vehicle public to post</Button>}
+              {isPublic && <Button asChild variant="outline"><Link href={`/vehicle/${vehicle.id}?tab=posts`}><MessageSquare className="mr-2 h-4 w-4" />View Posts</Link></Button>}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === "build" && <VehicleBuildManager vehicleId={vehicle.id} entries={timelines.build} />}
+      {activeTab === "maintenance" && <VehicleMaintenanceManager vehicleId={vehicle.id} events={timelines.maintenance} />}
+
+      {activeTab === "inspections" && <Card id="inspections">
         <CardHeader><CardTitle>Inspections and Reports</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           {inspections.length === 0 ? <p className="text-sm text-muted-foreground">No inspections yet for this vehicle.</p> : inspections.map((inspection) => (
@@ -165,9 +215,9 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           ))}
           <Button asChild><Link href={`/dashboard/ppi/new?vehicle=${vehicle.id}`}><ClipboardCheck className="mr-2 h-4 w-4" />Start Inspection</Link></Button>
         </CardContent>
-      </Card>
+      </Card>}
 
-      <div className="border-t pt-3"><VehicleDeleteButton vehicleId={vehicle.id} /></div>
+      {activeTab === "overview" && <div className="border-t pt-3"><VehicleDeleteButton vehicleId={vehicle.id} /></div>}
     </div>
   );
 }

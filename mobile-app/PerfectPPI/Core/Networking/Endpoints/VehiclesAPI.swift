@@ -182,4 +182,58 @@ enum VehiclesAPI {
     static func delete(id: String) async throws -> Empty {
         try await APIClient.shared.delete("/api/vehicles/\(id)")
     }
+
+    struct BuildEntryPayload: Encodable {
+        let category: String
+        let title: String
+        let manufacturer: String?
+        let partNumber: String?
+        let installedOn: String?
+        let mileage: Int?
+        let installationKind: VehicleInstallationKind
+        let shopName: String?
+        let costCents: Int?
+        let publicNotes: String?
+        let privateNotes: String?
+        let status: VehicleBuildStatus
+        let isPublic: Bool
+    }
+
+    static func buildEntries(id: String) async throws -> [VehicleBuildEntry] {
+        try await APIClient.shared.get("/api/vehicles/\(id)/build")
+    }
+
+    static func addBuildEntry(id: String, payload: BuildEntryPayload) async throws -> VehicleBuildEntry {
+        try await APIClient.shared.post("/api/vehicles/\(id)/build", body: payload)
+    }
+
+    static func deleteBuildEntry(vehicleId: String, entryId: String) async throws -> Empty {
+        try await APIClient.shared.delete("/api/vehicles/\(vehicleId)/build/\(entryId)")
+    }
+
+    struct MaintenanceEventPayload: Encodable {
+        let serviceType: String
+        let servicedOn: String
+        let mileage: Int?
+        let partsFluids: String?
+        let provider: String?
+        let costCents: Int?
+        let publicNotes: String?
+        let privateNotes: String?
+        let nextDueOn: String?
+        let nextDueMileage: Int?
+        let isPublic: Bool
+    }
+
+    static func maintenanceEvents(id: String) async throws -> [VehicleMaintenanceEvent] {
+        try await APIClient.shared.get("/api/vehicles/\(id)/maintenance")
+    }
+
+    static func addMaintenanceEvent(id: String, payload: MaintenanceEventPayload) async throws -> VehicleMaintenanceEvent {
+        try await APIClient.shared.post("/api/vehicles/\(id)/maintenance", body: payload)
+    }
+
+    static func deleteMaintenanceEvent(vehicleId: String, eventId: String) async throws -> Empty {
+        try await APIClient.shared.delete("/api/vehicles/\(vehicleId)/maintenance/\(eventId)")
+    }
 }
