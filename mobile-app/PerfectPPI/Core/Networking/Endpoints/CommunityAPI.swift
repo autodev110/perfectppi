@@ -17,6 +17,14 @@ enum CommunityAPI {
         )
     }
 
+    /// Visible posts tagged to one public vehicle (Garage ↔ Community).
+    static func postsAboutVehicle(id: String) async throws -> [CommunityPost] {
+        try await APIClient.shared.get(
+            "/api/community/posts",
+            query: [URLQueryItem(name: "vehicle", value: id)]
+        )
+    }
+
     /// One visible post by id (deep links); 404 when hidden or out of audience.
     static func post(id: String) async throws -> CommunityPost {
         try await APIClient.shared.get("/api/community/posts/\(id)")

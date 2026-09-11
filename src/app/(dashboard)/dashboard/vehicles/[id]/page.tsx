@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatMileage } from "@/lib/utils/formatting";
-import { Car, ClipboardCheck, ExternalLink, FileText, ImagePlus, Pencil, Share2, Tag } from "lucide-react";
+import { Car, ClipboardCheck, ExternalLink, FileText, ImagePlus, MessageSquare, Pencil, Share2, Tag } from "lucide-react";
 import { VehiclePhotoUploader } from "./vehicle-photo-uploader";
 import { VehiclePhotoDeleteButton } from "./vehicle-photo-delete-button";
 import { VehicleNotesForm } from "./vehicle-notes-form";
@@ -83,6 +83,12 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           ) : (
             <Button variant="outline" className="justify-start" disabled title="Make the vehicle public first"><Share2 className="mr-2 h-4 w-4" />Share</Button>
           )}
+          {isPublic ? (
+            <Button asChild variant="outline" className="justify-start"><Link href={`/vehicle/${vehicle.id}?tab=discussion`}><MessageSquare className="mr-2 h-4 w-4" />Community Posts About This Vehicle</Link></Button>
+          ) : null}
+          {isPublic ? (
+            <Button asChild variant="outline" className="justify-start"><Link href={`/vehicle/${vehicle.id}?tab=marketplace`}><Tag className="mr-2 h-4 w-4" />Marketplace Listing Page</Link></Button>
+          ) : null}
           {!isPublic && <p className="text-xs text-muted-foreground sm:col-span-2">Make this vehicle public before creating a listing or attaching it to a community post.</p>}
         </CardContent>
       </Card>

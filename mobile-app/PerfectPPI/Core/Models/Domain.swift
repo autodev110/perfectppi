@@ -126,6 +126,8 @@ struct MarketplaceListing: Codable, Identifiable, Hashable {
     let inspectionSummary: MarketplaceInspectionSummary?
     let inspectionRequest: MarketplaceInspectionRequestSummary?
     let viewerIsSeller: Bool?
+    /// Private bookmark (plan 25.2 Save); sellers never see who saved.
+    let savedByViewer: Bool?
 }
 
 struct MarketplaceInspectionSummary: Codable, Hashable {

@@ -14,6 +14,7 @@ import { getPublicVehicleWarrantySnapshot } from "@/features/warranty/queries";
 import { createCommunityComment } from "@/features/community/actions";
 import { getVehicleDiscussionPosts } from "@/features/community/queries";
 import { SafetyNotice } from "@/components/shared/safety-notice";
+import { ListingSaveButton } from "@/components/shared/listing-save-button";
 import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-control";
 import { CommunityLikeButton } from "@/components/shared/community-like-button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -420,6 +421,11 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                     </button>
                   </form>
                 )}
+                {!activeListing.viewer_is_seller ? (
+                  <div className="mt-3">
+                    <ListingSaveButton listingId={activeListing.id} initialSaved={activeListing.saved_by_viewer} variant="inline" />
+                  </div>
+                ) : null}
                 {!activeListing.viewer_is_seller && activeListing.inspection_request ? (
                   <div className="mt-3 rounded-xl bg-teal/10 px-4 py-3 text-center text-xs font-bold text-teal ghost-border">
                     Inspection requested · {activeListing.inspection_request.status.replaceAll("_", " ")}

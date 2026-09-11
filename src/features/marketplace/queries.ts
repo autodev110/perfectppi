@@ -41,6 +41,8 @@ export type MarketplaceListing = Listing & {
   inspection_summary: MarketplaceInspectionSummary | null;
   inspection_request: MarketplaceInspectionRequestSummary | null;
   viewer_is_seller: boolean;
+  /** Private bookmark (plan 25.2 Save); never shown to the seller. */
+  saved_by_viewer: boolean;
 };
 
 const LISTING_SELECT = `
@@ -52,7 +54,7 @@ const LISTING_SELECT = `
   seller:profiles!marketplace_listings_seller_id_fkey(id, display_name, username, avatar_url, is_public)
 `;
 
-type ListingRow = Omit<MarketplaceListing, "inspection_summary" | "inspection_request" | "viewer_is_seller">;
+type ListingRow = Omit<MarketplaceListing, "inspection_summary" | "inspection_request" | "viewer_is_seller" | "saved_by_viewer">;
 
 export type MarketplaceFilters = {
   q?: string;
@@ -233,12 +235,53 @@ async function addInspectionTrust(
     }
   }
 
+  const savedIds = new Set<string>();
+  if (viewerId) {
+    const { data: saveRows } = await admin.rpc("marketplace_listing_save_states", {
+      p_viewer_id: viewerId,
+      p_listing_ids: listingIds,
+    });
+    for (const row of saveRows ?? []) if (row.saved) savedIds.add(row.listing_id);
+  }
+
   return listings.map((listing) => ({
     ...listing,
     inspection_summary: inspectionByVehicle.get(listing.vehicle_id) ?? null,
     inspection_request: openRequestByListing.get(listing.id) ?? null,
     viewer_is_seller: viewerId === listing.seller_id,
+    saved_by_viewer: savedIds.has(listing.id),
   }));
+}
+
+/**
+ * Saved listings in save order (plan 25.1). Sold/removed listings stay so
+ * the member sees the outcome; listings from blocked sellers are dropped.
+ */
+export async function getSavedMarketplaceListings(page = 1, perPage = 20) {
+  const viewerId = await getCurrentSocialProfileId();
+  if (!viewerId) return [];
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const admin = createAdminClient();
+  const { data: savedRows, error } = await admin.rpc("list_saved_marketplace_listing_ids", {
+    p_viewer_id: viewerId,
+    p_limit: perPage,
+    p_offset: (safePage - 1) * perPage,
+  });
+  if (error) {
+    console.error("[marketplace] saved listings failed", error.message);
+    return [];
+  }
+  const ids = (savedRows ?? []).map((row) => row.listing_id);
+  if (ids.length === 0) return [];
+  const { data } = await admin.from("marketplace_listings").select(LISTING_SELECT).in("id", ids);
+  const rows = (data ?? []) as unknown as ListingRow[];
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const ordered = ids.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [row] : [];
+  });
+  const cleaned = await Promise.all(ordered.map((item) => cleanListingMedia(item)));
+  return addInspectionTrust(cleaned, viewerId);
 }
 
 async function filterVisibleListings(listings: ListingRow[], viewerId: string | null) {

@@ -97,4 +97,26 @@ enum MarketplaceAPI {
             body: RequestInspectionPayload(scope: scope)
         )
     }
+
+    struct SavePayload: Encodable { let saved: Bool }
+    struct SaveResult: Decodable {
+        let listingId: String
+        let saved: Bool
+    }
+
+    /// Private Save/Unsave (plan 25.2). Saving needs a visible listing.
+    static func setSaved(listingId: String, saved: Bool) async throws -> SaveResult {
+        try await APIClient.shared.post(
+            "/api/marketplace/listings/\(listingId)/save",
+            body: SavePayload(saved: saved)
+        )
+    }
+
+    /// Saved listings in save order; sold or removed ones stay with their status.
+    static func saved(page: Int = 1) async throws -> [MarketplaceListing] {
+        try await APIClient.shared.get(
+            "/api/marketplace/saved",
+            query: [URLQueryItem(name: "page", value: String(max(page, 1)))]
+        )
+    }
 }

@@ -3186,6 +3186,24 @@ export type Database = {
         }
         Relationships: []
       }
+      marketplace_listing_saves: {
+        Row: {
+          created_at: string
+          listing_id: string
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          listing_id: string
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          listing_id?: string
+          profile_id?: string
+        }
+        Relationships: []
+      }
       community_post_saves: {
         Row: {
           created_at: string
@@ -4470,6 +4488,18 @@ export type Database = {
         Args: { p_actor_profile_id: string }
         Returns: number
       }
+      set_marketplace_listing_save: {
+        Args: { p_actor_profile_id: string; p_listing_id: string; p_saved: boolean }
+        Returns: Json
+      }
+      marketplace_listing_save_states: {
+        Args: { p_viewer_id: string; p_listing_ids: string[] }
+        Returns: { listing_id: string; saved: boolean }[]
+      }
+      list_saved_marketplace_listing_ids: {
+        Args: { p_viewer_id: string; p_limit?: number; p_offset?: number }
+        Returns: { listing_id: string; saved_at: string; listing_status: Database["public"]["Enums"]["listing_status"] }[]
+      }
       set_community_post_save: {
         Args: { p_actor_profile_id: string; p_post_id: string; p_saved: boolean }
         Returns: Json
@@ -4887,6 +4917,7 @@ export type Database = {
         | "post_likes"
         | "group_post_removed"
         | "group_role_changed"
+        | "saved_listing_updated"
         | "moderation_decision"
         | "moderation_case"
         | "report_received"

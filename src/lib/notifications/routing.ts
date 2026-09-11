@@ -31,7 +31,7 @@ export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, { label:
   social: { label: "Community", description: "Friend requests, comments, likes, and accepted answers.", locked: false },
   groups: { label: "Groups", description: "Moderator actions on your group posts and role changes.", locked: false },
   messages: { label: "Messages", description: "New direct messages.", locked: false },
-  marketplace: { label: "Marketplace", description: "Inquiries and inspection requests on your listings.", locked: false },
+  marketplace: { label: "Marketplace", description: "Inquiries and inspection requests on your listings, and changes to listings you saved.", locked: false },
   inspections: { label: "Inspections", description: "Technician assignments and report updates.", locked: false },
   safety: { label: "Safety & moderation", description: "Report receipts, decisions, warnings, and restrictions. Always delivered.", locked: true },
   account: { label: "Account", description: "Payments, security, and privacy requests. Always delivered.", locked: true },
@@ -61,6 +61,7 @@ export function notificationDestinationIntent(
     case "message_received":
       return { kind: "conversation", id: str(d.conversation_id), secondaryId: str(d.message_id) };
     case "listing_inspection_requested":
+    case "saved_listing_updated":
       return { kind: "listing_vehicle", id: str(d.vehicle_id), secondaryId: str(d.listing_id) };
     case "moderation_decision":
     case "group_post_removed":

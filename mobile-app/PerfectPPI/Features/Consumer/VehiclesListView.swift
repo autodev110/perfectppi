@@ -422,6 +422,21 @@ struct VehicleDetailView: View {
                         Button("Share", systemImage: "square.and.arrow.up") {
                             openPublicAction(.post)
                         }
+                        // Garage → Community / Marketplace hops (plan Phase 1B).
+                        if vehicle.visibility == .public {
+                            NavigationLink {
+                                VehicleCommunityPostsView(vehicle: vehicle)
+                            } label: {
+                                Label("Community Posts About This Vehicle", systemImage: "text.bubble")
+                            }
+                        }
+                        if let listing = vehicle.marketplaceListings?.first(where: { $0.status == .active }) {
+                            NavigationLink {
+                                MarketplaceListingLoaderView(listingId: listing.id)
+                            } label: {
+                                Label("View Marketplace Listing", systemImage: "tag")
+                            }
+                        }
                     }
 
                     Section("Notes") {
@@ -1096,3 +1111,4 @@ struct NewVehicleView: View {
         return parts.isEmpty ? "Vehicle" : parts.joined(separator: " ")
     }
 }
+

@@ -203,6 +203,7 @@ private struct NotificationRow: View {
         case .answerAccepted, .acceptedAnswerUnavailable: "checkmark.circle"
         case .messageReceived: "envelope"
         case .listingInspectionRequested, .inspectionSubmitted, .inspectionUpdated, .techRequestNew, .techRequestAccepted: "checkmark.seal"
+        case .savedListingUpdated: "tag"
         case .moderationDecision, .moderationCase, .reportReceived: "shield"
         case .warrantyAvailable, .paymentCompleted: "creditcard"
         case .unknown: "bell"
@@ -219,6 +220,7 @@ enum NotificationRoute: Hashable, Identifiable {
     case inspectionRequest(id: String)
     case myPosts
     case group(slug: String)
+    case listing(id: String)
 
     var id: String {
         switch self {
@@ -229,6 +231,7 @@ enum NotificationRoute: Hashable, Identifiable {
         case .inspectionRequest(let id): "inspection:\(id)"
         case .myPosts: "my_posts"
         case .group(let slug): "group:\(slug)"
+        case .listing(let id): "listing:\(id)"
         }
     }
 
@@ -244,6 +247,9 @@ enum NotificationRoute: Hashable, Identifiable {
         case ("inspection_request", let id?): self = .inspectionRequest(id: id)
         case ("my_posts", _): self = .myPosts
         case ("group", let slug?): self = .group(slug: slug)
+        case ("listing_vehicle", _):
+            guard let listingId = destination.secondaryId else { return nil }
+            self = .listing(id: listingId)
         default: return nil
         }
     }
@@ -281,6 +287,8 @@ struct NotificationRouteView: View {
             ModeratedPostsView(onChanged: onChanged)
         case .group(let slug):
             CommunityGroupDetailView(slug: slug)
+        case .listing(let id):
+            MarketplaceListingLoaderView(listingId: id)
         }
     }
 }

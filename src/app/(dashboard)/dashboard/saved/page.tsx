@@ -1,24 +1,32 @@
 import Link from "next/link";
 import { requireRole } from "@/features/auth/guards";
 import { getSavedCommunityPosts } from "@/features/community/queries";
+import { getSavedMarketplaceListings } from "@/features/marketplace/queries";
+import { ListingSaveButton } from "@/components/shared/listing-save-button";
+import { formatCurrency } from "@/lib/utils/formatting";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CommunitySaveButton } from "@/components/shared/community-save-button";
 import { SafetyNotice } from "@/components/shared/safety-notice";
 import { formatDate, getInitials } from "@/lib/utils/formatting";
-import { Bookmark, MessageSquare } from "lucide-react";
+import { Bookmark, Car, MessageSquare, Tag } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 // Private saved posts (plan Phase 1B / 7.4 "Saved Items"). Posts that were
 // hidden, removed, or moved out of the viewer's audience simply do not
 // appear; the save itself is kept so a restored post comes back.
-export default async function SavedPostsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+export default async function SavedPostsPage({ searchParams }: { searchParams: Promise<{ page?: string; tab?: string }> }) {
   await requireRole(["consumer", "technician", "org_manager", "admin"]);
-  const requestedPage = Number((await searchParams).page ?? "1");
+  const params = await searchParams;
+  const requestedPage = Number(params.page ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const posts = await getSavedCommunityPosts(page, 20);
+  const tab = params.tab === "listings" ? "listings" : "posts";
+  const [posts, listings] = await Promise.all([
+    tab === "posts" ? getSavedCommunityPosts(page, 20) : Promise.resolve([]),
+    tab === "listings" ? getSavedMarketplaceListings(page, 20) : Promise.resolve([]),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -26,15 +34,62 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
         <div>
           <h1 className="font-heading text-2xl font-extrabold tracking-tight">Saved</h1>
           <p className="text-sm text-muted-foreground">
-            Posts you bookmarked. Only you can see this list; authors are never told.
+            Posts and listings you bookmarked. Only you can see this list; authors and sellers are never told.
           </p>
         </div>
         <Button asChild variant="outline">
-          <Link href="/community">Back to Community</Link>
+          <Link href={tab === "listings" ? "/marketplace" : "/community"}>{tab === "listings" ? "Browse Marketplace" : "Back to Community"}</Link>
         </Button>
       </div>
 
-      {posts.length === 0 ? (
+      <nav className="flex w-fit gap-1 rounded-2xl bg-surface-container-low p-1.5 ghost-border" aria-label="Saved items">
+        <Link href="/dashboard/saved" className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === "posts" ? "bg-surface-container-lowest shadow-sm" : "text-muted-foreground"}`}>Posts</Link>
+        <Link href="/dashboard/saved?tab=listings" className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === "listings" ? "bg-surface-container-lowest shadow-sm" : "text-muted-foreground"}`}>Listings</Link>
+      </nav>
+
+      {tab === "listings" ? (
+        listings.length === 0 ? (
+          <Card>
+            <CardContent className="p-10 text-center">
+              <Tag className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
+              <p className="font-heading font-bold">No saved listings</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Tap Save on a listing to follow it here. You are told when its price changes or it sells.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {listings.map((listing) => {
+              const name = [listing.vehicle?.year, listing.vehicle?.make, listing.vehicle?.model].filter(Boolean).join(" ");
+              const unavailable = listing.status !== "active";
+              return (
+                <Card key={listing.id}>
+                  <CardContent className="flex items-center justify-between gap-4 p-4">
+                    <Link href={`/vehicle/${listing.vehicle_id}?tab=marketplace`} className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-12 w-16 shrink-0 items-center justify-center rounded-xl bg-surface-container">
+                        <Car className="h-5 w-5 text-muted-foreground" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-bold">{listing.title || name || "Listing"}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {name}{name ? " · " : ""}{formatCurrency(listing.asking_price_cents)}
+                          {unavailable ? ` · ${listing.status === "sold" ? "Sold" : "No longer available"}` : ""}
+                        </span>
+                      </span>
+                    </Link>
+                    <ListingSaveButton listingId={listing.id} initialSaved={listing.saved_by_viewer} variant="inline" />
+                  </CardContent>
+                </Card>
+              );
+            })}
+            <nav className="flex items-center justify-between pt-2" aria-label="Saved listings pagination">
+              {page > 1 ? <Button asChild variant="outline"><Link href={`/dashboard/saved?tab=listings&page=${page - 1}`}>Previous</Link></Button> : <span />}
+              {listings.length === 20 ? <Button asChild variant="outline"><Link href={`/dashboard/saved?tab=listings&page=${page + 1}`}>Next</Link></Button> : <span />}
+            </nav>
+          </div>
+        )
+      ) : posts.length === 0 ? (
         <Card>
           <CardContent className="p-10 text-center">
             <Bookmark className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />

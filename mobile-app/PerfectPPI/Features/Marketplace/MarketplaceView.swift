@@ -29,9 +29,23 @@ struct MarketplaceView: View {
                                 MarketplaceListingDetailView(
                                     listing: listing,
                                     currentProfileId: currentProfileId
-                                )
+                                ) { reloadToken = UUID() }
                             } label: {
                                 MarketplaceListingRow(listing: listing)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                if listing.sellerId != currentProfileId {
+                                    Button {
+                                        Task {
+                                            _ = try? await MarketplaceAPI.setSaved(listingId: listing.id, saved: listing.savedByViewer != true)
+                                            reloadToken = UUID()
+                                        }
+                                    } label: {
+                                        Label(listing.savedByViewer == true ? "Unsave" : "Save",
+                                              systemImage: listing.savedByViewer == true ? "bookmark.slash" : "bookmark")
+                                    }
+                                    .tint(Theme.Palette.primary)
+                                }
                             }
                         }
                         .listStyle(.insetGrouped)
@@ -73,9 +87,17 @@ private struct MarketplaceListingRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(listing.title)
-                    .font(.headline)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(listing.title)
+                        .font(.headline)
+                        .lineLimit(1)
+                    if listing.savedByViewer == true {
+                        Image(systemName: "bookmark.fill")
+                            .font(.caption)
+                            .foregroundStyle(Theme.Palette.primary)
+                            .accessibilityLabel("Saved")
+                    }
+                }
                 Text(vehicleSubtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -117,17 +139,40 @@ private struct MarketplaceListingRow: View {
 private struct MarketplaceListingDetailView: View {
     let listing: MarketplaceListing
     let currentProfileId: String?
+    var onChanged: () -> Void = {}
 
     @State private var contacting = false
     @State private var requestingInspection = false
     @State private var notice: String?
     @State private var openConversationId: String?
     @State private var inspectionRequest: MarketplaceInspectionRequestSummary?
+    @State private var saved: Bool
+    @State private var saving = false
 
-    init(listing: MarketplaceListing, currentProfileId: String?) {
+    init(listing: MarketplaceListing, currentProfileId: String?, onChanged: @escaping () -> Void = {}) {
         self.listing = listing
         self.currentProfileId = currentProfileId
+        self.onChanged = onChanged
         _inspectionRequest = State(initialValue: listing.inspectionRequest)
+        _saved = State(initialValue: listing.savedByViewer ?? false)
+    }
+
+    /// Optimistic private save (plan 25.2); reconciled to the server answer.
+    @MainActor
+    private func toggleSaved() async {
+        guard !saving else { return }
+        let previous = saved
+        saved.toggle()
+        saving = true
+        defer { saving = false }
+        do {
+            let result = try await MarketplaceAPI.setSaved(listingId: listing.id, saved: saved)
+            saved = result.saved
+            onChanged()
+        } catch {
+            saved = previous
+            notice = error.localizedDescription
+        }
     }
 
     var body: some View {
@@ -188,11 +233,31 @@ private struct MarketplaceListingDetailView: View {
                     }
                 }
 
+                // Garage ↔ Community cross-navigation (plan Phase 1B).
+                if let vehicle = listing.vehicle {
+                    NavigationLink {
+                        VehicleCommunityPostsView(vehicle: vehicle)
+                    } label: {
+                        Label("Community posts about this vehicle", systemImage: "text.bubble")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(OutlineButtonStyle())
+                }
+
                 if listing.sellerId == currentProfileId {
                     Text("This is your listing.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
+                    Button {
+                        Task { await toggleSaved() }
+                    } label: {
+                        Label(saved ? "Saved" : "Save Listing", systemImage: saved ? "bookmark.fill" : "bookmark")
+                    }
+                    .buttonStyle(OutlineButtonStyle())
+                    .disabled(saving)
+                    .accessibilityLabel(saved ? "Remove listing from saved" : "Save listing")
+
                     Button {
                         Task { await contactSeller() }
                     } label: {
@@ -634,5 +699,41 @@ private struct ListingThumbnail: View {
                 .font(.title2)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+
+/// Public wrapper so other features (Garage) can push the listing detail.
+struct MarketplaceListingSummaryView: View {
+    let listing: MarketplaceListing
+    let currentProfileId: String?
+
+    var body: some View {
+        MarketplaceListingDetailView(listing: listing, currentProfileId: currentProfileId)
+    }
+}
+
+/// Loads one listing by id (deep links, Garage hop) and shows the detail.
+struct MarketplaceListingLoaderView: View {
+    let listingId: String
+    @EnvironmentObject private var auth: AuthStore
+
+    var body: some View {
+        AsyncContent(
+            load: { try await MarketplaceAPI.get(id: listingId) },
+            loaded: { listing in MarketplaceListingSummaryView(listing: listing, currentProfileId: auth.profile?.id) },
+            failure: { error, retry in
+                if let apiError = error as? APIError, case .notFound = apiError {
+                    EmptyStateCard(
+                        title: "Listing unavailable",
+                        message: "This listing is no longer available.",
+                        systemImage: "tag.slash"
+                    )
+                    .padding()
+                } else {
+                    ErrorView(message: error.localizedDescription, retry: retry)
+                }
+            }
+        )
     }
 }

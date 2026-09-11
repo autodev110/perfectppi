@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getMarketplaceListings } from "@/features/marketplace/queries";
+import { getCurrentSocialProfileId } from "@/features/social/relationships";
+import { ListingSaveButton } from "@/components/shared/listing-save-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -28,6 +30,7 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
   const params = await searchParams;
   const { q, make, model, minYear, maxYear, maxPrice, sort } = params;
 
+  const viewerId = await getCurrentSocialProfileId();
   const listings = await getMarketplaceListings({
     q,
     make,
@@ -191,10 +194,15 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                 const vehicleName = [vehicle?.year, vehicle?.make, vehicle?.model].filter(Boolean).join(" ") || listing.title;
 
                 return (
+                  <div key={listing.id} className="relative min-w-0">
+                  {viewerId && !listing.viewer_is_seller ? (
+                    <div className="absolute right-4 top-4 z-10">
+                      <ListingSaveButton listingId={listing.id} initialSaved={listing.saved_by_viewer} />
+                    </div>
+                  ) : null}
                   <Link
-                    key={listing.id}
                     href={`/vehicle/${listing.vehicle_id}?tab=marketplace`}
-                    className="group min-w-0 bg-surface-container-lowest rounded-[1.5rem] overflow-hidden ghost-border shadow-sm hover:shadow-xl transition-all"
+                    className="group block min-w-0 bg-surface-container-lowest rounded-[1.5rem] overflow-hidden ghost-border shadow-sm hover:shadow-xl transition-all"
                   >
                     <div className="relative h-56 bg-surface-container-low overflow-hidden">
                       {primaryMedia ? (
@@ -273,6 +281,7 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                       </div>
                     </div>
                   </Link>
+                  </div>
                 );
               })}
             </div>

@@ -386,3 +386,35 @@ export async function requestMarketplaceInspectionFromListing(formData: FormData
     : "/marketplace?tab=marketplace";
   redirect(`${back}&inspection_requested=1`);
 }
+
+const saveListingSchema = z.object({
+  listingId: z.string().uuid(),
+  saved: z.boolean(),
+});
+
+export type SaveListingResult =
+  | { error: string; data?: undefined }
+  | { error?: undefined; data: { listingId: string; saved: boolean } };
+
+// Private Save/Unsave for listings (plan 25.2). Saving requires the listing
+// to be visible to the caller; unsaving always works.
+export async function setMarketplaceListingSave(input: unknown): Promise<SaveListingResult> {
+  const parsed = saveListingSchema.safeParse(input);
+  if (!parsed.success) return { error: "Invalid save request" };
+  const profile = await getCurrentProfileId();
+  if ("error" in profile) return { error: profile.error ?? "Not authenticated" };
+
+  const { data, error } = await createAdminClient().rpc("set_marketplace_listing_save", {
+    p_actor_profile_id: profile.profileId,
+    p_listing_id: parsed.data.listingId,
+    p_saved: parsed.data.saved,
+  });
+  if (error) {
+    if (error.message.includes("own listing")) return { error: "You cannot save your own listing." };
+    return { error: "This listing is not available." };
+  }
+  const result = (data ?? {}) as { listingId?: string; saved?: boolean };
+  revalidatePath("/marketplace");
+  revalidatePath("/dashboard/saved");
+  return { data: { listingId: result.listingId ?? parsed.data.listingId, saved: result.saved ?? parsed.data.saved } };
+}
