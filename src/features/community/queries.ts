@@ -57,10 +57,32 @@ type CommunityFeedComment = Pick<
 type CommunityFeedCommentWithMentions = CommunityFeedComment & { mentions: CommunityMention[] };
 type CommunityFeedGroup = Pick<CommunityGroupRow, "id" | "slug" | "name" | "avatar_url">;
 
+/** Poll state for the viewer (plan 14.2): counts only after voting or close. */
+export type CommunityPollView = {
+  closes_at: string;
+  closed: boolean;
+  total_votes: number;
+  viewer_option_key: string | null;
+  options: Array<{ key: string; label: string; votes: number | null }>;
+};
+
+/** Redacted inspection card for Inspection Discussion posts: never findings. */
+export type CommunityInspectionSummary = {
+  id: string;
+  ppi_type: string;
+  inspection_scope: string;
+  status: string;
+  completed_at: string | null;
+};
+
 export type CommunityFeedPost = Pick<
   CommunityPostRow,
   "id" | "author_id" | "vehicle_id" | "marketplace_listing_id" | "group_id" | "content" | "audience" | "post_type" | "accepted_answer_comment_id" | "status" | "created_at" | "updated_at"
 > & {
+  /** Structured fields for the post type (plan 14.2). */
+  details: Record<string, unknown>;
+  poll: CommunityPollView | null;
+  inspection: CommunityInspectionSummary | null;
   author: CommunityFeedProfile | null;
   vehicle: CommunityFeedVehicle | null;
   marketplace_listing: CommunityFeedListing | null;
@@ -113,6 +135,16 @@ export type CommunityPostOptionListing = Pick<
 
 export type CommunityPostOptionGroup = Pick<CommunityGroupRow, "id" | "slug" | "name" | "avatar_url">;
 
+/** The author's own submitted/completed inspections, for Inspection Discussion posts. */
+export type CommunityPostOptionInspection = {
+  id: string;
+  vehicle_id: string;
+  ppi_type: string;
+  inspection_scope: string;
+  status: string;
+  updated_at: string;
+};
+
 const COMMUNITY_POST_SELECT = `
   *,
   author:profiles!community_posts_author_id_fkey(id, display_name, username, avatar_url, is_public),
@@ -138,7 +170,7 @@ const COMMUNITY_POST_SELECT = `
 // are selected only where the server needs them to filter nested rows, then
 // removed before serialization.
 const COMMUNITY_FEED_SELECT = `
-  id, author_id, vehicle_id, marketplace_listing_id, group_id, group_status, group_pinned_at, active_revision_id, content, audience, post_type, accepted_answer_comment_id, status, created_at, updated_at,
+  id, author_id, vehicle_id, marketplace_listing_id, group_id, group_status, group_pinned_at, active_revision_id, content, audience, post_type, details, accepted_answer_comment_id, status, created_at, updated_at,
   author:profiles!community_posts_author_id_fkey(id, display_name, username, avatar_url, is_public),
   vehicle:vehicles!community_posts_vehicle_id_fkey(
     id, year, make, model, trim, mileage, visibility,
@@ -264,6 +296,9 @@ function toCommunityFeedPost(
       revisionId: post.active_revision_id,
     }),
     safety_notice: buildSafetyNotice(post.content),
+    details: (post.details && typeof post.details === "object" && !Array.isArray(post.details) ? post.details : {}) as Record<string, unknown>,
+    poll: null,
+    inspection: null,
     mentions: post.mentions ?? [],
     author: post.author ? {
       id: post.author.id,
@@ -332,24 +367,69 @@ function toCommunityFeedPost(
 
 // Viewer-specific reaction state (likes, private saves) layered onto posts
 // that already passed the visibility policy.
+function toPollView(row: { closes_at: string; closed: boolean; total_votes: number; viewer_option_key: string | null; options: unknown }): CommunityPollView {
+  const options = Array.isArray(row.options) ? row.options as Array<{ key?: unknown; label?: unknown; votes?: unknown }> : [];
+  return {
+    closes_at: row.closes_at,
+    closed: row.closed,
+    total_votes: row.total_votes,
+    viewer_option_key: row.viewer_option_key,
+    options: options.map((option) => ({
+      key: String(option.key ?? ""),
+      label: String(option.label ?? ""),
+      votes: typeof option.votes === "number" ? option.votes : null,
+    })),
+  };
+}
+
+// Viewer-specific state for a page of posts: likes, saves, poll results, and
+// the redacted inspection card for Inspection Discussion posts.
 async function withPostLikeState(posts: CommunityFeedPost[], viewerId: string) {
   if (posts.length === 0) return posts;
   const admin = createAdminClient();
   const postIds = posts.map((post) => post.id);
-  const [{ data, error }, { data: saves, error: saveError }] = await Promise.all([
+  const pollIds = posts.filter((post) => post.post_type === "poll").map((post) => post.id);
+  const inspectionIds = posts
+    .map((post) => (post.post_type === "inspection_discussion" ? String(post.details.inspection_request_id ?? "") : ""))
+    .filter(Boolean);
+  const [{ data, error }, { data: saves, error: saveError }, { data: polls, error: pollError }, { data: inspections }] = await Promise.all([
     admin.rpc("community_post_like_summaries", { p_viewer_id: viewerId, p_post_ids: postIds }),
     admin.rpc("community_post_save_states", { p_viewer_id: viewerId, p_post_ids: postIds }),
+    pollIds.length
+      ? admin.rpc("community_poll_results", { p_viewer_id: viewerId, p_post_ids: pollIds })
+      : Promise.resolve({ data: [], error: null }),
+    inspectionIds.length
+      ? admin.from("ppi_requests").select("id, ppi_type, inspection_scope, status, updated_at").in("id", inspectionIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; ppi_type: string; inspection_scope: string; status: string; updated_at: string }> }),
   ]);
   if (error) console.error("community_post_like_summaries failed", error);
   if (saveError) console.error("community_post_save_states failed", saveError);
+  if (pollError) console.error("community_poll_results failed", pollError);
   const summaries = new Map((data ?? []).map((summary) => [summary.post_id, summary]));
   const saved = new Set((saves ?? []).filter((row) => row.saved).map((row) => row.post_id));
-  return posts.map((post) => ({
-    ...post,
-    like_count: Number(summaries.get(post.id)?.like_count ?? post.like_count),
-    liked_by_viewer: summaries.get(post.id)?.liked_by_viewer ?? post.liked_by_viewer,
-    saved_by_viewer: saved.has(post.id),
-  }));
+  const pollByPost = new Map((polls ?? []).map((row) => [row.post_id, toPollView(row)]));
+  const inspectionById = new Map((inspections ?? []).map((row) => [row.id, row]));
+  return posts.map((post) => {
+    const inspection = post.post_type === "inspection_discussion"
+      ? inspectionById.get(String(post.details.inspection_request_id ?? "")) ?? null
+      : null;
+    return {
+      ...post,
+      like_count: Number(summaries.get(post.id)?.like_count ?? post.like_count),
+      liked_by_viewer: summaries.get(post.id)?.liked_by_viewer ?? post.liked_by_viewer,
+      saved_by_viewer: saved.has(post.id),
+      poll: pollByPost.get(post.id) ?? post.poll,
+      inspection: inspection
+        ? {
+          id: inspection.id,
+          ppi_type: inspection.ppi_type,
+          inspection_scope: inspection.inspection_scope,
+          status: inspection.status,
+          completed_at: inspection.status === "completed" ? inspection.updated_at : null,
+        }
+        : post.inspection,
+    };
+  });
 }
 
 /** Saved posts in save order; hidden or removed posts drop out silently. */
@@ -479,7 +559,9 @@ export async function getCommunityPostById(id: string) {
 
   const post = data as unknown as CommunityPost | null;
   if (post?.group_id && !(await getFeatureFlags()).flags.groups) return null;
-  if (!post || (post.vehicle && post.vehicle.visibility !== "public")) return null;
+  // Vehicle visibility (public / friends / private) was already applied by
+  // social_can_view_community_post for this viewer.
+  if (!post) return null;
   const blockedAuthors = await getBlockedProfileIds(
     viewerId,
     (post.comments ?? []).map((comment) => comment.author_id),
@@ -655,14 +737,14 @@ export async function getCommunityPostOptions() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return { vehicles: [], listings: [], groups: [], defaultAudience: "friends" as const, canPostPublic: false };
+  if (!user) return { vehicles: [], listings: [], groups: [], inspections: [], defaultAudience: "friends" as const, canPostPublic: false };
 
   const { data: profile } = await getProfileIdFromAuthUserId(user.id);
-  if (!profile) return { vehicles: [], listings: [], groups: [], defaultAudience: "friends" as const, canPostPublic: false };
+  if (!profile) return { vehicles: [], listings: [], groups: [], inspections: [], defaultAudience: "friends" as const, canPostPublic: false };
 
   const admin = createAdminClient();
   const flags = await getFeatureFlags();
-  const [{ data: vehicles }, { data: listings }, { data: memberships }] = await Promise.all([
+  const [{ data: vehicles }, { data: listings }, { data: memberships }, { data: inspections }] = await Promise.all([
     admin
       .from("vehicles")
       .select("id, year, make, model, trim, vin")
@@ -682,8 +764,16 @@ export async function getCommunityPostOptions() {
           .eq("profile_id", profile.id)
           .eq("status", "active")
       : Promise.resolve({ data: [] }),
+    admin
+      .from("ppi_requests")
+      .select("id, vehicle_id, ppi_type, inspection_scope, status, updated_at")
+      .eq("requester_id", profile.id)
+      .in("status", ["submitted", "completed"])
+      .order("updated_at", { ascending: false })
+      .limit(50),
   ]);
 
+  const publicVehicleIds = new Set((vehicles ?? []).map((vehicle) => vehicle.id));
   const groups = (memberships ?? []).flatMap((membership) => {
     const group = membership.group as unknown as CommunityPostOptionGroup | null;
     return group ? [group] : [];
@@ -693,6 +783,8 @@ export async function getCommunityPostOptions() {
     vehicles: (vehicles ?? []) as CommunityPostOptionVehicle[],
     listings: (listings ?? []) as CommunityPostOptionListing[],
     groups,
+    // Only inspections of vehicles that can be attached (public) are offered.
+    inspections: ((inspections ?? []) as CommunityPostOptionInspection[]).filter((inspection) => publicVehicleIds.has(inspection.vehicle_id)),
     defaultAudience: profile.default_post_audience,
     canPostPublic: profile.is_public,
   };

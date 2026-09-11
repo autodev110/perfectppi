@@ -9,7 +9,7 @@ import {
   blockedMediaResult,
   extensionForContentType,
   hasExpectedMediaSignature,
-  moderateMediaBytes,
+  moderateUploadedMedia,
 } from "@/lib/moderation/media-safety";
 import {
   getActivePostingRestriction,
@@ -395,7 +395,7 @@ export async function attachVehiclePhoto(input: {
   let storedUrl = parsed.data.url;
   const checkedAt = new Date().toISOString();
   try {
-    result = await moderateMediaBytes(bytes, parsed.data.contentType, parsed.data.mediaType);
+    result = await moderateUploadedMedia(bytes, parsed.data.contentType, parsed.data.mediaType);
     if (result.decision === "allow") {
       const promoted = await promoteQuarantinedObject({
         storageReference: parsed.data.url,

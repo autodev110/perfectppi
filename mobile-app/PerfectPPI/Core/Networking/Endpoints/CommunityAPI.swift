@@ -48,8 +48,17 @@ enum CommunityAPI {
         let listingId: String?
         let groupId: String?
         let postType: CommunityPostType
+        /// Structured fields for the type (plan 14.2).
+        var details: JSONValue? = nil
         let expectedMediaCount: Int
         let creationToken: String?
+    }
+
+    private struct PollVotePayload: Encodable { let optionKey: String }
+
+    /// One vote per member, changeable until the poll closes (plan 14.2).
+    static func votePoll(postId: String, optionKey: String) async throws -> CommunityPollView {
+        try await APIClient.shared.postCamel("/api/community/posts/\(postId)/vote", body: PollVotePayload(optionKey: optionKey))
     }
 
     struct CreatePostResponse: Decodable {
@@ -303,6 +312,37 @@ enum CommunityAPI {
     /// Owner-only settings update; the slug is never changed.
     static func updateGroupSettings(slug: String, _ payload: CommunityGroupSettingsPayload) async throws -> GroupSlugResult {
         try await APIClient.shared.patchCamel("/api/community/groups/\(slug)", body: payload)
+    }
+
+    private struct GroupImagePayload: Encodable {
+        let kind: String
+        let url: String
+        let contentType: String
+    }
+
+    struct GroupImageResult: Decodable {
+        let kind: String
+        let url: String?
+    }
+
+    /// Group avatar / cover (plan 13.5): quarantine upload, then the server
+    /// runs the safety gate and applies the image. Owner or admin only.
+    static func setGroupImage(groupId: String, slug: String, kind: String, attachment: PickedAttachment) async throws -> GroupImageResult {
+        let url = try await R2Uploader.upload(
+            data: attachment.data,
+            filename: attachment.filename,
+            contentType: attachment.contentType,
+            entity: "community_group",
+            recordId: groupId
+        )
+        return try await APIClient.shared.postCamel(
+            "/api/community/groups/\(slug)/images",
+            body: GroupImagePayload(kind: kind, url: url, contentType: attachment.contentType)
+        )
+    }
+
+    static func removeGroupImage(slug: String, kind: String) async throws -> GroupImageResult {
+        try await APIClient.shared.delete("/api/community/groups/\(slug)/images", query: [URLQueryItem(name: "kind", value: kind)])
     }
 
     static func groupMembers(slug: String, page: Int = 1) async throws -> CommunityGroupMembersPage {

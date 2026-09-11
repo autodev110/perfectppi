@@ -80,6 +80,8 @@ private struct SignedInContainer: View {
                 switch destination {
                 case .notification(let id): NotificationLinkView(notificationId: id)
                 case .profile(let username): MemberProfileView(username: username)
+                case .communityPost(let id): SharedLinkView(route: .post(id: id))
+                case .communityGroup(let slug): SharedLinkView(route: .group(slug: slug))
                 }
             }
         }
@@ -122,6 +124,8 @@ private struct SignedInContainer: View {
         switch route {
         case .notification(let id): linkedDestination = .notification(id: id)
         case .profile(let username): linkedDestination = .profile(username: username)
+        case .communityPost(let id): linkedDestination = .communityPost(id: id)
+        case .communityGroup(let slug): linkedDestination = .communityGroup(slug: slug)
         default: return
         }
         router.selectedRoute = nil
@@ -340,11 +344,33 @@ private struct MissingRoleView: View {
 private enum LinkedDestination: Identifiable {
     case notification(id: String)
     case profile(username: String)
+    case communityPost(id: String)
+    case communityGroup(slug: String)
 
     var id: String {
         switch self {
         case .notification(let id): "notification:\(id)"
         case .profile(let username): "profile:\(username.lowercased())"
+        case .communityPost(let id): "post:\(id)"
+        case .communityGroup(let slug): "group:\(slug.lowercased())"
         }
+    }
+}
+
+/// A share link opened in the app (plan 15.4): the same native screens the
+/// notification router uses, so the post or group is re-checked for this
+/// member and unavailable content shows the neutral state.
+private struct SharedLinkView: View {
+    let route: NotificationRoute
+    @EnvironmentObject private var auth: AuthStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NotificationRouteView(route: route, currentProfileId: auth.profile?.id) {}
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
     }
 }

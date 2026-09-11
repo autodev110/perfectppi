@@ -21,10 +21,13 @@ const presignSchema = z.object({
     "vehicle_media",
     "media_package",
     "community_post",
+    "community_group",
     "message_attachment",
   ]),
   recordId: z.string().uuid(),
 });
+
+const QUARANTINED = new Set(["community_post", "vehicle_media", "community_group"]);
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -105,7 +108,7 @@ export async function POST(request: Request) {
   };
 
   try {
-    if (parsed.data.entity === "community_post" || parsed.data.entity === "vehicle_media") {
+    if (QUARANTINED.has(parsed.data.entity)) {
       const admin = createAdminClient();
       const now = Date.now();
       // A presigned URL is valid for ten minutes, so a reservation still
@@ -146,6 +149,7 @@ export async function POST(request: Request) {
         profile_id: profile.id,
         post_id: parsed.data.entity === "community_post" ? parsed.data.recordId : null,
         vehicle_id: parsed.data.entity === "vehicle_media" ? parsed.data.recordId : null,
+        group_id: parsed.data.entity === "community_group" ? parsed.data.recordId : null,
         storage_reference: result.storageReference,
         expected_size: parsed.data.size,
         content_type: parsed.data.contentType,

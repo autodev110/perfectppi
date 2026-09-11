@@ -1,5 +1,6 @@
 import type { ModerationResult } from "./types";
-import { moderateImage, moderateVideo } from "./policy";
+import { moderateImage, moderateImageLaunchMode, moderateVideo } from "./policy";
+import { getFeatureFlags } from "@/lib/feature-flags";
 
 export function hasExpectedMediaSignature(bytes: Uint8Array, contentType: string): boolean {
   if (bytes.byteLength < 12) return false;
@@ -47,3 +48,25 @@ export async function moderateMediaBytes(
 }
 
 export { extensionForContentType } from "./content-types";
+
+/**
+ * The publication gate for member-uploaded stills (plan 21.2 / 3.6), shared
+ * by post photos, group images, and moderator re-checks: in launch mode the
+ * specialist safeguard is the only gate (and may be switched off by flag as
+ * a recorded product decision); with automated post moderation on, the
+ * legacy specialist + classifier chain runs. Videos always take the legacy
+ * chain and need manual review.
+ */
+export async function moderateUploadedMedia(
+  bytes: Uint8Array,
+  contentType: string,
+  mediaType: "image" | "video",
+): Promise<ModerationResult> {
+  if (!hasExpectedMediaSignature(bytes, contentType)) return blockedMediaResult("invalid_media_signature");
+  if (mediaType === "video") return moderateVideo(bytes, contentType);
+  const flags = await getFeatureFlags();
+  if (flags.flags.automated_post_moderation) return moderateImage(bytes, contentType);
+  return moderateImageLaunchMode(bytes, contentType, {
+    safeguardRequired: flags.flags.specialist_image_safeguard,
+  });
+}

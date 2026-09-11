@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 /// Create or edit a member group (plan 13.2 / 13.3 / 13.4). Visibility drives
@@ -11,6 +12,14 @@ struct GroupSettingsView: View {
 
     let mode: Mode
     var onSaved: (String) -> Void = { _ in }
+    /// Edit mode only: the group whose images can be changed (plan 13.5).
+    private let imageTarget: (id: String, slug: String)?
+    @State private var avatarUrl: String?
+    @State private var coverUrl: String?
+    @State private var showingImagePicker = false
+    @State private var pendingImageKind: String?
+    @State private var imagePickerItem: PhotosPickerItem?
+    @State private var imageBusy: String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var slug = ""
@@ -38,6 +47,13 @@ struct GroupSettingsView: View {
     init(mode: Mode, initial: CommunityGroupSummary? = nil, onSaved: @escaping (String) -> Void = { _ in }) {
         self.mode = mode
         self.onSaved = onSaved
+        if case .edit(let slug) = mode, let initial {
+            imageTarget = (id: initial.id, slug: slug)
+            _avatarUrl = State(initialValue: initial.avatarUrl)
+            _coverUrl = State(initialValue: initial.coverUrl)
+        } else {
+            imageTarget = nil
+        }
         if let initial {
             _name = State(initialValue: initial.name)
             _description = State(initialValue: initial.description)
@@ -71,6 +87,16 @@ struct GroupSettingsView: View {
 
     var body: some View {
         Form {
+            if imageTarget != nil {
+                Section {
+                    imageRow(kind: "avatar", label: "Avatar", url: avatarUrl, shape: AnyShape(RoundedRectangle(cornerRadius: 14, style: .continuous)), size: CGSize(width: 64, height: 64))
+                    imageRow(kind: "cover", label: "Cover", url: coverUrl, shape: AnyShape(RoundedRectangle(cornerRadius: 10, style: .continuous)), size: CGSize(width: 112, height: 56))
+                } header: {
+                    Text("Images")
+                } footer: {
+                    Text("Images pass the same safety check as post photos before they appear. Only the owner and admins can change them.")
+                }
+            }
             Section("Group") {
                 TextField("Name", text: $name)
                 if mode == .create {
@@ -145,12 +171,88 @@ struct GroupSettingsView: View {
         }
         .navigationTitle(mode == .create ? "Create Group" : "Group Settings")
         .navigationBarTitleDisplayMode(.inline)
+        // One picker for both image slots; the tapped slot is remembered
+        // separately from presentation so dismissal cannot race the pick.
+        .photosPicker(isPresented: $showingImagePicker, selection: $imagePickerItem, matching: .images)
+        .onChange(of: imagePickerItem) { _, item in
+            guard let item, let kind = pendingImageKind else { return }
+            imagePickerItem = nil
+            pendingImageKind = nil
+            Task { await uploadImage(kind: kind, item: item) }
+        }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
                 Button(saving ? "Saving…" : (mode == .create ? "Create" : "Save")) { Task { await save() } }
                     .disabled(saving || !canSave)
             }
+        }
+    }
+
+    private func imageRow(kind: String, label: String, url: String?, shape: AnyShape, size: CGSize) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                shape.fill(Color(.secondarySystemFill))
+                if let url, let imageURL = URL(string: url) {
+                    AsyncImage(url: imageURL) { phase in
+                        if let image = phase.image { image.resizable().scaledToFill() } else { Color.clear }
+                    }
+                } else {
+                    Image(systemName: "photo").foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: size.width, height: size.height)
+            .clipShape(shape)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(label).font(.subheadline.weight(.semibold))
+                HStack {
+                    Button(imageBusy == kind ? "Uploading…" : (url == nil ? "Upload" : "Replace")) {
+                        pendingImageKind = kind
+                        showingImagePicker = true
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    if url != nil {
+                        Button("Remove", role: .destructive) { Task { await removeImage(kind: kind) } }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                }
+                .disabled(imageBusy != nil)
+            }
+            Spacer()
+        }
+    }
+
+    @MainActor
+    private func uploadImage(kind: String, item: PhotosPickerItem) async {
+        guard let imageTarget else { return }
+        imageBusy = kind
+        defer { imageBusy = nil }
+        do {
+            let attachment = try await AttachmentPickerSupport.load(item)
+            guard attachment.kind == .image else {
+                error = "Choose a photo for the group \(kind)."
+                return
+            }
+            let result = try await CommunityAPI.setGroupImage(groupId: imageTarget.id, slug: imageTarget.slug, kind: kind, attachment: attachment)
+            if kind == "avatar" { avatarUrl = result.url } else { coverUrl = result.url }
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func removeImage(kind: String) async {
+        guard let imageTarget else { return }
+        imageBusy = kind
+        defer { imageBusy = nil }
+        do {
+            _ = try await CommunityAPI.removeGroupImage(slug: imageTarget.slug, kind: kind)
+            if kind == "avatar" { avatarUrl = nil } else { coverUrl = nil }
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 

@@ -323,6 +323,10 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let content: String
     let audience: CommunityPostAudience
     let postType: CommunityPostType?
+    /// Structured fields for the type (plan 14.2); absent on old servers.
+    var details: JSONValue? = nil
+    var poll: CommunityPollView? = nil
+    var inspection: CommunityInspectionSummary? = nil
     let acceptedAnswerCommentId: String?
     let status: CommunityContentStatus
     let moderationStatus: String?
@@ -486,8 +490,25 @@ struct CommunityPostOptions: Codable, Hashable {
     let vehicles: [CommunityPostOptionVehicle]
     let listings: [CommunityPostOptionListing]
     let groups: [CommunityPostOptionGroup]
+    /// The author's submitted/completed inspections of attachable vehicles.
+    var inspections: [CommunityPostOptionInspection]? = nil
     let defaultAudience: CommunityPostAudience
     let canPostPublic: Bool
+}
+
+struct CommunityPostOptionInspection: Codable, Identifiable, Hashable {
+    let id: String
+    let vehicleId: String
+    let ppiType: String
+    let inspectionScope: String
+    let status: String
+    let updatedAt: Date?
+
+    var label: String {
+        let scope = inspectionScope == "dents_tires" ? "Dents & tires" : "Complete"
+        let when = updatedAt.map { " · " + $0.formatted(date: .abbreviated, time: .omitted) } ?? ""
+        return "\(scope) · \(status.capitalized)\(when)"
+    }
 }
 
 struct CommunityPostOptionGroup: Codable, Identifiable, Hashable {

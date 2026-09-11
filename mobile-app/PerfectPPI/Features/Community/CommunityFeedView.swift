@@ -357,12 +357,21 @@ struct CommunityPostRow: View {
                       systemImage: post.acceptedAnswerCommentId == nil ? "questionmark.bubble" : "checkmark.circle.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Theme.Palette.primary)
+            } else if let chip = post.postType?.chip {
+                Text(chip)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.Palette.primary)
             }
 
             CommunityMentionText(content: post.content, mentions: post.mentions)
                 .font(.subheadline)
                 .foregroundStyle(.primary.opacity(0.9))
                 .lineLimit(4)
+
+            CommunityPostDetailsView(post: post)
+            if post.postType == .poll, let poll = post.poll {
+                CommunityPollCard(postId: post.id, poll: poll)
+            }
 
             if let notice = post.safetyNotice {
                 CommunitySafetyNoticeView(notice: notice, compact: true)
@@ -415,6 +424,14 @@ struct CommunityPostRow: View {
                     Label("\(count) comment\(count == 1 ? "" : "s")", systemImage: "bubble.left")
                         .foregroundStyle(.secondary)
                 }
+
+                Spacer(minLength: 0)
+                ShareLink(item: ShareLinks.post(id: post.id)) {
+                    Image(systemName: "square.and.arrow.up")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Share post")
             }
             .font(.caption)
         }
@@ -634,9 +651,17 @@ struct CommunityPostDetailView: View {
                           systemImage: acceptedAnswerCommentId == nil ? "questionmark.bubble" : "checkmark.circle.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Theme.Palette.primary)
+                } else if let type = post.postType, type.chip != nil {
+                    Text(type.label)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.Palette.primary)
                 }
                 CommunityMentionText(content: post.content, mentions: post.mentions)
                     .font(.body)
+                CommunityPostDetailsView(post: post)
+                if post.postType == .poll, let poll = post.poll {
+                    CommunityPollCard(postId: post.id, poll: poll)
+                }
                 if let notice = post.safetyNotice {
                     CommunitySafetyNoticeView(notice: notice, compact: false)
                 }
@@ -1115,6 +1140,7 @@ struct NewCommunityPostView: View {
     @State private var content = ""
     @State private var audience: CommunityPostAudience = .friends
     @State private var postType: CommunityPostType = .general
+    @State private var typeFields = PostTypeFields()
     @State private var loadedDefaultAudience = false
     @State private var selectedVehicleId = ""
     @State private var selectedListingId = ""
@@ -1162,18 +1188,26 @@ struct NewCommunityPostView: View {
 
                         Section("Post") {
                             Picker("Post type", selection: $postType) {
-                                Text("General post").tag(CommunityPostType.general)
-                                Text("Question / troubleshooting").tag(CommunityPostType.question)
+                                ForEach(CommunityPostType.composable, id: \.self) { type in
+                                    Text(type.label).tag(type)
+                                }
                             }
                             TextEditor(text: $content)
                                 .frame(minHeight: 140)
                                 .disabled(!caps.communityTextPosts)
-                            if postType == .question {
-                                Text("Describe the symptoms and what you have already checked. You can accept one member response after publishing.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text(postType == .question
+                                 ? "Describe the symptoms and what you have already checked. You can accept one member response after publishing."
+                                 : postType.prompt)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
+
+                        PostTypeFieldsSection(
+                            type: postType,
+                            fields: $typeFields,
+                            inspections: options.inspections ?? [],
+                            attachedVehicleId: attachedVehicleId(options)
+                        )
 
                         Section("Audience") {
                             if caps.groups, !options.groups.isEmpty {
@@ -1389,9 +1423,26 @@ struct NewCommunityPostView: View {
         }
     }
 
+    /// The vehicle a post will carry: an attached listing implies its vehicle.
+    private func attachedVehicleId(_ options: CommunityPostOptions) -> String {
+        if !selectedListingId.isEmpty,
+           let listing = options.listings.first(where: { $0.id == selectedListingId }) {
+            return listing.vehicleId
+        }
+        return selectedVehicleId
+    }
+
     private func save() async {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !saving else { return }
+        if let message = typeFields.validationMessage(
+            for: postType,
+            photoCount: media.count,
+            vehicleAttached: !selectedVehicleId.isEmpty || !selectedListingId.isEmpty
+        ) {
+            error = message
+            return
+        }
         saving = true
         defer { saving = false }
         var step: PublishStep = .creating
@@ -1413,6 +1464,7 @@ struct NewCommunityPostView: View {
                         listingId: listingId,
                         groupId: selectedGroupId.isEmpty ? nil : selectedGroupId,
                         postType: postType,
+                        details: typeFields.details(for: postType),
                         expectedMediaCount: media.count,
                         creationToken: media.isEmpty ? nil : creationToken
                     )
@@ -1494,7 +1546,11 @@ private struct CommunityMediaCarousel: View {
         TabView {
             ForEach(media.sorted(by: { $0.sortOrder < $1.sortOrder })) { item in
                 ZStack(alignment: .topTrailing) {
-                    Color.black
+                    if item.mediaType == "video" {
+                        Color.black
+                    } else {
+                        Theme.Palette.subtle
+                    }
                     // Community media is delivered through the authenticated,
                     // status-aware API path (plan 19.2); legacy absolute URLs
                     // are only still possible for vehicle media elsewhere.
@@ -1502,14 +1558,19 @@ private struct CommunityMediaCarousel: View {
                         if item.mediaType == "video" {
                             SecureVideoPlayer(path: item.url)
                         } else {
-                            SecureImage(path: item.url, contentMode: .fit)
+                            SecureImage(path: item.url, contentMode: .fill)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .clipped()
                         }
                     } else if item.mediaType == "video", let url = URL(string: item.url) {
                         RemoteVideoPlayer(url: url)
                     } else if let url = URL(string: item.url) {
                         AsyncImage(url: url) { phase in
                             switch phase {
-                            case .success(let image): image.resizable().scaledToFit()
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .clipped()
                             case .failure: Image(systemName: "photo").foregroundStyle(.white.opacity(0.6))
                             default: ProgressView().tint(.white)
                             }
@@ -1519,7 +1580,7 @@ private struct CommunityMediaCarousel: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: media.count > 1 ? .always : .never))
-        .background(.black)
+        .background(Theme.Palette.subtle)
     }
 }
 

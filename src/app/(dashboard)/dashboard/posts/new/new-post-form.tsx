@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 import { createCommunityPost } from "@/features/community/actions";
 import type {
   CommunityPostOptionGroup,
+  CommunityPostOptionInspection,
   CommunityPostOptionListing,
   CommunityPostOptionVehicle,
 } from "@/features/community/queries";
+import { POST_TYPES, POST_TYPE_LABELS, type PostType } from "@/lib/community/post-types";
+import { EMPTY_POST_TYPE_FIELDS, PostTypeFields, detailsFromFields, type PostTypeFieldState } from "@/components/shared/post-type-fields";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +24,7 @@ type NewPostFormProps = {
   vehicles: CommunityPostOptionVehicle[];
   listings: CommunityPostOptionListing[];
   groups: CommunityPostOptionGroup[];
+  inspections?: CommunityPostOptionInspection[];
   selectedVehicleId?: string;
   selectedGroupSlug?: string;
   defaultAudience: "public" | "friends";
@@ -41,6 +45,7 @@ export function NewPostForm({
   vehicles,
   listings,
   groups,
+  inspections = [],
   selectedVehicleId,
   selectedGroupSlug,
   defaultAudience,
@@ -60,7 +65,10 @@ export function NewPostForm({
   const [audience, setAudience] = useState<"public" | "friends">(
     canPostPublic ? defaultAudience : "friends",
   );
-  const [postType, setPostType] = useState<"general" | "question">("general");
+  const [postType, setPostType] = useState<PostType>("general");
+  const [typeFields, setTypeFields] = useState<PostTypeFieldState>(EMPTY_POST_TYPE_FIELDS);
+  const [vehicleId, setVehicleId] = useState(requestedVehicle?.id ?? "");
+  const [listingId, setListingId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [media, setMedia] = useState<File[]>([]);
@@ -85,6 +93,7 @@ export function NewPostForm({
 
     if (attachmentType !== "vehicle") formData.set("vehicle_id", "");
     if (attachmentType !== "listing") formData.set("listing_id", "");
+    formData.set("details", JSON.stringify(detailsFromFields(postType, typeFields)));
     formData.set("expected_media_count", String(media.length));
     if (media.length > 0) {
       creationToken.current ??= crypto.randomUUID();
@@ -177,6 +186,11 @@ export function NewPostForm({
   const overallProgress = progress.length
     ? progress.reduce((total, value) => total + value, 0) / progress.length
     : 0;
+  const attachedVehicleId = attachmentType === "vehicle"
+    ? vehicleId
+    : attachmentType === "listing"
+      ? listings.find((listing) => listing.id === listingId)?.vehicle_id ?? ""
+      : "";
 
   return (
     <form action={handleSubmit} className="space-y-5">
@@ -225,16 +239,17 @@ export function NewPostForm({
           id="post_type"
           name="post_type"
           value={postType}
-          onChange={(event) => setPostType(event.target.value as "general" | "question")}
+          onChange={(event) => setPostType(event.target.value as PostType)}
           className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
         >
-          <option value="general">General post</option>
-          <option value="question">Question / troubleshooting</option>
+          {POST_TYPES.map((type) => <option key={type} value={type}>{POST_TYPE_LABELS[type].label}</option>)}
         </select>
         <p className="text-xs text-muted-foreground">
           {postType === "question"
             ? "Responses can be marked as the accepted answer after publishing."
-            : "Use Question / troubleshooting when you want members to help solve a specific issue."}
+            : postType === "general"
+              ? "Pick a type to add structured details members can scan and filter."
+              : POST_TYPE_LABELS[postType].prompt}
         </p>
       </div>
 
@@ -248,9 +263,22 @@ export function NewPostForm({
           required
           placeholder={postType === "question"
             ? "Describe the symptoms, when they happen, and what you have already checked."
-            : "Share a vehicle update, listing context, or inspection discussion. Keep it factual and tied to what you can verify."}
+            : POST_TYPE_LABELS[postType].prompt}
         />
       </div>
+
+      {postType !== "general" && postType !== "question" ? (
+        <div className="space-y-2 rounded-xl border p-4">
+          <Label className="text-xs uppercase tracking-wide text-muted-foreground">{POST_TYPE_LABELS[postType].label} details</Label>
+          <PostTypeFields
+            postType={postType}
+            fields={typeFields}
+            onChange={setTypeFields}
+            inspections={inspections}
+            vehicleId={attachedVehicleId}
+          />
+        </div>
+      ) : null}
 
       {mediaAllowed ? <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
@@ -322,7 +350,8 @@ export function NewPostForm({
           <select
             id="vehicle_id"
             name="vehicle_id"
-            defaultValue={requestedVehicle?.id ?? ""}
+            value={vehicleId}
+            onChange={(event) => setVehicleId(event.target.value)}
             className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <option value="">Choose a public vehicle</option>
@@ -344,6 +373,8 @@ export function NewPostForm({
           <select
             id="listing_id"
             name="listing_id"
+            value={listingId}
+            onChange={(event) => setListingId(event.target.value)}
             className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <option value="">Choose an active listing</option>

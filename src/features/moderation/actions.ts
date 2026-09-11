@@ -15,9 +15,7 @@ import {
   promoteQuarantinedObject,
 } from "@/lib/storage/r2";
 import { UPLOAD_LIMITS } from "@/config/constants";
-import { extensionForContentType, hasExpectedMediaSignature, moderateMediaBytes } from "@/lib/moderation/media-safety";
-import { moderateImageLaunchMode } from "@/lib/moderation/policy";
-import { getFeatureFlags } from "@/lib/feature-flags";
+import { extensionForContentType, moderateUploadedMedia } from "@/lib/moderation/media-safety";
 import { recordModeration } from "@/lib/moderation";
 import { publishCommunityMedia } from "@/lib/storage/community-media";
 import { getModerationCapabilities } from "@/features/moderation/capabilities";
@@ -204,19 +202,11 @@ const SAFEGUARD_NOT_CONFIGURED_MESSAGE =
 // a well-formed image passes. Videos always need a clean specialist scan
 // plus this manual review.
 async function rescanForApproval(bytes: Uint8Array, contentType: string, mediaType: "image" | "video") {
-  const flags = await getFeatureFlags();
-  if (mediaType === "video" || flags.flags.automated_post_moderation) {
-    const scan = await moderateMediaBytes(bytes, contentType, mediaType);
-    return { scan, cleared: hasCleanSpecialistScan(scan.rawResult as Json) };
-  }
-  if (!hasExpectedMediaSignature(bytes, contentType)) {
-    const scan = await moderateMediaBytes(bytes, contentType, mediaType);
-    return { scan, cleared: false };
-  }
-  const scan = await moderateImageLaunchMode(bytes, contentType, {
-    safeguardRequired: flags.flags.specialist_image_safeguard,
-  });
-  return { scan, cleared: scan.decision === "allow" || hasCleanSpecialistScan(scan.rawResult as Json) };
+  const scan = await moderateUploadedMedia(bytes, contentType, mediaType);
+  const cleared = mediaType === "video"
+    ? hasCleanSpecialistScan(scan.rawResult as Json)
+    : scan.decision === "allow" || hasCleanSpecialistScan(scan.rawResult as Json);
+  return { scan, cleared };
 }
 
 // Web form entry point: never throws into the page; outcomes land in the

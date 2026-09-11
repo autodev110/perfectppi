@@ -631,6 +631,7 @@ export type Database = {
           author_id: string
           content: string
           created_at: string
+          details: Json
           group_id: string | null
           group_pinned_at: string | null
           group_pinned_by: string | null
@@ -641,6 +642,7 @@ export type Database = {
           moderation_reason: string | null
           moderation_status: string
           moderation_version: string | null
+          poll_closes_at: string | null
           post_type: Database["public"]["Enums"]["community_post_type"]
           status: Database["public"]["Enums"]["community_content_status"]
           updated_at: string
@@ -653,6 +655,7 @@ export type Database = {
           author_id: string
           content: string
           created_at?: string
+          details?: Json
           group_id?: string | null
           group_pinned_at?: string | null
           group_pinned_by?: string | null
@@ -663,6 +666,7 @@ export type Database = {
           moderation_reason?: string | null
           moderation_status?: string
           moderation_version?: string | null
+          poll_closes_at?: string | null
           post_type?: Database["public"]["Enums"]["community_post_type"]
           status?: Database["public"]["Enums"]["community_content_status"]
           updated_at?: string
@@ -675,6 +679,7 @@ export type Database = {
           author_id?: string
           content?: string
           created_at?: string
+          details?: Json
           group_id?: string | null
           group_pinned_at?: string | null
           group_pinned_by?: string | null
@@ -685,6 +690,7 @@ export type Database = {
           moderation_reason?: string | null
           moderation_status?: string
           moderation_version?: string | null
+          poll_closes_at?: string | null
           post_type?: Database["public"]["Enums"]["community_post_type"]
           status?: Database["public"]["Enums"]["community_content_status"]
           updated_at?: string
@@ -734,6 +740,7 @@ export type Database = {
           author_id: string | null
           content: string
           created_at: string
+          details: Json
           group_id: string | null
           group_status: Database["public"]["Enums"]["community_group_post_status"]
           id: string
@@ -748,6 +755,7 @@ export type Database = {
           author_id?: string | null
           content: string
           created_at?: string
+          details?: Json
           group_id?: string | null
           group_status?: Database["public"]["Enums"]["community_group_post_status"]
           id: string
@@ -762,6 +770,7 @@ export type Database = {
           author_id?: string | null
           content?: string
           created_at?: string
+          details?: Json
           group_id?: string | null
           group_status?: Database["public"]["Enums"]["community_group_post_status"]
           id?: string
@@ -852,6 +861,7 @@ export type Database = {
           created_at: string
           expected_size: number
           expires_at: string
+          group_id: string | null
           id: string
           post_id: string | null
           profile_id: string | null
@@ -865,6 +875,7 @@ export type Database = {
           created_at?: string
           expected_size: number
           expires_at?: string
+          group_id?: string | null
           id?: string
           post_id?: string | null
           profile_id?: string | null
@@ -878,6 +889,7 @@ export type Database = {
           created_at?: string
           expected_size?: number
           expires_at?: string
+          group_id?: string | null
           id?: string
           post_id?: string | null
           profile_id?: string | null
@@ -3354,6 +3366,45 @@ export type Database = {
         }
         Relationships: []
       }
+      community_poll_votes: {
+        Row: {
+          created_at: string
+          option_key: string
+          post_id: string
+          profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          option_key: string
+          post_id: string
+          profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          option_key?: string
+          post_id?: string
+          profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_poll_votes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_poll_votes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_post_saves: {
         Row: {
           created_at: string
@@ -4301,6 +4352,7 @@ export type Database = {
           p_moderation_reason: string | null
           p_moderation_status: string
           p_moderation_version: string | null
+          p_details?: Json
           p_post_type: Database["public"]["Enums"]["community_post_type"]
           p_vehicle_id: string | null
         }
@@ -4948,6 +5000,60 @@ export type Database = {
         Args: { p_viewer_id: string; p_group_id: string }
         Returns: boolean
       }
+      community_post_share_preview: {
+        Args: { p_post_id: string }
+        Returns: {
+          post_id: string
+          author_label: string
+          author_username: string | null
+          post_type: Database["public"]["Enums"]["community_post_type"]
+          excerpt: string
+          media_count: number
+          vehicle_label: string | null
+          created_at: string
+        }[]
+      }
+      community_group_share_preview: {
+        Args: { p_slug: string }
+        Returns: {
+          group_id: string
+          slug: string
+          name: string
+          description: string
+          visibility: Database["public"]["Enums"]["community_group_visibility"]
+          member_count: number
+        }[]
+      }
+      profile_share_preview: {
+        Args: { p_username: string }
+        Returns: {
+          profile_id: string
+          username: string
+          display_name: string | null
+          avatar_url: string | null
+          bio: string | null
+          is_technician: boolean
+        }[]
+      }
+      set_community_group_image: {
+        Args: { p_actor_profile_id: string; p_group_id: string; p_kind: string; p_url: string | null }
+        Returns: Database["public"]["Tables"]["community_groups"]["Row"]
+      }
+      community_poll_results: {
+        Args: { p_viewer_id: string; p_post_ids: string[] }
+        Returns: {
+          post_id: string
+          closes_at: string
+          closed: boolean
+          total_votes: number
+          viewer_option_key: string | null
+          options: Json
+        }[]
+      }
+      cast_community_poll_vote: {
+        Args: { p_actor_profile_id: string; p_post_id: string; p_option_key: string }
+        Returns: Json
+      }
       community_group_owner_available: {
         Args: { p_group_id: string }
         Returns: boolean
@@ -5258,7 +5364,7 @@ export type Database = {
       community_group_visibility: "public" | "private" | "unlisted"
       community_post_audience: "public" | "friends"
       community_post_assembly_state: "assembling" | "submitted" | "finalized"
-      community_post_type: "general" | "question"
+      community_post_type: "general" | "question" | "build_update" | "maintenance" | "before_after" | "inspection_discussion" | "buying_advice" | "poll"
       community_media_type: "image" | "video"
       completion_state: "not_started" | "in_progress" | "completed"
       device_env: "prod" | "sandbox"
@@ -5489,7 +5595,7 @@ export const Constants = {
       community_feed_filter: ["all", "friends", "my_cars"],
       community_post_audience: ["public", "friends"],
       community_post_assembly_state: ["assembling", "submitted", "finalized"],
-      community_post_type: ["general", "question"],
+      community_post_type: ["general", "question", "build_update", "maintenance", "before_after", "inspection_discussion", "buying_advice", "poll"],
       community_media_type: ["image", "video"],
       completion_state: ["not_started", "in_progress", "completed"],
       device_env: ["prod", "sandbox"],

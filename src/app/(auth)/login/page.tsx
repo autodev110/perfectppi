@@ -1,13 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { signIn, signInWithGoogle } from "@/features/auth/actions";
 import { Mail, Lock } from "lucide-react";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // A share or deep link that wants the member back after signing in.
+  const returnTo = useSearchParams().get("redirect") ?? "";
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -32,7 +43,7 @@ export default function LoginPage() {
 
       <div className="space-y-6">
         {/* Google OAuth */}
-        <form action={async () => { await signInWithGoogle(); }}>
+        <form action={async () => { await signInWithGoogle(returnTo); }}>
           <button
             type="submit"
             className="w-full flex items-center justify-center gap-3 h-14 bg-surface-container-low hover:bg-surface-container-high transition-all rounded-xl border border-outline-variant/10 text-on-surface font-semibold text-sm"
@@ -58,6 +69,7 @@ export default function LoginPage() {
 
         {/* Form */}
         <form action={handleSubmit} className="space-y-5">
+          <input type="hidden" name="redirect" value={returnTo} />
           <div className="space-y-1.5">
             <label
               htmlFor="email"

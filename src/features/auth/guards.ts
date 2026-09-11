@@ -88,6 +88,21 @@ export async function getAuthProfile() {
   return profile;
 }
 
+/**
+ * For pages that render a signed-out shell (share links, plan 15.4): the
+ * usable profile when there is one, otherwise null. Unusable and
+ * username-pending sessions still go through their usual redirects so a
+ * share link never bypasses onboarding or enforcement.
+ */
+export async function getOptionalProfile(allowedRoles: UserRole[]) {
+  const session = await resolveSession();
+  if (session.status === "anonymous") return null;
+  if (session.status === "unusable") redirect(ACCOUNT_UNAVAILABLE_PATH);
+  if (session.status === "username_required") redirect("/onboarding/username");
+  if (!allowedRoles.includes(session.profile.role)) redirect(getRoleHomePath(session.profile.role));
+  return session.profile;
+}
+
 // Require a specific role — redirect if unauthorized
 export async function requireRole(allowedRoles: UserRole[]) {
   const session = await resolveSession();

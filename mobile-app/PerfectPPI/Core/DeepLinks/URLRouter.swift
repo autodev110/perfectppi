@@ -16,6 +16,10 @@ final class URLRouter: ObservableObject {
         /// /notifications/{id}: resolve through the server (plan 22.1).
         case notification(id: String)
         case profile(username: String)
+        /// /community/posts/{id} and /community/groups/{slug}: share links
+        /// (plan 15.4), re-checked by the API for this member.
+        case communityPost(id: String)
+        case communityGroup(slug: String)
         case unknown
     }
 
@@ -50,6 +54,15 @@ final class URLRouter: ObservableObject {
 
         if parts.count >= 2, parts[0] == "notifications", UUID(uuidString: parts[1]) != nil {
             selectedRoute = .notification(id: parts[1])
+            return true
+        }
+
+        if parts.count >= 3, parts[0] == "community", parts[1] == "posts", UUID(uuidString: parts[2]) != nil {
+            selectedRoute = .communityPost(id: parts[2])
+            return true
+        }
+        if parts.count >= 3, parts[0] == "community", parts[1] == "groups", !parts[2].isEmpty {
+            selectedRoute = .communityGroup(slug: parts[2])
             return true
         }
 

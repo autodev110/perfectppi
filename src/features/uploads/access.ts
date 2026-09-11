@@ -7,6 +7,7 @@ export type UploadEntity =
   | "vehicle_media"
   | "media_package"
   | "community_post"
+  | "community_group"
   | "message_attachment";
 
 export async function canUploadToTarget(
@@ -50,6 +51,19 @@ export async function canUploadToTarget(
         .eq("author_id", profileId)
         .maybeSingle();
       return Boolean(data);
+    }
+    case "community_group": {
+      // Group avatar / cover (plan 13.5): the owner or an admin of a live group.
+      const admin = createAdminClient();
+      const { data: group } = await admin
+        .from("community_groups")
+        .select("id")
+        .eq("id", recordId)
+        .eq("status", "active")
+        .maybeSingle();
+      if (!group) return false;
+      const { data: role } = await admin.rpc("community_group_role_of", { p_profile_id: profileId, p_group_id: recordId });
+      return role === "owner" || role === "admin";
     }
     case "message_attachment": {
       const { data } = await supabase

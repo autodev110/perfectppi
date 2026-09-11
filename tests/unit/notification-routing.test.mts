@@ -44,6 +44,7 @@ describe("notification deep links (plan 22.1)", () => {
   test("malformed payloads degrade to a safe destination, never a crash", () => {
     assert.equal(notificationDestinationIntent("post_comment", null).id, null);
     assert.equal(notificationWebPath(notificationDestinationIntent("post_comment", null)), "/community");
+    assert.equal(notificationWebPath(notificationDestinationIntent("post_comment", { post_id: "p1" })), "/community/posts/p1");
     assert.equal(notificationDestinationIntent("message_received", { conversation_id: 42 }).id, null);
     assert.equal(notificationDestinationIntent("something_new", {}).kind, "none");
   });

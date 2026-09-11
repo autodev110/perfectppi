@@ -107,11 +107,18 @@ export async function signUp(formData: FormData) {
   redirect(getRoleHomePath(profile?.role ?? createdProfile.role));
 }
 
+/** Local path a share/deep link asked to return to after sign-in (plan 5.x). */
+function safeReturnPath(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return null;
+  return value.length <= 500 ? value : null;
+}
+
 export async function signIn(formData: FormData) {
   const raw = {
     email: formData.get("email") as string,
     password: formData.get("password") as string,
   };
+  const returnTo = safeReturnPath(formData.get("redirect"));
 
   const parsed = signInSchema.safeParse(raw);
   if (!parsed.success) {
@@ -146,15 +153,16 @@ export async function signIn(formData: FormData) {
     if (!acceptance) redirect("/legal/accept");
   }
 
-  redirect(getRoleHomePath(profile?.role));
+  redirect(returnTo ?? getRoleHomePath(profile?.role));
 }
 
-export async function signInWithGoogle() {
+export async function signInWithGoogle(requestedReturnTo?: string) {
   const supabase = await createClient();
+  const returnTo = safeReturnPath(requestedReturnTo ?? null) ?? "/legal/accept";
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? CANONICAL_ORIGIN}/callback?next=/legal/accept`,
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? CANONICAL_ORIGIN}/callback?next=${encodeURIComponent(returnTo)}`,
     },
   });
 

@@ -18,10 +18,13 @@ const uploadSchema = z.object({
     "vehicle_media",
     "media_package",
     "community_post",
+    "community_group",
     "message_attachment",
   ]),
   recordId: z.string().uuid(),
 });
+
+const QUARANTINED = new Set(["community_post", "vehicle_media", "community_group"]);
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -118,7 +121,7 @@ export async function POST(request: Request) {
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    if (parsed.data.entity === "community_post" || parsed.data.entity === "vehicle_media") {
+    if (QUARANTINED.has(parsed.data.entity)) {
       const { storageReference } = await uploadPrivateObject({
         key: buildQuarantineKey(keyParams),
         body: Buffer.from(arrayBuffer),
@@ -130,6 +133,7 @@ export async function POST(request: Request) {
           profile_id: profile.id,
           post_id: parsed.data.entity === "community_post" ? parsed.data.recordId : null,
           vehicle_id: parsed.data.entity === "vehicle_media" ? parsed.data.recordId : null,
+          group_id: parsed.data.entity === "community_group" ? parsed.data.recordId : null,
           storage_reference: storageReference,
           expected_size: file.size,
           content_type: file.type,

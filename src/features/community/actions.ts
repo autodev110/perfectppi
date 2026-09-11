@@ -21,6 +21,7 @@ import {
   statusForDecision,
 } from "@/lib/moderation";
 import type { ModerationResult, ModerationStatus } from "@/lib/moderation";
+import type { Json } from "@/types/database";
 import {
   blockedMediaResult,
   hasExpectedMediaSignature,
@@ -46,12 +47,15 @@ import {
   communityCreationTokensMatch,
   normalizeCommunityCreationToken,
 } from "@/features/community/creation-token";
+import { POST_TYPES, parsePostDetails, postTypeRequiresPhotos, postTypeRequiresVehicle } from "@/lib/community/post-types";
 
 const creationTokenSchema = z.string().uuid().transform(normalizeCommunityCreationToken);
 
 const postSchema = z.object({
   content: z.string().trim().min(1, "Write something before posting").max(1200),
-  postType: z.enum(["general", "question"]).default("general"),
+  postType: z.enum(POST_TYPES).default("general"),
+  /** Structured fields for the type (plan 14.2); validated by `parsePostDetails`. */
+  details: z.record(z.unknown()).optional().nullable(),
   audience: z.enum(["public", "friends"]).optional(),
   vehicleId: z.string().uuid().optional().nullable(),
   listingId: z.string().uuid().optional().nullable(),
@@ -61,6 +65,13 @@ const postSchema = z.object({
 }).superRefine((value, context) => {
   if (value.expectedMediaCount > 0 && !value.creationToken) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["creationToken"], message: "Post retry token is required" });
+  }
+  const photosNeeded = postTypeRequiresPhotos(value.postType);
+  if (photosNeeded > 0 && value.expectedMediaCount < photosNeeded) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["expectedMediaCount"], message: `Before & After posts need at least ${photosNeeded} photos` });
+  }
+  if (postTypeRequiresVehicle(value.postType) && !value.vehicleId && !value.listingId) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["vehicleId"], message: "Attach the inspected vehicle" });
   }
 });
 
@@ -215,10 +226,21 @@ async function recentAuthorContent(
     .map(({ content, created_at }) => ({ content, created_at }));
 }
 
+function parseJsonField(value: FormDataEntryValue | null): Record<string, unknown> | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function createCommunityPost(formData: FormData) {
   return createCommunityPostFromInput({
     content: formData.get("content"),
     postType: formData.get("post_type") || "general",
+    details: parseJsonField(formData.get("details")),
     audience: formData.get("audience") || undefined,
     vehicleId: nullableUuid(formData.get("vehicle_id")),
     listingId: nullableUuid(formData.get("listing_id")),
@@ -233,6 +255,9 @@ export async function createCommunityPostFromInput(
 ): Promise<CommunityActionResult<CommunityPublishData>> {
   const parsed = postSchema.safeParse(input);
   if (!parsed.success) return rejected("validation_failed", parsed.error.errors[0].message);
+  const detailsResult = parsePostDetails(parsed.data.postType, parsed.data.details ?? {});
+  if (!detailsResult.ok) return rejected("validation_failed", detailsResult.message);
+  const details = detailsResult.details;
 
   const profile = await getCurrentProfileId();
   if (profile.error !== undefined) return { error: profile.error };
@@ -362,6 +387,21 @@ export async function createCommunityPostFromInput(
     }
   }
 
+  // Inspection discussions (14.2): the author's own submitted/completed
+  // inspection of the attached vehicle; the trigger re-checks this.
+  if (parsed.data.postType === "inspection_discussion") {
+    const inspectionId = String(details.inspection_request_id ?? "");
+    const { data: inspection } = await admin
+      .from("ppi_requests")
+      .select("id, requester_id, vehicle_id, status")
+      .eq("id", inspectionId)
+      .maybeSingle();
+    if (!inspection || inspection.requester_id !== profile.profileId || inspection.vehicle_id !== vehicleId
+      || !["submitted", "completed"].includes(inspection.status)) {
+      return rejected("validation_failed", "Choose one of your own completed inspections of the attached vehicle.");
+    }
+  }
+
   const launchMode = !flags.flags.automated_post_moderation;
   const hasMediaAssembly = parsed.data.expectedMediaCount > 0;
   const initialModerationStatus = launchMode ? "active" : "pending_scan";
@@ -383,6 +423,7 @@ export async function createCommunityPostFromInput(
       p_moderation_reason: null,
       p_moderation_checked_at: launchMode ? new Date().toISOString() : null,
       p_moderation_version: launchMode ? LAUNCH_POLICY_VERSION : null,
+      p_details: details as Json,
     });
     data = assembled.data ? { id: assembled.data } : null;
     createError = assembled.error;
@@ -394,6 +435,7 @@ export async function createCommunityPostFromInput(
       marketplace_listing_id: listingId,
       group_id: groupId,
       post_type: parsed.data.postType,
+      details: details as Json,
       content: evaluated.text,
       // Text-only posts preserve the launch-mode immediate publication path.
       status: launchMode ? "active" : "hidden",
@@ -556,6 +598,48 @@ export async function setCommunityPostLike(
   revalidatePath("/community");
   revalidatePath("/community/groups");
   return { data: result.data };
+}
+
+const pollVoteSchema = z.object({
+  postId: z.string().uuid(),
+  optionKey: z.string().regex(/^[a-z0-9_-]{1,32}$/),
+});
+
+export type CommunityPollVoteData = {
+  postId: string;
+  closesAt: string;
+  closed: boolean;
+  totalVotes: number;
+  viewerOptionKey: string | null;
+  options: Array<{ key: string; label: string; votes: number | null }>;
+};
+
+/** One vote per account, changeable until close (plan 14.2). */
+export async function castCommunityPollVote(input: unknown): Promise<CommunityActionResult<CommunityPollVoteData>> {
+  const parsed = pollVoteSchema.safeParse(input);
+  if (!parsed.success) return rejected("validation_failed", "Invalid poll vote");
+  const profile = await getCurrentProfileId();
+  if (profile.error !== undefined) return { error: profile.error };
+
+  const { data, error } = await createAdminClient().rpc("cast_community_poll_vote", {
+    p_actor_profile_id: profile.profileId,
+    p_post_id: parsed.data.postId,
+    p_option_key: parsed.data.optionKey,
+  });
+  if (error) {
+    return {
+      error: error.message.includes("poll_closed")
+        ? "This poll has closed."
+        : error.message.includes("invalid poll option")
+          ? "That option is no longer available."
+          : "This poll is no longer available.",
+    };
+  }
+  const result = (data ?? {}) as Partial<CommunityPollVoteData>;
+  if (!result.postId || !Array.isArray(result.options)) return { error: "The vote could not be recorded." };
+  revalidatePath("/community");
+  revalidatePath("/community/groups");
+  return { data: result as CommunityPollVoteData };
 }
 
 const postSaveSchema = z.object({

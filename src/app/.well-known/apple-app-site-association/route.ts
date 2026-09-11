@@ -29,6 +29,18 @@ const association = {
             "/": "/notifications/*",
             comment: "Open a notification's permission-checked destination in PerfectPPI.",
           },
+          {
+            "/": "/community/posts/*",
+            comment: "Open a shared Community post in PerfectPPI (re-checked for the signed-in member).",
+          },
+          {
+            "/": "/community/groups/*",
+            comment: "Open a shared group in PerfectPPI.",
+          },
+          {
+            "/": "/profile/*",
+            comment: "Open a shared member profile in PerfectPPI.",
+          },
         ],
       },
     ],

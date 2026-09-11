@@ -139,11 +139,19 @@ struct CommunityGroupsView: View {
             CommunityGroupDetailView(slug: group.slug) { reloadToken = UUID() }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: group.vehicleMake == nil ? "wrench.and.screwdriver.fill" : "car.fill")
+                if let avatar = group.avatarUrl, let avatarURL = URL(string: avatar) {
+                    AsyncImage(url: avatarURL) { phase in
+                        if let image = phase.image { image.resizable().scaledToFill() } else { Color(.secondarySystemFill) }
+                    }
                     .frame(width: 42, height: 42)
-                    .background(Theme.Palette.primary.opacity(0.12))
-                    .foregroundStyle(Theme.Palette.primary)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                } else {
+                    Image(systemName: group.vehicleMake == nil ? "wrench.and.screwdriver.fill" : "car.fill")
+                        .frame(width: 42, height: 42)
+                        .background(Theme.Palette.primary.opacity(0.12))
+                        .foregroundStyle(Theme.Palette.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(group.name).font(.headline)
@@ -248,8 +256,30 @@ struct CommunityGroupDetailView: View {
     private func content(_ detail: CommunityGroupDetail) -> some View {
         let canModerate = detail.group.moderates
         List {
+            if let cover = detail.group.coverUrl, let coverURL = URL(string: cover) {
+                Section {
+                    AsyncImage(url: coverURL) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFill()
+                        } else {
+                            Color(.secondarySystemFill)
+                        }
+                    }
+                    .frame(height: 150)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+                    .listRowInsets(EdgeInsets())
+                }
+            }
             Section {
                 VStack(alignment: .leading, spacing: 10) {
+                    if let avatar = detail.group.avatarUrl, let avatarURL = URL(string: avatar) {
+                        AsyncImage(url: avatarURL) { phase in
+                            if let image = phase.image { image.resizable().scaledToFill() } else { Color(.secondarySystemFill) }
+                        }
+                        .frame(width: 56, height: 56)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
                     Text(detail.group.description)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -372,6 +402,11 @@ struct CommunityGroupDetailView: View {
         .navigationTitle(detail.group.name)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                if !detail.group.isUnlisted {
+                    ShareLink(item: ShareLinks.group(slug: detail.group.slug)) {
+                        Label("Share group", systemImage: "square.and.arrow.up")
+                    }
+                }
                 if detail.group.isMember && (detail.group.postingPolicy != "moderators" || canModerate) {
                     Button { showingComposer = true } label: {
                         Label("Post to group", systemImage: "plus.bubble")

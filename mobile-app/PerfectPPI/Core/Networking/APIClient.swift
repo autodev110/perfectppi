@@ -65,8 +65,8 @@ final class APIClient {
         try await send(method: "DELETE", path: path, query: [], body: body, encoder: encoder)
     }
 
-    func delete<T: Decodable>(_ path: String) async throws -> T {
-        try await send(method: "DELETE", path: path, query: [], body: Optional<Empty>.none, encoder: encoder)
+    func delete<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
+        try await send(method: "DELETE", path: path, query: query, body: Optional<Empty>.none, encoder: encoder)
     }
 
     /// Raw bytes endpoint — used for the media proxy + PDF download.

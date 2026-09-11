@@ -93,7 +93,7 @@ export function notificationDestinationIntent(
 export function notificationWebPath(intent: NotificationDestinationIntent, messagesBase = "/dashboard/messages"): string | null {
   switch (intent.kind) {
     case "post":
-      return intent.id ? `/community#post-${intent.id}` : "/community";
+      return intent.id ? `/community/posts/${encodeURIComponent(intent.id)}` : "/community";
     case "group":
       return intent.id ? `/community/groups/${encodeURIComponent(intent.id)}` : "/community/groups";
     case "profile":

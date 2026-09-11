@@ -5,6 +5,7 @@ import { getCommunityGroup } from "@/features/social/groups";
 import { getViewerGroupRole } from "@/features/social/group-tools";
 import { Button } from "@/components/ui/button";
 import { GroupSettingsForm } from "@/components/shared/group-settings-form";
+import { GroupImageManager } from "@/components/shared/group-image-manager";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,10 @@ export default async function GroupSettingsPage({ params }: { params: Promise<{ 
         <h1 className="font-heading text-3xl font-extrabold tracking-tight">Group settings</h1>
         <p className="mt-2 text-sm text-on-surface-variant">Changes are recorded in the group&apos;s moderation log.</p>
         <div className="mt-8 rounded-[2rem] bg-surface-container-lowest p-6 shadow-sm ghost-border sm:p-8">
+          <h2 className="mb-4 font-heading text-lg font-extrabold">Images</h2>
+          <GroupImageManager groupId={group.id} slug={group.slug} avatarUrl={group.avatar_url} coverUrl={group.cover_url} />
+        </div>
+        <div className="mt-6 rounded-[2rem] bg-surface-container-lowest p-6 shadow-sm ghost-border sm:p-8">
           <GroupSettingsForm
             mode="edit"
             slugForUpdate={group.slug}

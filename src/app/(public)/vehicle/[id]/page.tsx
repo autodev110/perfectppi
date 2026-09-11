@@ -14,6 +14,8 @@ import { getPublicVehicleWarrantySnapshot } from "@/features/warranty/queries";
 import { createCommunityComment } from "@/features/community/actions";
 import { getVehicleDiscussionPosts } from "@/features/community/queries";
 import { SafetyNotice } from "@/components/shared/safety-notice";
+import { ShareButton } from "@/components/shared/share-button";
+import { sharePath } from "@/lib/share/links";
 import { ListingSaveButton } from "@/components/shared/listing-save-button";
 import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-control";
 import { CommunityLikeButton } from "@/components/shared/community-like-button";
@@ -59,9 +61,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!vehicle) return {};
 
   const name = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ");
+  // Year/make/model only (plan 23.3, 15.4): never VIN, plate, or location.
+  const description = `View available inspection records and details for this ${name} on PerfectPPI.`;
   return {
     title: `${name} — PerfectPPI`,
-    description: `View available inspection records and details for this ${name} on PerfectPPI.`,
+    description,
+    openGraph: { title: `${name} · PerfectPPI`, description, url: `/vehicle/${id}` },
   };
 }
 
@@ -195,7 +200,11 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
             </div>
           </div>
 
-          {/* Owner */}
+          {/* Owner + share */}
+          <div className="flex flex-shrink-0 flex-col items-end gap-2">
+          {vehicle.visibility === "public" ? (
+            <ShareButton path={sharePath({ kind: "vehicle", id: vehicle.id })} title={`${vehicleName} · PerfectPPI`} />
+          ) : null}
           {owner && owner.is_public && (
             <Link
               href={`/profile/${owner.username ?? owner.id}`}
@@ -215,6 +224,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
               </div>
             </Link>
           )}
+          </div>
         </div>
       </div>
 

@@ -11,7 +11,7 @@ export default async function NewDashboardPostPage({
   searchParams: Promise<{ vehicle?: string; group?: string }>;
 }) {
   const { vehicle: requestedVehicleId, group: requestedGroupSlug } = await searchParams;
-  const [{ vehicles, listings, groups, defaultAudience, canPostPublic }, flags] = await Promise.all([
+  const [{ vehicles, listings, groups, inspections, defaultAudience, canPostPublic }, flags] = await Promise.all([
     getCommunityPostOptions(),
     getFeatureFlags(),
   ]);
@@ -35,6 +35,7 @@ export default async function NewDashboardPostPage({
               vehicles={vehicles}
               listings={listings}
               groups={groups}
+              inspections={inspections}
               selectedVehicleId={requestedVehicleId}
               selectedGroupSlug={requestedGroupSlug}
               defaultAudience={defaultAudience}

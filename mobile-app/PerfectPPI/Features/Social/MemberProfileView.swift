@@ -117,6 +117,14 @@ private struct MemberProfileContent: View {
         }
         .listStyle(.insetGrouped)
         .toolbar {
+            if !isPreview, let handle = identity.username {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShareLink(item: ShareLinks.profile(username: handle)) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Share profile")
+                }
+            }
             if !isMe && !isPreview {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {

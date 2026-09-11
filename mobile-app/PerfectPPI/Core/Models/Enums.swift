@@ -242,6 +242,19 @@ enum CommunityContentStatus: String, Codable {
 enum CommunityPostType: String, Codable, CaseIterable {
     case general
     case question
+    case buildUpdate = "build_update"
+    case maintenance
+    case beforeAfter = "before_after"
+    case inspectionDiscussion = "inspection_discussion"
+    case buyingAdvice = "buying_advice"
+    case poll
+    /// Newer server types never fail feed decoding on an older build.
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = CommunityPostType(rawValue: raw) ?? .unknown
+    }
 }
 
 enum CommunityFeedFilter: String, CaseIterable, Identifiable {

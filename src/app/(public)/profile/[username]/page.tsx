@@ -23,6 +23,10 @@ import { MemberSafetyActions } from "@/components/shared/member-safety-actions";
 import { FriendActionButton } from "@/components/shared/friend-action-button";
 import { getSocialRelationshipState } from "@/features/social/relationships";
 import { friendsDiscoveryEnabled, getFriendRelationshipState } from "@/features/social/friends";
+import { getOptionalProfile } from "@/features/auth/guards";
+import { getProfileSharePreview, profileShareCard } from "@/features/share/previews";
+import { ShareButton } from "@/components/shared/share-button";
+import { sharePath } from "@/lib/share/links";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,13 +34,16 @@ type PageProps = { params: Promise<{ username: string }> };
 
 // ── Metadata ──────────────────────────────────────────────────────────────────
 
+// Share cards (plan 15.4) come from the anonymous-audience preview: public,
+// lookup-enabled, available profiles only — never the viewer's own access.
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { username } = await params;
-  const profile = await getPublicProfile(username);
-  if (!profile) return {};
+  const card = await profileShareCard(username);
   return {
-    title: `${profile.display_name ?? profile.username} — PerfectPPI`,
-    description: profile.bio ?? `View ${profile.display_name ?? profile.username}'s profile on PerfectPPI.`,
+    title: card.title,
+    description: card.description,
+    openGraph: { title: card.title, description: card.description, url: card.path, type: "profile" },
+    robots: card.available ? undefined : { index: false },
   };
 }
 
@@ -52,6 +59,47 @@ const PPI_BADGE = {
 
 export default async function PublicProfilePage({ params }: PageProps) {
   const { username } = await params;
+  const viewer = await getOptionalProfile(["consumer", "technician", "org_manager", "admin"]);
+  if (!viewer) {
+    // Signed-out share link: the public card and a sign-in prompt; private
+    // and unknown profiles look identical.
+    const preview = await getProfileSharePreview(username);
+    const path = sharePath({ kind: "profile", username });
+    return (
+      <div className="min-h-screen bg-surface px-8 pb-20 pt-28">
+        <div className="mx-auto max-w-2xl">
+          {preview ? (
+            <section className="flex flex-col items-start gap-5 rounded-[2rem] bg-surface-container-lowest p-8 shadow-sm ghost-border sm:flex-row">
+              <Avatar className="h-20 w-20 flex-shrink-0 ring-4 ring-surface shadow-md">
+                <AvatarImage src={preview.avatar_url ?? ""} />
+                <AvatarFallback className="text-2xl font-bold">{getInitials(preview.display_name ?? preview.username)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="font-heading text-2xl font-extrabold tracking-tight text-on-surface">{preview.display_name ?? preview.username}</h1>
+                  {preview.is_technician ? <Badge className="bg-secondary-container text-on-secondary-container">Technician</Badge> : null}
+                </div>
+                <p className="mt-1 text-sm text-on-surface-variant">@{preview.username}</p>
+                {preview.bio ? <p className="mt-3 max-w-xl text-sm leading-relaxed text-on-surface-variant">{preview.bio}</p> : null}
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+                  <Button asChild><Link href={`/login?redirect=${encodeURIComponent(path)}`}>Sign in to see more</Link></Button>
+                  <Button asChild variant="outline"><Link href="/signup">Join PerfectPPI</Link></Button>
+                  <ShareButton path={path} title={`${preview.display_name ?? preview.username} · PerfectPPI`} />
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="rounded-3xl bg-surface-container-lowest p-10 text-center ghost-border">
+              <Users className="mx-auto mb-3 h-9 w-9 text-on-surface-variant/40" />
+              <p className="font-semibold">This profile isn&rsquo;t available.</p>
+              <p className="mt-1 text-sm text-on-surface-variant">It may be private or no longer exist. Sign in if you were sent this link by a friend.</p>
+              <Button asChild className="mt-5"><Link href={`/login?redirect=${encodeURIComponent(path)}`}>Sign in</Link></Button>
+            </section>
+          )}
+        </div>
+      </div>
+    );
+  }
   const profile = await getPublicProfile(username);
   if (!profile) notFound();
 
@@ -158,6 +206,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
               </Link>
             </Button>
             {relationship ? <MemberSafetyActions profileId={profile.id} muted={relationship.mutedByMe} /> : null}
+            {profile.username ? <ShareButton path={sharePath({ kind: "profile", username: profile.username })} title={`${profile.display_name ?? profile.username} · PerfectPPI`} compact className="self-center px-2" /> : null}
           </div>
         </div>
       </section>

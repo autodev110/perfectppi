@@ -70,9 +70,14 @@ export default async function CommunityGroupsPage() {
             {[...groups].sort((a, b) => Number(b.is_suggested) - Number(a.is_suggested) || a.name.localeCompare(b.name)).map((group) => (
               <article key={group.id} className="flex flex-col rounded-[1.5rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
                 <div className="mb-4 flex items-start justify-between gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                    <CarFront className="h-6 w-6" />
-                  </div>
+                  {group.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={group.avatar_url} alt="" className="h-12 w-12 rounded-2xl object-cover" />
+                  ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <CarFront className="h-6 w-6" />
+                    </div>
+                  )}
                   <div className="flex flex-wrap justify-end gap-2">
                     {group.visibility === "private" ? <Badge variant="outline"><Lock className="mr-1 h-3 w-3" />Private</Badge> : null}
                     {group.visibility === "unlisted" ? <Badge variant="outline"><EyeOff className="mr-1 h-3 w-3" />Unlisted</Badge> : null}

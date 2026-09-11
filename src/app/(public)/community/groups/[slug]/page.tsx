@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -18,17 +19,36 @@ import {
   searchCommunityGroupPosts,
   type CommunityFeedPost,
 } from "@/features/community/queries";
-import { requireRole } from "@/features/auth/guards";
+import { getOptionalProfile } from "@/features/auth/guards";
 import { getCommunityGroup } from "@/features/social/groups";
+import { getGroupSharePreview, groupShareCard } from "@/features/share/previews";
+import { ShareButton } from "@/components/shared/share-button";
+import { sharePath } from "@/lib/share/links";
 import { getGroupJoinRequests, getGroupMembers, getViewerGroupRole } from "@/features/social/group-tools";
 import { GroupArchiveButton, GroupInviteForm, GroupJoinRequestControls, GroupMemberModerationMenu, GroupPostModerationMenu } from "@/components/shared/group-moderation-controls";
 import { GROUP_JOIN_POLICY_LABELS, GROUP_VISIBILITY_LABELS } from "@/lib/social/group-options";
+import { CommunityPoll } from "@/components/shared/community-poll";
+import { PostDetailsCard } from "@/components/shared/post-details-card";
+import { POST_TYPE_LABELS, type PostType } from "@/lib/community/post-types";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDate, getInitials } from "@/lib/utils/formatting";
 import { ArrowLeft, Lock, MessageSquare, Pin, Plus, Search, ShieldCheck, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+// Share cards see the shell of public and private groups only (plan 15.4);
+// unlisted groups get the neutral card.
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const card = await groupShareCard(slug);
+  return {
+    title: card.title,
+    description: card.description,
+    openGraph: { title: card.title, description: card.description, url: card.path },
+    robots: card.available ? undefined : { index: false },
+  };
+}
 
 export default async function CommunityGroupPage({
   params,
@@ -37,8 +57,41 @@ export default async function CommunityGroupPage({
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ page?: string; q?: string; tab?: string }>;
 }) {
-  const viewer = await requireRole(["consumer", "technician", "org_manager", "admin"]);
+  const viewer = await getOptionalProfile(["consumer", "technician", "org_manager", "admin"]);
   const { slug } = await params;
+  if (!viewer) {
+    // Signed-out share link: the public shell and a sign-in prompt.
+    const preview = await getGroupSharePreview(slug);
+    return (
+      <main className="min-h-screen bg-surface px-6 pb-20 pt-24 sm:px-8">
+        <div className="mx-auto max-w-3xl">
+          <Button asChild variant="ghost" className="mb-5 -ml-3"><Link href="/community"><ArrowLeft className="mr-2 h-4 w-4" />Community</Link></Button>
+          {preview ? (
+            <section className="rounded-[2rem] bg-surface-container-lowest p-8 shadow-sm ghost-border">
+              <div className="mb-3 flex flex-wrap gap-2">
+                <Badge>{preview.visibility === "private" ? "Private group" : "Public group"}</Badge>
+              </div>
+              <h1 className="font-heading text-3xl font-extrabold tracking-tight">{preview.name}</h1>
+              <p className="mt-3 leading-relaxed text-on-surface-variant">{preview.description}</p>
+              <p className="mt-4 flex items-center gap-2 text-sm text-on-surface-variant"><Users className="h-4 w-4" />{preview.member_count} member{preview.member_count === 1 ? "" : "s"}</p>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <Button asChild><Link href={`/login?redirect=${encodeURIComponent(sharePath({ kind: "group", slug: preview.slug }))}`}>Sign in to open the group</Link></Button>
+                <Button asChild variant="outline"><Link href="/signup">Join PerfectPPI</Link></Button>
+                <ShareButton path={sharePath({ kind: "group", slug: preview.slug })} title={`${preview.name} · PerfectPPI Groups`} />
+              </div>
+            </section>
+          ) : (
+            <section className="rounded-3xl bg-surface-container-lowest p-10 text-center ghost-border">
+              <Lock className="mx-auto mb-3 h-9 w-9 text-on-surface-variant/40" />
+              <p className="font-semibold">This group isn&rsquo;t available.</p>
+              <p className="mt-1 text-sm text-on-surface-variant">It may be unlisted, archived, or no longer exist. Sign in if you were invited.</p>
+              <Button asChild className="mt-5"><Link href={`/login?redirect=${encodeURIComponent(sharePath({ kind: "group", slug }))}`}>Sign in</Link></Button>
+            </section>
+          )}
+        </div>
+      </main>
+    );
+  }
   const group = await getCommunityGroup(slug);
   if (!group) notFound();
   const query = await searchParams;
@@ -65,10 +118,19 @@ export default async function CommunityGroupPage({
       <div className="mx-auto max-w-5xl">
         <Button asChild variant="ghost" className="mb-5 -ml-3"><Link href="/community/groups"><ArrowLeft className="mr-2 h-4 w-4" />All groups</Link></Button>
         <section className="overflow-hidden rounded-[2rem] bg-surface-container-lowest shadow-sm ghost-border">
-          <div className="h-24 bg-[radial-gradient(circle_at_15%_10%,rgba(18,122,110,0.28),transparent_36%),linear-gradient(120deg,rgba(12,24,36,0.96),rgba(40,74,78,0.9))]" />
+          {group.cover_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={group.cover_url} alt="" className="h-40 w-full object-cover sm:h-56" />
+          ) : (
+            <div className="h-24 bg-[radial-gradient(circle_at_15%_10%,rgba(18,122,110,0.28),transparent_36%),linear-gradient(120deg,rgba(12,24,36,0.96),rgba(40,74,78,0.9))]" />
+          )}
           <div className="p-7 sm:p-9">
             <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
               <div className="max-w-2xl">
+                {group.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={group.avatar_url} alt="" className="-mt-16 mb-4 h-20 w-20 rounded-2xl border-4 border-surface-container-lowest object-cover shadow-md sm:-mt-20 sm:h-24 sm:w-24" />
+                ) : null}
                 <div className="mb-3 flex flex-wrap gap-2">
                   <Badge>{group.visibility === "public" ? "Public group" : `${GROUP_VISIBILITY_LABELS[group.visibility].label} group`}</Badge>
                   <Badge variant="outline">{group.join_policy === "open" ? "Open to join" : GROUP_JOIN_POLICY_LABELS[group.join_policy].label}</Badge>
@@ -82,6 +144,7 @@ export default async function CommunityGroupPage({
               </div>
               <div className="flex flex-col items-end gap-2">
                 <GroupMembershipButton groupId={group.id} status={group.membership_status} joinPolicy={group.join_policy} owner={group.membership_role === "owner"} />
+                {group.visibility !== "unlisted" ? <ShareButton path={sharePath({ kind: "group", slug: group.slug })} title={`${group.name} · PerfectPPI Groups`} /> : null}
                 {viewerRole === "owner" || viewerRole === "admin" ? (
                   <div className="flex flex-wrap justify-end gap-2">
                     <Button asChild size="sm" variant="outline"><Link href={`/community/groups/${group.slug}/settings`}>Group settings</Link></Button>
@@ -212,10 +275,12 @@ export default async function CommunityGroupPage({
           ) : posts.map((post) => (
             <article key={post.id} className="rounded-[1.5rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
               <div className="flex items-start justify-between gap-4">
-                <div><div className="flex flex-wrap items-center gap-2"><p className="font-bold">{post.author?.display_name ?? post.author?.username ?? "PerfectPPI member"}</p>{post.post_type === "question" ? <Badge className="bg-teal/10 text-teal hover:bg-teal/10">{post.accepted_answer_comment_id ? "Solved" : "Question"}</Badge> : null}</div><p className="text-xs text-on-surface-variant">{formatDate(post.created_at)}</p></div>
+                <div><div className="flex flex-wrap items-center gap-2"><p className="font-bold">{post.author?.display_name ?? post.author?.username ?? "PerfectPPI member"}</p>{post.post_type === "question" ? <Badge className="bg-teal/10 text-teal hover:bg-teal/10">{post.accepted_answer_comment_id ? "Solved" : "Question"}</Badge> : post.post_type !== "general" && POST_TYPE_LABELS[post.post_type as PostType] ? <Badge className="bg-teal/10 text-teal hover:bg-teal/10">{POST_TYPE_LABELS[post.post_type as PostType].chip}</Badge> : null}</div><p className="text-xs text-on-surface-variant"><Link href={sharePath({ kind: "post", id: post.id })} className="hover:underline">{formatDate(post.created_at)}</Link></p></div>
                 <div className="flex items-center gap-1">{post.author_id === viewer.id ? <Badge variant="outline">Your post</Badge> : <MemberSafetyActions profileId={post.author_id} compact />}{post.report_context ? <CommunityReportControl entityType="community_post" entityId={post.id} reportContext={post.report_context} /> : null}{post.can_moderate_group ? <GroupPostModerationMenu slug={group.slug} postId={post.id} pinned={post.group_pinned} removed={false} /> : null}</div>
               </div>
               <CommunityMentionText content={post.content} mentions={post.mentions} className="mt-4 block whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant" />
+              <PostDetailsCard postType={post.post_type as PostType} details={post.details} inspection={post.inspection} />
+              {post.post_type === "poll" && post.poll ? <CommunityPoll postId={post.id} initial={post.poll} /> : null}
               {post.safety_notice ? <div className="mt-4"><SafetyNotice notice={post.safety_notice} /></div> : null}
               {post.media.length ? <div className="-mx-6 mt-5"><PostMediaCarousel media={post.media} /></div> : null}
               <div className="mt-4">
