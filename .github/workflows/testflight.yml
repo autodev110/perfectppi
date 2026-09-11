@@ -200,7 +200,8 @@ jobs:
             'applinks:www.perfectppi.com' \
             'webcredentials:perfectppi.com' \
             'webcredentials:www.perfectppi.com'; do
-            if ! grep -Fxq '    *' <<< "$profile_associated_domains" \
+            if [[ "$profile_associated_domains" != '*' ]] \
+              && ! grep -Fxq '    *' <<< "$profile_associated_domains" \
               && ! grep -Fxq "    $domain" <<< "$profile_associated_domains"; then
               echo "::error::The App Store provisioning profile is missing the Associated Domains value: $domain"
               exit 1
