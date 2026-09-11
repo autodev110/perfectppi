@@ -25,6 +25,10 @@ const association = {
             "/": "/dashboard/warranty/*",
             comment: "Open warranty order links in PerfectPPI.",
           },
+          {
+            "/": "/notifications/*",
+            comment: "Open a notification's permission-checked destination in PerfectPPI.",
+          },
         ],
       },
     ],

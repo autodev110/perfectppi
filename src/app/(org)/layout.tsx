@@ -16,7 +16,6 @@ export default async function OrgLayout({
       sidebar={<OrgSidebar />}
       settingsHref="/org/settings"
       profileHref="/org/profile"
-      messagesBase="/org/messages"
     >
       {children}
     </PortalLayout>

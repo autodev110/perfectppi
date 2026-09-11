@@ -153,6 +153,16 @@ export default function AccountSettingsPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Notifications</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">Per-category in-app and push switches.</p>
+          <Button asChild variant="outline" size="sm"><Link href="/dashboard/settings/notifications">Manage</Link></Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Current Access</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">

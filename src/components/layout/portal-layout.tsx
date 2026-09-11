@@ -20,7 +20,6 @@ interface PortalLayoutProps {
   sidebar: React.ReactNode;
   settingsHref: string;
   profileHref: string;
-  messagesBase: string;
 }
 
 export function PortalLayout({
@@ -28,7 +27,6 @@ export function PortalLayout({
   sidebar,
   settingsHref,
   profileHref,
-  messagesBase,
 }: PortalLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -63,7 +61,7 @@ export function PortalLayout({
               />
             </div>
 
-            <NotificationBell messagesBase={messagesBase} />
+            <NotificationBell />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

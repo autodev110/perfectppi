@@ -13,6 +13,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isFeatureEnabled, FEATURE_UNAVAILABLE_MESSAGE } from "@/lib/feature-flags";
 import { pushToProfile } from "@/lib/push/dispatch";
+import { notificationLink, pushAllowed } from "@/features/notifications/preferences";
 import type { Json } from "@/types/database";
 
 export const FRIEND_RELATIONSHIP_STATES = [
@@ -200,16 +201,34 @@ export async function mutateFriendship(input: unknown): Promise<FriendMutationRe
 // Push mirrors the in-app notice the RPC wrote. Payloads carry only the
 // actor's public handle (plan 22.2).
 async function pushFriendNotice(recipientId: string, actorId: string, kind: "request" | "accepted") {
+  // Per-category push preference (plan 22.1); the in-app row was already
+  // filtered by the database.
+  if (!(await pushAllowed(recipientId, kind === "request" ? "friend_request" : "friend_request_accepted"))) return;
   const { data: actor } = await createAdminClient()
     .from("profiles")
     .select("display_name, username")
     .eq("id", actorId)
     .maybeSingle();
   const name = actor?.display_name?.trim() || (actor?.username ? `@${actor.username}` : "A member");
+  const type = kind === "request" ? "friend_request" : "friend_request_accepted";
+  // Tapping the push opens /notifications/<id>, which re-checks permissions.
+  const { data: notice } = await createAdminClient()
+    .from("notifications")
+    .select("id")
+    .eq("user_id", recipientId)
+    .eq("type", type)
+    .contains("data", { profile_id: actorId })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   await pushToProfile(recipientId, {
     title: kind === "request" ? "New friend request" : "Friend request accepted",
     body: kind === "request" ? `${name} wants to be friends` : `${name} accepted your friend request`,
-    data: { type: kind === "request" ? "friend_request" : "friend_request_accepted", profile_id: actorId },
+    data: {
+      type,
+      profile_id: actorId,
+      ...(notice ? { notification_id: notice.id, link: notificationLink(notice.id) } : {}),
+    },
   }).catch((error) => console.warn("[friends] push failed", error instanceof Error ? error.message : error));
 }
 

@@ -1001,6 +1001,27 @@ struct NotificationItem: Codable, Identifiable, Hashable {
     let createdAt: Date
 }
 
+/// Where a notification opens, after the server re-checked permissions
+/// (plan 22.1). `available == false` means show the neutral screen.
+struct NotificationDestination: Codable, Hashable {
+    let kind: String
+    let id: String?
+    let secondaryId: String?
+    let available: Bool
+    let message: String?
+}
+
+struct NotificationPreference: Codable, Identifiable, Hashable {
+    let category: String
+    let label: String
+    let description: String
+    let inApp: Bool
+    let push: Bool
+    let locked: Bool
+
+    var id: String { category }
+}
+
 // MARK: - Media Packages & Sharing
 
 struct MediaPackageItem: Codable, Identifiable, Hashable {

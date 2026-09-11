@@ -190,6 +190,10 @@ enum NotificationType: String, Codable {
     case answerAccepted = "answer_accepted"
     case acceptedAnswerUnavailable = "accepted_answer_unavailable"
     case listingInspectionRequested = "listing_inspection_requested"
+    case friendRequest = "friend_request"
+    case friendRequestAccepted = "friend_request_accepted"
+    case postComment = "post_comment"
+    case postLikes = "post_likes"
     /// Server-side categories grow over time (plan 22.1); an unrecognized
     /// value must not fail decoding of the whole inbox on an older build.
     case unknown

@@ -17,6 +17,38 @@ enum NotificationsAPI {
         )
     }
 
+    struct MarkAllResult: Decodable {
+        let ok: Bool
+        let marked: Int
+    }
+
+    /// Plan 22.2 "Mark All as Read".
+    static func markAllRead() async throws -> MarkAllResult {
+        try await APIClient.shared.patch("/api/notifications", body: MarkReadPayload(read: true))
+    }
+
+    /// Marks the notice read and returns its permission-checked destination.
+    static func destination(id: String) async throws -> NotificationDestination {
+        try await APIClient.shared.post("/api/notifications/\(id)/destination", body: Empty())
+    }
+
+    static func preferences() async throws -> [NotificationPreference] {
+        try await APIClient.shared.get("/api/notifications/preferences")
+    }
+
+    private struct PreferencePayload: Encodable {
+        let category: String
+        let inApp: Bool
+        let push: Bool
+    }
+
+    static func setPreference(category: String, inApp: Bool, push: Bool) async throws {
+        let _: Empty = try await APIClient.shared.patchCamel(
+            "/api/notifications/preferences",
+            body: PreferencePayload(category: category, inApp: inApp, push: push)
+        )
+    }
+
     struct RegisterDevicePayload: Encodable {
         let token: String
         let platform: String

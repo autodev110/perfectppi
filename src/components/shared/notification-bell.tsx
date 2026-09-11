@@ -12,9 +12,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, CheckCheck, MessageSquare, ShieldCheck, CreditCard, FileText, Wrench, Flag, Gavel, UserPlus, UserCheck, CheckCircle2, CircleAlert, ClipboardCheck } from "lucide-react";
+import { Bell, CheckCheck, MessageSquare, ShieldCheck, CreditCard, FileText, Wrench, Flag, Gavel, UserPlus, UserCheck, CheckCircle2, CircleAlert, ClipboardCheck, Heart } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils/formatting";
 import type { Database } from "@/types/database";
+import { notificationDestinationIntent } from "@/lib/notifications/routing";
 
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 type NotificationType = NotificationRow["type"];
@@ -38,9 +39,13 @@ const typeStyle: Record<
   listing_inspection_requested: { icon: ClipboardCheck, color: "text-teal-600", bg: "bg-teal-50" },
   answer_accepted: { icon: CheckCircle2, color: "text-teal", bg: "bg-teal/10" },
   accepted_answer_unavailable: { icon: CircleAlert, color: "text-amber-600", bg: "bg-amber-50" },
+  post_comment: { icon: MessageSquare, color: "text-teal", bg: "bg-teal/10" },
+  post_likes: { icon: Heart, color: "text-rose-600", bg: "bg-rose-50" },
 };
 
-export function NotificationBell({ messagesBase }: { messagesBase: string }) {
+// Destinations resolve server-side in /notifications/<id>, which knows the
+// role's messages base itself, so the bell no longer needs it.
+export function NotificationBell() {
   const router = useRouter();
   const [profileId, setProfileId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -75,50 +80,30 @@ export function NotificationBell({ messagesBase }: { messagesBase: string }) {
     });
   }
 
+  // Every item routes through /notifications/<id>, which marks it read and
+  // redirects to a permission-checked destination or a neutral unavailable
+  // page (plan 22.1). The pure intent only decides whether there is
+  // anywhere to go at all.
   function routeForNotification(n: NotificationRow): string | null {
     const data = (n.data ?? {}) as Record<string, unknown>;
-    if (n.type === "message_received" && typeof data.conversation_id === "string") {
-      const base = `${messagesBase}/${data.conversation_id}`;
-      if (typeof data.message_id === "string") {
-        return `${base}?m=${encodeURIComponent(data.message_id)}`;
-      }
-      return base;
-    }
-    // Moderation notices deep-link to permission-checked destinations only
-    // (plan 22.1): the author's own posts, the moderator queue, or nothing.
-    if (n.type === "moderation_decision") return "/dashboard/posts?tab=review";
-    if (n.type === "moderation_case" && typeof data.caseId === "string") {
-      return `/admin/moderation/cases/${data.caseId}`;
-    }
-    if (n.type === "moderation_case") return "/admin/moderation";
-    // Friend notices open the owner's request list or the accepter's profile;
-    // both destinations re-check visibility on load.
-    if (n.type === "friend_request") return "/dashboard/friends";
-    if (n.type === "friend_request_accepted" && typeof data.username === "string") {
-      return `/profile/${encodeURIComponent(data.username)}`;
-    }
-    if (n.type === "friend_request_accepted") return "/dashboard/friends";
-    if (n.type === "listing_inspection_requested" && typeof data.vehicle_id === "string") {
-      return `/vehicle/${data.vehicle_id}?tab=marketplace`;
-    }
-    if (n.type === "listing_inspection_requested") return "/dashboard/listings";
-    if (n.type === "answer_accepted" || n.type === "accepted_answer_unavailable") return "/community";
-    return null;
+    const intent = notificationDestinationIntent(n.type, data);
+    return intent.kind === "none" ? null : `/notifications/${n.id}`;
   }
 
   async function handleClickNotification(n: NotificationRow) {
     const destination = routeForNotification(n);
     setOpen(false);
 
+    if (destination) {
+      // The route handler marks it read before redirecting.
+      router.push(destination);
+      return;
+    }
     if (!n.read_at) {
       startTransition(async () => {
         await markNotificationRead(n.id);
         await refetch();
       });
-    }
-
-    if (destination) {
-      router.push(destination);
     }
   }
 

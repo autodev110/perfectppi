@@ -17,6 +17,11 @@ enum CommunityAPI {
         )
     }
 
+    /// One visible post by id (deep links); 404 when hidden or out of audience.
+    static func post(id: String) async throws -> CommunityPost {
+        try await APIClient.shared.get("/api/community/posts/\(id)")
+    }
+
     static func mine(status: String = "active") async throws -> [CommunityPost] {
         try await APIClient.shared.get(
             "/api/community/posts/me",

@@ -19,7 +19,6 @@ export default async function TechLayout({
       sidebar={<TechSidebar showOrgReturn={isManager} />}
       settingsHref="/tech/profile"
       profileHref="/tech/profile"
-      messagesBase="/tech/messages"
     >
       {children}
     </PortalLayout>

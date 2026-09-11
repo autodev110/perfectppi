@@ -38,6 +38,8 @@ import {
   type PublicationOutcome,
 } from "@/lib/moderation/launch-policy";
 import { FEATURE_UNAVAILABLE_MESSAGE, getFeatureFlags } from "@/lib/feature-flags";
+import { notificationLink, pushAllowed } from "@/features/notifications/preferences";
+import { pushToProfile } from "@/lib/push/dispatch";
 
 const postSchema = z.object({
   content: z.string().trim().min(1, "Write something before posting").max(1200),
@@ -908,6 +910,38 @@ export async function removeCommunityPostMedia(input: unknown) {
   return { data: { id: deleted.id } };
 }
 
+// Push mirror of the in-app comment notice (plan 22.2). The database
+// trigger decides whether a notice exists at all (self, mute, block,
+// in-app preference); a push goes out only when it did, the push preference
+// allows it, and never carries the comment text.
+async function pushCommentNotice(postId: string, commenterId: string) {
+  const admin = createAdminClient();
+  const { data: post } = await admin
+    .from("community_posts")
+    .select("author_id")
+    .eq("id", postId)
+    .maybeSingle();
+  if (!post || post.author_id === commenterId) return;
+  const { data: notice } = await admin
+    .from("notifications")
+    .select("id, data")
+    .eq("user_id", post.author_id)
+    .eq("type", "post_comment")
+    .is("read_at", null)
+    .contains("data", { post_id: postId })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const latest = (notice?.data as { latest_actor_id?: string } | null)?.latest_actor_id;
+  if (!notice || latest !== commenterId) return;
+  if (!(await pushAllowed(post.author_id, "post_comment"))) return;
+  await pushToProfile(post.author_id, {
+    title: "New comment on your post",
+    body: "Open PerfectPPI to read it.",
+    data: { type: "post_comment", post_id: postId, notification_id: notice.id, link: notificationLink(notice.id) },
+  }).catch((error) => console.warn("[community] comment push failed", error instanceof Error ? error.message : error));
+}
+
 export async function createCommunityComment(formData: FormData) {
   const result = await createCommunityCommentFromInput({
     postId: formData.get("post_id"),
@@ -1002,6 +1036,7 @@ export async function createCommunityCommentFromInput(
       contentPreview: evaluated.text,
       result: launchAllowResult({ linkCount: evaluated.linkCount, fingerprint: evaluated.fingerprint }),
     }).catch((recordError) => console.error("launch moderation record failed", recordError));
+    await pushCommentNotice(post.id, profile.profileId);
 
     revalidatePath("/community");
     revalidatePath("/admin/community");
@@ -1028,6 +1063,9 @@ export async function createCommunityCommentFromInput(
     if (updateError) throw updateError;
   } catch {
     return { error: "Your comment could not be checked yet. Please try again." };
+  }
+  if (statusForDecision(moderation.decision) === "active") {
+    await pushCommentNotice(post.id, profile.profileId);
   }
 
   revalidatePath("/community");

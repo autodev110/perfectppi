@@ -22,7 +22,6 @@ export default async function DevLayout({
       // the consumer inbox, whose requireRole bounces back to /dev. That is a
       // clean redirect, where a /dev/<conversationId> link would 404.
       profileHref="/dev"
-      messagesBase="/dashboard/messages"
     >
       {children}
     </PortalLayout>

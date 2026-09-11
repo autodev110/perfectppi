@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pushToProfile } from "@/lib/push/dispatch";
+import { notificationLink } from "@/features/notifications/preferences";
 import type { Database, Json } from "@/types/database";
 import {
   authorRemovedMessage,
@@ -62,18 +63,26 @@ async function deliver(profileId: string, type: NotificationType, draft: Notific
     .maybeSingle();
   if (existing) return false;
 
-  const { error } = await admin.from("notifications").insert({
+  const { data: inserted, error } = await admin.from("notifications").insert({
     user_id: profileId,
     type,
     title: draft.title,
     body: draft.body,
     data: draft.data as Json,
-  });
+  }).select("id").maybeSingle();
   if (error) throw new Error(`notification insert failed: ${error.message}`);
 
   if (draft.push) {
-    // Best-effort; the in-app record above is the durable notice.
-    await pushToProfile(profileId, { title: draft.push.title, body: draft.push.body, data: draft.push.data })
+    // Best-effort; the in-app record above is the durable notice. The link
+    // routes the tap through /notifications/<id> (permission-checked).
+    await pushToProfile(profileId, {
+      title: draft.push.title,
+      body: draft.push.body,
+      data: {
+        ...draft.push.data,
+        ...(inserted ? { notification_id: inserted.id, link: notificationLink(inserted.id) } : {}),
+      },
+    })
       .catch((pushError) => console.warn("[moderation-outbox] push failed", pushError instanceof Error ? pushError.message : pushError));
   }
   return true;

@@ -13,6 +13,8 @@ final class URLRouter: ObservableObject {
         case ppiRequest(id: String)
         case ppiSubmission(id: String)
         case warrantyOrder(id: String)
+        /// /notifications/{id}: resolve through the server (plan 22.1).
+        case notification(id: String)
         case unknown
     }
 
@@ -42,6 +44,11 @@ final class URLRouter: ObservableObject {
 
         if parts.count >= 3, parts[0] == "dashboard", parts[1] == "warranty" {
             selectedRoute = .warrantyOrder(id: parts[2])
+            return true
+        }
+
+        if parts.count >= 2, parts[0] == "notifications", UUID(uuidString: parts[1]) != nil {
+            selectedRoute = .notification(id: parts[1])
             return true
         }
 

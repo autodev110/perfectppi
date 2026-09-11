@@ -169,7 +169,7 @@ struct CommunityFeedView: View {
     }
 }
 
-private struct ModeratedPostsView: View {
+struct ModeratedPostsView: View {
     let onChanged: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var posts: [CommunityPost] = []

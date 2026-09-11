@@ -30,9 +30,11 @@ struct RootView: View {
 
 private struct SignedInContainer: View {
     @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var router: URLRouter
     let profile: Profile
     @State private var hasAcceptedCurrentTerms: Bool?
     @State private var termsError: String?
+    @State private var linkedNotification: LinkedNotification?
 
     var body: some View {
         Group {
@@ -61,6 +63,16 @@ private struct SignedInContainer: View {
             if !profile.needsUsername {
                 await checkTerms()
             }
+        }
+        // A push tap or universal link to /notifications/<id> lands here once
+        // the account is usable; the sheet resolves it server-side.
+        .onChange(of: router.selectedRoute) { _, route in
+            guard case .notification(let id)? = route, hasAcceptedCurrentTerms == true, !profile.needsUsername else { return }
+            linkedNotification = LinkedNotification(id: id)
+            router.selectedRoute = nil
+        }
+        .sheet(item: $linkedNotification) { link in
+            NavigationStack { NotificationLinkView(notificationId: link.id) }
         }
     }
 
@@ -304,4 +316,8 @@ private struct MissingRoleView: View {
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
+
+private struct LinkedNotification: Identifiable {
+    let id: String
 }

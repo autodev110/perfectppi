@@ -3120,6 +3120,30 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_preferences: {
+        Row: {
+          category: string
+          in_app: boolean
+          profile_id: string
+          push: boolean
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          in_app?: boolean
+          profile_id: string
+          push?: boolean
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          in_app?: boolean
+          profile_id?: string
+          push?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       community_post_saves: {
         Row: {
           created_at: string
@@ -4388,6 +4412,22 @@ export type Database = {
         }
         Returns: Database["public"]["Tables"]["profiles"]["Row"]
       }
+      notification_allowed: {
+        Args: { p_profile_id: string; p_type: Database["public"]["Enums"]["notification_type"]; p_channel: string }
+        Returns: boolean
+      }
+      set_notification_preference: {
+        Args: { p_actor_profile_id: string; p_category: string; p_in_app: boolean; p_push: boolean }
+        Returns: Database["public"]["Tables"]["notification_preferences"]["Row"]
+      }
+      list_notification_preferences: {
+        Args: { p_actor_profile_id: string }
+        Returns: { category: string; in_app: boolean; push: boolean; locked: boolean }[]
+      }
+      mark_all_notifications_read: {
+        Args: { p_actor_profile_id: string }
+        Returns: number
+      }
       set_community_post_save: {
         Args: { p_actor_profile_id: string; p_post_id: string; p_saved: boolean }
         Returns: Json
@@ -4759,6 +4799,8 @@ export type Database = {
         | "friend_request"
         | "friend_request_accepted"
         | "listing_inspection_requested"
+        | "post_comment"
+        | "post_likes"
         | "moderation_decision"
         | "moderation_case"
         | "report_received"
