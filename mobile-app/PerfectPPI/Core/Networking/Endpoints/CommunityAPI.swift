@@ -159,6 +159,37 @@ enum CommunityAPI {
         )
     }
 
+    struct HelpfulPayload: Encodable { let helpful: Bool }
+    struct HelpfulResult: Decodable {
+        let commentId: String
+        let helpful: Bool
+        let helpfulCount: Int
+    }
+
+    static func setHelpful(commentId: String, helpful: Bool) async throws -> HelpfulResult {
+        try await APIClient.shared.post(
+            "/api/community/comments/\(commentId)/helpful",
+            body: HelpfulPayload(helpful: helpful)
+        )
+    }
+
+    struct QuestionOutcomePayload: Encodable { let outcome: CommunityQuestionOutcome? }
+    struct QuestionOutcomeResult: Decodable {
+        let postId: String
+        let outcome: CommunityQuestionOutcome?
+        let changed: Bool
+    }
+
+    static func setQuestionOutcome(
+        postId: String,
+        outcome: CommunityQuestionOutcome?
+    ) async throws -> QuestionOutcomeResult {
+        try await APIClient.shared.patch(
+            "/api/community/posts/\(postId)/outcome",
+            body: QuestionOutcomePayload(outcome: outcome)
+        )
+    }
+
     struct LikePayload: Encodable { let liked: Bool }
     struct LikeResult: Decodable {
         let postId: String

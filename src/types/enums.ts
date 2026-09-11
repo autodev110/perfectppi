@@ -125,6 +125,21 @@ export type OrgMemberRole = "technician" | "manager";
 
 // Domain G: Notifications
 export type NotificationType =
+  | "friend_request"
+  | "friend_request_accepted"
+  | "post_comment"
+  | "post_likes"
+  | "post_mention"
+  | "answer_accepted"
+  | "accepted_answer_unavailable"
+  | "answer_helpful"
+  | "group_post_removed"
+  | "group_role_changed"
+  | "group_invitation"
+  | "group_join_request"
+  | "group_join_decision"
+  | "saved_listing_updated"
+  | "listing_inspection_requested"
   | "moderation_decision"
   | "moderation_case"
   | "report_received"

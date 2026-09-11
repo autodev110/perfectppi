@@ -19,6 +19,8 @@ import { sharePath } from "@/lib/share/links";
 import { ListingSaveButton } from "@/components/shared/listing-save-button";
 import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-control";
 import { CommunityLikeButton } from "@/components/shared/community-like-button";
+import { CommunityHelpfulButton } from "@/components/shared/community-helpful-button";
+import { QuestionOutcomeControl } from "@/components/shared/question-outcome-control";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -694,6 +696,14 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                     <SafetyNotice notice={post.safety_notice} compact />
                   </div>
                 ) : null}
+                {post.post_type === "question" ? (
+                  <QuestionOutcomeControl
+                    postId={post.id}
+                    initialOutcome={post.question_outcome}
+                    hasAcceptedAnswer={Boolean(post.accepted_answer_comment_id)}
+                    canManage={post.can_manage_accepted_answer}
+                  />
+                ) : null}
 
                 <div className="mb-4">
                   <CommunityLikeButton
@@ -731,6 +741,14 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                         <p className="text-xs text-on-surface-variant whitespace-pre-wrap">
                           {comment.content}
                         </p>
+                        {post.post_type === "question" ? (
+                          <CommunityHelpfulButton
+                            commentId={comment.id}
+                            initialHelpful={comment.helpful_by_viewer}
+                            initialCount={comment.helpful_count}
+                            disabled={!comment.can_mark_helpful}
+                          />
+                        ) : null}
                       </div>
                     ))}
                   </div>

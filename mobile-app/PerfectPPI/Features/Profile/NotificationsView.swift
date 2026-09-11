@@ -202,6 +202,7 @@ private struct NotificationRow: View {
         case .groupInvitation: "envelope.badge.person.crop"
         case .postLikes: "heart"
         case .answerAccepted, .acceptedAnswerUnavailable: "checkmark.circle"
+        case .answerHelpful: "wrench.and.screwdriver"
         case .messageReceived: "envelope"
         case .listingInspectionRequested, .inspectionSubmitted, .inspectionUpdated, .techRequestNew, .techRequestAccepted: "checkmark.seal"
         case .savedListingUpdated: "tag"

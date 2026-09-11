@@ -328,6 +328,8 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     var poll: CommunityPollView? = nil
     var inspection: CommunityInspectionSummary? = nil
     let acceptedAnswerCommentId: String?
+    var questionOutcome: CommunityQuestionOutcome? = nil
+    var questionOutcomeUpdatedAt: Date? = nil
     let status: CommunityContentStatus
     let moderationStatus: String?
     let moderationReason: String?
@@ -436,6 +438,9 @@ struct CommunityComment: Codable, Identifiable, Hashable {
     let author: Profile?
     let reportContext: String?
     var mentions: [CommunityMention]? = nil
+    var helpfulCount: Int? = nil
+    var helpfulByViewer: Bool? = nil
+    var canMarkHelpful: Bool? = nil
 }
 
 struct CommunityMention: Codable, Identifiable, Hashable {

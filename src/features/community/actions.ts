@@ -156,6 +156,12 @@ export type CommunityPublishData = {
 
 export type CommunityFinalizeData = CommunityPublishData & { published: boolean };
 export type CommunityLikeData = { postId: string; liked: boolean; likeCount: number };
+export type CommunityHelpfulData = { commentId: string; helpful: boolean; helpfulCount: number };
+export type CommunityQuestionOutcomeData = {
+  postId: string;
+  outcome: "fixed" | "helped" | "not_fixed" | "still_diagnosing" | null;
+  changed: boolean;
+};
 export type CommunitySaveData = { postId: string; saved: boolean };
 
 function rejected(
@@ -597,6 +603,77 @@ export async function setCommunityPostLike(
 
   revalidatePath("/community");
   revalidatePath("/community/groups");
+  return { data: result.data };
+}
+
+const commentHelpfulSchema = z.object({
+  commentId: z.string().uuid(),
+  helpful: z.boolean(),
+});
+const commentHelpfulResultSchema = z.object({
+  commentId: z.string().uuid(),
+  helpful: z.boolean(),
+  helpfulCount: z.number().int().nonnegative(),
+});
+
+export async function setCommunityCommentHelpful(
+  input: unknown,
+): Promise<CommunityActionResult<CommunityHelpfulData>> {
+  const parsed = commentHelpfulSchema.safeParse(input);
+  if (!parsed.success) return rejected("validation_failed", "Invalid Helpful reaction");
+  const profile = await getCurrentProfileId();
+  if (profile.error !== undefined) return { error: profile.error };
+
+  const { data, error } = await createAdminClient().rpc("set_community_comment_helpful", {
+    p_actor_profile_id: profile.profileId,
+    p_comment_id: parsed.data.commentId,
+    p_helpful: parsed.data.helpful,
+  });
+  if (error) {
+    return {
+      error: error.message.includes("authors cannot")
+        ? "You cannot mark your own answer Helpful."
+        : "This answer is no longer available.",
+    };
+  }
+  const result = commentHelpfulResultSchema.safeParse(data);
+  if (!result.success) return { error: "The Helpful reaction could not be updated." };
+
+  revalidatePath("/community");
+  revalidatePath("/community/groups");
+  return { data: result.data };
+}
+
+const questionOutcomeSchema = z.object({
+  postId: z.string().uuid(),
+  outcome: z.enum(["fixed", "helped", "not_fixed", "still_diagnosing"]).nullable(),
+});
+const questionOutcomeResultSchema = z.object({
+  postId: z.string().uuid(),
+  outcome: z.enum(["fixed", "helped", "not_fixed", "still_diagnosing"]).nullable(),
+  changed: z.boolean(),
+});
+
+export async function setCommunityQuestionOutcome(
+  input: unknown,
+): Promise<CommunityActionResult<CommunityQuestionOutcomeData>> {
+  const parsed = questionOutcomeSchema.safeParse(input);
+  if (!parsed.success) return rejected("validation_failed", "Invalid question outcome");
+  const profile = await getCurrentProfileId();
+  if (profile.error !== undefined) return { error: profile.error };
+
+  const { data, error } = await createAdminClient().rpc("set_community_question_outcome", {
+    p_actor_profile_id: profile.profileId,
+    p_post_id: parsed.data.postId,
+    p_outcome: parsed.data.outcome,
+  });
+  if (error) return { error: "Choose an accepted answer before recording the outcome." };
+  const result = questionOutcomeResultSchema.safeParse(data);
+  if (!result.success) return { error: "The question outcome could not be updated." };
+
+  revalidatePath("/community");
+  revalidatePath("/community/groups");
+  revalidatePath("/dashboard/posts");
   return { data: result.data };
 }
 

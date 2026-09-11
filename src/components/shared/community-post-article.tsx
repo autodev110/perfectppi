@@ -20,6 +20,8 @@ import { sharePath } from "@/lib/share/links";
 import { CommunityPoll } from "@/components/shared/community-poll";
 import { PostDetailsCard } from "@/components/shared/post-details-card";
 import { POST_TYPE_LABELS, type PostType } from "@/lib/community/post-types";
+import { CommunityHelpfulButton } from "@/components/shared/community-helpful-button";
+import { QuestionOutcomeControl } from "@/components/shared/question-outcome-control";
 
 function getVehicleName(vehicle: { year: number | null; make: string | null; model: string | null; trim: string | null } | null) {
   return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ");
@@ -79,6 +81,14 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
           className="block whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant"
         />
         <PostDetailsCard postType={post.post_type as PostType} details={post.details} inspection={post.inspection} />
+        {post.post_type === "question" ? (
+          <QuestionOutcomeControl
+            postId={post.id}
+            initialOutcome={post.question_outcome}
+            hasAcceptedAnswer={Boolean(post.accepted_answer_comment_id)}
+            canManage={post.can_manage_accepted_answer}
+          />
+        ) : null}
         {post.post_type === "poll" && post.poll ? <CommunityPoll postId={post.id} initial={post.poll} /> : null}
         {post.safety_notice ? (
           <div className="mt-4">
@@ -178,6 +188,14 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
                   </div>
                 </div>
                 <CommunityMentionText content={comment.content} mentions={comment.mentions} className="block whitespace-pre-wrap text-sm text-on-surface-variant" />
+                {post.post_type === "question" ? (
+                  <CommunityHelpfulButton
+                    commentId={comment.id}
+                    initialHelpful={comment.helpful_by_viewer}
+                    initialCount={comment.helpful_count}
+                    disabled={!comment.can_mark_helpful}
+                  />
+                ) : null}
               </div>
             ))}
           </div>

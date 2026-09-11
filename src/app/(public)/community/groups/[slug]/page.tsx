@@ -30,6 +30,8 @@ import { GROUP_JOIN_POLICY_LABELS, GROUP_VISIBILITY_LABELS } from "@/lib/social/
 import { CommunityPoll } from "@/components/shared/community-poll";
 import { PostDetailsCard } from "@/components/shared/post-details-card";
 import { POST_TYPE_LABELS, type PostType } from "@/lib/community/post-types";
+import { CommunityHelpfulButton } from "@/components/shared/community-helpful-button";
+import { QuestionOutcomeControl } from "@/components/shared/question-outcome-control";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDate, getInitials } from "@/lib/utils/formatting";
@@ -280,13 +282,14 @@ export default async function CommunityGroupPage({
               </div>
               <CommunityMentionText content={post.content} mentions={post.mentions} className="mt-4 block whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant" />
               <PostDetailsCard postType={post.post_type as PostType} details={post.details} inspection={post.inspection} />
+              {post.post_type === "question" ? <QuestionOutcomeControl postId={post.id} initialOutcome={post.question_outcome} hasAcceptedAnswer={Boolean(post.accepted_answer_comment_id)} canManage={post.can_manage_accepted_answer} /> : null}
               {post.post_type === "poll" && post.poll ? <CommunityPoll postId={post.id} initial={post.poll} /> : null}
               {post.safety_notice ? <div className="mt-4"><SafetyNotice notice={post.safety_notice} /></div> : null}
               {post.media.length ? <div className="-mx-6 mt-5"><PostMediaCarousel media={post.media} /></div> : null}
               <div className="mt-4">
                 <CommunityLikeButton postId={post.id} initialLiked={post.liked_by_viewer} initialCount={post.like_count} disabled={!post.can_like} />
               </div>
-              {post.comments.length ? <div className="mt-5 space-y-2 border-t pt-4">{post.comments.map((comment) => <div key={comment.id} className={`flex items-start justify-between gap-3 rounded-xl bg-surface-container px-4 py-3 ${post.accepted_answer_comment_id === comment.id ? "ring-2 ring-teal/30" : ""}`}><div><p className="text-xs font-bold">{comment.author?.display_name ?? comment.author?.username ?? "Member"}</p>{post.post_type === "question" ? <AcceptedAnswerControl postId={post.id} commentId={comment.id} accepted={post.accepted_answer_comment_id === comment.id} canManage={post.can_manage_accepted_answer} ownResponse={comment.author_id === post.author_id} /> : null}<CommunityMentionText content={comment.content} mentions={comment.mentions} className="mt-1 block text-sm text-on-surface-variant" /></div>{comment.report_context ? <CommunityReportControl entityType="community_comment" entityId={comment.id} reportContext={comment.report_context} compact /> : null}</div>)}</div> : null}
+              {post.comments.length ? <div className="mt-5 space-y-2 border-t pt-4">{post.comments.map((comment) => <div key={comment.id} className={`flex items-start justify-between gap-3 rounded-xl bg-surface-container px-4 py-3 ${post.accepted_answer_comment_id === comment.id ? "ring-2 ring-teal/30" : ""}`}><div><p className="text-xs font-bold">{comment.author?.display_name ?? comment.author?.username ?? "Member"}</p>{post.post_type === "question" ? <AcceptedAnswerControl postId={post.id} commentId={comment.id} accepted={post.accepted_answer_comment_id === comment.id} canManage={post.can_manage_accepted_answer} ownResponse={comment.author_id === post.author_id} /> : null}<CommunityMentionText content={comment.content} mentions={comment.mentions} className="mt-1 block text-sm text-on-surface-variant" />{post.post_type === "question" ? <CommunityHelpfulButton commentId={comment.id} initialHelpful={comment.helpful_by_viewer} initialCount={comment.helpful_count} disabled={!comment.can_mark_helpful} /> : null}</div>{comment.report_context ? <CommunityReportControl entityType="community_comment" entityId={comment.id} reportContext={comment.report_context} compact /> : null}</div>)}</div> : null}
               {group.is_member ? <form action={createCommunityComment} className="mt-4 flex flex-col gap-2 sm:flex-row"><input type="hidden" name="post_id" value={post.id} /><Textarea name="content" required maxLength={600} rows={2} placeholder="Add a comment..." /><Button type="submit" className="sm:self-end">Comment</Button></form> : null}
             </article>
           ))}

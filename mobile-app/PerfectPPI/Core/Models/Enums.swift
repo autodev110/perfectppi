@@ -209,6 +209,7 @@ enum NotificationType: String, Codable {
     case reportReceived = "report_received"
     case answerAccepted = "answer_accepted"
     case acceptedAnswerUnavailable = "accepted_answer_unavailable"
+    case answerHelpful = "answer_helpful"
     case listingInspectionRequested = "listing_inspection_requested"
     case friendRequest = "friend_request"
     case friendRequestAccepted = "friend_request_accepted"
@@ -254,6 +255,24 @@ enum CommunityPostType: String, Codable, CaseIterable {
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = CommunityPostType(rawValue: raw) ?? .unknown
+    }
+}
+
+enum CommunityQuestionOutcome: String, Codable, CaseIterable, Identifiable {
+    case fixed
+    case helped
+    case notFixed = "not_fixed"
+    case stillDiagnosing = "still_diagnosing"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .fixed: "Fixed the issue"
+        case .helped: "Helped, but did not fully solve it"
+        case .notFixed: "Did not fix it"
+        case .stillDiagnosing: "Still diagnosing"
+        }
     }
 }
 

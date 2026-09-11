@@ -402,6 +402,91 @@ export type Database = {
           },
         ]
       }
+      community_comment_helpful_reactions: {
+        Row: {
+          comment_id: string
+          created_at: string
+          profile_id: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          profile_id: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_comment_helpful_reactions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "community_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_comment_helpful_reactions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_question_outcome_events: {
+        Row: {
+          actor_id: string | null
+          answer_comment_id: string | null
+          created_at: string
+          id: string
+          outcome: Database["public"]["Enums"]["community_question_outcome"] | null
+          post_id: string
+          previous_outcome: Database["public"]["Enums"]["community_question_outcome"] | null
+        }
+        Insert: {
+          actor_id?: string | null
+          answer_comment_id?: string | null
+          created_at?: string
+          id?: string
+          outcome?: Database["public"]["Enums"]["community_question_outcome"] | null
+          post_id: string
+          previous_outcome?: Database["public"]["Enums"]["community_question_outcome"] | null
+        }
+        Update: {
+          actor_id?: string | null
+          answer_comment_id?: string | null
+          created_at?: string
+          id?: string
+          outcome?: Database["public"]["Enums"]["community_question_outcome"] | null
+          post_id?: string
+          previous_outcome?: Database["public"]["Enums"]["community_question_outcome"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_question_outcome_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_question_outcome_events_answer_comment_id_fkey"
+            columns: ["answer_comment_id"]
+            isOneToOne: false
+            referencedRelation: "community_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_question_outcome_events_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_post_assemblies: {
         Row: {
           created_at: string
@@ -644,6 +729,8 @@ export type Database = {
           moderation_version: string | null
           poll_closes_at: string | null
           post_type: Database["public"]["Enums"]["community_post_type"]
+          question_outcome: Database["public"]["Enums"]["community_question_outcome"] | null
+          question_outcome_updated_at: string | null
           status: Database["public"]["Enums"]["community_content_status"]
           updated_at: string
           vehicle_id: string | null
@@ -668,6 +755,8 @@ export type Database = {
           moderation_version?: string | null
           poll_closes_at?: string | null
           post_type?: Database["public"]["Enums"]["community_post_type"]
+          question_outcome?: Database["public"]["Enums"]["community_question_outcome"] | null
+          question_outcome_updated_at?: string | null
           status?: Database["public"]["Enums"]["community_content_status"]
           updated_at?: string
           vehicle_id?: string | null
@@ -692,6 +781,8 @@ export type Database = {
           moderation_version?: string | null
           poll_closes_at?: string | null
           post_type?: Database["public"]["Enums"]["community_post_type"]
+          question_outcome?: Database["public"]["Enums"]["community_question_outcome"] | null
+          question_outcome_updated_at?: string | null
           status?: Database["public"]["Enums"]["community_content_status"]
           updated_at?: string
           vehicle_id?: string | null
@@ -4374,6 +4465,33 @@ export type Database = {
         }
         Returns: Json
       }
+      set_community_comment_helpful: {
+        Args: {
+          p_actor_profile_id: string
+          p_comment_id: string
+          p_helpful: boolean
+        }
+        Returns: Json
+      }
+      community_comment_helpful_summaries: {
+        Args: {
+          p_comment_ids: string[]
+          p_viewer_id: string
+        }
+        Returns: {
+          comment_id: string
+          helpful_by_viewer: boolean
+          helpful_count: number
+        }[]
+      }
+      set_community_question_outcome: {
+        Args: {
+          p_actor_profile_id: string
+          p_outcome?: Database["public"]["Enums"]["community_question_outcome"] | null
+          p_post_id: string
+        }
+        Returns: Json
+      }
       community_post_like_summaries: {
         Args: {
           p_post_ids: string[]
@@ -5365,6 +5483,7 @@ export type Database = {
       community_post_audience: "public" | "friends"
       community_post_assembly_state: "assembling" | "submitted" | "finalized"
       community_post_type: "general" | "question" | "build_update" | "maintenance" | "before_after" | "inspection_discussion" | "buying_advice" | "poll"
+      community_question_outcome: "fixed" | "helped" | "not_fixed" | "still_diagnosing"
       community_media_type: "image" | "video"
       completion_state: "not_started" | "in_progress" | "completed"
       device_env: "prod" | "sandbox"
@@ -5390,6 +5509,7 @@ export type Database = {
         | "report_received"
         | "answer_accepted"
         | "accepted_answer_unavailable"
+        | "answer_helpful"
         | "tech_request_new"
         | "tech_request_accepted"
         | "inspection_submitted"
@@ -5596,6 +5716,7 @@ export const Constants = {
       community_post_audience: ["public", "friends"],
       community_post_assembly_state: ["assembling", "submitted", "finalized"],
       community_post_type: ["general", "question", "build_update", "maintenance", "before_after", "inspection_discussion", "buying_advice", "poll"],
+      community_question_outcome: ["fixed", "helped", "not_fixed", "still_diagnosing"],
       community_media_type: ["image", "video"],
       completion_state: ["not_started", "in_progress", "completed"],
       device_env: ["prod", "sandbox"],
@@ -5618,6 +5739,7 @@ export const Constants = {
         "report_received",
         "answer_accepted",
         "accepted_answer_unavailable",
+        "answer_helpful",
         "post_comment",
         "post_likes",
         "post_mention",

@@ -369,6 +369,11 @@ struct CommunityPostRow: View {
                 .lineLimit(4)
 
             CommunityPostDetailsView(post: post)
+            if let outcome = post.questionOutcome {
+                Label("Outcome: \(outcome.label)", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.Palette.primary)
+            }
             if post.postType == .poll, let poll = post.poll {
                 CommunityPollCard(postId: post.id, poll: poll)
             }
@@ -534,10 +539,13 @@ struct CommunityPostDetailView: View {
     @State private var comments: [CommunityComment]
     @State private var media: [CommunityPostMedia]
     @State private var acceptedAnswerCommentId: String?
+    @State private var questionOutcome: CommunityQuestionOutcome?
     @State private var liked: Bool
     @State private var likeCount: Int
     @State private var liking = false
     @State private var acceptedAnswerBusyId: String?
+    @State private var outcomeBusy = false
+    @State private var helpfulBusyIds: Set<String> = []
     @State private var comment = ""
     @State private var submitting = false
     @State private var error: String?
@@ -555,6 +563,7 @@ struct CommunityPostDetailView: View {
         _comments = State(initialValue: post.comments ?? [])
         _media = State(initialValue: (post.media ?? []).sorted { $0.sortOrder < $1.sortOrder })
         _acceptedAnswerCommentId = State(initialValue: post.acceptedAnswerCommentId)
+        _questionOutcome = State(initialValue: post.questionOutcome)
         _liked = State(initialValue: post.likedByViewer ?? false)
         _likeCount = State(initialValue: post.likeCount ?? 0)
     }
@@ -659,6 +668,9 @@ struct CommunityPostDetailView: View {
                 CommunityMentionText(content: post.content, mentions: post.mentions)
                     .font(.body)
                 CommunityPostDetailsView(post: post)
+                if post.postType == .question {
+                    questionOutcomeControl
+                }
                 if post.postType == .poll, let poll = post.poll {
                     CommunityPollCard(postId: post.id, poll: poll)
                 }
@@ -798,6 +810,22 @@ struct CommunityPostDetailView: View {
                             .font(.caption.weight(.semibold))
                             .disabled(acceptedAnswerBusyId != nil)
                         }
+                        if post.postType == .question {
+                            Button {
+                                Task { await toggleHelpful(item.id) }
+                            } label: {
+                                Label(
+                                    item.helpfulCount.map { $0 > 0 ? "Helpful \($0)" : "Helpful" } ?? "Helpful",
+                                    systemImage: item.helpfulByViewer == true ? "wrench.and.screwdriver.fill" : "wrench.and.screwdriver"
+                                )
+                            }
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(item.helpfulByViewer == true ? Theme.Palette.primary : .secondary)
+                            .disabled(item.canMarkHelpful != true || helpfulBusyIds.contains(item.id))
+                            .accessibilityLabel(item.canMarkHelpful == true
+                                                ? (item.helpfulByViewer == true ? "Remove Helpful mark" : "Mark answer Helpful")
+                                                : "\(item.helpfulCount ?? 0) Helpful marks")
+                        }
                     }
                     Spacer()
                     if let reportContext = item.reportContext {
@@ -839,6 +867,73 @@ struct CommunityPostDetailView: View {
             showingPhotoPicker = true
         } else {
             error = "Photo access is off. Allow full or limited access in Settings to add photos."
+        }
+    }
+
+    @ViewBuilder
+    private var questionOutcomeControl: some View {
+        if acceptedAnswerCommentId == nil {
+            if isMyPost {
+                Text("Accept an answer to record what solved the issue.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } else if isMyPost {
+            Menu {
+                ForEach(CommunityQuestionOutcome.allCases) { outcome in
+                    Button {
+                        Task { await setQuestionOutcome(outcome) }
+                    } label: {
+                        if questionOutcome == outcome {
+                            Label(outcome.label, systemImage: "checkmark")
+                        } else {
+                            Text(outcome.label)
+                        }
+                    }
+                }
+                if questionOutcome != nil {
+                    Divider()
+                    Button("Clear outcome", role: .destructive) {
+                        Task { await setQuestionOutcome(nil) }
+                    }
+                }
+            } label: {
+                Label(
+                    questionOutcome.map { "Outcome: \($0.label)" } ?? "Record question outcome",
+                    systemImage: "checkmark.circle"
+                )
+                .font(.caption.weight(.semibold))
+            }
+            .disabled(outcomeBusy)
+        } else if let questionOutcome {
+            Label("Outcome: \(questionOutcome.label)", systemImage: "checkmark.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.Palette.primary)
+        }
+    }
+
+    @MainActor
+    private func toggleHelpful(_ commentId: String) async {
+        guard let index = comments.firstIndex(where: { $0.id == commentId }),
+              comments[index].canMarkHelpful == true,
+              !helpfulBusyIds.contains(commentId) else { return }
+        let previous = comments[index].helpfulByViewer ?? false
+        let previousCount = comments[index].helpfulCount ?? 0
+        let next = !previous
+        comments[index].helpfulByViewer = next
+        comments[index].helpfulCount = max(0, previousCount + (next ? 1 : -1))
+        helpfulBusyIds.insert(commentId)
+        defer { helpfulBusyIds.remove(commentId) }
+        do {
+            let result = try await CommunityAPI.setHelpful(commentId: commentId, helpful: next)
+            guard let refreshedIndex = comments.firstIndex(where: { $0.id == commentId }) else { return }
+            comments[refreshedIndex].helpfulByViewer = result.helpful
+            comments[refreshedIndex].helpfulCount = result.helpfulCount
+        } catch {
+            guard let refreshedIndex = comments.firstIndex(where: { $0.id == commentId }) else { return }
+            comments[refreshedIndex].helpfulByViewer = previous
+            comments[refreshedIndex].helpfulCount = previousCount
+            self.error = error.localizedDescription
         }
     }
 
@@ -965,8 +1060,26 @@ struct CommunityPostDetailView: View {
         do {
             let result = try await CommunityAPI.setAcceptedAnswer(postId: post.id, commentId: commentId)
             acceptedAnswerCommentId = result.acceptedAnswerCommentId
+            questionOutcome = nil
             onChanged()
         } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func setQuestionOutcome(_ outcome: CommunityQuestionOutcome?) async {
+        guard !outcomeBusy else { return }
+        let previous = questionOutcome
+        questionOutcome = outcome
+        outcomeBusy = true
+        defer { outcomeBusy = false }
+        do {
+            let result = try await CommunityAPI.setQuestionOutcome(postId: post.id, outcome: outcome)
+            questionOutcome = result.outcome
+            onChanged()
+        } catch {
+            questionOutcome = previous
             self.error = error.localizedDescription
         }
     }

@@ -53,7 +53,13 @@ type CommunityFeedMedia = Pick<
 type CommunityFeedComment = Pick<
   CommunityCommentRow,
   "id" | "post_id" | "author_id" | "content" | "status" | "created_at" | "updated_at"
-> & { author: CommunityFeedProfile | null; report_context: string | null };
+> & {
+  author: CommunityFeedProfile | null;
+  report_context: string | null;
+  helpful_count: number;
+  helpful_by_viewer: boolean;
+  can_mark_helpful: boolean;
+};
 type CommunityFeedCommentWithMentions = CommunityFeedComment & { mentions: CommunityMention[] };
 type CommunityFeedGroup = Pick<CommunityGroupRow, "id" | "slug" | "name" | "avatar_url">;
 
@@ -77,7 +83,7 @@ export type CommunityInspectionSummary = {
 
 export type CommunityFeedPost = Pick<
   CommunityPostRow,
-  "id" | "author_id" | "vehicle_id" | "marketplace_listing_id" | "group_id" | "content" | "audience" | "post_type" | "accepted_answer_comment_id" | "status" | "created_at" | "updated_at"
+  "id" | "author_id" | "vehicle_id" | "marketplace_listing_id" | "group_id" | "content" | "audience" | "post_type" | "accepted_answer_comment_id" | "question_outcome" | "question_outcome_updated_at" | "status" | "created_at" | "updated_at"
 > & {
   /** Structured fields for the post type (plan 14.2). */
   details: Record<string, unknown>;
@@ -170,7 +176,7 @@ const COMMUNITY_POST_SELECT = `
 // are selected only where the server needs them to filter nested rows, then
 // removed before serialization.
 const COMMUNITY_FEED_SELECT = `
-  id, author_id, vehicle_id, marketplace_listing_id, group_id, group_status, group_pinned_at, active_revision_id, content, audience, post_type, details, accepted_answer_comment_id, status, created_at, updated_at,
+  id, author_id, vehicle_id, marketplace_listing_id, group_id, group_status, group_pinned_at, active_revision_id, content, audience, post_type, details, accepted_answer_comment_id, question_outcome, question_outcome_updated_at, status, created_at, updated_at,
   author:profiles!community_posts_author_id_fkey(id, display_name, username, avatar_url, is_public),
   vehicle:vehicles!community_posts_vehicle_id_fkey(
     id, year, make, model, trim, mileage, visibility,
@@ -277,6 +283,8 @@ function toCommunityFeedPost(
     audience: post.audience,
     post_type: post.post_type,
     accepted_answer_comment_id: acceptedAnswerCommentId,
+    question_outcome: acceptedAnswerCommentId ? post.question_outcome : null,
+    question_outcome_updated_at: acceptedAnswerCommentId ? post.question_outcome_updated_at : null,
     status: post.status,
     created_at: post.created_at,
     updated_at: post.updated_at,
@@ -354,6 +362,9 @@ function toCommunityFeedPost(
           entityId: comment.id,
           revisionId: comment.active_revision_id,
         }),
+        helpful_count: 0,
+        helpful_by_viewer: false,
+        can_mark_helpful: post.post_type === "question" && comment.author_id !== viewerId,
         mentions: comment.mentions ?? [],
         author: comment.author ? {
           id: comment.author.id,
@@ -392,7 +403,16 @@ async function withPostLikeState(posts: CommunityFeedPost[], viewerId: string) {
   const inspectionIds = posts
     .map((post) => (post.post_type === "inspection_discussion" ? String(post.details.inspection_request_id ?? "") : ""))
     .filter(Boolean);
-  const [{ data, error }, { data: saves, error: saveError }, { data: polls, error: pollError }, { data: inspections }] = await Promise.all([
+  const answerIds = posts
+    .filter((post) => post.post_type === "question")
+    .flatMap((post) => post.comments.map((comment) => comment.id));
+  const [
+    { data, error },
+    { data: saves, error: saveError },
+    { data: polls, error: pollError },
+    { data: inspections },
+    { data: helpful, error: helpfulError },
+  ] = await Promise.all([
     admin.rpc("community_post_like_summaries", { p_viewer_id: viewerId, p_post_ids: postIds }),
     admin.rpc("community_post_save_states", { p_viewer_id: viewerId, p_post_ids: postIds }),
     pollIds.length
@@ -401,20 +421,30 @@ async function withPostLikeState(posts: CommunityFeedPost[], viewerId: string) {
     inspectionIds.length
       ? admin.from("ppi_requests").select("id, ppi_type, inspection_scope, status, updated_at").in("id", inspectionIds)
       : Promise.resolve({ data: [] as Array<{ id: string; ppi_type: string; inspection_scope: string; status: string; updated_at: string }> }),
+    answerIds.length
+      ? admin.rpc("community_comment_helpful_summaries", { p_viewer_id: viewerId, p_comment_ids: answerIds })
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (error) console.error("community_post_like_summaries failed", error);
   if (saveError) console.error("community_post_save_states failed", saveError);
   if (pollError) console.error("community_poll_results failed", pollError);
+  if (helpfulError) console.error("community_comment_helpful_summaries failed", helpfulError);
   const summaries = new Map((data ?? []).map((summary) => [summary.post_id, summary]));
   const saved = new Set((saves ?? []).filter((row) => row.saved).map((row) => row.post_id));
   const pollByPost = new Map((polls ?? []).map((row) => [row.post_id, toPollView(row)]));
   const inspectionById = new Map((inspections ?? []).map((row) => [row.id, row]));
+  const helpfulByComment = new Map((helpful ?? []).map((row) => [row.comment_id, row]));
   return posts.map((post) => {
     const inspection = post.post_type === "inspection_discussion"
       ? inspectionById.get(String(post.details.inspection_request_id ?? "")) ?? null
       : null;
     return {
       ...post,
+      comments: post.comments.map((comment) => ({
+        ...comment,
+        helpful_count: Number(helpfulByComment.get(comment.id)?.helpful_count ?? 0),
+        helpful_by_viewer: helpfulByComment.get(comment.id)?.helpful_by_viewer ?? false,
+      })),
       like_count: Number(summaries.get(post.id)?.like_count ?? post.like_count),
       liked_by_viewer: summaries.get(post.id)?.liked_by_viewer ?? post.liked_by_viewer,
       saved_by_viewer: saved.has(post.id),

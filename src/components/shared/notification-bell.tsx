@@ -39,6 +39,7 @@ const typeStyle: Record<
   listing_inspection_requested: { icon: ClipboardCheck, color: "text-teal-600", bg: "bg-teal-50" },
   answer_accepted: { icon: CheckCircle2, color: "text-teal", bg: "bg-teal/10" },
   accepted_answer_unavailable: { icon: CircleAlert, color: "text-amber-600", bg: "bg-amber-50" },
+  answer_helpful: { icon: Wrench, color: "text-teal", bg: "bg-teal/10" },
   post_comment: { icon: MessageSquare, color: "text-teal", bg: "bg-teal/10" },
   post_likes: { icon: Heart, color: "text-rose-600", bg: "bg-rose-50" },
   post_mention: { icon: MessageSquare, color: "text-sky-600", bg: "bg-sky-50" },

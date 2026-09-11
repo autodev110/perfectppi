@@ -52,6 +52,7 @@ export function notificationDestinationIntent(
     case "post_mention":
     case "answer_accepted":
     case "accepted_answer_unavailable":
+    case "answer_helpful":
       return { kind: "post", id: str(d.post_id), secondaryId: str(d.comment_id) };
     case "friend_request":
       return { kind: "friends", id: null, secondaryId: null };
