@@ -56,6 +56,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
   const [
     profile,
     vehicles,
+    vehicleOwnershipEvents,
     requestedInspections,
     performedSubmissions,
     communityPosts,
@@ -81,6 +82,10 @@ export async function buildAccountDataExport(profileId: string, user: User) {
   ] = await Promise.all([
     row("profile", admin.from("profiles").select("*").eq("id", profileId).maybeSingle()),
     rows("vehicles", admin.from("vehicles").select("*").eq("owner_id", profileId)),
+    rows(
+      "vehicle ownership events",
+      admin.from("vehicle_ownership_events").select("*").eq("profile_id", profileId),
+    ),
     rows(
       "inspection requests",
       admin.from("ppi_requests").select("*")
@@ -254,7 +259,12 @@ export async function buildAccountDataExport(profileId: string, user: User) {
       })),
     },
     profile,
-    vehicles: { records: vehicles, media: vehicleMedia, listings: marketplaceListings },
+    vehicles: {
+      records: vehicles,
+      media: vehicleMedia,
+      listings: marketplaceListings,
+      ownershipEvents: vehicleOwnershipEvents,
+    },
     inspections: {
       requests: requestedInspections,
       submissions,

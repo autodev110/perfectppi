@@ -18,8 +18,9 @@ final class GarageRenderHarnessTests: XCTestCase {
     private func vehicle(_ id: String, nickname: String? = nil, year: Int = 2018, make: String = "Acura", model: String = "TLX", trim: String? = "A-Spec SH-AWD", state: VehicleOwnershipState = .owned, listed: Bool = false, inspection: PpiRequestStatus? = .completed) -> Vehicle {
         Vehicle(
             id: id, ownerId: "o", vin: "19UUB3F70JA000123", year: year, make: make, model: model, trim: trim,
+            engine: "3.5L V6", drivetrain: "AWD", transmission: "9-speed automatic", bodyStyle: "Sedan",
             nickname: nickname, ownershipState: state, mileage: 48_210, mileageUpdatedAt: Date(),
-            notes: nil, visibility: .public, createdAt: Date(), vehicleMedia: nil,
+            notes: nil, visibility: .public, soldAt: nil, createdAt: Date(), vehicleMedia: nil,
             ppiRequests: inspection.map { [GarageInspectionSummary(id: "r\(id)", status: $0, createdAt: Date(), updatedAt: nil)] },
             marketplaceListings: listed ? [GarageListingSummary(id: "l\(id)", status: .active)] : []
         )

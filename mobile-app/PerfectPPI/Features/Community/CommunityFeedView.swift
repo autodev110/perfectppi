@@ -1130,7 +1130,7 @@ struct NewCommunityPostView: View {
     @State private var submittedForReview = false
     /// The private assembly and client token survive upload retries without
     /// creating a second post.
-    @State private var creationToken = UUID().uuidString
+    @State private var creationToken = UUID().uuidString.lowercased()
     @State private var createdPostId: String?
     @State private var createdModerationStatus = "active"
     @State private var uploadedMedia: [CommunityAPI.MediaItemPayload]?

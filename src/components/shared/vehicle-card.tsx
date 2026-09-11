@@ -11,7 +11,7 @@ interface VehicleCardProps {
   trim?: string | null;
   mileage?: number | null;
   vin?: string | null;
-  visibility: "public" | "private";
+  visibility: "public" | "friends" | "private";
   href?: string;
 }
 
@@ -40,7 +40,7 @@ export function VehicleCard({
           <Badge
             variant={visibility === "public" ? "default" : "secondary"}
           >
-            {visibility}
+            {visibility === "private" ? "Only me" : visibility === "friends" ? "Friends" : "Public"}
           </Badge>
         </div>
         {mileage != null && (

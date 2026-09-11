@@ -30,10 +30,15 @@ enum VehiclesAPI {
         let make: String?
         let model: String?
         let trim: String?
+        let engine: String?
+        let drivetrain: String?
+        let transmission: String?
+        let bodyStyle: String?
         let mileage: Int?
         let notes: String?
         let nickname: String?
         let ownershipState: VehicleOwnershipState?
+        let visibility: VehicleVisibility?
 
         init(
             vin: String?,
@@ -44,17 +49,27 @@ enum VehiclesAPI {
             mileage: Int?,
             notes: String? = nil,
             nickname: String? = nil,
-            ownershipState: VehicleOwnershipState? = nil
+            ownershipState: VehicleOwnershipState? = nil,
+            visibility: VehicleVisibility? = nil,
+            engine: String? = nil,
+            drivetrain: String? = nil,
+            transmission: String? = nil,
+            bodyStyle: String? = nil
         ) {
             self.vin = vin
             self.year = year
             self.make = make
             self.model = model
             self.trim = trim
+            self.engine = engine
+            self.drivetrain = drivetrain
+            self.transmission = transmission
+            self.bodyStyle = bodyStyle
             self.mileage = mileage
             self.notes = notes
             self.nickname = nickname
             self.ownershipState = ownershipState
+            self.visibility = visibility
         }
     }
 
@@ -72,6 +87,10 @@ enum VehiclesAPI {
         let make: String?
         let model: String?
         let trim: String?
+        let engine: String?
+        let drivetrain: String?
+        let transmission: String?
+        let bodyStyle: String?
         let mileage: Int?
         let visibility: VehicleVisibility?
         let notes: String?
@@ -88,13 +107,21 @@ enum VehiclesAPI {
             visibility: VehicleVisibility?,
             notes: String? = nil,
             nickname: String? = nil,
-            ownershipState: VehicleOwnershipState? = nil
+            ownershipState: VehicleOwnershipState? = nil,
+            engine: String? = nil,
+            drivetrain: String? = nil,
+            transmission: String? = nil,
+            bodyStyle: String? = nil
         ) {
             self.vin = vin
             self.year = year
             self.make = make
             self.model = model
             self.trim = trim
+            self.engine = engine
+            self.drivetrain = drivetrain
+            self.transmission = transmission
+            self.bodyStyle = bodyStyle
             self.mileage = mileage
             self.visibility = visibility
             self.notes = notes
@@ -105,6 +132,17 @@ enum VehiclesAPI {
 
     static func update(id: String, payload: UpdatePayload) async throws -> Vehicle {
         try await APIClient.shared.patch("/api/vehicles/\(id)", body: payload)
+    }
+
+    private struct MarkSoldPayload: Encodable {
+        let keepPublicHistory: Bool
+    }
+
+    static func markSold(id: String, keepPublicHistory: Bool) async throws -> Vehicle {
+        try await APIClient.shared.post(
+            "/api/vehicles/\(id)/sold",
+            body: MarkSoldPayload(keepPublicHistory: keepPublicHistory)
+        )
     }
 
     static func media(id: String) async throws -> [VehicleMedia] {

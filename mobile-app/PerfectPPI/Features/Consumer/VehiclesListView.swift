@@ -310,6 +310,9 @@ struct VehicleDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var vehicle: Vehicle?
     @State private var savingVisibility = false
+    @State private var showingVisibilityOptions = false
+    @State private var showingSoldOptions = false
+    @State private var markingSold = false
     @State private var savingNotes = false
     @State private var notes = ""
     @State private var showingEdit = false
@@ -346,8 +349,8 @@ struct VehicleDetailView: View {
                             ChipFlow(spacing: 6) {
                                 GarageChip(text: (vehicle.ownershipState ?? .owned).label, systemImage: "key.fill", tint: Theme.Palette.primary)
                                 GarageChip(
-                                    text: vehicle.visibility == .public ? "Public" : "Private",
-                                    systemImage: vehicle.visibility == .public ? "globe" : "lock.fill",
+                                    text: (vehicle.visibility ?? .private).label,
+                                    systemImage: (vehicle.visibility ?? .private).systemImage,
                                     tint: .secondary
                                 )
                                 if vehicle.marketplaceListings?.contains(where: { $0.status == .active }) == true {
@@ -389,6 +392,25 @@ struct VehicleDetailView: View {
                                 label: "Mileage",
                                 value: mileageDetail(mileage, updatedAt: vehicle.mileageUpdatedAt),
                                 systemImage: "gauge.with.dots.needle.50percent"
+                            )
+                        }
+                        if let engine = vehicle.engine, !engine.isEmpty {
+                            VehicleDetailRow(label: "Engine", value: engine, systemImage: "engine.combustion")
+                        }
+                        if let drivetrain = vehicle.drivetrain, !drivetrain.isEmpty {
+                            VehicleDetailRow(label: "Drivetrain", value: drivetrain, systemImage: "gearshape.2")
+                        }
+                        if let transmission = vehicle.transmission, !transmission.isEmpty {
+                            VehicleDetailRow(label: "Transmission", value: transmission, systemImage: "gearshift.layout.sixspeed")
+                        }
+                        if let bodyStyle = vehicle.bodyStyle, !bodyStyle.isEmpty {
+                            VehicleDetailRow(label: "Body style", value: bodyStyle, systemImage: "car.side")
+                        }
+                        if let soldAt = vehicle.soldAt {
+                            VehicleDetailRow(
+                                label: "Marked sold",
+                                value: soldAt.formatted(date: .abbreviated, time: .omitted),
+                                systemImage: "checkmark.circle"
                             )
                         }
                         VehicleDetailRow(
@@ -454,9 +476,9 @@ struct VehicleDetailView: View {
                     }
 
                     Section {
-                        Button(savingVisibility ? "Updating…" : nextVisibilityTitle(vehicle),
-                               systemImage: vehicle.visibility == .public ? "lock" : "globe") {
-                            Task { await toggleVisibility() }
+                        Button(savingVisibility ? "Updating…" : "Change Visibility",
+                               systemImage: (vehicle.visibility ?? .private).systemImage) {
+                            showingVisibilityOptions = true
                         }
                         .disabled(savingVisibility)
                     } header: {
@@ -464,7 +486,22 @@ struct VehicleDetailView: View {
                     } footer: {
                         Text(vehicle.visibility == .public
                              ? "Public vehicles can be attached to posts and listings and appear on your profile."
-                             : "Private vehicles are only visible to you.")
+                             : vehicle.visibility == .friends
+                               ? "Accepted friends can view this Vehicle Passport. Listings and post attachments still require Public."
+                               : "Only you can view this vehicle.")
+                    }
+
+                    if vehicle.ownershipState == .owned || vehicle.ownershipState == .project {
+                        Section {
+                            Button(markingSold ? "Updating…" : "Mark as Sold", systemImage: "checkmark.seal") {
+                                showingSoldOptions = true
+                            }
+                            .disabled(markingSold)
+                        } header: {
+                            Text("Ownership History")
+                        } footer: {
+                            Text("This closes active listings and keeps the vehicle under your account. It never transfers private records.")
+                        }
                     }
 
                     Section {
@@ -531,6 +568,29 @@ struct VehicleDetailView: View {
                actions: { Button("OK") { inlineAlert = nil } },
                message: { Text(inlineAlert ?? "") })
         .confirmationDialog(
+            "Who can view this vehicle?",
+            isPresented: $showingVisibilityOptions,
+            titleVisibility: .visible
+        ) {
+            ForEach(VehicleVisibility.allCases) { visibility in
+                Button(visibility.label) { Task { await setVisibility(visibility) } }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Marketplace listings and vehicle post attachments require Public.")
+        }
+        .confirmationDialog(
+            "Mark this vehicle as sold?",
+            isPresented: $showingSoldOptions,
+            titleVisibility: .visible
+        ) {
+            Button("Keep Public History") { Task { await markSold(keepPublicHistory: true) } }
+            Button("Keep History Private") { Task { await markSold(keepPublicHistory: false) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Active listings will be closed. Your Garage record and private inspection data stay with your account.")
+        }
+        .confirmationDialog(
             "Delete this media item?",
             isPresented: Binding(
                 get: { mediaToDelete != nil },
@@ -568,13 +628,12 @@ struct VehicleDetailView: View {
         }
     }
 
-    private func toggleVisibility() async {
+    private func setVisibility(_ visibility: VehicleVisibility) async {
         guard !savingVisibility else { return }
         guard let vehicle else { return }
         savingVisibility = true
         defer { savingVisibility = false }
 
-        let next: VehicleVisibility = vehicle.visibility == .public ? .private : .public
         do {
             _ = try await VehiclesAPI.update(
                 id: vehicle.id,
@@ -585,7 +644,7 @@ struct VehicleDetailView: View {
                     model: nil,
                     trim: nil,
                     mileage: nil,
-                    visibility: next,
+                    visibility: visibility,
                     notes: nil
                 )
             )
@@ -598,8 +657,16 @@ struct VehicleDetailView: View {
         }
     }
 
-    private func nextVisibilityTitle(_ vehicle: Vehicle) -> String {
-        vehicle.visibility == .public ? "Make Private" : "Make Public"
+    private func markSold(keepPublicHistory: Bool) async {
+        guard !markingSold else { return }
+        markingSold = true
+        defer { markingSold = false }
+        do {
+            _ = try await VehiclesAPI.markSold(id: vehicleId, keepPublicHistory: keepPublicHistory)
+            await load()
+        } catch {
+            inlineAlert = error.localizedDescription
+        }
     }
 
     private func sortedMedia(_ media: [VehicleMedia]) -> [VehicleMedia] {
@@ -870,8 +937,13 @@ private struct EditVehicleView: View {
     @State private var make: String
     @State private var model: String
     @State private var trim: String
+    @State private var engine: String
+    @State private var drivetrain: String
+    @State private var transmission: String
+    @State private var bodyStyle: String
     @State private var nickname: String
     @State private var ownershipState: VehicleOwnershipState
+    @State private var visibility: VehicleVisibility
     @State private var year: String
     @State private var mileage: String
     @State private var saving = false
@@ -884,8 +956,13 @@ private struct EditVehicleView: View {
         _make = State(initialValue: vehicle.make ?? "")
         _model = State(initialValue: vehicle.model ?? "")
         _trim = State(initialValue: vehicle.trim ?? "")
+        _engine = State(initialValue: vehicle.engine ?? "")
+        _drivetrain = State(initialValue: vehicle.drivetrain ?? "")
+        _transmission = State(initialValue: vehicle.transmission ?? "")
+        _bodyStyle = State(initialValue: vehicle.bodyStyle ?? "")
         _nickname = State(initialValue: vehicle.nickname ?? "")
         _ownershipState = State(initialValue: vehicle.ownershipState ?? .owned)
+        _visibility = State(initialValue: vehicle.visibility ?? .private)
         _year = State(initialValue: vehicle.year.map(String.init) ?? "")
         _mileage = State(initialValue: vehicle.mileage.map(String.init) ?? "")
     }
@@ -898,14 +975,23 @@ private struct EditVehicleView: View {
                         nickname = String(value.prefix(60))
                     }
                 Picker("Garage relationship", selection: $ownershipState) {
-                    ForEach(VehicleOwnershipState.allCases) { state in
+                    ForEach(editableOwnershipStates) { state in
                         Text(state.label).tag(state)
+                    }
+                }
+                Picker("Visibility", selection: $visibility) {
+                    ForEach(VehicleVisibility.allCases) { option in
+                        Label(option.label, systemImage: option.systemImage).tag(option)
                     }
                 }
                 TextField("VIN", text: $vin).textInputAutocapitalization(.characters)
                 TextField("Make", text: $make)
                 TextField("Model", text: $model)
                 TextField("Trim", text: $trim)
+                TextField("Engine", text: $engine)
+                TextField("Drivetrain", text: $drivetrain)
+                TextField("Transmission", text: $transmission)
+                TextField("Body style", text: $bodyStyle)
                 TextField("Year", text: $year).keyboardType(.numberPad)
                 TextField("Mileage", text: $mileage).keyboardType(.numberPad)
                 if let error { Text(error).foregroundStyle(Theme.Palette.danger) }
@@ -926,6 +1012,12 @@ private struct EditVehicleView: View {
         }
     }
 
+    private var editableOwnershipStates: [VehicleOwnershipState] {
+        vehicle.ownershipState == .previouslyOwned
+            ? VehicleOwnershipState.allCases
+            : VehicleOwnershipState.allCases.filter { $0 != .previouslyOwned }
+    }
+
     private func save() async {
         guard !saving else { return }
         saving = true
@@ -940,10 +1032,14 @@ private struct EditVehicleView: View {
                     model: model.trimmingCharacters(in: .whitespacesAndNewlines),
                     trim: trim.trimmingCharacters(in: .whitespacesAndNewlines),
                     mileage: Int(mileage),
-                    visibility: nil,
+                    visibility: visibility,
                     notes: nil,
                     nickname: nickname.trimmingCharacters(in: .whitespacesAndNewlines),
-                    ownershipState: ownershipState
+                    ownershipState: ownershipState,
+                    engine: engine.trimmingCharacters(in: .whitespacesAndNewlines),
+                    drivetrain: drivetrain.trimmingCharacters(in: .whitespacesAndNewlines),
+                    transmission: transmission.trimmingCharacters(in: .whitespacesAndNewlines),
+                    bodyStyle: bodyStyle.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
             )
             onSaved()
@@ -968,8 +1064,13 @@ struct NewVehicleView: View {
     @State private var year = ""
     @State private var mileage = ""
     @State private var trim = ""
+    @State private var engine = ""
+    @State private var drivetrain = ""
+    @State private var transmission = ""
+    @State private var bodyStyle = ""
     @State private var nickname = ""
     @State private var ownershipState: VehicleOwnershipState = .owned
+    @State private var visibility: VehicleVisibility = .private
     @State private var saving = false
     @State private var error: String?
     @State private var showVINScanner = false
@@ -986,6 +1087,11 @@ struct NewVehicleView: View {
                     Picker("Relationship", selection: $ownershipState) {
                         ForEach(VehicleOwnershipState.allCases) { state in
                             Text(state.label).tag(state)
+                        }
+                    }
+                    Picker("Visibility", selection: $visibility) {
+                        ForEach(VehicleVisibility.allCases) { option in
+                            Label(option.label, systemImage: option.systemImage).tag(option)
                         }
                     }
                 }
@@ -1005,6 +1111,12 @@ struct NewVehicleView: View {
                     TextField("Trim", text: $trim)
                     TextField("Year", text: $year).keyboardType(.numberPad)
                     TextField("Mileage", text: $mileage).keyboardType(.numberPad)
+                }
+                Section("Specifications") {
+                    TextField("Engine", text: $engine)
+                    TextField("Drivetrain", text: $drivetrain)
+                    TextField("Transmission", text: $transmission)
+                    TextField("Body style", text: $bodyStyle)
                 }
                 if let error {
                     Text(error).foregroundStyle(Theme.Palette.danger)
@@ -1092,7 +1204,12 @@ struct NewVehicleView: View {
                     trim: trimmedTrim.isEmpty ? nil : trimmedTrim,
                     mileage: parsedMileage,
                     nickname: nickname.trimmingCharacters(in: .whitespacesAndNewlines),
-                    ownershipState: ownershipState
+                    ownershipState: ownershipState,
+                    visibility: visibility,
+                    engine: nilIfBlank(engine),
+                    drivetrain: nilIfBlank(drivetrain),
+                    transmission: nilIfBlank(transmission),
+                    bodyStyle: nilIfBlank(bodyStyle)
                 )
             )
             onSave(created)
@@ -1110,5 +1227,9 @@ struct NewVehicleView: View {
             .compactMap { $0 }
         return parts.isEmpty ? "Vehicle" : parts.joined(separator: " ")
     }
-}
 
+    private func nilIfBlank(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}

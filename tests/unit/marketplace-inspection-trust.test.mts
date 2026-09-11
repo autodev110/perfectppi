@@ -27,8 +27,13 @@ describe("marketplace inspection trust", () => {
     ]);
     assert.doesNotMatch(marketplace, /vehicle:vehicles[^`]*[\s\S]*\(\*/);
     assert.doesNotMatch(marketplace, /vehicle\?\.vin/);
-    const publicVehicleQuery = vehicles.slice(vehicles.indexOf("export async function getPublicVehicle"));
-    assert.doesNotMatch(publicVehicleQuery.split("export async function getVehiclePpiHistory")[0], /\*/);
+    const visibleVehicleStart = vehicles.indexOf("export async function getVisibleVehicle");
+    assert.notEqual(visibleVehicleStart, -1);
+    const visibleVehicleQuery = vehicles
+      .slice(visibleVehicleStart)
+      .split("export async function getVehiclePpiHistory")[0];
+    assert.doesNotMatch(visibleVehicleQuery, /\*/);
+    assert.doesNotMatch(visibleVehicleQuery, /\bvin\b/i);
   });
 
   test("web and iOS expose factual inspection context and request controls", async () => {

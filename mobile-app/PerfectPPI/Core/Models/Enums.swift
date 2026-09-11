@@ -51,7 +51,27 @@ enum UserRole: String, Codable, CaseIterable {
 }
 
 enum MediaType: String, Codable { case image, video }
-enum VehicleVisibility: String, Codable { case `public`, `private` }
+enum VehicleVisibility: String, Codable, CaseIterable, Identifiable {
+    case `public`, friends, `private`
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .public: "Public"
+        case .friends: "Friends"
+        case .private: "Only me"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .public: "globe"
+        case .friends: "person.2.fill"
+        case .private: "lock.fill"
+        }
+    }
+}
 enum VehicleOwnershipState: String, Codable, CaseIterable, Identifiable {
     case owned
     case previouslyOwned = "previously_owned"

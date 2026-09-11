@@ -29,13 +29,40 @@ struct MessagesView: View {
             },
             loaded: { boxes in
                 VStack(spacing: 0) {
-                    Picker("Mailbox", selection: $selectedBox) {
-                        Text("Inbox").tag(0)
-                        Text(boxes.requests.isEmpty ? "Requests" : "Requests \(boxes.requests.count)").tag(1)
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack(spacing: 12) {
+                            Image(systemName: selectedBox == 0 ? "bubble.left.and.bubble.right.fill" : "person.crop.circle.badge.clock")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 42, height: 42)
+                                .background(Theme.brandGradient)
+                                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(selectedBox == 0 ? "Your conversations" : "Message requests")
+                                    .font(.headline)
+                                Text(selectedBox == 0
+                                     ? "Friends and marketplace conversations"
+                                     : "Review new conversations before replying")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Picker("Mailbox", selection: $selectedBox) {
+                            Text("Inbox").tag(0)
+                            Text(boxes.requests.isEmpty ? "Requests" : "Requests \(boxes.requests.count)").tag(1)
+                        }
+                        .pickerStyle(.segmented)
                     }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .padding(.top, 8)
+                    .padding(16)
+                    .background(Theme.Palette.card)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+                            .stroke(Theme.Palette.hairline, lineWidth: 1)
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
 
                     let conversations = selectedBox == 0 ? boxes.inbox : boxes.requests
                     if conversations.isEmpty {
@@ -47,23 +74,32 @@ struct MessagesView: View {
                             systemImage: "bubble.left.and.bubble.right"
                         )
                         .padding()
+                        Spacer(minLength: 0)
                     } else {
-                        List(conversations) { conversation in
-                            NavigationLink {
-                                MessageThreadView(
-                                    conversationId: conversation.id,
-                                    currentProfileId: currentProfileId
-                                )
-                            } label: {
-                                ConversationRow(
-                                    conversation: conversation,
-                                    currentProfileId: currentProfileId
-                                )
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                ForEach(conversations) { conversation in
+                                    NavigationLink {
+                                        MessageThreadView(
+                                            conversationId: conversation.id,
+                                            currentProfileId: currentProfileId
+                                        )
+                                        .onDisappear { reloadToken = UUID() }
+                                    } label: {
+                                        ConversationRow(
+                                            conversation: conversation,
+                                            currentProfileId: currentProfileId,
+                                            isRequest: selectedBox == 1
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
+                            .padding(16)
                         }
-                        .listStyle(.insetGrouped)
                     }
                 }
+                .background(Color(.systemGroupedBackground))
                 .navigationTitle("Messages")
                 .toolbar {
                     Button {
@@ -89,45 +125,69 @@ struct MessagesView: View {
 private struct ConversationRow: View {
     let conversation: ConversationSummary
     let currentProfileId: String?
+    let isRequest: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .font(.headline)
-                    .lineLimit(2)
-                Spacer(minLength: 8)
+        HStack(alignment: .top, spacing: 12) {
+            ZStack(alignment: .topTrailing) {
+                Avatar(name: title, size: 46)
                 if conversation.unreadCount > 0 {
-                    StatusBadge(text: "\(conversation.unreadCount)", color: Theme.Palette.primary)
+                    Circle()
+                        .fill(Theme.Palette.primary)
+                        .frame(width: 12, height: 12)
+                        .overlay(Circle().stroke(Theme.Palette.card, lineWidth: 2))
+                        .offset(x: 2, y: -2)
                 }
             }
-            if let car = conversation.listingContext?.carLabel {
-                Label(car, systemImage: "car")
-                    .font(.caption)
-                    .foregroundStyle(Theme.Palette.primary)
-                    .lineLimit(1)
-            }
-            if let content = conversation.lastMessage?.content, !content.isEmpty {
-                Text(content)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Spacer(minLength: 6)
+                    if let date = conversation.lastMessage?.createdAt ?? conversation.createdAt {
+                        Text(date, style: .relative)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
+
+                if let car = conversation.listingContext?.carLabel {
+                    Label(car, systemImage: "car.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.Palette.primary)
+                        .lineLimit(1)
+                }
+
+                Text(preview)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(conversation.unreadCount > 0 ? .primary : .secondary)
+                    .fontWeight(conversation.unreadCount > 0 ? .medium : .regular)
                     .lineLimit(2)
-            } else if conversation.lastMessage?.hasAttachment == true {
-                Label("Sent an attachment", systemImage: "paperclip")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("No messages yet")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+
+                if isRequest {
+                    Label("Review request", systemImage: "person.crop.circle.badge.questionmark")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Theme.Palette.warning)
+                }
             }
-            if let date = conversation.lastMessage?.createdAt ?? conversation.createdAt {
-                Text(date, style: .relative)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.tertiary)
+                .padding(.top, 5)
         }
-        .padding(.vertical, 4)
+        .padding(14)
+        .background(Theme.Palette.card)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+                .stroke(conversation.unreadCount > 0 ? Theme.Palette.primary.opacity(0.22) : Theme.Palette.hairline, lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     /// Car name lives on its own line below, so the title is people only.
@@ -137,6 +197,12 @@ private struct ConversationRow: View {
             myProfileId: currentProfileId
         )
         return people.isEmpty ? "Conversation" : people
+    }
+
+    private var preview: String {
+        if let content = conversation.lastMessage?.content, !content.isEmpty { return content }
+        if conversation.lastMessage?.hasAttachment == true { return "Sent an attachment" }
+        return isRequest ? "Open to accept or decline this request." : "No messages yet"
     }
 }
 

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getOwnedVehicle } from "@/features/vehicles/queries";
 import { getMyPpiRequests } from "@/features/ppi/queries";
 import { inspectionDisplayName } from "@/features/ppi/presentation";
-import { makeVehiclePrivate, makeVehiclePublic } from "@/features/vehicles/actions";
+import { makeVehicleFriendsOnly, makeVehiclePrivate, makeVehiclePublic } from "@/features/vehicles/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { VehiclePhotoDeleteButton } from "./vehicle-photo-delete-button";
 import { VehicleNotesForm } from "./vehicle-notes-form";
 import { VehicleDeleteButton } from "./vehicle-danger-actions";
 import { InspectionDeleteButton } from "@/components/shared/inspection-delete-button";
+import { VehicleSoldAction } from "./vehicle-sold-action";
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -36,6 +37,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       ? "Shopping / considering"
       : vehicle.ownership_state === "project" ? "Project" : "Owned";
   const isPublic = vehicle.visibility === "public";
+  const visibilityLabel = vehicle.visibility === "friends" ? "Friends" : vehicle.visibility === "public" ? "Public" : "Only me";
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -46,15 +48,13 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           {vehicle.nickname && vehicle.trim && <p className="text-sm text-muted-foreground">{vehicle.trim}</p>}
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant={isPublic ? "default" : "secondary"}>{vehicle.visibility}</Badge>
+          <Badge variant={isPublic ? "default" : "secondary"}>{visibilityLabel}</Badge>
           <Button asChild variant="outline" size="sm">
             <Link href={`/dashboard/vehicles/${vehicle.id}/edit`}><Pencil className="mr-2 h-3.5 w-3.5" />Edit</Link>
           </Button>
-          {isPublic && (
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/vehicle/${vehicle.id}`} target="_blank"><ExternalLink className="mr-2 h-3.5 w-3.5" />Public Page</Link>
-            </Button>
-          )}
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/vehicle/${vehicle.id}`} target="_blank"><ExternalLink className="mr-2 h-3.5 w-3.5" />View Passport</Link>
+          </Button>
         </div>
       </div>
 
@@ -62,8 +62,13 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         <CardHeader><CardTitle>Vehicle Details</CardTitle></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div><p className="text-sm text-muted-foreground">Garage relationship</p><p>{ownershipLabel}</p></div>
+          {vehicle.sold_at && <div><p className="text-sm text-muted-foreground">Marked sold</p><p>{formatDate(vehicle.sold_at)}</p></div>}
           {vehicle.vin && <div><p className="text-sm text-muted-foreground">VIN</p><p className="font-mono">{vehicle.vin}</p></div>}
           {vehicle.mileage != null && <div><p className="text-sm text-muted-foreground">Mileage</p><p>{formatMileage(vehicle.mileage)} miles</p>{vehicle.mileage_updated_at && <p className="text-xs text-muted-foreground">Updated {formatDate(vehicle.mileage_updated_at)}</p>}</div>}
+          {vehicle.engine && <div><p className="text-sm text-muted-foreground">Engine</p><p>{vehicle.engine}</p></div>}
+          {vehicle.drivetrain && <div><p className="text-sm text-muted-foreground">Drivetrain</p><p>{vehicle.drivetrain}</p></div>}
+          {vehicle.transmission && <div><p className="text-sm text-muted-foreground">Transmission</p><p>{vehicle.transmission}</p></div>}
+          {vehicle.body_style && <div><p className="text-sm text-muted-foreground">Body style</p><p>{vehicle.body_style}</p></div>}
         </CardContent>
       </Card>
 
@@ -127,14 +132,24 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       <Card id="visibility">
         <CardHeader><CardTitle>Visibility</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div><p className="text-sm font-medium">This vehicle is currently {vehicle.visibility}.</p><p className="text-sm text-muted-foreground">Public vehicles can be shared and listed on the marketplace.</p></div>
-          {isPublic ? (
-            <form action={makeVehiclePrivate}><input type="hidden" name="vehicle_id" value={vehicle.id} /><Button type="submit" variant="outline">Make Private</Button></form>
-          ) : (
-            <form action={makeVehiclePublic}><input type="hidden" name="vehicle_id" value={vehicle.id} /><Button type="submit">Make Public</Button></form>
-          )}
+          <div><p className="text-sm font-medium">Visible to: {visibilityLabel}</p><p className="text-sm text-muted-foreground">Friends-only vehicles appear only to accepted friends. Marketplace listings always require Public.</p></div>
+          <div className="flex flex-wrap gap-2">
+            {vehicle.visibility !== "private" && <form action={makeVehiclePrivate}><input type="hidden" name="vehicle_id" value={vehicle.id} /><Button type="submit" variant="outline">Only me</Button></form>}
+            {vehicle.visibility !== "friends" && <form action={makeVehicleFriendsOnly}><input type="hidden" name="vehicle_id" value={vehicle.id} /><Button type="submit" variant="outline">Friends</Button></form>}
+            {!isPublic && <form action={makeVehiclePublic}><input type="hidden" name="vehicle_id" value={vehicle.id} /><Button type="submit">Public</Button></form>}
+          </div>
         </CardContent>
       </Card>
+
+      {["owned", "project"].includes(vehicle.ownership_state) && (
+        <Card>
+          <CardHeader><CardTitle>Ownership History</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-sm font-medium">No longer own this vehicle?</p><p className="text-sm text-muted-foreground">Close active listings and move it to Previously Owned without transferring any private records.</p></div>
+            <VehicleSoldAction vehicleId={vehicle.id} />
+          </CardContent>
+        </Card>
+      )}
 
       <Card id="inspections">
         <CardHeader><CardTitle>Inspections and Reports</CardTitle></CardHeader>

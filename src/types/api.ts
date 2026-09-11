@@ -61,6 +61,10 @@ export interface CreateVehicleRequest {
   make?: string;
   model?: string;
   trim?: string;
+  engine?: string;
+  drivetrain?: string;
+  transmission?: string;
+  body_style?: string;
   mileage?: number;
   visibility?: VehicleVisibility;
 }
@@ -71,6 +75,10 @@ export interface UpdateVehicleRequest {
   make?: string;
   model?: string;
   trim?: string;
+  engine?: string | null;
+  drivetrain?: string | null;
+  transmission?: string | null;
+  body_style?: string | null;
   mileage?: number;
   visibility?: VehicleVisibility;
 }
@@ -83,8 +91,13 @@ export interface VehicleResponse {
   make: string | null;
   model: string | null;
   trim: string | null;
+  engine: string | null;
+  drivetrain: string | null;
+  transmission: string | null;
+  body_style: string | null;
   mileage: number | null;
   visibility: VehicleVisibility;
+  sold_at: string | null;
   created_at: string;
   updated_at: string;
 }

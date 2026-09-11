@@ -22,10 +22,14 @@ const updateSchema = z.object({
   make: z.string().min(1).max(100).optional(),
   model: z.string().min(1).max(100).optional(),
   trim: z.string().max(100).optional(),
+  engine: z.string().trim().max(100).nullable().optional(),
+  drivetrain: z.string().trim().max(100).nullable().optional(),
+  transmission: z.string().trim().max(100).nullable().optional(),
+  body_style: z.string().trim().max(100).nullable().optional(),
   nickname: z.string().trim().max(60).nullable().optional(),
   ownership_state: z.enum(["owned", "previously_owned", "considering", "project"]).optional(),
   mileage: z.number().min(0).optional(),
-  visibility: z.enum(["public", "private"]).optional(),
+  visibility: z.enum(["public", "friends", "private"]).optional(),
   notes: z.string().trim().max(5000).nullable().optional(),
 });
 
@@ -49,6 +53,12 @@ export async function PATCH(
   if (!existing) {
     return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
   }
+  if (parsed.data.ownership_state === "previously_owned" && existing.ownership_state !== "previously_owned") {
+    return NextResponse.json(
+      { error: "Use Mark as sold so active listings and your history privacy choice are updated together." },
+      { status: 400 },
+    );
+  }
 
   const { notes, ...vehicleFields } = parsed.data;
   const updateData = {
@@ -57,6 +67,10 @@ export async function PATCH(
       ? undefined
       : vehicleFields.vin.trim().toUpperCase() || null,
     trim: vehicleFields.trim === undefined ? undefined : vehicleFields.trim || null,
+    engine: vehicleFields.engine === undefined ? undefined : vehicleFields.engine?.trim() || null,
+    drivetrain: vehicleFields.drivetrain === undefined ? undefined : vehicleFields.drivetrain?.trim() || null,
+    transmission: vehicleFields.transmission === undefined ? undefined : vehicleFields.transmission?.trim() || null,
+    body_style: vehicleFields.body_style === undefined ? undefined : vehicleFields.body_style?.trim() || null,
     nickname: vehicleFields.nickname === undefined ? undefined : vehicleFields.nickname || null,
   };
 

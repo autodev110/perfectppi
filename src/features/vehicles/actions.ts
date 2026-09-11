@@ -32,10 +32,14 @@ const createVehicleSchema = z.object({
   make: z.string().min(1, "Make is required").max(100),
   model: z.string().min(1, "Model is required").max(100),
   trim: z.string().max(100).optional().or(z.literal("")),
+  engine: z.string().trim().max(100).optional().or(z.literal("")),
+  drivetrain: z.string().trim().max(100).optional().or(z.literal("")),
+  transmission: z.string().trim().max(100).optional().or(z.literal("")),
+  body_style: z.string().trim().max(100).optional().or(z.literal("")),
   nickname: z.string().trim().max(60).optional().or(z.literal("")),
   ownership_state: z.enum(["owned", "previously_owned", "considering", "project"]).optional(),
   mileage: z.coerce.number().min(0).optional(),
-  visibility: z.enum(["public", "private"]).optional(),
+  visibility: z.enum(["public", "friends", "private"]).optional(),
   notes: z.string().trim().max(5000).optional().or(z.literal("")),
 });
 
@@ -78,7 +82,7 @@ async function getCurrentProfileId() {
 export async function createVehicle(formData: FormData) {
   const raw: Record<string, unknown> = {};
   for (const [key, value] of formData.entries()) {
-    if (value !== "" || key === "notes" || key === "vin" || key === "trim" || key === "nickname") raw[key] = value;
+    if (value !== "" || ["notes", "vin", "trim", "nickname", "engine", "drivetrain", "transmission", "body_style"].includes(key)) raw[key] = value;
   }
 
   const parsed = createVehicleSchema.safeParse(raw);
@@ -128,6 +132,10 @@ export async function createVehicle(formData: FormData) {
     ...vehicleFields,
     vin: normalizedVin,
     trim: parsed.data.trim || null,
+    engine: parsed.data.engine || null,
+    drivetrain: parsed.data.drivetrain || null,
+    transmission: parsed.data.transmission || null,
+    body_style: parsed.data.body_style || null,
     nickname: parsed.data.nickname || null,
     owner_id: profile.id,
   };
@@ -172,7 +180,7 @@ export async function createVehicle(formData: FormData) {
 export async function updateVehicle(vehicleId: string, formData: FormData) {
   const raw: Record<string, unknown> = {};
   for (const [key, value] of formData.entries()) {
-    if (value !== "" || key === "notes" || key === "vin" || key === "trim" || key === "nickname") raw[key] = value;
+    if (value !== "" || ["notes", "vin", "trim", "nickname", "engine", "drivetrain", "transmission", "body_style"].includes(key)) raw[key] = value;
   }
 
   const parsed = updateVehicleSchema.safeParse(raw);
@@ -186,11 +194,14 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
 
   const { data: ownedVehicle } = await admin
     .from("vehicles")
-    .select("id")
+    .select("id, ownership_state")
     .eq("id", vehicleId)
     .eq("owner_id", profile.profileId)
     .maybeSingle();
   if (!ownedVehicle) return { error: "Vehicle not found" };
+  if (parsed.data.ownership_state === "previously_owned" && ownedVehicle.ownership_state !== "previously_owned") {
+    return { error: "Use Mark as sold so active listings and your history privacy choice are updated together." };
+  }
 
   const { notes, ...vehicleFields } = parsed.data;
   const updateData = {
@@ -199,6 +210,10 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
       ? undefined
       : vehicleFields.vin.trim().toUpperCase() || null,
     trim: vehicleFields.trim === undefined ? undefined : vehicleFields.trim || null,
+    engine: vehicleFields.engine === undefined ? undefined : vehicleFields.engine || null,
+    drivetrain: vehicleFields.drivetrain === undefined ? undefined : vehicleFields.drivetrain || null,
+    transmission: vehicleFields.transmission === undefined ? undefined : vehicleFields.transmission || null,
+    body_style: vehicleFields.body_style === undefined ? undefined : vehicleFields.body_style || null,
     nickname: vehicleFields.nickname === undefined ? undefined : vehicleFields.nickname || null,
   };
 
@@ -229,7 +244,7 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
 
 async function setVehicleVisibilityFromForm(
   formData: FormData,
-  visibility: "public" | "private"
+  visibility: "public" | "friends" | "private"
 ) {
   const vehicleId = String(formData.get("vehicle_id") ?? "");
   if (!vehicleId) return;
@@ -255,6 +270,37 @@ export async function makeVehiclePublic(formData: FormData) {
 
 export async function makeVehiclePrivate(formData: FormData) {
   await setVehicleVisibilityFromForm(formData, "private");
+}
+
+export async function makeVehicleFriendsOnly(formData: FormData) {
+  await setVehicleVisibilityFromForm(formData, "friends");
+}
+
+export async function markVehiclePreviouslyOwned(
+  vehicleId: string,
+  keepPublicHistory: boolean,
+) {
+  const parsedId = z.string().uuid().safeParse(vehicleId);
+  if (!parsedId.success) return { error: "Vehicle not found" };
+
+  const profile = await getCurrentProfileId();
+  if ("error" in profile) return { error: profile.error };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("mark_vehicle_previously_owned", {
+    p_vehicle_id: parsedId.data,
+    p_keep_public_history: keepPublicHistory,
+  });
+  if (error || !data) {
+    return { error: "This vehicle could not be marked as sold. Please try again." };
+  }
+
+  revalidatePath("/dashboard/vehicles");
+  revalidatePath(`/dashboard/vehicles/${vehicleId}`);
+  revalidatePath(`/vehicle/${vehicleId}`);
+  revalidatePath("/marketplace");
+  revalidatePath("/dashboard/listings");
+  return { data };
 }
 
 export async function attachVehiclePhoto(input: {

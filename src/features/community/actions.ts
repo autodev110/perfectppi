@@ -42,6 +42,12 @@ import { friendlyDatabaseError } from "@/lib/moderation/friendly-errors";
 import { FEATURE_UNAVAILABLE_MESSAGE, getFeatureFlags } from "@/lib/feature-flags";
 import { notificationLink, pushAllowed } from "@/features/notifications/preferences";
 import { pushToProfile } from "@/lib/push/dispatch";
+import {
+  communityCreationTokensMatch,
+  normalizeCommunityCreationToken,
+} from "@/features/community/creation-token";
+
+const creationTokenSchema = z.string().uuid().transform(normalizeCommunityCreationToken);
 
 const postSchema = z.object({
   content: z.string().trim().min(1, "Write something before posting").max(1200),
@@ -51,7 +57,7 @@ const postSchema = z.object({
   listingId: z.string().uuid().optional().nullable(),
   groupId: z.string().uuid().optional().nullable(),
   expectedMediaCount: z.coerce.number().int().min(0).max(10).default(0),
-  creationToken: z.string().uuid().optional().nullable(),
+  creationToken: creationTokenSchema.optional().nullable(),
 }).superRefine((value, context) => {
   if (value.expectedMediaCount > 0 && !value.creationToken) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["creationToken"], message: "Post retry token is required" });
@@ -62,7 +68,7 @@ const MAX_POST_MEDIA = 10;
 
 const postMediaSchema = z.object({
   postId: z.string().uuid(),
-  creationToken: z.string().uuid().optional().nullable(),
+  creationToken: creationTokenSchema.optional().nullable(),
   items: z.array(z.object({
     url: communityUploadReferenceSchema,
     mediaType: z.enum(["image", "video"]),
@@ -171,16 +177,42 @@ async function recentAuthorContent(
   table: "community_posts" | "community_comments",
   authorId: string,
   windowMs: number,
-) {
+): Promise<Array<{ content: string; created_at: string }>> {
   const since = new Date(Date.now() - windowMs).toISOString();
-  const { data } = await createAdminClient()
-    .from(table)
-    .select("content, created_at")
+  const admin = createAdminClient();
+  if (table === "community_comments") {
+    const { data } = await admin
+      .from("community_comments")
+      .select("content, created_at")
+      .eq("author_id", authorId)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(25);
+    return data ?? [];
+  }
+
+  const { data: posts } = await admin
+    .from("community_posts")
+    .select("id, content, created_at")
     .eq("author_id", authorId)
     .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(25);
-  return data ?? [];
+  if (!posts?.length) return [];
+
+  // A failed media upload leaves a hidden assembly so the same composer can
+  // retry. It is not a submitted post and must not make a fresh composer look
+  // like duplicate-content abuse. Complete review submissions still count.
+  const postIds = posts.map((post) => post.id);
+  const { data: unfinishedAssemblies } = await admin
+    .from("community_post_assemblies")
+    .select("post_id")
+    .in("post_id", postIds)
+    .eq("state", "assembling");
+  const unfinishedPostIds = new Set((unfinishedAssemblies ?? []).map((item) => item.post_id));
+  return posts
+    .filter((post) => !unfinishedPostIds.has(post.id))
+    .map(({ content, created_at }) => ({ content, created_at }));
 }
 
 export async function createCommunityPost(formData: FormData) {
@@ -583,19 +615,42 @@ export async function addCommunityPostMedia(input: unknown) {
   }
 
   const admin = createAdminClient();
-  const { data: post } = await admin
+  const { data: post, error: postError } = await admin
     .from("community_posts")
     .select("id, author_id, group_id, status, moderation_status")
     .eq("id", parsed.data.postId)
     .maybeSingle();
+  if (postError) {
+    return {
+      error: friendlyDatabaseError(
+        postError,
+        "Your post draft could not be opened. Please try again.",
+        "read post media draft",
+      ),
+    };
+  }
 
-  const { data: assembly } = post ? await admin
-    .from("community_post_assemblies")
-    .select("state, expected_media_count, creation_token")
-    .eq("post_id", post.id)
-    .maybeSingle() : { data: null };
-  const requestedAssembly = parsed.data.creationToken
-    && assembly?.creation_token === parsed.data.creationToken ? assembly : null;
+  const assemblyResult = post
+    ? await admin
+      .from("community_post_assemblies")
+      .select("state, expected_media_count, creation_token")
+      .eq("post_id", post.id)
+      .maybeSingle()
+    : { data: null, error: null };
+  if (assemblyResult.error) {
+    return {
+      error: friendlyDatabaseError(
+        assemblyResult.error,
+        "Your photo draft could not be opened. Please try again.",
+        "read post media assembly",
+      ),
+    };
+  }
+  const assembly = assemblyResult.data;
+  const requestedAssembly = communityCreationTokensMatch(
+    assembly?.creation_token,
+    parsed.data.creationToken,
+  ) ? assembly : null;
   const openAssembly = requestedAssembly?.state === "finalized" ? null : requestedAssembly;
   const editablePublishedPost = post?.status === "active" && post.moderation_status === "active";
   // The media trigger can mark a complete assembly submitted before the
@@ -603,10 +658,14 @@ export async function addCommunityPostMedia(input: unknown) {
   // the expected-count check below still prevents extra attachments.
   const editableAssembly = post?.status === "hidden"
     && (openAssembly?.state === "assembling" || openAssembly?.state === "submitted");
-  if (!post || post.author_id !== profile.profileId
-    || (assembly && parsed.data.creationToken && !requestedAssembly)
-    || (!editablePublishedPost && !editableAssembly)) {
-    return { error: "Post not found" };
+  if (!post || post.author_id !== profile.profileId) {
+    return { error: "This post draft is no longer available." };
+  }
+  if (assembly && parsed.data.creationToken && !requestedAssembly) {
+    return { error: "These photos belong to a different post attempt. Close this draft and try again." };
+  }
+  if (!editablePublishedPost && !editableAssembly) {
+    return { error: "This post can no longer accept those photos." };
   }
 
   const quarantinePrefix = `r2-private:///quarantine/community_post/${profile.profileId}/${post.id}/`;

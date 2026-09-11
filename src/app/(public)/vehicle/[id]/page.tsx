@@ -170,6 +170,16 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
             )}
             {/* Spec pills */}
             <div className="flex flex-wrap gap-2 mt-2">
+              {vehicle.ownership_state === "previously_owned" && (
+                <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant">
+                  Previously owned{vehicle.sold_at ? ` · ${formatDate(vehicle.sold_at)}` : ""}
+                </span>
+              )}
+              {vehicle.visibility === "friends" && (
+                <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant">
+                  Friends only
+                </span>
+              )}
               {vehicle.mileage != null && (
                 <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant">
                   <Gauge className="h-3 w-3" />
@@ -247,6 +257,10 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                 { label: "Make", value: vehicle.make },
                 { label: "Model", value: vehicle.model },
                 { label: "Trim", value: vehicle.trim },
+                { label: "Engine", value: vehicle.engine },
+                { label: "Drivetrain", value: vehicle.drivetrain },
+                { label: "Transmission", value: vehicle.transmission },
+                { label: "Body style", value: vehicle.body_style },
                 { label: "Mileage", value: vehicle.mileage != null ? `${formatMileage(vehicle.mileage)} miles` : null },
               ].filter((f) => f.value).map(({ label, value }) => (
                 <div key={label}>

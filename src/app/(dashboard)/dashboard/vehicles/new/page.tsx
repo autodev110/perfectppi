@@ -94,6 +94,12 @@ export default function NewVehiclePage() {
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Engine" name="engine" placeholder="2.0L turbo" maxLength={100} />
+              <Field label="Drivetrain" name="drivetrain" placeholder="AWD" maxLength={100} />
+              <Field label="Transmission" name="transmission" placeholder="10-speed automatic" maxLength={100} />
+              <Field label="Body style" name="body_style" placeholder="Sedan" maxLength={100} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="year">Year</Label>
                 <Input
@@ -184,6 +190,7 @@ export default function NewVehiclePage() {
                 className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <option value="private">Private - only visible in your dashboard</option>
+                <option value="friends">Friends - visible to accepted friends</option>
                 <option value="public">Public - can be used for public profile and marketplace</option>
               </select>
               <p className="text-xs text-muted-foreground">
@@ -224,6 +231,15 @@ export default function NewVehiclePage() {
           </form>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function Field({ label, name, ...props }: React.ComponentProps<typeof Input> & { label: string; name: string }) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={name}>{label}</Label>
+      <Input id={name} name={name} {...props} />
     </div>
   );
 }

@@ -3937,9 +3937,54 @@ export type Database = {
           },
         ]
       }
-      vehicles: {
+      vehicle_ownership_events: {
         Row: {
           created_at: string
+          event_type: string
+          id: string
+          kept_public_history: boolean
+          profile_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          kept_public_history: boolean
+          profile_id: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          kept_public_history?: boolean
+          profile_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_ownership_events_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_ownership_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicles: {
+        Row: {
+          body_style: string | null
+          created_at: string
+          drivetrain: string | null
+          engine: string | null
           id: string
           make: string | null
           mileage: number | null
@@ -3949,6 +3994,8 @@ export type Database = {
           organization_id: string | null
           ownership_state: Database["public"]["Enums"]["vehicle_ownership_state"]
           owner_id: string | null
+          sold_at: string | null
+          transmission: string | null
           trim: string | null
           updated_at: string
           vin: string | null
@@ -3956,7 +4003,10 @@ export type Database = {
           year: number | null
         }
         Insert: {
+          body_style?: string | null
           created_at?: string
+          drivetrain?: string | null
+          engine?: string | null
           id?: string
           make?: string | null
           mileage?: number | null
@@ -3966,6 +4016,8 @@ export type Database = {
           organization_id?: string | null
           ownership_state?: Database["public"]["Enums"]["vehicle_ownership_state"]
           owner_id?: string | null
+          sold_at?: string | null
+          transmission?: string | null
           trim?: string | null
           updated_at?: string
           vin?: string | null
@@ -3973,7 +4025,10 @@ export type Database = {
           year?: number | null
         }
         Update: {
+          body_style?: string | null
           created_at?: string
+          drivetrain?: string | null
+          engine?: string | null
           id?: string
           make?: string | null
           mileage?: number | null
@@ -3983,6 +4038,8 @@ export type Database = {
           organization_id?: string | null
           ownership_state?: Database["public"]["Enums"]["vehicle_ownership_state"]
           owner_id?: string | null
+          sold_at?: string | null
+          transmission?: string | null
           trim?: string | null
           updated_at?: string
           vin?: string | null
@@ -4208,6 +4265,13 @@ export type Database = {
       marketplace_visible_listing_ids: {
         Args: { p_listing_ids: string[]; p_viewer_id: string | null }
         Returns: { listing_id: string }[]
+      }
+      mark_vehicle_previously_owned: {
+        Args: {
+          p_keep_public_history: boolean
+          p_vehicle_id: string
+        }
+        Returns: Database["public"]["Tables"]["vehicles"]["Row"]
       }
       request_marketplace_inspection: {
         Args: {
@@ -4764,6 +4828,14 @@ export type Database = {
         Args: { p_profile_id: string; p_viewer_id: string }
         Returns: boolean
       }
+      social_can_view_vehicle: {
+        Args: { p_vehicle_id: string; p_viewer_id: string }
+        Returns: boolean
+      }
+      social_can_current_user_view_vehicle: {
+        Args: { p_vehicle_id: string }
+        Returns: boolean
+      }
       social_profile_is_available: {
         Args: { p_profile_id: string }
         Returns: boolean
@@ -5236,7 +5308,7 @@ export type Database = {
         | "org_manager"
         | "admin"
         | "developer"
-      vehicle_visibility: "public" | "private"
+      vehicle_visibility: "public" | "friends" | "private"
       vehicle_ownership_state: "owned" | "previously_owned" | "considering" | "project"
       warranty_status:
         | "not_offered"
@@ -5471,7 +5543,7 @@ export const Constants = {
         "admin",
         "developer",
       ],
-      vehicle_visibility: ["public", "private"],
+      vehicle_visibility: ["public", "friends", "private"],
       vehicle_ownership_state: ["owned", "previously_owned", "considering", "project"],
       warranty_status: [
         "not_offered",

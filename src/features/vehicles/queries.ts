@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
-import { getBlockedProfileIds, getCurrentSocialProfileId } from "@/features/social/relationships";
+import { getCurrentSocialProfileId } from "@/features/social/relationships";
 
 async function authorizeVehicleMedia<T extends { url: string }>(media: T[]): Promise<T[]> {
   return Promise.all(media.map(async (item) => ({
@@ -101,58 +101,72 @@ export async function getOwnedVehicle(id: string) {
   };
 }
 
-export async function getPublicVehicle(id: string) {
+export async function getVisibleVehicle(id: string) {
   const admin = createAdminClient();
   const viewerId = await getCurrentSocialProfileId();
+  if (!viewerId) return null;
+
+  const { data: canView } = await admin.rpc("social_can_view_vehicle", {
+    p_viewer_id: viewerId,
+    p_vehicle_id: id,
+  });
+  if (!canView) return null;
 
   const { data: vehicle } = await admin
     .from("vehicles")
     .select(`
       id, owner_id, year, make, model, trim, nickname, ownership_state,
-      mileage, mileage_updated_at, visibility, created_at, updated_at,
+      mileage, mileage_updated_at, visibility, engine, drivetrain,
+      transmission, body_style, sold_at, created_at, updated_at,
       vehicle_media(id, vehicle_id, url, media_type, is_primary, sort_order, uploaded_at, moderation_status),
       owner:profiles!vehicles_owner_id_fkey(id, display_name, username, avatar_url, is_public)
     `)
     .eq("id", id)
-    .eq("visibility", "public")
     .single();
 
   if (!vehicle) return null;
-  if (vehicle.owner_id) {
-    const [{ data: ownerAvailable }, blockedIds] = await Promise.all([
-      admin.rpc("social_profile_is_available", { p_profile_id: vehicle.owner_id }),
-      viewerId
-        ? getBlockedProfileIds(viewerId, [vehicle.owner_id])
-        : Promise.resolve(new Set<string>()),
-    ]);
-    if (!ownerAvailable || blockedIds.has(vehicle.owner_id)) return null;
-  }
   return {
     ...vehicle,
+    viewer_is_owner: vehicle.owner_id === viewerId,
     vehicle_media: await authorizeVehicleMedia(
       (vehicle.vehicle_media ?? []).filter((media) => media.moderation_status === "active"),
     ),
   };
 }
 
+// Retain the established export while callers migrate to the clearer name.
+export const getPublicVehicle = getVisibleVehicle;
+
 export async function getVehiclePpiHistory(vehicleId: string) {
   const admin = createAdminClient();
+  const viewerId = await getCurrentSocialProfileId();
+  if (!viewerId) return [];
+
   const { data: vehicle } = await admin
     .from("vehicles")
     .select("owner_id, visibility")
     .eq("id", vehicleId)
     .maybeSingle();
 
-  if (!vehicle || vehicle.visibility !== "public" || !vehicle.owner_id) return [];
+  if (!vehicle?.owner_id) return [];
 
-  const { data: listing } = await admin
-    .from("marketplace_listings")
-    .select("id")
-    .eq("vehicle_id", vehicleId)
-    .eq("seller_id", vehicle.owner_id)
-    .eq("status", "active")
-    .maybeSingle();
-  if (!listing) return [];
+  const { data: canView } = await admin.rpc("social_can_view_vehicle", {
+    p_viewer_id: viewerId,
+    p_vehicle_id: vehicleId,
+  });
+  if (!canView) return [];
+
+  if (viewerId !== vehicle.owner_id) {
+    if (vehicle.visibility !== "public") return [];
+    const { data: listing } = await admin
+      .from("marketplace_listings")
+      .select("id")
+      .eq("vehicle_id", vehicleId)
+      .eq("seller_id", vehicle.owner_id)
+      .eq("status", "active")
+      .maybeSingle();
+    if (!listing) return [];
+  }
 
   const { data } = await admin
     .from("ppi_requests")
