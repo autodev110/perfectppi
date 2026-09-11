@@ -8,14 +8,14 @@ const bodySchema = z.object({ joined: z.boolean() }).strict();
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ group: string }> },
 ) {
   const auth = await requireApiRole([...ROLES]);
   if ("response" in auth) return auth.response;
-  const { id } = await params;
+  const { group: groupId } = await params;
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   const result = await setCommunityGroupMembership({
-    groupId: id,
+    groupId,
     joined: parsed.success ? parsed.data.joined : null,
   });
   if (!result.ok) {

@@ -7,11 +7,11 @@ const ROLES = ["consumer", "technician", "org_manager", "admin"] as const;
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ slug: string }> },
+  { params }: { params: Promise<{ group: string }> },
 ) {
   const auth = await requireApiRole([...ROLES]);
   if ("response" in auth) return auth.response;
-  const { slug } = await params;
+  const { group: slug } = await params;
   const group = await getCommunityGroup(slug);
   if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 });
 
