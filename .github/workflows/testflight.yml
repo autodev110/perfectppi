@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'mobile-app/**'
+      - '.github/workflows/testflight.yml'
   pull_request:
     branches:
       - main
@@ -169,6 +170,7 @@ jobs:
           profile_is_debug="$(plutil -extract Entitlements.get-task-allow raw "$profile_plist")"
           profile_push_environment="$(plutil -extract Entitlements.aps-environment raw "$profile_plist" 2>/dev/null || true)"
           profile_apple_sign_in="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.applesignin:0' "$profile_plist" 2>/dev/null || true)"
+          profile_associated_domains="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.associated-domains' "$profile_plist" 2>/dev/null || true)"
           profile_is_xcode_managed="$(plutil -extract IsXcodeManaged raw "$profile_plist" 2>/dev/null || true)"
           profile_expiration="$(plutil -extract ExpirationDate raw "$profile_plist")"
 
@@ -198,8 +200,8 @@ jobs:
             'applinks:www.perfectppi.com' \
             'webcredentials:perfectppi.com' \
             'webcredentials:www.perfectppi.com'; do
-            if ! plutil -p "$profile_plist" \
-              | grep -Fq "\"$domain\""; then
+            if ! grep -Fxq '    *' <<< "$profile_associated_domains" \
+              && ! grep -Fxq "    $domain" <<< "$profile_associated_domains"; then
               echo "::error::The App Store provisioning profile is missing the Associated Domains value: $domain"
               exit 1
             fi
@@ -398,6 +400,17 @@ jobs:
             echo "::error::The signed archive does not have the production push-notification entitlement."
             exit 1
           fi
+          signed_associated_domains="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.associated-domains' "$signed_entitlements" 2>/dev/null || true)"
+          for domain in \
+            'applinks:perfectppi.com' \
+            'applinks:www.perfectppi.com' \
+            'webcredentials:perfectppi.com' \
+            'webcredentials:www.perfectppi.com'; do
+            if ! grep -Fxq "    $domain" <<< "$signed_associated_domains"; then
+              echo "::error::The signed archive is missing the Associated Domains value: $domain"
+              exit 1
+            fi
+          done
           signed_apple_sign_in="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.applesignin:0' "$signed_entitlements" 2>/dev/null || true)"
           bundled_apple_sign_in="$(plutil -extract PerfectPPIAppleSignInEnabled raw "$info_plist" 2>/dev/null || true)"
           if [[ "$APPLE_SIGN_IN_ENABLED" == "YES" ]]; then
