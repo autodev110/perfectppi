@@ -1373,11 +1373,27 @@ struct NewCommunityPostView: View {
         }
     }
 
+    /// Which stage of a photo post failed, so the alert says "Uploading photo
+    /// 2 of 3 failed: …" rather than a bare server code.
+    private enum PublishStep {
+        case creating, uploading(Int, Int), attaching, publishing
+
+        var label: String {
+            switch self {
+            case .creating: "Creating the post"
+            case .uploading(let index, let total): "Uploading photo \(index) of \(total)"
+            case .attaching: "Attaching photos"
+            case .publishing: "Publishing"
+            }
+        }
+    }
+
     private func save() async {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !saving else { return }
         saving = true
         defer { saving = false }
+        var step: PublishStep = .creating
         do {
             let listingId = selectedListingId.isEmpty ? nil : selectedListingId
             let vehicleId = selectedVehicleId.isEmpty ? nil : selectedVehicleId
@@ -1414,6 +1430,7 @@ struct NewCommunityPostView: View {
                     defer { uploadProgress.reset() }
                     var newUploads: [CommunityAPI.MediaItemPayload] = []
                     for (index, item) in media.enumerated() {
+                        step = .uploading(index + 1, media.count)
                         let url = try await R2Uploader.upload(
                             data: item.data,
                             filename: item.filename,
@@ -1433,11 +1450,13 @@ struct NewCommunityPostView: View {
                     uploaded = newUploads
                     self.uploadedMedia = newUploads
                 }
+                step = .attaching
                 _ = try await CommunityAPI.addMedia(
                     postId: postId,
                     items: uploaded,
                     creationToken: creationToken
                 )
+                step = .publishing
                 let finalized = try await CommunityAPI.finalizePost(postId: postId)
                 moderationStatus = finalized.moderationStatus
                 createdModerationStatus = moderationStatus
@@ -1450,7 +1469,12 @@ struct NewCommunityPostView: View {
                 submittedForReview = true
             }
         } catch {
-            self.error = error.localizedDescription
+            // The draft and any finished uploads are kept; tapping Post again
+            // resumes from the failed step instead of starting over.
+            let detail = error.localizedDescription
+            self.error = media.isEmpty
+                ? detail
+                : "\(step.label) failed. \(detail) Your draft is saved — tap Post to retry."
             photoAccessBlocked = false
         }
     }

@@ -40,6 +40,12 @@ enum APIError: LocalizedError {
         serverMessage: String? = nil,
         retryAfterSeconds: Int? = nil
     ) -> String {
+        // Specific server explanations win over the generic 429 wording, so a
+        // pending-upload backlog is not mistaken for the posting rate limit.
+        if code == "upload_backlog" {
+            let minutes = max(1, Int(ceil(Double(retryAfterSeconds ?? 600) / 60.0)))
+            return "Too many photo uploads are still pending from earlier attempts. Wait about \(minutes) minute\(minutes == 1 ? "" : "s") and try again, or post without photos."
+        }
         if code == "rate_limited" || status == 429 {
             if let retryAfterSeconds, retryAfterSeconds > 0 {
                 if retryAfterSeconds < 60 {

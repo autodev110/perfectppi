@@ -38,6 +38,7 @@ import {
   type PublicationOutcome,
 } from "@/lib/moderation/launch-policy";
 import { communityRateLimitMessage } from "@/lib/moderation/rate-limit";
+import { friendlyDatabaseError } from "@/lib/moderation/friendly-errors";
 import { FEATURE_UNAVAILABLE_MESSAGE, getFeatureFlags } from "@/lib/feature-flags";
 import { notificationLink, pushAllowed } from "@/features/notifications/preferences";
 import { pushToProfile } from "@/lib/push/dispatch";
@@ -372,7 +373,9 @@ export async function createCommunityPostFromInput(
     createError = created.error;
   }
 
-  if (createError || !data) return { error: createError?.message ?? "Could not create post" };
+  if (createError || !data) {
+    return { error: friendlyDatabaseError(createError, "Your post could not be created. Please try again.", "create post") };
+  }
 
   if (launchMode) {
     // The content row is the visibility source of truth; the moderation item
@@ -576,18 +579,6 @@ export async function addCommunityPostMedia(input: unknown) {
     return rejected("posting_restricted", "Media uploads are unavailable for this account");
   }
 
-  // Media moderation can finalize an assembly before the client's explicit
-  // finalize request. Recheck here so failed drafts remain retryable without
-  // allowing pre-created drafts to bypass the publish limit.
-  const postRateLimit = await getCommunityRateLimit(profile.profileId, "post");
-  if (postRateLimit.limited) {
-    return rejected(
-      "rate_limited",
-      communityRateLimitMessage("post", postRateLimit.retryAfterSeconds),
-      postRateLimit.retryAfterSeconds,
-    );
-  }
-
   const admin = createAdminClient();
   const { data: post } = await admin
     .from("community_posts")
@@ -651,7 +642,9 @@ export async function addCommunityPostMedia(input: unknown) {
     .eq("status", "issued")
     .gt("expires_at", new Date().toISOString())
     .in("storage_reference", references);
-  if (reservationError) return { error: reservationError.message };
+  if (reservationError) {
+    return { error: friendlyDatabaseError(reservationError, "Your uploads could not be verified. Please try again.", "read reservations") };
+  }
   const reservationsByReference = new Map(
     (reservations ?? []).map((reservation) => [reservation.storage_reference, reservation]),
   );
@@ -712,7 +705,7 @@ export async function addCommunityPostMedia(input: unknown) {
     await admin.from("community_upload_reservations")
       .update({ status: "issued", attached_at: null })
       .in("id", claimedReservationIds);
-    return { error: error.message };
+    return { error: friendlyDatabaseError(error, "The photos could not be attached to your post. Please try again.", "attach media") };
   }
 
   const scanned = (await Promise.all((data ?? []).map(async (media) => {
@@ -912,7 +905,7 @@ export async function removeCommunityPostMedia(input: unknown) {
     .select("id")
     .maybeSingle();
 
-  if (error) return { error: error.message };
+  if (error) return { error: friendlyDatabaseError(error, "The photo could not be removed. Please try again.", "remove media") };
   if (!deleted) return { error: "Media not found" };
   await deleteOrQueue(media.url, "community_media_deleted");
   if (media.display_reference) await deleteOrQueue(media.display_reference, "community_media_deleted");
@@ -1062,7 +1055,7 @@ export async function createCommunityCommentFromInput(
     } : {}),
   }).select("id").single();
 
-  if (error) return { error: error.message };
+  if (error) return { error: friendlyDatabaseError(error, "Your comment could not be posted. Please try again.", "create comment") };
 
   if (launchMode) {
     await recordModeration({
@@ -1208,7 +1201,7 @@ export async function updateMyCommunityPostStatus(postId: string, status: "activ
     .eq("id", postId)
     .eq("author_id", profile.profileId);
 
-  if (error) return { error: error.message };
+  if (error) return { error: friendlyDatabaseError(error, "The post could not be updated. Please try again.", "update post status") };
 
   revalidatePath("/community");
   revalidatePath("/dashboard/posts");
@@ -1247,7 +1240,7 @@ export async function deleteCommunityPostById(postId: string) {
   const { error } = await admin.from("community_posts")
     .update({ status: "archived", updated_at: new Date().toISOString() })
     .eq("id", postId);
-  if (error) return { error: error.message };
+  if (error) return { error: friendlyDatabaseError(error, "The post could not be removed. Please try again.", "archive post") };
 
   revalidatePath("/community");
   revalidatePath("/dashboard/posts");

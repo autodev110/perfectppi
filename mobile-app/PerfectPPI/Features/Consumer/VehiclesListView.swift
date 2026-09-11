@@ -33,34 +33,35 @@ struct VehiclesListView: View {
         }
     }
 
-    @ViewBuilder
     private func garageList(_ vehicles: [Vehicle]) -> some View {
+        GarageList(vehicles: vehicles, filter: $garageFilter) { reloadToken = UUID() }
+    }
+}
+
+/// The Garage list body. Separate from the loader so it can be rendered
+/// with fixture data (previews, layout tests).
+struct GarageList: View {
+    let vehicles: [Vehicle]
+    @Binding var filter: GarageFilter
+    var onChanged: () -> Void = {}
+
+    var body: some View {
         let filteredVehicles = vehicles.filter(matchesFilter)
 
         List {
             if !vehicles.isEmpty {
+                // One standard menu picker row instead of a scrolling chip
+                // strip: the current choice reads at a glance and the list of
+                // options never runs off screen.
                 Section {
-                    HStack(spacing: 12) {
-                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(Theme.Palette.primary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Show vehicles")
-                                .font(.subheadline.weight(.semibold))
-                            Text("Filter your Garage")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    Picker(selection: $filter) {
+                        ForEach(GarageFilter.allCases) { option in
+                            Text(option.label).tag(option)
                         }
-                        Spacer(minLength: 12)
-                        Picker("Show vehicles", selection: $garageFilter) {
-                            ForEach(GarageFilter.allCases) { filter in
-                                Text(filter.label).tag(filter)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
+                    } label: {
+                        Label("Show", systemImage: "line.3.horizontal.decrease.circle")
                     }
-                    .padding(.vertical, 3)
+                    .pickerStyle(.menu)
                 }
             }
 
@@ -79,14 +80,18 @@ struct VehiclesListView: View {
                 )
                 .listRowBackground(Color.clear)
             } else {
-                ForEach(filteredVehicles) { vehicle in
-                    NavigationLink {
-                        VehicleDetailView(vehicleId: vehicle.id) {
-                            reloadToken = UUID()
+                Section {
+                    ForEach(filteredVehicles) { vehicle in
+                        NavigationLink {
+                            VehicleDetailView(vehicleId: vehicle.id, onDelete: onChanged)
+                        } label: {
+                            GarageVehicleRow(vehicle: vehicle)
                         }
-                    } label: {
-                        GarageVehicleRow(vehicle: vehicle)
                     }
+                } header: {
+                    Text(filter == .all
+                         ? "\(filteredVehicles.count) vehicle\(filteredVehicles.count == 1 ? "" : "s")"
+                         : "\(filter.label) · \(filteredVehicles.count)")
                 }
             }
         }
@@ -94,7 +99,7 @@ struct VehiclesListView: View {
     }
 
     private func matchesFilter(_ vehicle: Vehicle) -> Bool {
-        switch garageFilter {
+        switch filter {
         case .all: true
         case .owned: vehicle.ownershipState == nil || vehicle.ownershipState == .owned
         case .previouslyOwned: vehicle.ownershipState == .previouslyOwned
@@ -105,7 +110,7 @@ struct VehiclesListView: View {
     }
 }
 
-private enum GarageFilter: String, CaseIterable, Identifiable {
+enum GarageFilter: String, CaseIterable, Identifiable {
     case all
     case owned
     case previouslyOwned
@@ -127,51 +132,47 @@ private enum GarageFilter: String, CaseIterable, Identifiable {
     }
 }
 
-private struct GarageVehicleRow: View {
+struct GarageVehicleRow: View {
     let vehicle: Vehicle
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             vehiclePhoto
-                .frame(width: 82, height: 66)
+                .frame(width: 84, height: 68)
                 .background(Theme.Palette.subtle)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(vehicle.nickname?.isEmpty == false ? (vehicle.nickname ?? vehicleName) : vehicleName)
                     .font(.headline)
                     .lineLimit(1)
                 if vehicle.nickname?.isEmpty == false {
                     Text(vehicleName)
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 if let mileage = vehicle.mileage {
-                    HStack(spacing: 4) {
-                        Text("\(mileage.formatted()) mi")
-                        if let updatedAt = vehicle.mileageUpdatedAt {
-                            Text("· Updated \(updatedAt, style: .date)")
-                        }
-                    }
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    Text(mileageLine(mileage))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                HStack(spacing: 8) {
-                    Label((vehicle.ownershipState ?? .owned).label, systemImage: "key")
+                // Chips wrap onto a new line instead of squeezing each label
+                // into two broken words.
+                ChipFlow(spacing: 6) {
+                    GarageChip(text: (vehicle.ownershipState ?? .owned).label, systemImage: "key.fill", tint: Theme.Palette.primary)
                     if let inspection = latestInspection {
-                        Label(inspectionLabel(inspection.status), systemImage: "checkmark.seal")
+                        GarageChip(text: inspectionLabel(inspection.status), systemImage: "checkmark.seal.fill", tint: Theme.Palette.success)
                     }
                     if vehicle.marketplaceListings?.contains(where: { $0.status == .active }) == true {
-                        Label("Listed", systemImage: "tag")
+                        GarageChip(text: "Listed", systemImage: "tag.fill", tint: Theme.Palette.warning)
                     }
                 }
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
+                .padding(.top, 2)
             }
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, 6)
     }
 
     @ViewBuilder
@@ -188,7 +189,9 @@ private struct GarageVehicleRow: View {
             }
             .clipped()
         } else {
-            Image(systemName: "car").foregroundStyle(.secondary)
+            Image(systemName: "car.fill")
+                .font(.title2)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -208,12 +211,78 @@ private struct GarageVehicleRow: View {
         return label.isEmpty ? "Unnamed Vehicle" : label
     }
 
+    private func mileageLine(_ mileage: Int) -> String {
+        guard let updatedAt = vehicle.mileageUpdatedAt else { return "\(mileage.formatted()) mi" }
+        return "\(mileage.formatted()) mi · updated \(updatedAt.formatted(.dateTime.month(.abbreviated).day()))"
+    }
+
     private func inspectionLabel(_ status: PpiRequestStatus) -> String {
         switch status {
-        case .submitted, .completed: "Report"
-        case .inProgress: "In progress"
+        case .submitted, .completed: "Inspected"
+        case .inProgress: "Inspection in progress"
         case .needsRevision: "Needs revision"
-        default: status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized
+        case .draft: "Inspection draft"
+        case .pendingAssignment, .assigned, .accepted: "Inspection scheduled"
+        case .archived: "Inspection archived"
+        }
+    }
+}
+
+/// Small tinted capsule used for Garage status chips.
+struct GarageChip: View {
+    let text: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: systemImage).font(.system(size: 10, weight: .semibold))
+            Text(text)
+        }
+        .font(.caption2.weight(.semibold))
+        .lineLimit(1)
+        .fixedSize()
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(tint.opacity(0.12))
+        .foregroundStyle(tint)
+        .clipShape(Capsule())
+    }
+}
+
+/// Left-aligned wrapping layout for chips; rows break when the width runs out.
+struct ChipFlow: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0 && x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            maxX = max(maxX, x - spacing)
+        }
+        return CGSize(width: width == .infinity ? maxX : width, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x: CGFloat = bounds.minX, y: CGFloat = bounds.minY, rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX && x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }
@@ -221,10 +290,21 @@ private struct GarageVehicleRow: View {
 struct VehicleDetailView: View {
     let vehicleId: String
     private let onDelete: () -> Void
+    /// Preview/test injection: skips the network load.
+    private let preloaded: Vehicle?
 
     init(vehicleId: String, onDelete: @escaping () -> Void = {}) {
         self.vehicleId = vehicleId
         self.onDelete = onDelete
+        self.preloaded = nil
+    }
+
+    init(preview vehicle: Vehicle) {
+        self.vehicleId = vehicle.id
+        self.onDelete = {}
+        self.preloaded = vehicle
+        _vehicle = State(initialValue: vehicle)
+        _notes = State(initialValue: vehicle.notes ?? "")
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -256,21 +336,26 @@ struct VehicleDetailView: View {
                             Text(vehicle.nickname?.isEmpty == false
                                  ? (vehicle.nickname ?? vehicleName(vehicle))
                                  : vehicleName(vehicle))
-                                .font(.title3.weight(.bold))
+                                .font(.title2.weight(.bold))
                                 .fixedSize(horizontal: false, vertical: true)
                             if vehicle.nickname?.isEmpty == false {
                                 Text(vehicleName(vehicle))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
-                            Label(
-                                (vehicle.ownershipState ?? .owned).label,
-                                systemImage: "key.fill"
-                            )
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Theme.Palette.primary)
+                            ChipFlow(spacing: 6) {
+                                GarageChip(text: (vehicle.ownershipState ?? .owned).label, systemImage: "key.fill", tint: Theme.Palette.primary)
+                                GarageChip(
+                                    text: vehicle.visibility == .public ? "Public" : "Private",
+                                    systemImage: vehicle.visibility == .public ? "globe" : "lock.fill",
+                                    tint: .secondary
+                                )
+                                if vehicle.marketplaceListings?.contains(where: { $0.status == .active }) == true {
+                                    GarageChip(text: "Listed", systemImage: "tag.fill", tint: Theme.Palette.warning)
+                                }
+                            }
                         }
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 4)
                     }
 
                     if let media = vehicle.vehicleMedia, !media.isEmpty {
@@ -290,12 +375,7 @@ struct VehicleDetailView: View {
                         }
                     }
 
-                    Section("Vehicle details") {
-                        VehicleDetailRow(
-                            label: "Vehicle",
-                            value: vehicleName(vehicle),
-                            systemImage: "car"
-                        )
+                    Section("Details") {
                         if let vin = vehicle.vin {
                             VehicleDetailRow(
                                 label: "VIN",
@@ -312,14 +392,13 @@ struct VehicleDetailView: View {
                             )
                         }
                         VehicleDetailRow(
-                            label: "Visibility",
-                            value: vehicle.visibility?.rawValue.capitalized ?? "Not set",
-                            systemImage: vehicle.visibility == .public ? "globe" : "lock.fill"
+                            label: "Garage",
+                            value: (vehicle.ownershipState ?? .owned).label,
+                            systemImage: "key"
                         )
                         Button("Edit Vehicle", systemImage: "pencil") {
                             showingEdit = true
                         }
-                        .padding(.vertical, 4)
                     }
 
                     Section("Actions") {
@@ -359,11 +438,18 @@ struct VehicleDetailView: View {
                         }
                     }
 
-                    Section("Visibility") {
-                        Button(savingVisibility ? "Updating…" : nextVisibilityTitle(vehicle)) {
+                    Section {
+                        Button(savingVisibility ? "Updating…" : nextVisibilityTitle(vehicle),
+                               systemImage: vehicle.visibility == .public ? "lock" : "globe") {
                             Task { await toggleVisibility() }
                         }
                         .disabled(savingVisibility)
+                    } header: {
+                        Text("Visibility")
+                    } footer: {
+                        Text(vehicle.visibility == .public
+                             ? "Public vehicles can be attached to posts and listings and appear on your profile."
+                             : "Private vehicles are only visible to you.")
                     }
 
                     Section {
@@ -385,7 +471,8 @@ struct VehicleDetailView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle("Vehicle")
+        .navigationTitle(vehicle.map { $0.nickname?.isEmpty == false ? ($0.nickname ?? "Vehicle") : vehicleName($0) } ?? "Vehicle")
+        .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
         .photosPicker(
@@ -456,6 +543,7 @@ struct VehicleDetailView: View {
     }
 
     private func load() async {
+        if preloaded != nil { return }
         do {
             self.vehicle = try await VehiclesAPI.get(id: vehicleId)
             self.notes = self.vehicle?.notes ?? ""
@@ -612,34 +700,32 @@ struct VehicleDetailView: View {
     }
 }
 
-private struct VehicleDetailRow: View {
+struct VehicleDetailRow: View {
     let label: String
     let value: String
     let systemImage: String
     var monospaced = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             Image(systemName: systemImage)
-                .frame(width: 22, height: 22)
+                .font(.body)
+                .frame(width: 24)
                 .foregroundStyle(Theme.Palette.primary)
-            VStack(alignment: .leading, spacing: 4) {
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.caption.weight(.semibold))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                if monospaced {
-                    Text(value)
-                        .font(.system(.body, design: .monospaced))
-                        .textSelection(.enabled)
-                } else {
-                    Text(value)
-                        .font(.body.weight(.medium))
-                }
+                Text(value)
+                    .font(monospaced ? .system(.callout, design: .monospaced) : .body)
+                    .textSelection(.enabled)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }
 

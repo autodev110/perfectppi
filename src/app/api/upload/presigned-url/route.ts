@@ -107,15 +107,34 @@ export async function POST(request: Request) {
   try {
     if (parsed.data.entity === "community_post" || parsed.data.entity === "vehicle_media") {
       const admin = createAdminClient();
-      const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const now = Date.now();
+      // A presigned URL is valid for ten minutes, so a reservation still
+      // "issued" after that belongs to an abandoned attempt (failed upload,
+      // closed composer). Retire those first; otherwise a few failed tries
+      // pin the member against the open-upload cap for half an hour and
+      // surface as a mysterious rate limit.
+      await admin.from("community_upload_reservations")
+        .update({ status: "expired" })
+        .eq("profile_id", profile.id)
+        .eq("status", "issued")
+        .lt("created_at", new Date(now - 10 * 60 * 1000).toISOString());
+
+      const since = new Date(now - 60 * 60 * 1000).toISOString();
       const [{ count: recentCount }, { count: openCount }] = await Promise.all([
         admin.from("community_upload_reservations").select("id", { count: "exact", head: true })
           .eq("profile_id", profile.id).gte("created_at", since),
         admin.from("community_upload_reservations").select("id", { count: "exact", head: true })
-          .eq("profile_id", profile.id).eq("status", "issued").gt("expires_at", new Date().toISOString()),
+          .eq("profile_id", profile.id).eq("status", "issued").gt("expires_at", new Date(now).toISOString()),
       ]);
-      if ((recentCount ?? 0) >= 50 || (openCount ?? 0) >= 20) {
-        return NextResponse.json({ error: "Too many pending uploads. Try again later." }, { status: 429 });
+      if ((recentCount ?? 0) >= 120 || (openCount ?? 0) >= 30) {
+        return NextResponse.json(
+          {
+            error: "Too many photo uploads are still pending from earlier attempts. Wait a few minutes, then try again.",
+            code: "upload_backlog",
+            retryAfterSeconds: 600,
+          },
+          { status: 429, headers: { "Retry-After": "600" } },
+        );
       }
 
       const result = await generateQuarantinePresignedUrl({
