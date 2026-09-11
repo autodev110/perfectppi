@@ -79,6 +79,8 @@ export function ConversationThread({
   highlightMessageId,
   requestStatus: initialRequestStatus,
   requestedBy,
+  initialCanSend,
+  sendUnavailableReason,
 }: {
   conversationId: string;
   routeBase: string;
@@ -89,6 +91,8 @@ export function ConversationThread({
   highlightMessageId?: string;
   requestStatus: "pending" | "accepted";
   requestedBy: string | null;
+  initialCanSend: boolean;
+  sendUnavailableReason: string | null;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<MessageRow[]>(initialMessages);
@@ -100,6 +104,7 @@ export function ConversationThread({
   const [liveConnected, setLiveConnected] = useState(false);
   const [flashedMessageId, setFlashedMessageId] = useState<string | null>(null);
   const [requestStatus, setRequestStatus] = useState(initialRequestStatus);
+  const [policyAllowsSend, setPolicyAllowsSend] = useState(initialCanSend);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const threadScrollRef = useRef<HTMLDivElement | null>(null);
@@ -129,7 +134,8 @@ export function ConversationThread({
   const carLabel = listingCarLabel(listingContext);
   const incomingRequest = requestStatus === "pending" && requestedBy !== myProfileId;
   const outgoingRequest = requestStatus === "pending" && requestedBy === myProfileId;
-  const canCompose = requestStatus === "accepted" || (outgoingRequest && messages.length === 0);
+  const canCompose = policyAllowsSend
+    && (requestStatus === "accepted" || (outgoingRequest && messages.length === 0));
 
   const refetch = useCallback(async () => {
     const response = await fetch(`/api/messages/conversations/${conversationId}/messages`, {
@@ -349,6 +355,7 @@ export function ConversationThread({
         return;
       }
       setRequestStatus("accepted");
+      setPolicyAllowsSend(true);
       await markCurrentConversationRead();
       router.refresh();
     });
@@ -535,7 +542,8 @@ export function ConversationThread({
             ) : null}
             {!canCompose ? (
               <p className="rounded-xl bg-surface-container-low px-4 py-3 text-center text-xs text-muted-foreground">
-                {incomingRequest ? "Accept this request to reply." : "Waiting for this member to accept your request."}
+                {sendUnavailableReason
+                  ?? (incomingRequest ? "Accept this request to reply." : "Waiting for this member to accept your request.")}
               </p>
             ) : attachment ? (
               <div className="mb-2 rounded-xl border border-outline-variant/20 bg-surface-container-low px-3 py-2">
@@ -605,12 +613,12 @@ export function ConversationThread({
                 <SendHorizontal className="h-4 w-4" />
               </Button>
             </div> : null}
-            <div className="mt-1.5 flex items-center justify-between px-1">
+            {canCompose ? <div className="mt-1.5 flex items-center justify-between px-1">
               <p className="text-[10px] text-muted-foreground">
                 Enter to send · Shift+Enter for a new line
               </p>
               <p className="text-[10px] text-muted-foreground">{draft.trim().length}/4000</p>
-            </div>
+            </div> : null}
           </div>
         </CardContent>
       </Card>

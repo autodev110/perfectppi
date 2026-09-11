@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/database";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 import { canProfilesInteract, getBlockedProfileIds } from "@/features/social/relationships";
+import { resolveMessageEligibility } from "@/features/messages/eligibility";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -55,6 +56,8 @@ export interface ConversationThread {
   messages: MessageRow[];
   request_status: "pending" | "accepted";
   requested_by: string | null;
+  can_send: boolean;
+  send_unavailable_reason: string | null;
 }
 
 export interface MessageRecipient {
@@ -136,7 +139,7 @@ async function getConversationBox(
     .from("conversation_participants")
     .select("conversation_id")
     .eq("profile_id", profileId)
-    .limit(Math.max(limit * 4, 100));
+    .limit(1000);
 
   const conversationIds = (myMemberships ?? []).map((row) => row.conversation_id);
   if (conversationIds.length === 0) return [];
@@ -301,15 +304,7 @@ export async function getMessageRecipientsDirectory(limit = 100): Promise<Messag
   if (!profileId) return [];
 
   const admin = createAdminClient();
-  const [{ data }, { data: me }, { data: myFriendships }, { data: myGroups }] = await Promise.all([
-    admin
-    .from("profiles")
-    .select("id, display_name, username, role, allow_friend_messages, allow_group_message_requests")
-    .neq("id", profileId)
-    .eq("discoverable", true)
-    .eq("username_state", "claimed")
-    .order("display_name", { ascending: true, nullsFirst: false })
-    .limit(Math.max(limit * 3, 100)),
+  const [{ data: me }, { data: myFriendships }, { data: myMemberships }] = await Promise.all([
     admin.from("profiles").select("allow_friend_messages").eq("id", profileId).single(),
     admin
       .from("friend_relationships")
@@ -323,38 +318,49 @@ export async function getMessageRecipientsDirectory(limit = 100): Promise<Messag
       .eq("status", "active"),
   ]);
 
-  const rawProfiles = data ?? [];
   const friendIds = new Set((myFriendships ?? []).map((row) => (
     row.profile_low_id === profileId ? row.profile_high_id : row.profile_low_id
   )));
-  const groupIds = (myGroups ?? []).map((row) => row.group_id);
-  const [{ data: sharedMemberships }, { data: sharedGroups }] = await Promise.all([
-    groupIds.length && rawProfiles.length
-      ? admin
-          .from("community_group_memberships")
-          .select("profile_id, group_id")
-          .in("profile_id", rawProfiles.map((profile) => profile.id))
-          .in("group_id", groupIds)
-          .eq("status", "active")
-      : Promise.resolve({ data: [] as Array<{ profile_id: string; group_id: string }> }),
-    groupIds.length
-      ? admin.from("community_groups").select("id, name").in("id", groupIds).eq("status", "active")
-      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
-  ]);
-  const groupNameById = new Map((sharedGroups ?? []).map((group) => [group.id, group.name]));
+  const groupIds = (myMemberships ?? []).map((row) => row.group_id);
+  const { data: activeGroups } = groupIds.length
+    ? await admin.from("community_groups").select("id, name").in("id", groupIds).eq("status", "active")
+    : { data: [] as Array<{ id: string; name: string }> };
+  const activeGroupIds = (activeGroups ?? []).map((group) => group.id);
+  const { data: sharedMemberships } = activeGroupIds.length
+    ? await admin
+        .from("community_group_memberships")
+        .select("profile_id, group_id")
+        .neq("profile_id", profileId)
+        .in("group_id", activeGroupIds)
+        .eq("status", "active")
+    : { data: [] as Array<{ profile_id: string; group_id: string }> };
+  const candidateIds = Array.from(new Set([
+    ...friendIds,
+    ...(sharedMemberships ?? []).map((membership) => membership.profile_id),
+  ]));
+  if (candidateIds.length === 0) return [];
+
+  const { data: rawProfiles } = await admin
+    .from("profiles")
+    .select("id, display_name, username, role, discoverable, allow_friend_messages, allow_group_message_requests")
+    .in("id", candidateIds)
+    .eq("username_state", "claimed")
+    .limit(Math.max(limit * 10, 1000));
+
+  const groupNameById = new Map((activeGroups ?? []).map((group) => [group.id, group.name]));
   const firstSharedGroupByProfile = new Map<string, string>();
   for (const membership of sharedMemberships ?? []) {
     if (!firstSharedGroupByProfile.has(membership.profile_id)) {
       firstSharedGroupByProfile.set(membership.profile_id, membership.group_id);
     }
   }
-  const profiles = rawProfiles.flatMap<MessageRecipient>((profile) => {
+  const profiles = (rawProfiles ?? []).flatMap<MessageRecipient>((profile) => {
     const isFriend = friendIds.has(profile.id);
     const sharedGroupId = firstSharedGroupByProfile.get(profile.id);
     if (isFriend && me?.allow_friend_messages && profile.allow_friend_messages) {
       return [{ ...profile, contact_mode: "message" as const, shared_group_name: null }];
     }
-    if (sharedGroupId && profile.allow_group_message_requests) {
+    if (profile.discoverable && sharedGroupId && profile.allow_group_message_requests) {
       return [{
         ...profile,
         contact_mode: "request" as const,
@@ -379,6 +385,11 @@ export async function getMessageRecipientsDirectory(limit = 100): Promise<Messag
     .map((action) => action.profile_id));
   return profiles
     .filter((profile) => !blockedIds.has(profile.id) && !unavailableIds.has(profile.id))
+    .sort((a, b) => (a.display_name ?? a.username ?? "").localeCompare(
+      b.display_name ?? b.username ?? "",
+      undefined,
+      { sensitivity: "base" },
+    ))
     .slice(0, limit);
 }
 
@@ -413,7 +424,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
   const [{ data: conversation }, { data: participants }, { data: messages }] = await Promise.all([
     admin
       .from("conversations")
-      .select("id, created_at, marketplace_listing_id, request_status, requested_by")
+      .select("id, created_at, marketplace_listing_id, request_status, requested_by, request_context_group_id")
       .eq("id", conversationId)
       .maybeSingle(),
     admin
@@ -442,6 +453,37 @@ export async function getConversation(conversationId: string): Promise<Conversat
     ),
   ]);
 
+  let canSend = true;
+  let sendUnavailableReason: string | null = null;
+  const otherProfileId = participantIds.find((id) => id !== profileId);
+  if (conversation.request_status === "pending") {
+    canSend = conversation.requested_by === profileId && (messages?.length ?? 0) === 0;
+    let requestStillEligible = canSend;
+    if (canSend && otherProfileId) {
+      const eligibility = await resolveMessageEligibility(profileId, otherProfileId);
+      requestStillEligible = !("error" in eligibility)
+        && eligibility.kind === "pending"
+        && eligibility.groupId === conversation.request_context_group_id;
+      canSend = requestStillEligible;
+    }
+    sendUnavailableReason = canSend
+      ? null
+      : conversation.requested_by === profileId && (messages?.length ?? 0) === 0 && !requestStillEligible
+        ? "This message request is no longer available."
+      : conversation.requested_by === profileId
+        ? "Waiting for this member to accept your request."
+        : "Accept this request to reply.";
+  } else if (
+    conversation.requested_by
+    && !conversation.marketplace_listing_id
+    && !conversation.request_context_group_id
+    && otherProfileId
+  ) {
+    const eligibility = await resolveMessageEligibility(profileId, otherProfileId);
+    canSend = !("error" in eligibility) && eligibility.kind === "accepted";
+    if (!canSend) sendUnavailableReason = "Friend messages are currently disabled.";
+  }
+
   return {
     id: conversation.id,
     created_at: conversation.created_at,
@@ -452,6 +494,8 @@ export async function getConversation(conversationId: string): Promise<Conversat
     messages: await Promise.all(((messages ?? []) as MessageRow[]).map(authorizeAttachment)),
     request_status: conversation.request_status as "pending" | "accepted",
     requested_by: conversation.requested_by,
+    can_send: canSend,
+    send_unavailable_reason: sendUnavailableReason,
   };
 }
 

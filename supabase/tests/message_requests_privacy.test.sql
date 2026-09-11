@@ -8,22 +8,27 @@ INSERT INTO auth.users (
   ('76000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated', 'message-requester@example.test', '', '{}', '{"username":"MessageRequester"}', now(), now()),
   ('76000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000',
-   'authenticated', 'authenticated', 'message-recipient@example.test', '', '{}', '{"username":"MessageRecipient"}', now(), now());
+   'authenticated', 'authenticated', 'message-recipient@example.test', '', '{}', '{"username":"MessageRecipient"}', now(), now()),
+  ('76000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'message-third@example.test', '', '{}', '{"username":"MessageThird"}', now(), now());
 
 CREATE TEMP TABLE actors AS
 SELECT
   (SELECT id FROM public.profiles WHERE auth_user_id = '76000000-0000-0000-0000-000000000001') requester,
-  (SELECT id FROM public.profiles WHERE auth_user_id = '76000000-0000-0000-0000-000000000002') recipient;
+  (SELECT id FROM public.profiles WHERE auth_user_id = '76000000-0000-0000-0000-000000000002') recipient,
+  (SELECT id FROM public.profiles WHERE auth_user_id = '76000000-0000-0000-0000-000000000003') third_recipient;
 
 INSERT INTO public.community_groups (id, slug, name, description, category, is_staff_curated)
 VALUES ('76000000-0000-0000-0000-000000000010', 'message-test-group', 'Message Test Group', 'Shared group.', 'general', true);
 INSERT INTO public.community_group_memberships (group_id, profile_id, status)
 SELECT '76000000-0000-0000-0000-000000000010'::uuid, requester, 'active'::public.community_group_membership_status FROM actors
 UNION ALL
-SELECT '76000000-0000-0000-0000-000000000010'::uuid, recipient, 'active'::public.community_group_membership_status FROM actors;
+SELECT '76000000-0000-0000-0000-000000000010'::uuid, recipient, 'active'::public.community_group_membership_status FROM actors
+UNION ALL
+SELECT '76000000-0000-0000-0000-000000000010'::uuid, third_recipient, 'active'::public.community_group_membership_status FROM actors;
 
 UPDATE public.profiles SET allow_group_message_requests = true
-WHERE id = (SELECT recipient FROM actors);
+WHERE id IN (SELECT recipient FROM actors UNION ALL SELECT third_recipient FROM actors);
 
 -- Privacy fields cannot bypass the canonical RPC through a direct profile
 -- update, even on deployments with the standard authenticated UPDATE grant.
@@ -148,5 +153,91 @@ UPDATE public.profiles SET allow_friend_messages = true
 WHERE id = (SELECT requester FROM actors);
 INSERT INTO public.messages (conversation_id, sender_id, content)
 SELECT '76000000-0000-0000-0000-000000000021', recipient, 'Enabled friend message' FROM actors;
+
+-- Pair creation is atomic and idempotent, closing the concurrent duplicate
+-- request path that could otherwise allow several one-message introductions.
+DO $$
+DECLARE
+  first_id uuid;
+  second_id uuid;
+  first_created boolean;
+  second_created boolean;
+BEGIN
+  SELECT conversation_id, was_created INTO first_id, first_created
+  FROM public.create_direct_conversation_internal(
+    (SELECT requester FROM actors),
+    (SELECT recipient FROM actors),
+    NULL,
+    'accepted',
+    NULL
+  );
+  SELECT conversation_id, was_created INTO second_id, second_created
+  FROM public.create_direct_conversation_internal(
+    (SELECT requester FROM actors),
+    (SELECT recipient FROM actors),
+    NULL,
+    'accepted',
+    NULL
+  );
+  IF first_id IS DISTINCT FROM second_id OR NOT first_created OR second_created THEN
+    RAISE EXCEPTION 'direct conversation pair creation was not idempotent';
+  END IF;
+END
+$$;
+
+DO $$
+DECLARE hit boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO public.messages (conversation_id, sender_id, content)
+    SELECT '76000000-0000-0000-0000-000000000021', requester, 'Old duplicate thread' FROM actors;
+  EXCEPTION WHEN insufficient_privilege THEN hit := SQLERRM = 'conversation superseded';
+  END;
+  IF NOT hit THEN RAISE EXCEPTION 'historical duplicate conversation remained writable'; END IF;
+END
+$$;
+
+-- Archived groups cannot create or deliver a group-member request even when
+-- both membership rows still say active.
+UPDATE public.community_groups SET status = 'archived'
+WHERE id = '76000000-0000-0000-0000-000000000010';
+DO $$
+DECLARE hit boolean := false;
+BEGIN
+  BEGIN
+    PERFORM public.create_direct_conversation_internal(
+      (SELECT requester FROM actors),
+      (SELECT recipient FROM actors),
+      NULL,
+      'pending',
+      '76000000-0000-0000-0000-000000000010'
+    );
+  EXCEPTION WHEN insufficient_privilege THEN hit := SQLERRM = 'message request unavailable';
+  END;
+  IF NOT hit THEN RAISE EXCEPTION 'archived group created a message request'; END IF;
+END
+$$;
+
+INSERT INTO public.conversations (
+  id, request_status, requested_by, request_context_group_id
+)
+SELECT '76000000-0000-0000-0000-000000000022', 'pending', requester,
+       '76000000-0000-0000-0000-000000000010'
+FROM actors;
+INSERT INTO public.conversation_participants (conversation_id, profile_id)
+SELECT '76000000-0000-0000-0000-000000000022'::uuid, requester FROM actors
+UNION ALL
+SELECT '76000000-0000-0000-0000-000000000022'::uuid, third_recipient FROM actors;
+DO $$
+DECLARE hit boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO public.messages (conversation_id, sender_id, content)
+    SELECT '76000000-0000-0000-0000-000000000022', requester, 'Archived group request' FROM actors;
+  EXCEPTION WHEN insufficient_privilege THEN hit := SQLERRM = 'message request unavailable';
+  END;
+  IF NOT hit THEN RAISE EXCEPTION 'archived group delivered a message request'; END IF;
+END
+$$;
 
 ROLLBACK;

@@ -167,7 +167,8 @@ struct MessageThreadView: View {
     }
 
     private var canCompose: Bool {
-        thread?.requestStatus != "pending" || (outgoingRequest && thread?.messages.isEmpty == true)
+        (thread?.canSend ?? true)
+            && (thread?.requestStatus != "pending" || (outgoingRequest && thread?.messages.isEmpty == true))
     }
 
     var body: some View {
@@ -300,7 +301,8 @@ struct MessageThreadView: View {
                     }
                     .padding()
                     } else {
-                        Text(incomingRequest ? "Accept this request to reply." : "Waiting for this member to accept your request.")
+                        Text(thread.sendUnavailableReason
+                             ?? (incomingRequest ? "Accept this request to reply." : "Waiting for this member to accept your request."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity)

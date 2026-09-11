@@ -700,6 +700,8 @@ struct ConversationThread: Codable, Identifiable, Hashable {
     let messages: [ConversationMessage]
     let requestStatus: String?
     let requestedBy: String?
+    let canSend: Bool?
+    let sendUnavailableReason: String?
 }
 
 struct MessageRecipient: Codable, Identifiable, Hashable {

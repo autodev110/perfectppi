@@ -42,6 +42,8 @@ export default async function OrgConversationPage({
       messages={conversation.messages}
       requestStatus={conversation.request_status}
       requestedBy={conversation.requested_by}
+      initialCanSend={conversation.can_send}
+      sendUnavailableReason={conversation.send_unavailable_reason}
       highlightMessageId={highlightMessageId}
     />
   );

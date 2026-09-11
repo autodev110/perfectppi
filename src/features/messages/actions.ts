@@ -7,6 +7,7 @@ import { z } from "zod";
 import { uploadedUrlSchema } from "@/features/uploads/url";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 import { canProfilesInteract } from "@/features/social/relationships";
+import { resolveMessageEligibility } from "@/features/messages/eligibility";
 
 const createConversationSchema = z.object({
   participantId: z.string().uuid(),
@@ -64,77 +65,6 @@ export type CreateConversationResult =
         requestStatus: "pending" | "accepted";
       };
     };
-
-async function resolveMessageEligibility(
-  actorId: string,
-  targetId: string,
-  marketplaceListingId?: string,
-): Promise<
-  | { kind: "accepted"; groupId: null }
-  | { kind: "pending"; groupId: string }
-  | { error: string }
-> {
-  const admin = createAdminClient();
-
-  if (marketplaceListingId) {
-    const { data: listing } = await admin
-      .from("marketplace_listings")
-      .select("id")
-      .eq("id", marketplaceListingId)
-      .eq("seller_id", targetId)
-      .eq("status", "active")
-      .maybeSingle();
-    return listing ? { kind: "accepted", groupId: null } : { error: "Listing unavailable" };
-  }
-
-  const lowId = actorId < targetId ? actorId : targetId;
-  const highId = actorId < targetId ? targetId : actorId;
-  const [{ data: profiles }, { data: friendship }, { data: actorGroups }] = await Promise.all([
-    admin
-      .from("profiles")
-      .select("id, allow_friend_messages, allow_group_message_requests")
-      .in("id", [actorId, targetId]),
-    admin
-      .from("friend_relationships")
-      .select("status")
-      .eq("profile_low_id", lowId)
-      .eq("profile_high_id", highId)
-      .eq("status", "friends")
-      .maybeSingle(),
-    admin
-      .from("community_group_memberships")
-      .select("group_id")
-      .eq("profile_id", actorId)
-      .eq("status", "active"),
-  ]);
-
-  const actor = profiles?.find((profile) => profile.id === actorId);
-  const target = profiles?.find((profile) => profile.id === targetId);
-  if (!actor || !target) return { error: "Profile unavailable" };
-
-  if (friendship) {
-    return actor.allow_friend_messages && target.allow_friend_messages
-      ? { kind: "accepted", groupId: null }
-      : { error: "Friend messages are disabled" };
-  }
-
-  if (!target.allow_group_message_requests || !actorGroups?.length) {
-    return { error: "This member is not accepting message requests" };
-  }
-
-  const { data: sharedMembership } = await admin
-    .from("community_group_memberships")
-    .select("group_id")
-    .eq("profile_id", targetId)
-    .eq("status", "active")
-    .in("group_id", actorGroups.map((row) => row.group_id))
-    .limit(1)
-    .maybeSingle();
-
-  return sharedMembership
-    ? { kind: "pending", groupId: sharedMembership.group_id }
-    : { error: "Only friends and eligible group members can message this person" };
-}
 
 export async function createConversation(input: {
   participantId: string;
@@ -197,7 +127,7 @@ export async function createConversation(input: {
     const [{ data: existingConversations }, { data: existingMessages }] = await Promise.all([
       admin
         .from("conversations")
-        .select("id, created_at, marketplace_listing_id, request_status, requested_by")
+        .select("id, created_at, marketplace_listing_id, participant_low_id, participant_high_id, request_status, requested_by, request_context_group_id")
         .in("id", sharedConversationIds),
       admin
         .from("messages")
@@ -219,7 +149,13 @@ export async function createConversation(input: {
       }
     }
 
-    const existingConversationId = [...sharedConversationIds].sort((a, b) => {
+    const canonicalConversations = (existingConversations ?? []).filter(
+      (conversation) => conversation.participant_low_id && conversation.participant_high_id,
+    );
+    const candidateConversationIds = canonicalConversations.length > 0
+      ? canonicalConversations.map((conversation) => conversation.id)
+      : sharedConversationIds;
+    const existingConversationId = [...candidateConversationIds].sort((a, b) => {
       const aActivityAt = latestMessageAt.get(a) ?? conversationCreatedAt.get(a) ?? "";
       const bActivityAt = latestMessageAt.get(b) ?? conversationCreatedAt.get(b) ?? "";
       return new Date(bActivityAt).getTime() - new Date(aActivityAt).getTime();
@@ -229,27 +165,28 @@ export async function createConversation(input: {
     // about a different car lands in the existing thread. Repoint it at the
     // listing now being discussed so the title stays accurate, and tell the
     // caller it moved so it can post a fresh intro message.
-    const previousListingId =
-      (existingConversations ?? []).find(
-        (conversation) => conversation.id === existingConversationId,
-      )?.marketplace_listing_id ?? null;
-
-    const listingChanged = !!listingId && listingId !== previousListingId;
-    if (listingChanged) {
-      await admin
-        .from("conversations")
-        .update({
-          marketplace_listing_id: listingId,
-          request_status: "accepted",
-          request_resolved_at: new Date().toISOString(),
-        })
-        .eq("id", existingConversationId);
-    }
-
     const existingConversation = existingConversations?.find(
       (conversation) => conversation.id === existingConversationId,
     );
-    if (existingConversation?.request_status === "declined" && !listingId) {
+    const previousListingId = existingConversation?.marketplace_listing_id ?? null;
+
+    const listingChanged = !!listingId && listingId !== previousListingId;
+    const eligibilityPromoted = eligibility.kind === "accepted"
+      && existingConversation?.request_status !== "accepted";
+    if (listingChanged || eligibilityPromoted) {
+      const { error: updateError } = await admin
+        .from("conversations")
+        .update({
+          ...(listingChanged ? { marketplace_listing_id: listingId } : {}),
+          request_status: "accepted",
+          request_context_group_id: null,
+          request_resolved_at: new Date().toISOString(),
+        })
+        .eq("id", existingConversationId);
+      if (updateError) return { error: "Failed to update conversation" };
+    }
+
+    if (existingConversation?.request_status === "declined" && !eligibilityPromoted && !listingId) {
       return { error: "This message request was declined" };
     }
 
@@ -258,7 +195,7 @@ export async function createConversation(input: {
         conversationId: existingConversationId,
         existing: true,
         listingChanged,
-        requestStatus: listingChanged
+        requestStatus: listingChanged || eligibilityPromoted
           ? "accepted"
           : existingConversation?.request_status === "pending"
             ? "pending"
@@ -267,36 +204,65 @@ export async function createConversation(input: {
     };
   }
 
-  // Create both conversation + participants with admin client.
-  // Reason: conversations SELECT policy requires participant membership,
-  // so insert(...).select() with user client can fail before participants exist.
-  const { data: conversation, error: convoErr } = await admin
-    .from("conversations")
-    .insert({
-      marketplace_listing_id: listingId,
-      request_status: eligibility.kind,
-      requested_by: profile.id,
-      request_context_group_id: eligibility.groupId,
-    })
-    .select("id")
-    .single();
+  // This internal RPC locks the profile pair and creates the conversation and
+  // both participants atomically. That prevents concurrent devices from
+  // manufacturing multiple one-introduction request threads.
+  const { data: conversationRows, error: convoErr } = await admin.rpc(
+    "create_direct_conversation_internal",
+    {
+      p_actor_id: profile.id,
+      p_target_id: participantId,
+      p_marketplace_listing_id: listingId,
+      p_request_status: eligibility.kind,
+      p_request_context_group_id: eligibility.groupId,
+    },
+  );
+  const conversation = conversationRows?.[0];
 
   if (convoErr || !conversation) {
-    console.error("createConversation: failed to insert conversation", convoErr);
+    console.error("createConversation: failed to create conversation", convoErr);
     return { error: "Failed to create conversation" };
   }
 
-  const { error: participantErr } = await admin
-    .from("conversation_participants")
-    .insert([
-      { conversation_id: conversation.id, profile_id: profile.id },
-      { conversation_id: conversation.id, profile_id: participantId },
-    ]);
+  if (!conversation.was_created) {
+    const { data: racedConversation } = await admin
+      .from("conversations")
+      .select("marketplace_listing_id, request_status")
+      .eq("id", conversation.conversation_id)
+      .single();
+    if (!racedConversation) return { error: "Failed to load conversation" };
 
-  if (participantErr) {
-    console.error("createConversation: failed to add participants", participantErr);
-    await admin.from("conversations").delete().eq("id", conversation.id);
-    return { error: "Failed to add participants" };
+    const listingChanged = !!listingId
+      && racedConversation.marketplace_listing_id !== listingId;
+    const eligibilityPromoted = eligibility.kind === "accepted"
+      && racedConversation.request_status !== "accepted";
+    if (listingChanged || eligibilityPromoted) {
+      const { error: updateError } = await admin
+        .from("conversations")
+        .update({
+          ...(listingChanged ? { marketplace_listing_id: listingId } : {}),
+          request_status: "accepted",
+          request_context_group_id: null,
+          request_resolved_at: new Date().toISOString(),
+        })
+        .eq("id", conversation.conversation_id);
+      if (updateError) return { error: "Failed to update conversation" };
+    } else if (racedConversation.request_status === "declined" && !listingId) {
+      return { error: "This message request was declined" };
+    }
+
+    return {
+      data: {
+        conversationId: conversation.conversation_id,
+        existing: true,
+        listingChanged,
+        requestStatus: listingChanged || eligibilityPromoted
+          ? "accepted"
+          : racedConversation.request_status === "pending"
+            ? "pending"
+            : "accepted",
+      },
+    };
   }
 
   revalidatePath("/dashboard/messages");
@@ -306,7 +272,7 @@ export async function createConversation(input: {
 
   return {
     data: {
-      conversationId: conversation.id,
+      conversationId: conversation.conversation_id,
       existing: false,
       listingChanged: !!listingId,
       requestStatus: eligibility.kind,
@@ -368,6 +334,20 @@ export async function sendMessage(input: {
     participants.map((participant) => canProfilesInteract(profile.id, participant.profile_id)),
   );
   if (allowed.some((value) => !value)) return { error: "Conversation unavailable" };
+
+  if (conversation.request_status === "pending") {
+    const eligibility = await resolveMessageEligibility(
+      profile.id,
+      participants[0].profile_id,
+    );
+    if (
+      "error" in eligibility
+      || eligibility.kind !== "pending"
+      || eligibility.groupId !== conversation.request_context_group_id
+    ) {
+      return { error: "This message request is no longer available" };
+    }
+  }
 
   // New direct friend conversations remain subject to both participants'
   // current privacy settings. Marketplace, accepted group requests, and
@@ -523,7 +503,7 @@ export async function decideMessageRequest(input: {
 
   const { data: conversation } = await admin
     .from("conversations")
-    .select("id, request_status, requested_by, conversation_participants(profile_id)")
+    .select("id, request_status, requested_by, request_context_group_id, conversation_participants(profile_id)")
     .eq("id", parsed.data.conversationId)
     .maybeSingle();
   const participants = (conversation?.conversation_participants ?? []) as Array<{ profile_id: string }>;
@@ -534,6 +514,24 @@ export async function decideMessageRequest(input: {
     || !participants.some((participant) => participant.profile_id === profile.id)
   ) {
     return { error: "Message request unavailable" };
+  }
+
+  if (parsed.data.decision === "accept" && conversation.requested_by) {
+    if (!await canProfilesInteract(profile.id, conversation.requested_by)) {
+      return { error: "Message request unavailable" };
+    }
+    const eligibility = await resolveMessageEligibility(
+      conversation.requested_by,
+      profile.id,
+    );
+    const stillEligible = !("error" in eligibility) && (
+      eligibility.kind === "accepted"
+      || (
+        eligibility.kind === "pending"
+        && eligibility.groupId === conversation.request_context_group_id
+      )
+    );
+    if (!stillEligible) return { error: "This message request is no longer available" };
   }
 
   const nextStatus = parsed.data.decision === "accept" ? "accepted" : "declined";

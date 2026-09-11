@@ -1698,6 +1698,8 @@ export type Database = {
           created_at: string
           id: string
           marketplace_listing_id: string | null
+          participant_high_id: string | null
+          participant_low_id: string | null
           request_context_group_id: string | null
           request_resolved_at: string | null
           request_status: string
@@ -1707,6 +1709,8 @@ export type Database = {
           created_at?: string
           id?: string
           marketplace_listing_id?: string | null
+          participant_high_id?: string | null
+          participant_low_id?: string | null
           request_context_group_id?: string | null
           request_resolved_at?: string | null
           request_status?: string
@@ -1716,6 +1720,8 @@ export type Database = {
           created_at?: string
           id?: string
           marketplace_listing_id?: string | null
+          participant_high_id?: string | null
+          participant_low_id?: string | null
           request_context_group_id?: string | null
           request_resolved_at?: string | null
           request_status?: string
@@ -1727,6 +1733,20 @@ export type Database = {
             columns: ["marketplace_listing_id"]
             isOneToOne: false
             referencedRelation: "marketplace_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_participant_high_id_fkey"
+            columns: ["participant_high_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_participant_low_id_fkey"
+            columns: ["participant_low_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -4453,6 +4473,16 @@ export type Database = {
       set_moderation_retention_policy: {
         Args: { p_approval_reference: string; p_basis: string; p_retention_days: number }
         Returns: Database["public"]["Tables"]["moderation_retention_policies"]["Row"]
+      }
+      create_direct_conversation_internal: {
+        Args: {
+          p_actor_id: string
+          p_marketplace_listing_id: string | null
+          p_request_context_group_id: string | null
+          p_request_status: string
+          p_target_id: string
+        }
+        Returns: { conversation_id: string; was_created: boolean }[]
       }
       set_own_profile_block: {
         Args: { p_blocked: boolean; p_target_profile_id: string }
