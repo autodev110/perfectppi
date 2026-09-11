@@ -104,8 +104,10 @@ export async function getOwnedVehicle(id: string) {
 export async function getVisibleVehicle(id: string) {
   const admin = createAdminClient();
   const viewerId = await getCurrentSocialProfileId();
-  if (!viewerId) return null;
 
+  // Anonymous visitors reach public vehicles from the public marketplace; the
+  // RPC answers for a NULL viewer (public + available owner) the same way the
+  // listing visibility check does.
   const { data: canView } = await admin.rpc("social_can_view_vehicle", {
     p_viewer_id: viewerId,
     p_vehicle_id: id,
@@ -127,7 +129,7 @@ export async function getVisibleVehicle(id: string) {
   if (!vehicle) return null;
   return {
     ...vehicle,
-    viewer_is_owner: vehicle.owner_id === viewerId,
+    viewer_is_owner: !!viewerId && vehicle.owner_id === viewerId,
     vehicle_media: await authorizeVehicleMedia(
       (vehicle.vehicle_media ?? []).filter((media) => media.moderation_status === "active"),
     ),
@@ -140,7 +142,6 @@ export const getPublicVehicle = getVisibleVehicle;
 export async function getVehiclePpiHistory(vehicleId: string) {
   const admin = createAdminClient();
   const viewerId = await getCurrentSocialProfileId();
-  if (!viewerId) return [];
 
   const { data: vehicle } = await admin
     .from("vehicles")

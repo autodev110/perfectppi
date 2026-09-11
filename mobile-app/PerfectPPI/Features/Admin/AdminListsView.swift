@@ -14,6 +14,7 @@ struct AdminListsView: View {
             NavigationLink("Outputs", value: AdminListSection.outputs)
             NavigationLink("Marketplace", value: AdminListSection.listings)
             NavigationLink("Community", value: AdminListSection.community)
+            NavigationLink("Moderation queue", value: AdminListSection.moderation)
             NavigationLink("Reviews", value: AdminListSection.reviews)
             NavigationLink("Communications", value: AdminListSection.communications)
             NavigationLink("Audit Log", value: AdminListSection.audit)
@@ -29,7 +30,7 @@ struct AdminListsView: View {
 enum AdminListSection: String, Hashable {
     case users, technicians, organizations, inspections
     case payments, contracts, warranties, vehicles, outputs, audit
-    case listings, community, reviews, communications
+    case listings, community, reviews, communications, moderation
 }
 
 struct AdminListDetailView: View {
@@ -251,6 +252,9 @@ struct AdminListDetailView: View {
                         }
                     }
                 }, failure: { e, r in ErrorView(message: e.localizedDescription, retry: r) })
+
+            case .moderation:
+                AdminModerationQueueView()
 
             case .reviews:
                 AsyncContent(load: { try await AdminAPI.reviews() }, loaded: { resp in

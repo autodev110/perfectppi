@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireApiRole } from "@/features/auth/api";
 import { getAdminCommunityPosts } from "@/features/community/queries";
 
-const statusSchema = z.enum(["active", "archived", "all"]);
+const statusSchema = z.enum(["active", "archived", "review", "all"]);
 
 export async function GET(req: NextRequest) {
   const auth = await requireApiRole(["admin"]);

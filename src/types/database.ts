@@ -1754,6 +1754,7 @@ export type Database = {
       }
       conversations: {
         Row: {
+          contact_kind: string
           created_at: string
           id: string
           marketplace_listing_id: string | null
@@ -1765,6 +1766,7 @@ export type Database = {
           requested_by: string | null
         }
         Insert: {
+          contact_kind?: string
           created_at?: string
           id?: string
           marketplace_listing_id?: string | null
@@ -1776,6 +1778,7 @@ export type Database = {
           requested_by?: string | null
         }
         Update: {
+          contact_kind?: string
           created_at?: string
           id?: string
           marketplace_listing_id?: string | null
@@ -4828,8 +4831,12 @@ export type Database = {
         Args: { p_profile_id: string; p_viewer_id: string }
         Returns: boolean
       }
+      social_service_contact_allowed: {
+        Args: { p_actor_id: string; p_target_id: string }
+        Returns: boolean
+      }
       social_can_view_vehicle: {
-        Args: { p_vehicle_id: string; p_viewer_id: string }
+        Args: { p_vehicle_id: string; p_viewer_id: string | null }
         Returns: boolean
       }
       social_can_current_user_view_vehicle: {
@@ -4940,6 +4947,26 @@ export type Database = {
       community_group_content_visible: {
         Args: { p_viewer_id: string; p_group_id: string }
         Returns: boolean
+      }
+      community_group_owner_available: {
+        Args: { p_group_id: string }
+        Returns: boolean
+      }
+      list_groups_needing_platform_review: {
+        Args: Record<string, never>
+        Returns: { group_id: string; slug: string; name: string; reason: string; active_member_count: number }[]
+      }
+      platform_assign_group_owner: {
+        Args: { p_actor_profile_id: string; p_group_id: string; p_new_owner_profile_id: string; p_reason: string }
+        Returns: Json
+      }
+      platform_archive_group: {
+        Args: { p_actor_profile_id: string; p_group_id: string; p_reason: string }
+        Returns: Json
+      }
+      list_owned_active_groups: {
+        Args: { p_profile_id: string }
+        Returns: { group_id: string; slug: string; name: string }[]
       }
       community_group_shell_visible: {
         Args: { p_viewer_id: string; p_group_id: string }
@@ -5226,7 +5253,7 @@ export type Database = {
       community_group_join_policy: "open" | "request_approval" | "invite_only"
       community_group_membership_status: "active" | "left" | "removed" | "banned" | "requested" | "invited"
       community_group_post_status: "active" | "group_removed"
-      community_group_role: "owner" | "moderator" | "member"
+      community_group_role: "owner" | "admin" | "moderator" | "member"
       community_group_status: "active" | "archived"
       community_group_visibility: "public" | "private" | "unlisted"
       community_post_audience: "public" | "friends"

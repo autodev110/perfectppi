@@ -38,6 +38,7 @@ export const GROUP_MODERATION_ACTIONS = [
   "remove_member",
   "ban_member",
   "unban_member",
+  "make_admin",
   "make_moderator",
   "make_member",
   "transfer_ownership",
@@ -132,6 +133,9 @@ export async function getViewerGroupRole(groupId: string): Promise<GroupRole | n
 
 function classify(error: { code?: string; message?: string }): Exclude<GroupModerationResult, { ok: true }> {
   const message = error.message ?? "";
+  if (message.includes("group under review")) {
+    return { ok: false, outcome: "conflict", message: "This group is paused while PerfectPPI reviews its ownership." };
+  }
   if (error.code === "42501") return { ok: false, outcome: "forbidden", message: "You do not have permission to do that in this group." };
   if (message.includes("request unavailable")) return { ok: false, outcome: "not_found", message: "That request is no longer pending." };
   if (message.includes("member unavailable")) return { ok: false, outcome: "not_found", message: "That member could not be found." };
@@ -169,7 +173,7 @@ export async function moderateGroup(input: unknown): Promise<GroupModerationResu
   const admin = createAdminClient();
   const needsPost = ["pin", "unpin", "remove_post", "restore_post"].includes(action);
   const needsProfile = [
-    "remove_member", "ban_member", "unban_member", "make_moderator", "make_member", "transfer_ownership",
+    "remove_member", "ban_member", "unban_member", "make_admin", "make_moderator", "make_member", "transfer_ownership",
     "approve_request", "decline_request", "invite",
   ].includes(action);
   const profileId = action === "invite"
@@ -207,13 +211,14 @@ export async function moderateGroup(input: unknown): Promise<GroupModerationResu
           p_status: action === "remove_member" ? "removed" : action === "ban_member" ? "banned" : "active",
           p_reason: reason ?? null,
         });
+      case "make_admin":
       case "make_moderator":
       case "make_member":
         return admin.rpc("set_group_member_role", {
           p_actor_profile_id: actorId,
           p_group_id: groupId,
           p_target_profile_id: profileId!,
-          p_role: action === "make_moderator" ? "moderator" : "member",
+          p_role: action === "make_admin" ? "admin" : action === "make_moderator" ? "moderator" : "member",
         });
       case "transfer_ownership":
         return admin.rpc("transfer_group_ownership", {

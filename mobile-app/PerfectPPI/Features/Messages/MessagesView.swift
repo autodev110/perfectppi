@@ -6,98 +6,108 @@ import UniformTypeIdentifiers
 
 struct MessagesView: View {
     let currentProfileId: String?
+    /// Layout previews and tests: skip the network and show these boxes.
+    private let preloaded: MessageBoxes?
 
     @State private var reloadToken = UUID()
     @State private var showingComposer = false
-    @State private var selectedBox = 0
+    @State private var selectedBox: Int
 
-    private struct MessageBoxes {
+    struct MessageBoxes {
         let inbox: [ConversationSummary]
         let requests: [ConversationSummary]
     }
 
     init(currentProfileId: String? = nil) {
         self.currentProfileId = currentProfileId
+        self.preloaded = nil
+        _selectedBox = State(initialValue: 0)
+    }
+
+    init(preview boxes: MessageBoxes, currentProfileId: String? = nil, showingRequests: Bool = false) {
+        self.currentProfileId = currentProfileId
+        self.preloaded = boxes
+        _selectedBox = State(initialValue: showingRequests ? 1 : 0)
     }
 
     var body: some View {
         AsyncContent(
             load: {
+                if let preloaded { return preloaded }
                 async let inbox = MessagesAPI.conversations()
                 async let requests = MessagesAPI.requests()
                 return try await MessageBoxes(inbox: inbox, requests: requests)
             },
             loaded: { boxes in
-                VStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack(spacing: 12) {
-                            Image(systemName: selectedBox == 0 ? "bubble.left.and.bubble.right.fill" : "person.crop.circle.badge.clock")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 42, height: 42)
-                                .background(Theme.brandGradient)
-                                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(selectedBox == 0 ? "Your conversations" : "Message requests")
-                                    .font(.headline)
-                                Text(selectedBox == 0
-                                     ? "Friends and marketplace conversations"
-                                     : "Review new conversations before replying")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        Picker("Mailbox", selection: $selectedBox) {
-                            Text("Inbox").tag(0)
-                            Text(boxes.requests.isEmpty ? "Requests" : "Requests \(boxes.requests.count)").tag(1)
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                    .padding(16)
-                    .background(Theme.Palette.card)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                            .stroke(Theme.Palette.hairline, lineWidth: 1)
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-
-                    let conversations = selectedBox == 0 ? boxes.inbox : boxes.requests
-                    if conversations.isEmpty {
-                        EmptyStateCard(
-                            title: selectedBox == 0 ? "No messages yet" : "No message requests",
-                            message: selectedBox == 0
-                                ? "Accepted conversations and marketplace inquiries will appear here."
-                                : "Eligible group-member introductions wait here until you accept or decline them.",
-                            systemImage: "bubble.left.and.bubble.right"
-                        )
-                        .padding()
-                        Spacer(minLength: 0)
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: 12) {
-                                ForEach(conversations) { conversation in
-                                    NavigationLink {
-                                        MessageThreadView(
-                                            conversationId: conversation.id,
-                                            currentProfileId: currentProfileId
-                                        )
-                                        .onDisappear { reloadToken = UUID() }
-                                    } label: {
-                                        ConversationRow(
-                                            conversation: conversation,
-                                            currentProfileId: currentProfileId,
-                                            isRequest: selectedBox == 1
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
+                // One scroll container for both mailboxes, so the header card,
+                // the large title, and the empty state sit in the same place
+                // whether the box has conversations or not.
+                let conversations = selectedBox == 0 ? boxes.inbox : boxes.requests
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack(spacing: 12) {
+                                Image(systemName: selectedBox == 0 ? "bubble.left.and.bubble.right.fill" : "person.crop.circle.badge.clock")
+                                    .font(.title3.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 42, height: 42)
+                                    .background(Theme.brandGradient)
+                                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(selectedBox == 0 ? "Your conversations" : "Message requests")
+                                        .font(.headline)
+                                    Text(selectedBox == 0
+                                         ? "Friends, marketplace, and technician conversations"
+                                         : "Review new conversations before replying")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
-                            .padding(16)
+
+                            Picker("Mailbox", selection: $selectedBox) {
+                                Text("Inbox").tag(0)
+                                Text(boxes.requests.isEmpty ? "Requests" : "Requests \(boxes.requests.count)").tag(1)
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        .padding(16)
+                        .background(Theme.Palette.card)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+                                .stroke(Theme.Palette.hairline, lineWidth: 1)
+                        )
+
+                        if conversations.isEmpty {
+                            EmptyStateCard(
+                                title: selectedBox == 0 ? "No messages yet" : "No message requests",
+                                message: selectedBox == 0
+                                    ? "Accepted conversations and marketplace inquiries will appear here."
+                                    : "Eligible group-member introductions wait here until you accept or decline them.",
+                                systemImage: "bubble.left.and.bubble.right"
+                            )
+                        } else {
+                            ForEach(conversations) { conversation in
+                                NavigationLink {
+                                    MessageThreadView(
+                                        conversationId: conversation.id,
+                                        currentProfileId: currentProfileId
+                                    )
+                                    .onDisappear { reloadToken = UUID() }
+                                } label: {
+                                    ConversationRow(
+                                        conversation: conversation,
+                                        currentProfileId: currentProfileId,
+                                        isRequest: selectedBox == 1
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .padding(.bottom, 16)
                 }
                 .background(Color(.systemGroupedBackground))
                 .navigationTitle("Messages")
@@ -209,6 +219,20 @@ private struct ConversationRow: View {
 struct MessageThreadView: View {
     let conversationId: String
     let currentProfileId: String?
+    /// Layout previews and tests: show this thread instead of loading one.
+    private let preloaded: ConversationThread?
+
+    init(conversationId: String, currentProfileId: String?) {
+        self.conversationId = conversationId
+        self.currentProfileId = currentProfileId
+        self.preloaded = nil
+    }
+
+    init(preview thread: ConversationThread, currentProfileId: String?) {
+        self.conversationId = thread.id
+        self.currentProfileId = currentProfileId
+        self.preloaded = thread
+    }
 
     @Environment(\.dismiss) private var dismiss
     @State private var thread: ConversationThread?
@@ -269,22 +293,29 @@ struct MessageThreadView: View {
                             .background(Theme.Palette.subtle)
                     }
 
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 10) {
-                                ForEach(thread.messages) { message in
-                                    MessageBubble(
-                                        message: message,
-                                        isMine: message.senderId == currentProfileId
-                                    )
-                                    .id(message.id)
+                    // Messages read like a chat: the newest sits just above the
+                    // composer, and a short thread is pushed to the bottom
+                    // rather than floating at the top.
+                    GeometryReader { geometry in
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                LazyVStack(alignment: .leading, spacing: 10) {
+                                    ForEach(thread.messages) { message in
+                                        MessageBubble(
+                                            message: message,
+                                            isMine: message.senderId == currentProfileId
+                                        )
+                                        .id(message.id)
+                                    }
                                 }
+                                .padding()
+                                .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .bottom)
                             }
-                            .padding()
-                        }
-                        .onChange(of: thread.messages.count) {
-                            if let last = thread.messages.last {
-                                proxy.scrollTo(last.id, anchor: .bottom)
+                            .defaultScrollAnchor(.bottom)
+                            .onChange(of: thread.messages.count) {
+                                if let last = thread.messages.last {
+                                    proxy.scrollTo(last.id, anchor: .bottom)
+                                }
                             }
                         }
                     }
@@ -430,6 +461,10 @@ struct MessageThreadView: View {
     }
 
     private func load() async {
+        if let preloaded {
+            self.thread = preloaded
+            return
+        }
         do {
             self.thread = try await MessagesAPI.conversation(id: conversationId)
             self.error = nil

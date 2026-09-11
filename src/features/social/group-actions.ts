@@ -60,3 +60,60 @@ export async function createCuratedCommunityGroup(formData: FormData) {
   revalidatePath("/admin/community/groups");
   redirect("/admin/community/groups?created=1");
 }
+
+const reviewSchema = z.object({
+  groupId: z.string().uuid(),
+  reason: z.string().trim().min(10, "Give a reason of at least 10 characters").max(500),
+  username: z.string().trim().min(1).max(64).optional(),
+});
+
+// Plan 13.4 platform review: assign a willing member as owner, or archive.
+// The RPCs require the content_decide capability and write audit events.
+export async function reviewCommunityGroup(formData: FormData) {
+  const actor = await requireRole(["admin"]);
+  const decision = formData.get("decision") === "archive" ? "archive" : "assign_owner";
+  const parsed = reviewSchema.safeParse({
+    groupId: formData.get("group_id"),
+    reason: formData.get("reason") ?? "",
+    username: formData.get("username") || undefined,
+  });
+  if (!parsed.success) {
+    redirect(`/admin/community/groups?error=${encodeURIComponent(parsed.error.errors[0].message)}`);
+  }
+  const admin = createAdminClient();
+
+  if (decision === "assign_owner") {
+    const handle = parsed.data.username?.replace(/^@/, "").toLowerCase();
+    const { data: profile } = handle
+      ? await admin.from("profiles").select("id").eq("username_normalized", handle).eq("username_state", "claimed").maybeSingle()
+      : { data: null };
+    if (!profile) redirect("/admin/community/groups?error=No+member+with+that+username+was+found");
+    const { error } = await admin.rpc("platform_assign_group_owner", {
+      p_actor_profile_id: actor.id,
+      p_group_id: parsed.data.groupId,
+      p_new_owner_profile_id: profile.id,
+      p_reason: parsed.data.reason,
+    });
+    if (error) redirect(`/admin/community/groups?error=${encodeURIComponent(reviewError(error))}`);
+  } else {
+    const { error } = await admin.rpc("platform_archive_group", {
+      p_actor_profile_id: actor.id,
+      p_group_id: parsed.data.groupId,
+      p_reason: parsed.data.reason,
+    });
+    if (error) redirect(`/admin/community/groups?error=${encodeURIComponent(reviewError(error))}`);
+  }
+  revalidatePath("/community/groups");
+  revalidatePath("/admin/community/groups");
+  redirect("/admin/community/groups?reviewed=1");
+}
+
+function reviewError(error: { code?: string; message?: string }) {
+  const message = error.message ?? "";
+  if (message.includes("moderation capability required")) return "You need the content_decide moderation capability for group stewardship";
+  if (message.includes("already has an available owner")) return "This group already has an available owner";
+  if (message.includes("must be an available active member")) return "The new owner must be an available, active member of the group";
+  if (message.includes("group unavailable")) return "This group is no longer active";
+  console.warn("group platform review failed", { code: error.code, message: message.slice(0, 200) });
+  return "The review action could not be applied";
+}

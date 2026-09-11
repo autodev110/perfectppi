@@ -537,7 +537,9 @@ struct CommunityGroupSummary: Codable, Identifiable, Hashable {
     var hasRequested: Bool { membershipStatus == "requested" }
     var isInvited: Bool { membershipStatus == "invited" }
     var contentVisible: Bool { canViewContent ?? true }
-    var moderates: Bool { membershipRole == "owner" || membershipRole == "moderator" }
+    var moderates: Bool { membershipRole == "owner" || membershipRole == "admin" || membershipRole == "moderator" }
+    /// Owner or admin: group settings, roles, bans (plan 13.4).
+    var administers: Bool { membershipRole == "owner" || membershipRole == "admin" }
 }
 
 struct CommunityGroupInvitation: Codable, Identifiable, Hashable {

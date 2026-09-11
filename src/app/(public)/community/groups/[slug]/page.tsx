@@ -82,10 +82,10 @@ export default async function CommunityGroupPage({
               </div>
               <div className="flex flex-col items-end gap-2">
                 <GroupMembershipButton groupId={group.id} status={group.membership_status} joinPolicy={group.join_policy} owner={group.membership_role === "owner"} />
-                {viewerRole === "owner" ? (
+                {viewerRole === "owner" || viewerRole === "admin" ? (
                   <div className="flex flex-wrap justify-end gap-2">
                     <Button asChild size="sm" variant="outline"><Link href={`/community/groups/${group.slug}/settings`}>Group settings</Link></Button>
-                    <GroupArchiveButton slug={group.slug} />
+                    {viewerRole === "owner" ? <GroupArchiveButton slug={group.slug} /> : null}
                   </div>
                 ) : null}
               </div>
@@ -169,11 +169,11 @@ export default async function CommunityGroupPage({
                   <Avatar className="h-9 w-9"><AvatarImage src={member.avatar_url ?? ""} /><AvatarFallback className="text-xs">{getInitials(member.display_name ?? member.username ?? "U")}</AvatarFallback></Avatar>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-bold">{member.display_name ?? member.username ?? "PerfectPPI member"}</span>
-                    <span className="block text-xs text-on-surface-variant">{member.username ? `@${member.username} · ` : ""}{member.role === "owner" ? "Owner" : member.role === "moderator" ? "Moderator" : "Member"} · since {formatDate(member.joined_at)}</span>
+                    <span className="block text-xs text-on-surface-variant">{member.username ? `@${member.username} · ` : ""}{member.role === "owner" ? "Owner" : member.role === "admin" ? "Admin" : member.role === "moderator" ? "Moderator" : "Member"} · since {formatDate(member.joined_at)}</span>
                   </span>
                 </Link>
                 {canModerate && member.id !== viewer.id ? (
-                  <GroupMemberModerationMenu slug={group.slug} profileId={member.id} role={member.role} viewerRole={viewerRole as "owner" | "moderator"} />
+                  <GroupMemberModerationMenu slug={group.slug} profileId={member.id} role={member.role} viewerRole={viewerRole as "owner" | "admin" | "moderator"} />
                 ) : null}
               </div>
             ))}

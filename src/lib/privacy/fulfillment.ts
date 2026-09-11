@@ -142,6 +142,24 @@ async function fulfillDeletion(request: {
       return { status: "on_hold" as const, deletedObjects: 0 };
     }
 
+    // Plan 13.4 backstop: a group created after the request was filed would
+    // otherwise lose its only owner. Pause until it is transferred or archived.
+    const { data: ownedGroups, error: ownedError } = await admin.rpc("list_owned_active_groups", { p_profile_id: profileId });
+    if (ownedError) throw new Error(ownedError.message);
+    if ((ownedGroups ?? []).length > 0) {
+      await admin.from("privacy_requests").update({
+        status: "on_hold",
+        acknowledged_at: new Date().toISOString(),
+        resolution_summary: "Automated deletion is paused because this account still owns an active community group. Transfer ownership or archive the group to continue.",
+        next_attempt_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+        last_error: null,
+        locked_at: null,
+        lock_expires_at: null,
+        locked_by: null,
+      }).eq("id", request.id);
+      return { status: "on_hold" as const, deletedObjects: 0 };
+    }
+
     const { data: userData, error: userError } = await admin.auth.admin.getUserById(authUserId!);
     if (userError && !isMissingAuthUser(userError.message)) throw userError;
 

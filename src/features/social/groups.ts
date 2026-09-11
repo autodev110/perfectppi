@@ -27,7 +27,7 @@ export type CommunityGroupSummary = {
   year_end: number | null;
   member_count: number;
   is_member: boolean;
-  membership_role: "owner" | "moderator" | "member" | null;
+  membership_role: "owner" | "admin" | "moderator" | "member" | null;
   is_suggested: boolean;
   /** Directory badge only (plan 13.6 launch set); no longer a gate. */
   is_staff_curated: boolean;
@@ -129,7 +129,7 @@ export async function getCommunityGroups(): Promise<CommunityGroupSummary[]> {
 
   const memberCounts = new Map<string, number>();
   const pendingCounts = new Map<string, number>();
-  const mine = new Map<string, { role: "owner" | "moderator" | "member"; status: Exclude<GroupMembershipStatus, null> }>();
+  const mine = new Map<string, { role: "owner" | "admin" | "moderator" | "member"; status: Exclude<GroupMembershipStatus, null> }>();
   for (const membership of memberships ?? []) {
     if (membership.status === "active") {
       memberCounts.set(membership.group_id, (memberCounts.get(membership.group_id) ?? 0) + 1);
@@ -148,7 +148,7 @@ export async function getCommunityGroups(): Promise<CommunityGroupSummary[]> {
   return groups.map((group) => {
     const own = mine.get(group.id);
     const isMember = own?.status === "active";
-    const moderates = isMember && (own.role === "owner" || own.role === "moderator");
+    const moderates = isMember && own.role !== "member";
     return {
       ...group,
       rules: group.rules ?? [],
@@ -244,10 +244,12 @@ export async function getMyGroupInvitations(): Promise<GroupInvitation[]> {
 
 export async function getAdminCommunityGroups() {
   const admin = createAdminClient();
-  const [{ data: groups }, { data: memberships }] = await Promise.all([
+  const [{ data: groups }, { data: memberships }, { data: review }] = await Promise.all([
     admin.from("community_groups").select("*").order("created_at", { ascending: false }),
     admin.from("community_group_memberships").select("group_id, role, status"),
+    admin.rpc("list_groups_needing_platform_review"),
   ]);
+  const reviewReason = new Map((review ?? []).map((row) => [row.group_id, row.reason]));
   return (groups ?? []).map((group) => ({
     ...group,
     active_member_count: (memberships ?? []).filter((membership) =>
@@ -256,7 +258,19 @@ export async function getAdminCommunityGroups() {
       membership.group_id === group.id && membership.status === "requested").length,
     has_active_owner: (memberships ?? []).some((membership) =>
       membership.group_id === group.id && membership.status === "active" && membership.role === "owner"),
+    /** Plan 13.4: "missing_owner" | "owner_unavailable" while the group waits for platform review. */
+    review_reason: reviewReason.get(group.id) ?? null,
   }));
+}
+
+/** Groups the member still owns; account deletion waits for a transfer or archive (13.4). */
+export async function getOwnedActiveGroups(profileId: string) {
+  const { data, error } = await createAdminClient().rpc("list_owned_active_groups", { p_profile_id: profileId });
+  if (error) {
+    console.error("list_owned_active_groups failed", error.message);
+    return [];
+  }
+  return data ?? [];
 }
 
 export type GroupMembershipOutcome =

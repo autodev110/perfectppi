@@ -326,6 +326,7 @@ enum CommunityAPI {
         case removeMember = "remove_member"
         case banMember = "ban_member"
         case unbanMember = "unban_member"
+        case makeAdmin = "make_admin"
         case makeModerator = "make_moderator"
         case makeMember = "make_member"
         case transferOwnership = "transfer_ownership"

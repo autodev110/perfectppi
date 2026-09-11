@@ -15,7 +15,9 @@ import {
   promoteQuarantinedObject,
 } from "@/lib/storage/r2";
 import { UPLOAD_LIMITS } from "@/config/constants";
-import { extensionForContentType, moderateMediaBytes } from "@/lib/moderation/media-safety";
+import { extensionForContentType, hasExpectedMediaSignature, moderateMediaBytes } from "@/lib/moderation/media-safety";
+import { moderateImageLaunchMode } from "@/lib/moderation/policy";
+import { getFeatureFlags } from "@/lib/feature-flags";
 import { recordModeration } from "@/lib/moderation";
 import { publishCommunityMedia } from "@/lib/storage/community-media";
 import { getModerationCapabilities } from "@/features/moderation/capabilities";
@@ -187,6 +189,38 @@ function legacyContentType(url: string, mediaType: "image" | "video") {
   return "image/jpeg";
 }
 
+export type ModerationReviewInput = z.infer<typeof reviewSchema>;
+export type ModerationReviewResult =
+  | { ok: true; itemId: string; status: "active" | "rejected" | "legal_hold" }
+  | { ok: false; error: string; code: "invalid" | "forbidden" | "not_found" | "safeguard_required" | "failed" };
+
+const SAFEGUARD_NOT_CONFIGURED_MESSAGE =
+  "This photo cannot be approved: the specialist image safeguard is on but no scanner is configured "
+  + "(CHILD_SAFETY_SCANNER_URL / CHILD_SAFETY_SCANNER_TOKEN). Configure the scanner, or turn off the "
+  + "specialist_image_safeguard flag for this environment and approve again.";
+
+// Same gate as upload time (plan 21.2): in launch mode the specialist
+// safeguard decides images; with that flag off (a recorded product decision)
+// a well-formed image passes. Videos always need a clean specialist scan
+// plus this manual review.
+async function rescanForApproval(bytes: Uint8Array, contentType: string, mediaType: "image" | "video") {
+  const flags = await getFeatureFlags();
+  if (mediaType === "video" || flags.flags.automated_post_moderation) {
+    const scan = await moderateMediaBytes(bytes, contentType, mediaType);
+    return { scan, cleared: hasCleanSpecialistScan(scan.rawResult as Json) };
+  }
+  if (!hasExpectedMediaSignature(bytes, contentType)) {
+    const scan = await moderateMediaBytes(bytes, contentType, mediaType);
+    return { scan, cleared: false };
+  }
+  const scan = await moderateImageLaunchMode(bytes, contentType, {
+    safeguardRequired: flags.flags.specialist_image_safeguard,
+  });
+  return { scan, cleared: scan.decision === "allow" || hasCleanSpecialistScan(scan.rawResult as Json) };
+}
+
+// Web form entry point: never throws into the page; outcomes land in the
+// query string of the media queue.
 export async function reviewModerationItem(formData: FormData) {
   const profile = await currentProfile();
   if (!profile || profile.role !== "admin") return;
@@ -196,17 +230,29 @@ export async function reviewModerationItem(formData: FormData) {
     notes: String(formData.get("notes") ?? "") || undefined,
     enforcement: formData.get("enforcement") ?? "none",
   });
-  if (!parsed.success) return;
+  if (!parsed.success) redirect("/admin/moderation?tab=media&error=Invalid+review");
+
+  const result = await applyModerationReview(parsed.data, profile.id);
+  if (!result.ok) redirect(`/admin/moderation?tab=media&error=${encodeURIComponent(result.error)}`);
+  redirect(`/admin/moderation?tab=media&reviewed=${result.status}`);
+}
+
+/** Decide a held item; used by the web form and the iOS admin queue. */
+export async function applyModerationReview(input: ModerationReviewInput, reviewerId: string): Promise<ModerationReviewResult> {
+  const parsed = reviewSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid review", code: "invalid" };
 
   // Plan 18.1: the admin role alone decides nothing. Each authority is an
   // explicit grant, checked here and again inside the review RPC's caller.
-  const capabilities = await getModerationCapabilities(profile.id);
-  if (!capabilities.has("content_decide")) throw new Error("content_decide capability required");
+  const capabilities = await getModerationCapabilities(reviewerId);
+  if (!capabilities.has("content_decide")) {
+    return { ok: false, error: "The content_decide capability is required to decide items.", code: "forbidden" };
+  }
   if (parsed.data.decision === "legal_hold" && !capabilities.has("legal_hold_review")) {
-    throw new Error("legal_hold_review capability required");
+    return { ok: false, error: "The legal_hold_review capability is required to preserve and escalate.", code: "forbidden" };
   }
   if (parsed.data.enforcement !== "none" && !capabilities.has("account_enforce")) {
-    throw new Error("account_enforce capability required");
+    return { ok: false, error: "The account_enforce capability is required for account actions.", code: "forbidden" };
   }
 
   const admin = createAdminClient();
@@ -215,7 +261,7 @@ export async function reviewModerationItem(formData: FormData) {
     .select("*")
     .eq("id", parsed.data.itemId)
     .single();
-  if (!item) return;
+  if (!item) return { ok: false, error: "That item is no longer in the queue.", code: "not_found" };
 
   const nextStatus = parsed.data.decision === "approve"
     ? "active"
@@ -228,117 +274,130 @@ export async function reviewModerationItem(formData: FormData) {
   let sourceUrl: string | null = null;
   let promotedUrl: string | null = null;
   let communityPublication: Awaited<ReturnType<typeof publishCommunityMedia>> | null = null;
-  if (isMedia && nextStatus === "active") {
-    const mediaResult = item.entity_type === "vehicle_media"
-      ? await admin.from("vehicle_media")
-        .select("url, vehicle_id, media_type, content_type")
-        .eq("id", item.entity_id)
-        .single()
-      : await admin.from("community_post_media")
-        .select("url, post_id, media_type, content_type")
-        .eq("id", item.entity_id)
-        .single();
-    if (mediaResult.error || !mediaResult.data) {
-      throw new Error(mediaResult.error?.message ?? "Moderated media was not found");
-    }
-    const media = mediaResult.data;
-    const contentType = media.content_type ?? legacyContentType(media.url, media.media_type);
-
-    if (!hasCleanSpecialistScan(item.raw_result)) {
-      const object = await getObjectFromStoredUrl(media.url, { maxBytes: UPLOAD_LIMITS.maxVideoSize });
-      const scan = await moderateMediaBytes(object.bytes, contentType, media.media_type);
-      if (!hasCleanSpecialistScan(scan.rawResult as Json)) {
-        await recordModeration({
-          entityType: item.entity_type as "community_post_media" | "vehicle_media",
-          entityId: item.entity_id,
-          authorId: item.author_id ?? profile.id,
-          contentPreview: item.content_preview,
-          evidenceReference: scan.decision === "legal_hold" ? media.url : item.evidence_reference,
-          result: scan,
-        });
-        throw new Error("Media cannot be approved until the specialist safety scan passes");
+  try {
+    if (isMedia && nextStatus === "active") {
+      const mediaResult = item.entity_type === "vehicle_media"
+        ? await admin.from("vehicle_media")
+          .select("url, vehicle_id, media_type, content_type")
+          .eq("id", item.entity_id)
+          .single()
+        : await admin.from("community_post_media")
+          .select("url, post_id, media_type, content_type")
+          .eq("id", item.entity_id)
+          .single();
+      if (mediaResult.error || !mediaResult.data) {
+        return { ok: false, error: "The moderated media was not found.", code: "not_found" };
       }
+      const media = mediaResult.data;
+      const contentType = media.content_type ?? legacyContentType(media.url, media.media_type);
 
-      // Preserve pending review until promotion and the review RPC both succeed.
-      const { error: scanUpdateError } = await admin
-        .from("moderation_items")
-        .update({
-          model_provider: scan.provider,
-          model_name: scan.modelName,
-          model_version: scan.modelVersion,
-          raw_result: scan.rawResult as Json,
-        })
-        .eq("id", item.id);
-      if (scanUpdateError) throw new Error(scanUpdateError.message);
-    }
-
-    if (isPrivateStorageReference(media.url)) {
-      if (!item.author_id) throw new Error("Moderated media has no retained owner");
-      sourceUrl = media.url;
-      if ("post_id" in media) {
-        // Community media stays private (plan 19.2): immutable original plus a
-        // metadata-stripped display variant, both behind status-aware delivery.
+      if (!hasCleanSpecialistScan(item.raw_result)) {
         const object = await getObjectFromStoredUrl(media.url, { maxBytes: UPLOAD_LIMITS.maxVideoSize });
-        const published = await publishCommunityMedia({
-          mediaId: item.entity_id,
-          postId: media.post_id,
-          ownerId: item.author_id,
-          mediaType: media.media_type,
-          contentType,
-          sourceReference: media.url,
-          bytes: object.bytes,
-        });
-        promotedUrl = published.storageReference;
-        communityPublication = published;
-      } else {
-        const promoted = await promoteQuarantinedObject({
-          storageReference: media.url,
-          destinationKey: buildStorageKey({
-            entity: "vehicle_media",
+        const { scan, cleared } = await rescanForApproval(object.bytes, contentType, media.media_type);
+        if (!cleared) {
+          await recordModeration({
+            entityType: item.entity_type as "community_post_media" | "vehicle_media",
+            entityId: item.entity_id,
+            authorId: item.author_id ?? reviewerId,
+            contentPreview: item.content_preview,
+            evidenceReference: scan.decision === "legal_hold" ? media.url : item.evidence_reference,
+            result: scan,
+          });
+          const notConfigured = scan.reasonCodes.includes("specialist_scan_not_configured");
+          return {
+            ok: false,
+            code: "safeguard_required",
+            error: notConfigured
+              ? SAFEGUARD_NOT_CONFIGURED_MESSAGE
+              : "Media cannot be approved until the specialist safety scan passes.",
+          };
+        }
+
+        // Preserve pending review until promotion and the review RPC both succeed.
+        const { error: scanUpdateError } = await admin
+          .from("moderation_items")
+          .update({
+            model_provider: scan.provider,
+            model_name: scan.modelName,
+            model_version: scan.modelVersion,
+            raw_result: scan.rawResult as Json,
+          })
+          .eq("id", item.id);
+        if (scanUpdateError) throw new Error(scanUpdateError.message);
+      }
+
+      if (isPrivateStorageReference(media.url)) {
+        if (!item.author_id) throw new Error("Moderated media has no retained owner");
+        sourceUrl = media.url;
+        if ("post_id" in media) {
+          // Community media stays private (plan 19.2): immutable original plus a
+          // metadata-stripped display variant, both behind status-aware delivery.
+          const object = await getObjectFromStoredUrl(media.url, { maxBytes: UPLOAD_LIMITS.maxVideoSize });
+          const published = await publishCommunityMedia({
+            mediaId: item.entity_id,
+            postId: media.post_id,
             ownerId: item.author_id,
-            recordId: media.vehicle_id,
-            filename: `${item.entity_id}.${extensionForContentType(contentType)}`,
-          }),
-        });
-        promotedUrl = promoted.publicUrl;
+            mediaType: media.media_type,
+            contentType,
+            sourceReference: media.url,
+            bytes: object.bytes,
+          });
+          promotedUrl = published.storageReference;
+          communityPublication = published;
+        } else {
+          const promoted = await promoteQuarantinedObject({
+            storageReference: media.url,
+            destinationKey: buildStorageKey({
+              entity: "vehicle_media",
+              ownerId: item.author_id,
+              recordId: media.vehicle_id,
+              filename: `${item.entity_id}.${extensionForContentType(contentType)}`,
+            }),
+          });
+          promotedUrl = promoted.publicUrl;
+        }
       }
     }
-  }
 
-  const reviewFunction = item.entity_type === "vehicle_media"
-    ? "apply_vehicle_media_review"
-    : "apply_moderation_review";
-  const { error: reviewError } = await admin.rpc(reviewFunction, {
-    p_item_id: item.id,
-    p_reviewer_id: profile.id,
-    p_next_status: nextStatus,
-    p_next_decision: nextDecision,
-    p_notes: parsed.data.notes ?? null,
-    p_enforcement: parsed.data.enforcement,
-    p_media_url: promotedUrl,
-  });
-  if (reviewError) {
-    if (promotedUrl) await deleteStoredObject(promotedUrl).catch(() => undefined);
-    if (communityPublication?.displayReference) {
-      await deleteStoredObject(communityPublication.displayReference).catch(() => undefined);
+    const reviewFunction = item.entity_type === "vehicle_media"
+      ? "apply_vehicle_media_review"
+      : "apply_moderation_review";
+    const { error: reviewError } = await admin.rpc(reviewFunction, {
+      p_item_id: item.id,
+      p_reviewer_id: reviewerId,
+      p_next_status: nextStatus,
+      p_next_decision: nextDecision,
+      p_notes: parsed.data.notes ?? null,
+      p_enforcement: parsed.data.enforcement,
+      p_media_url: promotedUrl,
+    });
+    if (reviewError) {
+      if (promotedUrl) await deleteStoredObject(promotedUrl).catch(() => undefined);
+      if (communityPublication?.displayReference) {
+        await deleteStoredObject(communityPublication.displayReference).catch(() => undefined);
+      }
+      throw new Error(reviewError.message);
     }
-    throw new Error(reviewError.message);
+    if (communityPublication) {
+      const { error: variantError } = await admin
+        .from("community_post_media")
+        .update({
+          display_reference: communityPublication.displayReference,
+          content_sha256: communityPublication.sha256,
+        })
+        .eq("id", item.entity_id);
+      if (variantError) throw new Error(variantError.message);
+    }
+    // A migrated original already sits at its immutable key, so "promotion"
+    // resolves to the same reference; never delete the object we just kept.
+    if (sourceUrl && sourceUrl !== promotedUrl) await deleteOrQueue(sourceUrl, "approved_media_promoted");
+  } catch (error) {
+    console.error("moderation review failed", { itemId: item.id, message: error instanceof Error ? error.message : String(error) });
+    return { ok: false, error: "The review could not be applied. Please try again.", code: "failed" };
   }
-  if (communityPublication) {
-    const { error: variantError } = await admin
-      .from("community_post_media")
-      .update({
-        display_reference: communityPublication.displayReference,
-        content_sha256: communityPublication.sha256,
-      })
-      .eq("id", item.entity_id);
-    if (variantError) throw new Error(variantError.message);
-  }
-  // A migrated original already sits at its immutable key, so "promotion"
-  // resolves to the same reference; never delete the object we just kept.
-  if (sourceUrl && sourceUrl !== promotedUrl) await deleteOrQueue(sourceUrl, "approved_media_promoted");
 
   revalidateModerationPaths();
+  return { ok: true, itemId: item.id, status: nextStatus };
 }
 
 export async function appealModerationItem(formData: FormData) {

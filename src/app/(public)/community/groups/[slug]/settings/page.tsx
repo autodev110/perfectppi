@@ -9,13 +9,15 @@ import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-// Owner-only group settings (plan 13.4). The slug is not editable.
+// Owner/admin group settings (plan 13.4). The slug is not editable; admins
+// cannot make the group more open (the server refuses).
 export default async function GroupSettingsPage({ params }: { params: Promise<{ slug: string }> }) {
   await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const { slug } = await params;
   const group = await getCommunityGroup(slug);
   if (!group) notFound();
-  if ((await getViewerGroupRole(group.id)) !== "owner") redirect(`/community/groups/${group.slug}`);
+  const role = await getViewerGroupRole(group.id);
+  if (role !== "owner" && role !== "admin") redirect(`/community/groups/${group.slug}`);
 
   return (
     <main className="min-h-screen bg-surface px-6 pb-20 pt-24 sm:px-8">

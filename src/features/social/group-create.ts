@@ -40,7 +40,7 @@ export const groupSettingsSchema = z.object({
 export const createGroupSchema = groupSettingsSchema.and(z.object({ slug: slugSchema }));
 
 export type GroupCreateOutcome =
-  | "invalid" | "feature_unavailable" | "account_too_new" | "restricted" | "rate_limited" | "slug_taken" | "policy_not_allowed" | "forbidden" | "failed";
+  | "invalid" | "feature_unavailable" | "account_too_new" | "restricted" | "rate_limited" | "slug_taken" | "policy_not_allowed" | "policy_owner_only" | "forbidden" | "failed";
 
 export const GROUP_CREATE_MESSAGES: Record<Exclude<GroupCreateOutcome, "invalid">, string> = {
   feature_unavailable: FEATURE_UNAVAILABLE_MESSAGE.group_creation ?? "Creating groups is not available yet.",
@@ -49,7 +49,8 @@ export const GROUP_CREATE_MESSAGES: Record<Exclude<GroupCreateOutcome, "invalid"
   rate_limited: "You have created a lot of groups recently. You can create up to two per day and own up to five.",
   slug_taken: "That group address is already taken. Choose a different one.",
   policy_not_allowed: "Private and unlisted groups need request approval or invitations.",
-  forbidden: "Only the group owner can change these settings.",
+  policy_owner_only: "Only the group owner can make the group more open.",
+  forbidden: "Only the group owner or an admin can change these settings.",
   failed: "The group could not be saved. Please try again.",
 };
 
@@ -77,8 +78,9 @@ function classify(error: { code?: string; message?: string }): GroupCreateResult
         : message.includes("group_creation_rate_limited") ? "rate_limited"
           : message.includes("group_slug_taken") || error.code === "23505" ? "slug_taken"
             : message.includes("group_policy_not_allowed") ? "policy_not_allowed"
-              : error.code === "42501" ? "forbidden"
-                : "failed";
+              : message.includes("group_policy_owner_only") ? "policy_owner_only"
+                : error.code === "42501" ? "forbidden"
+                  : "failed";
   if (outcome === "failed") console.warn("group create/update failed", { code: error.code, message: message.slice(0, 300) });
   return { ok: false, outcome, message: GROUP_CREATE_MESSAGES[outcome] };
 }

@@ -127,7 +127,7 @@ export async function createConversation(input: {
     const [{ data: existingConversations }, { data: existingMessages }] = await Promise.all([
       admin
         .from("conversations")
-        .select("id, created_at, marketplace_listing_id, participant_low_id, participant_high_id, request_status, requested_by, request_context_group_id")
+        .select("id, created_at, marketplace_listing_id, participant_low_id, participant_high_id, request_status, requested_by, request_context_group_id, contact_kind")
         .in("id", sharedConversationIds),
       admin
         .from("messages")
@@ -173,7 +173,12 @@ export async function createConversation(input: {
     const listingChanged = !!listingId && listingId !== previousListingId;
     const eligibilityPromoted = eligibility.kind === "accepted"
       && existingConversation?.request_status !== "accepted";
-    if (listingChanged || eligibilityPromoted) {
+    // A thread that started as a group request (or a legacy thread) takes on
+    // the stronger relationship once one exists, so the per-send rules match.
+    const contactUpgraded = eligibility.kind === "accepted"
+      && existingConversation?.request_status === "accepted"
+      && (existingConversation.contact_kind === "group_request" || existingConversation.contact_kind === "legacy");
+    if (listingChanged || eligibilityPromoted || contactUpgraded) {
       const { error: updateError } = await admin
         .from("conversations")
         .update({
@@ -181,6 +186,7 @@ export async function createConversation(input: {
           request_status: "accepted",
           request_context_group_id: null,
           request_resolved_at: new Date().toISOString(),
+          contact_kind: eligibility.kind === "accepted" ? eligibility.contact : "group_request",
         })
         .eq("id", existingConversationId);
       if (updateError) return { error: "Failed to update conversation" };
@@ -227,7 +233,7 @@ export async function createConversation(input: {
   if (!conversation.was_created) {
     const { data: racedConversation } = await admin
       .from("conversations")
-      .select("marketplace_listing_id, request_status")
+      .select("marketplace_listing_id, request_status, contact_kind")
       .eq("id", conversation.conversation_id)
       .single();
     if (!racedConversation) return { error: "Failed to load conversation" };
@@ -244,6 +250,7 @@ export async function createConversation(input: {
           request_status: "accepted",
           request_context_group_id: null,
           request_resolved_at: new Date().toISOString(),
+          contact_kind: eligibility.kind === "accepted" ? eligibility.contact : "group_request",
         })
         .eq("id", conversation.conversation_id);
       if (updateError) return { error: "Failed to update conversation" };
@@ -297,7 +304,7 @@ export async function sendMessage(input: {
 
   const { data: membership } = await admin
     .from("conversation_participants")
-    .select("conversation_id, conversations(request_status, requested_by, marketplace_listing_id, request_context_group_id)")
+    .select("conversation_id, conversations(request_status, requested_by, marketplace_listing_id, request_context_group_id, contact_kind)")
     .eq("conversation_id", parsed.data.conversationId)
     .eq("profile_id", profile.id)
     .maybeSingle();
@@ -309,6 +316,7 @@ export async function sendMessage(input: {
     requested_by: string | null;
     marketplace_listing_id: string | null;
     request_context_group_id: string | null;
+    contact_kind: string;
   } | null;
   if (!conversation || conversation.request_status === "declined") {
     return { error: "Conversation unavailable" };
@@ -349,15 +357,11 @@ export async function sendMessage(input: {
     }
   }
 
-  // New direct friend conversations remain subject to both participants'
-  // current privacy settings. Marketplace, accepted group requests, and
-  // legacy conversations keep their established access rules.
-  if (
-    conversation.request_status === "accepted"
-    && conversation.requested_by
-    && !conversation.marketplace_listing_id
-    && !conversation.request_context_group_id
-  ) {
+  // Friend threads remain subject to both participants' current privacy
+  // settings. Marketplace, service, accepted group requests, and legacy
+  // conversations keep their established access rules (the database trigger
+  // applies the same rule).
+  if (conversation.request_status === "accepted" && conversation.contact_kind === "friend") {
     const eligibility = await resolveMessageEligibility(
       profile.id,
       participants[0].profile_id,

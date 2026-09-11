@@ -34,7 +34,7 @@ export async function GET(
 
 const SETTINGS_STATUS: Record<GroupCreateOutcome, number> = {
   invalid: 400, feature_unavailable: 503, account_too_new: 403, restricted: 403,
-  rate_limited: 429, slug_taken: 409, policy_not_allowed: 400, forbidden: 403, failed: 500,
+  rate_limited: 429, slug_taken: 409, policy_not_allowed: 400, policy_owner_only: 403, forbidden: 403, failed: 500,
 };
 
 // PATCH /api/community/groups/<slug> — owner-only settings (plan 13.4).

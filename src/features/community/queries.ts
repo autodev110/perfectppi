@@ -607,7 +607,12 @@ export async function getMyCommunityPosts(status: "active" | "archived" | "revie
   return cleanPosts((data ?? []) as CommunityPost[], true);
 }
 
-export async function getAdminCommunityPosts(page = 1, perPage = 50, status?: "active" | "archived" | "all") {
+/**
+ * Admin listing. "review" is what the author sees as "in review": posts held
+ * by moderation, or hidden while their photos wait for the media queue
+ * (decide those in /admin/moderation?tab=media).
+ */
+export async function getAdminCommunityPosts(page = 1, perPage = 50, status?: "active" | "archived" | "review" | "all") {
   const admin = createAdminClient();
   const from = (page - 1) * perPage;
   const to = from + perPage - 1;
@@ -619,7 +624,17 @@ export async function getAdminCommunityPosts(page = 1, perPage = 50, status?: "a
     .order("created_at", { ascending: true, referencedTable: "community_comments" })
     .range(from, to);
 
-  if (status && status !== "all") {
+  if (status === "review") {
+    const { data: held } = await admin
+      .from("community_post_assemblies")
+      .select("post_id")
+      .in("state", ["submitted", "assembling"]);
+    const heldIds = (held ?? []).map((assembly) => assembly.post_id);
+    query = query.neq("status", "archived");
+    query = heldIds.length > 0
+      ? query.or(`moderation_status.neq.active,id.in.(${heldIds.join(",")})`)
+      : query.neq("moderation_status", "active");
+  } else if (status && status !== "all") {
     query = query.eq("status", status);
   } else {
     // Default: only active + archived (not hidden legacy)

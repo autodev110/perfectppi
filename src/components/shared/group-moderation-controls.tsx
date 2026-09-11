@@ -73,6 +73,9 @@ export function GroupPostModerationMenu({
   );
 }
 
+// Role matrix (plan 13.4): owner does everything; admins manage members,
+// moderators, and bans but never other admins or ownership; moderators may
+// only remove plain members.
 export function GroupMemberModerationMenu({
   slug,
   profileId,
@@ -81,15 +84,17 @@ export function GroupMemberModerationMenu({
 }: {
   slug: string;
   profileId: string;
-  role: "owner" | "moderator" | "member";
-  viewerRole: "owner" | "moderator";
+  role: "owner" | "admin" | "moderator" | "member";
+  viewerRole: "owner" | "admin" | "moderator";
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<GroupModerationAction | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (role === "owner") return null;
-  if (viewerRole === "moderator" && role === "moderator") return null;
+  if (viewerRole === "moderator" && role !== "member") return null;
+  if (viewerRole === "admin" && role === "admin") return null;
+  const canAssignRoles = viewerRole === "owner" || viewerRole === "admin";
 
   async function run(action: GroupModerationAction, confirmText?: string) {
     if (confirmText && !window.confirm(confirmText)) return;
@@ -107,23 +112,28 @@ export function GroupMemberModerationMenu({
 
   return (
     <div className="flex flex-wrap items-center gap-1">
-      {viewerRole === "owner" ? (
-        <Button type="button" size="sm" variant="ghost" disabled={busy !== null} onClick={() => run(role === "moderator" ? "make_member" : "make_moderator")}>
-          {role === "moderator" ? "Make member" : "Make moderator"}
+      {canAssignRoles ? (
+        <Button type="button" size="sm" variant="ghost" disabled={busy !== null} onClick={() => run(role === "member" ? "make_moderator" : "make_member")}>
+          {role === "member" ? "Make moderator" : "Make member"}
+        </Button>
+      ) : null}
+      {viewerRole === "owner" && role !== "admin" ? (
+        <Button type="button" size="sm" variant="ghost" disabled={busy !== null} onClick={() => run("make_admin", "Make this member an admin? Admins manage members, moderators, posts, and ordinary settings.")}>
+          Make admin
         </Button>
       ) : null}
       <Button type="button" size="sm" variant="ghost" disabled={busy !== null} onClick={() => run("remove_member", "Remove this member from the group? They can rejoin later.")}>
         Remove
       </Button>
+      {canAssignRoles ? (
+        <Button type="button" size="sm" variant="ghost" className="text-destructive hover:text-destructive" disabled={busy !== null} onClick={() => run("ban_member", "Ban this member? They will not be able to rejoin until unbanned.")}>
+          Ban
+        </Button>
+      ) : null}
       {viewerRole === "owner" ? (
-        <>
-          <Button type="button" size="sm" variant="ghost" className="text-destructive hover:text-destructive" disabled={busy !== null} onClick={() => run("ban_member", "Ban this member? They will not be able to rejoin until unbanned.")}>
-            Ban
-          </Button>
-          <Button type="button" size="sm" variant="ghost" disabled={busy !== null} onClick={() => run("transfer_ownership", "Transfer ownership of this group to this member? You will become a moderator.")}>
-            Make owner
-          </Button>
-        </>
+        <Button type="button" size="sm" variant="ghost" disabled={busy !== null} onClick={() => run("transfer_ownership", "Transfer ownership of this group to this member? You will become a moderator.")}>
+          Make owner
+        </Button>
       ) : null}
       {error ? <span role="alert" className="text-xs text-destructive">{error}</span> : null}
     </div>

@@ -72,4 +72,40 @@ final class GarageRenderHarnessTests: XCTestCase {
         try snapshot(Host(vehicles: vehicles), name: "garage-list")
         try snapshot(NavigationStack { VehicleDetailView(preview: vehicles[0]) }, name: "garage-detail")
     }
+
+    private func conversation(_ id: String, name: String, text: String, unread: Int = 0, request: Bool = false) -> ConversationSummary {
+        let other = ConversationProfile(id: "p\(id)", displayName: name, username: name.lowercased(), avatarUrl: nil, role: .consumer)
+        let me = ConversationProfile(id: "me", displayName: "Me", username: "me", avatarUrl: nil, role: .consumer)
+        return ConversationSummary(
+            id: id, createdAt: Date(), participants: [me, other], otherParticipants: [other], listingContext: nil,
+            lastMessage: ConversationLastMessage(id: "m\(id)", senderId: other.id, content: text, status: "unread", createdAt: Date(), hasAttachment: false),
+            unreadCount: unread, requestStatus: request ? "pending" : "accepted", requestedBy: request ? other.id : nil
+        )
+    }
+
+    func testRenderMessages() throws {
+        let inbox = [
+            conversation("1", name: "Bea", text: "Is the Supra still available?", unread: 2),
+            conversation("2", name: "Marco", text: "Thanks for the inspection report!"),
+        ]
+        let requests = [conversation("3", name: "Dana", text: "Hi from the E30 group — quick question about your build.", request: true)]
+        let full = MessagesView.MessageBoxes(inbox: inbox, requests: requests)
+        let empty = MessagesView.MessageBoxes(inbox: [], requests: [])
+        try snapshot(NavigationStack { MessagesView(preview: full, currentProfileId: "me") }, name: "messages-inbox")
+        try snapshot(NavigationStack { MessagesView(preview: full, currentProfileId: "me", showingRequests: true) }, name: "messages-requests")
+        try snapshot(NavigationStack { MessagesView(preview: empty, currentProfileId: "me") }, name: "messages-inbox-empty")
+        try snapshot(NavigationStack { MessagesView(preview: empty, currentProfileId: "me", showingRequests: true) }, name: "messages-requests-empty")
+
+        let other = ConversationProfile(id: "p1", displayName: "Bea", username: "bea", avatarUrl: nil, role: .consumer)
+        let me = ConversationProfile(id: "me", displayName: "Me", username: "me", avatarUrl: nil, role: .consumer)
+        let message = { (id: String, mine: Bool, text: String) in
+            ConversationMessage(id: id, conversationId: "1", senderId: mine ? "me" : "p1", content: text, status: "read", hasAttachment: false, attachmentUrl: nil, attachmentType: nil, createdAt: Date())
+        }
+        let short = ConversationThread(
+            id: "1", createdAt: Date(), participants: [me, other], listingContext: nil,
+            messages: [message("a", false, "Is the Supra still available?"), message("b", true, "Yes — want to see it this weekend?")],
+            requestStatus: "accepted", requestedBy: nil, canSend: true, sendUnavailableReason: nil
+        )
+        try snapshot(NavigationStack { MessageThreadView(preview: short, currentProfileId: "me") }, name: "messages-thread-short")
+    }
 }

@@ -69,9 +69,10 @@ SELECT '6a000000-0000-0000-0000-000000000001'::uuid, 'filter-group', 'Filter Gro
        'Test group', 'general', 'active', 'public', 'open', true, viewer_id
 FROM filter_ids;
 
+-- Every live group has an available owner (13.4); the viewer takes that seat.
 INSERT INTO public.community_group_memberships (group_id, profile_id, role, status)
 SELECT '6a000000-0000-0000-0000-000000000001'::uuid, viewer_id,
-       'member'::public.community_group_role,
+       'owner'::public.community_group_role,
        'active'::public.community_group_membership_status
 FROM filter_ids
 UNION ALL

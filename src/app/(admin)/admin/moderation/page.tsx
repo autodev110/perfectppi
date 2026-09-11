@@ -17,7 +17,11 @@ import { formatDate } from "@/lib/utils/formatting";
 
 export const dynamic = "force-dynamic";
 
-type PageProps = { searchParams: Promise<{ tab?: string }> };
+type PageProps = { searchParams: Promise<{ tab?: string; error?: string; reviewed?: string }> };
+
+const SCANNER_HELP =
+  "The specialist image safeguard is on but no scanner is configured (CHILD_SAFETY_SCANNER_URL / CHILD_SAFETY_SCANNER_TOKEN). "
+  + "Photos are held and cannot be approved until it is configured, or until the specialist_image_safeguard flag is turned off for this environment.";
 
 const MEDIA_TAB = "media";
 
@@ -28,11 +32,15 @@ export default async function ModerationPage({ searchParams }: PageProps) {
     ? (params.tab as QueueTab)
     : params.tab === MEDIA_TAB ? MEDIA_TAB : "new";
 
+  // The media queue is loaded for every tab so its count and the scanner
+  // warning are visible wherever a moderator lands.
   const [cases, mediaItems, ops] = await Promise.all([
     tab === MEDIA_TAB ? Promise.resolve([]) : getModerationQueueCases(tab as QueueTab),
-    tab === MEDIA_TAB ? getModerationQueue("pending_review") : Promise.resolve([]),
+    getModerationQueue("pending_review"),
     getModerationOperationsStatus(),
   ]);
+  const heldMedia = mediaItems.filter((item) => item.entity_type === "community_post_media" || item.entity_type === "vehicle_media");
+  const scannerMissing = heldMedia.some((item) => item.reason_codes.includes("specialist_scan_not_configured"));
   const opsAlarm = (ops.casesOverdue ?? 0) > 0 || (ops.urgentUnacknowledged ?? 0) > 0
     || (ops.outboxDeadLettered ?? 0) > 0 || (ops.casesOpen ?? 0) > 25 || (ops.casesOver24hShare ?? 0) > 20;
   const canDecide = capabilities.has("content_decide");
@@ -56,6 +64,19 @@ export default async function ModerationPage({ searchParams }: PageProps) {
         </div>
       </div>
 
+      {params.error ? <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{params.error}</p> : null}
+      {params.reviewed ? <p className="rounded-xl border border-teal/30 bg-teal/5 p-3 text-sm text-teal">Decision recorded ({params.reviewed.replaceAll("_", " ")}).</p> : null}
+      {scannerMissing ? (
+        <p className="rounded-xl border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+          {SCANNER_HELP} <Link href="/admin/flags" className="font-semibold underline">Open flags</Link>
+        </p>
+      ) : null}
+      {tab !== MEDIA_TAB && heldMedia.length > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {heldMedia.length} photo{heldMedia.length === 1 ? "" : "s"} waiting in <Link href={`/admin/moderation?tab=${MEDIA_TAB}`} className="font-semibold underline">Media scans</Link>.
+        </p>
+      ) : null}
+
       <Card className={opsAlarm ? "border-destructive/40" : undefined}>
         <CardContent className="flex flex-wrap gap-x-6 gap-y-2 p-4 text-sm">
           <span><strong>{ops.casesOpen ?? 0}</strong> open</span>
@@ -78,7 +99,7 @@ export default async function ModerationPage({ searchParams }: PageProps) {
           </Button>
         ))}
         <Button size="sm" variant={tab === MEDIA_TAB ? "default" : "outline"} asChild>
-          <Link href={`/admin/moderation?tab=${MEDIA_TAB}`}>Media scans</Link>
+          <Link href={`/admin/moderation?tab=${MEDIA_TAB}`}>Media scans{heldMedia.length > 0 ? ` (${heldMedia.length})` : ""}</Link>
         </Button>
       </div>
 
@@ -131,12 +152,11 @@ export default async function ModerationPage({ searchParams }: PageProps) {
             ))}
           </div>
         )
-      ) : mediaItems.filter((item) => item.entity_type === "community_post_media" || item.entity_type === "vehicle_media").length === 0 ? (
+      ) : heldMedia.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground">No media awaiting review.</CardContent></Card>
       ) : (
         <div className="space-y-4">
-          {mediaItems
-            .filter((item) => item.entity_type === "community_post_media" || item.entity_type === "vehicle_media")
+          {heldMedia
             .map((item) => {
               const author = Array.isArray(item.author) ? item.author[0] : item.author;
               return (
@@ -170,6 +190,9 @@ export default async function ModerationPage({ searchParams }: PageProps) {
                       <span>Reasons: {item.reason_codes.join(", ") || "none"}</span>
                       <span>Provider: {item.model_provider}</span>
                     </div>
+                    {item.reason_codes.includes("specialist_scan_not_configured") ? (
+                      <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Held because the specialist scanner is not configured. Approve works once the scanner is set up or the specialist_image_safeguard flag is off.</p>
+                    ) : null}
                     {canDecide && !(item.status === "legal_hold" && !canLegalHold) ? (
                       <form action={reviewModerationItem} className="space-y-3 rounded-xl border p-4">
                         <input type="hidden" name="item_id" value={item.id} />

@@ -67,6 +67,8 @@ export interface MessageRecipient {
   role: ProfileRow["role"];
   contact_mode: "message" | "request";
   shared_group_name: string | null;
+  /** Why this person is listed; `service` covers technicians, inspections, and colleagues. */
+  contact_kind?: "friend" | "service" | "group_request";
 }
 
 async function getMyProfileId() {
@@ -299,12 +301,57 @@ export async function getMessageRequests(limit = 50) {
   return getConversationBox("requests", limit);
 }
 
+/**
+ * Service contacts (see `social_service_contact_allowed`): listed technicians
+ * with public profiles, the other side of an assigned inspection, and
+ * colleagues in the viewer's organization.
+ */
+async function getServiceContactIds(profileId: string, limit: number): Promise<Set<string>> {
+  const admin = createAdminClient();
+  const [{ data: technicians }, { data: inspections }, { data: myTechnicianProfile }] = await Promise.all([
+    admin
+      .from("technician_profiles")
+      .select("profile_id, profile:profiles!technician_profiles_profile_id_fkey!inner(id, is_public)")
+      .eq("profile.is_public", true)
+      .neq("profile_id", profileId)
+      .order("total_inspections", { ascending: false })
+      .limit(limit),
+    admin
+      .from("ppi_requests")
+      .select("requester_id, assigned_tech_id")
+      .or(`requester_id.eq.${profileId},assigned_tech_id.eq.${profileId}`)
+      .not("assigned_tech_id", "is", null)
+      .limit(500),
+    admin
+      .from("technician_profiles")
+      .select("organization_id")
+      .eq("profile_id", profileId)
+      .maybeSingle(),
+  ]);
+  const ids = new Set<string>();
+  for (const technician of technicians ?? []) ids.add(technician.profile_id);
+  for (const request of inspections ?? []) {
+    const other = request.requester_id === profileId ? request.assigned_tech_id : request.requester_id;
+    if (other) ids.add(other);
+  }
+  if (myTechnicianProfile?.organization_id) {
+    const { data: colleagues } = await admin
+      .from("technician_profiles")
+      .select("profile_id")
+      .eq("organization_id", myTechnicianProfile.organization_id)
+      .neq("profile_id", profileId);
+    for (const colleague of colleagues ?? []) ids.add(colleague.profile_id);
+  }
+  ids.delete(profileId);
+  return ids;
+}
+
 export async function getMessageRecipientsDirectory(limit = 100): Promise<MessageRecipient[]> {
   const { profileId } = await getMyProfileId();
   if (!profileId) return [];
 
   const admin = createAdminClient();
-  const [{ data: me }, { data: myFriendships }, { data: myMemberships }] = await Promise.all([
+  const [{ data: me }, { data: myFriendships }, { data: myMemberships }, serviceIds] = await Promise.all([
     admin.from("profiles").select("allow_friend_messages").eq("id", profileId).single(),
     admin
       .from("friend_relationships")
@@ -316,6 +363,7 @@ export async function getMessageRecipientsDirectory(limit = 100): Promise<Messag
       .select("group_id")
       .eq("profile_id", profileId)
       .eq("status", "active"),
+    getServiceContactIds(profileId, limit),
   ]);
 
   const friendIds = new Set((myFriendships ?? []).map((row) => (
@@ -336,6 +384,7 @@ export async function getMessageRecipientsDirectory(limit = 100): Promise<Messag
     : { data: [] as Array<{ profile_id: string; group_id: string }> };
   const candidateIds = Array.from(new Set([
     ...friendIds,
+    ...serviceIds,
     ...(sharedMemberships ?? []).map((membership) => membership.profile_id),
   ]));
   if (candidateIds.length === 0) return [];
@@ -358,13 +407,17 @@ export async function getMessageRecipientsDirectory(limit = 100): Promise<Messag
     const isFriend = friendIds.has(profile.id);
     const sharedGroupId = firstSharedGroupByProfile.get(profile.id);
     if (isFriend && me?.allow_friend_messages && profile.allow_friend_messages) {
-      return [{ ...profile, contact_mode: "message" as const, shared_group_name: null }];
+      return [{ ...profile, contact_mode: "message" as const, shared_group_name: null, contact_kind: "friend" as const }];
+    }
+    if (serviceIds.has(profile.id)) {
+      return [{ ...profile, contact_mode: "message" as const, shared_group_name: null, contact_kind: "service" as const }];
     }
     if (profile.discoverable && sharedGroupId && profile.allow_group_message_requests) {
       return [{
         ...profile,
         contact_mode: "request" as const,
         shared_group_name: groupNameById.get(sharedGroupId) ?? "a shared group",
+        contact_kind: "group_request" as const,
       }];
     }
     return [];
@@ -424,7 +477,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
   const [{ data: conversation }, { data: participants }, { data: messages }] = await Promise.all([
     admin
       .from("conversations")
-      .select("id, created_at, marketplace_listing_id, request_status, requested_by, request_context_group_id")
+      .select("id, created_at, marketplace_listing_id, request_status, requested_by, request_context_group_id, contact_kind")
       .eq("id", conversationId)
       .maybeSingle(),
     admin
@@ -473,12 +526,9 @@ export async function getConversation(conversationId: string): Promise<Conversat
       : conversation.requested_by === profileId
         ? "Waiting for this member to accept your request."
         : "Accept this request to reply.";
-  } else if (
-    conversation.requested_by
-    && !conversation.marketplace_listing_id
-    && !conversation.request_context_group_id
-    && otherProfileId
-  ) {
+  } else if (conversation.contact_kind === "friend" && otherProfileId) {
+    // Only friend threads re-check privacy settings on every send; service,
+    // marketplace, and legacy threads keep their established access.
     const eligibility = await resolveMessageEligibility(profileId, otherProfileId);
     canSend = !("error" in eligibility) && eligibility.kind === "accepted";
     if (!canSend) sendUnavailableReason = "Friend messages are currently disabled.";

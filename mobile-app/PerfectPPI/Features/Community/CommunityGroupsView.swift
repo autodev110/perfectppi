@@ -246,7 +246,7 @@ struct CommunityGroupDetailView: View {
 
     @ViewBuilder
     private func content(_ detail: CommunityGroupDetail) -> some View {
-        let canModerate = detail.group.membershipRole == "owner" || detail.group.membershipRole == "moderator"
+        let canModerate = detail.group.moderates
         List {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
@@ -377,14 +377,16 @@ struct CommunityGroupDetailView: View {
                         Label("Post to group", systemImage: "plus.bubble")
                     }
                 }
-                if detail.group.membershipRole == "owner" {
+                if detail.group.administers {
                     Menu {
                         Button("Group settings", systemImage: "gearshape") { showingSettings = true }
-                        Button("Archive group", systemImage: "archivebox", role: .destructive) { showingArchive = true }
+                        if detail.group.membershipRole == "owner" {
+                            Button("Archive group", systemImage: "archivebox", role: .destructive) { showingArchive = true }
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                    .accessibilityLabel("Owner tools")
+                    .accessibilityLabel(detail.group.membershipRole == "owner" ? "Owner tools" : "Admin tools")
                 }
             }
         }
@@ -668,7 +670,16 @@ private struct CommunityGroupMembersView: View {
 
     private var viewerRole: String? { group.membershipRole }
     private var isOwner: Bool { viewerRole == "owner" }
-    private var canModerate: Bool { isOwner || viewerRole == "moderator" }
+    private var isAdmin: Bool { viewerRole == "admin" }
+    private var canModerate: Bool { group.moderates }
+    /// Plan 13.4: owner acts on anyone but the owner; admins on moderators and
+    /// members; moderators only on members.
+    private func canAct(on member: CommunityGroupMember) -> Bool {
+        guard member.role != "owner" else { return false }
+        if isOwner { return true }
+        if isAdmin { return member.role != "admin" }
+        return member.role == "member"
+    }
 
     var body: some View {
         AsyncContent(
@@ -744,7 +755,7 @@ private struct CommunityGroupMembersView: View {
         } label: {
             PersonRow(person: member.person, subtitle: roleLabel(member.role)) {
                 if member.role != "member" {
-                    Image(systemName: member.role == "owner" ? "crown.fill" : "shield.lefthalf.filled")
+                    Image(systemName: member.role == "owner" ? "crown.fill" : member.role == "admin" ? "shield.fill" : "shield.lefthalf.filled")
                         .foregroundStyle(Theme.Palette.primary)
                         .accessibilityLabel(roleLabel(member.role))
                 }
@@ -752,17 +763,24 @@ private struct CommunityGroupMembersView: View {
         }
         .disabled(member.username == nil)
         .contextMenu {
-            if canModerate && !isSelf && member.role != "owner" && (isOwner || member.role == "member") {
-                if isOwner {
-                    Button(member.role == "moderator" ? "Make member" : "Make moderator", systemImage: "shield") {
-                        Task { await act(member.role == "moderator" ? .makeMember : .makeModerator, member) }
+            if canModerate && !isSelf && canAct(on: member) {
+                if isOwner || isAdmin {
+                    Button(member.role == "member" ? "Make moderator" : "Make member", systemImage: "shield") {
+                        Task { await act(member.role == "member" ? .makeModerator : .makeMember, member) }
                     }
+                }
+                if isOwner && member.role != "admin" {
+                    Button("Make admin", systemImage: "shield.fill") {
+                        Task { await act(.makeAdmin, member) }
+                    }
+                }
+                if isOwner {
                     Button("Make owner", systemImage: "crown") { pendingTransfer = member }
                 }
                 Button("Remove from group", systemImage: "person.badge.minus") {
                     Task { await act(.removeMember, member) }
                 }
-                if isOwner {
+                if isOwner || isAdmin {
                     Button("Ban", systemImage: "hand.raised", role: .destructive) { pendingBan = member }
                 }
             }
@@ -772,6 +790,7 @@ private struct CommunityGroupMembersView: View {
     private func roleLabel(_ role: String) -> String {
         switch role {
         case "owner": "Owner"
+        case "admin": "Admin"
         case "moderator": "Moderator"
         default: "Member"
         }

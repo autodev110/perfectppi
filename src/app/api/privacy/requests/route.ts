@@ -55,6 +55,19 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  // Plan 13.4: a member who still owns an active group must transfer it or
+  // archive it first; otherwise the group would be left without an owner.
+  if (parsed.data.requestType === "deletion") {
+    const { data: ownedGroups } = await admin.rpc("list_owned_active_groups", { p_profile_id: account.profile.id });
+    if (ownedGroups?.length) {
+      const names = ownedGroups.map((group) => group.name).join(", ");
+      return NextResponse.json({
+        error: `Transfer ownership or archive ${ownedGroups.length === 1 ? "this group" : "these groups"} before deleting your account: ${names}.`,
+        code: "group_ownership_required",
+        groups: ownedGroups,
+      }, { status: 409 });
+    }
+  }
   const { count } = await admin
     .from("privacy_requests")
     .select("id", { count: "exact", head: true })

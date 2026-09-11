@@ -10,6 +10,7 @@ import { ExternalLink, MessageSquare, Users } from "lucide-react";
 const STATUS_BADGE: Record<string, string> = {
   active: "bg-teal/10 text-teal border-teal/20",
   archived: "bg-surface-container text-on-surface-variant border-outline-variant",
+  hidden: "bg-amber-50 text-amber-900 border-amber-200",
 };
 
 type PageProps = {
@@ -22,10 +23,12 @@ function getVehicleName(vehicle: { year: number | null; make: string | null; mod
 
 export default async function AdminCommunityPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const tab = params.tab === "archived" ? "archived" : params.tab === "all" ? "all" : "active";
+  const tab = params.tab === "archived" ? "archived" : params.tab === "all" ? "all" : params.tab === "review" ? "review" : "active";
 
-  const statusFilter = tab === "all" ? "all" : (tab as "active" | "archived");
-  const { posts, total } = await getAdminCommunityPosts(1, 100, statusFilter);
+  const [{ posts, total }, reviewCount] = await Promise.all([
+    getAdminCommunityPosts(1, 100, tab),
+    tab === "review" ? Promise.resolve(null) : getAdminCommunityPosts(1, 1, "review").then((result) => result.total),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -41,7 +44,7 @@ export default async function AdminCommunityPage({ searchParams }: PageProps) {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {(["active", "archived", "all"] as const).map((t) => (
+        {(["active", "review", "archived", "all"] as const).map((t) => (
           <Link
             key={t}
             href={`/admin/community${t !== "active" ? `?tab=${t}` : ""}`}
@@ -51,10 +54,16 @@ export default async function AdminCommunityPage({ searchParams }: PageProps) {
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t === "all" ? "All" : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === "all" ? "All" : t === "review" ? `In review${reviewCount ? ` (${reviewCount})` : ""}` : t.charAt(0).toUpperCase() + t.slice(1)}
           </Link>
         ))}
       </div>
+      {tab === "review" ? (
+        <p className="text-sm text-muted-foreground">
+          These posts are hidden while their photos wait for a decision. Approve or reject the photos in{" "}
+          <Link href="/admin/moderation?tab=media" className="font-semibold underline">Moderation → Media scans</Link>; the post publishes when every photo is cleared.
+        </p>
+      ) : null}
 
       <Card>
         <CardHeader>

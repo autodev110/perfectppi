@@ -21,6 +21,61 @@ enum AdminAPI {
         try await APIClient.shared.get("/api/admin/metrics")
     }
 
+    // MARK: - Moderation queue (held photos / videos)
+
+    struct ModerationQueueAuthor: Codable, Hashable {
+        let id: String
+        let displayName: String?
+        let username: String?
+    }
+
+    struct ModerationQueueItem: Codable, Identifiable, Hashable {
+        let id: String
+        let entityType: String
+        let entityId: String
+        let status: String
+        let riskLevel: String
+        let reasonCodes: [String]
+        let contentPreview: String?
+        let mediaType: String?
+        let createdAt: Date?
+        let author: ModerationQueueAuthor?
+        let scannerNotConfigured: Bool
+
+        var authorLabel: String {
+            author?.displayName ?? author?.username.map { "@\($0)" } ?? "PerfectPPI member"
+        }
+    }
+
+    struct ModerationQueueResponse: Codable {
+        let items: [ModerationQueueItem]
+        let canDecide: Bool
+        let scannerNotConfigured: Bool
+    }
+
+    /// Needs the queue_read grant; the server answers 403 with
+    /// `capability_required` otherwise.
+    static func moderationQueue() async throws -> ModerationQueueResponse {
+        try await APIClient.shared.get("/api/admin/moderation/queue")
+    }
+
+    private struct ReviewPayload: Encodable {
+        let decision: String
+        let notes: String?
+    }
+
+    struct ReviewResult: Decodable {
+        let itemId: String
+        let status: String
+    }
+
+    static func reviewModerationItem(id: String, approve: Bool, notes: String? = nil) async throws -> ReviewResult {
+        try await APIClient.shared.postCamel(
+            "/api/admin/moderation/items/\(id)/review",
+            body: ReviewPayload(decision: approve ? "approve" : "reject", notes: notes)
+        )
+    }
+
     // MARK: - Users
 
     struct UsersResponse: Codable {

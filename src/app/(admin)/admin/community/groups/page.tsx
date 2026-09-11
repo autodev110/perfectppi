@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createCuratedCommunityGroup } from "@/features/social/group-actions";
+import { createCuratedCommunityGroup, reviewCommunityGroup } from "@/features/social/group-actions";
 import { getAdminCommunityGroups } from "@/features/social/groups";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,10 @@ export const dynamic = "force-dynamic";
 export default async function AdminCommunityGroupsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; created?: string }>;
+  searchParams: Promise<{ error?: string; created?: string; reviewed?: string }>;
 }) {
   const [groups, params] = await Promise.all([getAdminCommunityGroups(), searchParams]);
+  const needsReview = groups.filter((group) => group.review_reason);
   return (
     <div className="space-y-6">
       <div>
@@ -26,6 +27,27 @@ export default async function AdminCommunityGroupsPage({
       </div>
       {params.error ? <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{params.error}</p> : null}
       {params.created ? <p className="rounded-xl border border-teal/30 bg-teal/5 p-3 text-sm text-teal">Group created.</p> : null}
+      {params.reviewed ? <p className="rounded-xl border border-teal/30 bg-teal/5 p-3 text-sm text-teal">Review action recorded in the group&apos;s moderation log.</p> : null}
+      {needsReview.length > 0 ? (
+        <Card>
+          <CardHeader><CardTitle>Needs platform review ({needsReview.length})</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">These groups have no available owner, so new posts and role changes are paused. Assign a willing active member as owner or archive the group. Both actions need the <code>content_decide</code> capability and are audited.</p>
+            {needsReview.map((group) => (
+              <div key={group.id} className="rounded-xl border p-4">
+                <div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{group.name}</p><Badge variant="destructive">{group.review_reason === "missing_owner" ? "No owner" : "Owner unavailable"}</Badge><span className="text-xs text-muted-foreground">/{group.slug} · {group.active_member_count} active members</span></div>
+                <form action={reviewCommunityGroup} className="mt-3 grid gap-3 md:grid-cols-[1fr_2fr_auto_auto] md:items-end">
+                  <input type="hidden" name="group_id" value={group.id} />
+                  <div className="space-y-1"><Label htmlFor={`owner-${group.id}`}>New owner (@username)</Label><Input id={`owner-${group.id}`} name="username" maxLength={64} placeholder="@member" /></div>
+                  <div className="space-y-1"><Label htmlFor={`reason-${group.id}`}>Reason (logged)</Label><Input id={`reason-${group.id}`} name="reason" required minLength={10} maxLength={500} placeholder="Owner suspended; member volunteered in the group" /></div>
+                  <Button type="submit" name="decision" value="assign_owner" size="sm">Assign owner</Button>
+                  <Button type="submit" name="decision" value="archive" size="sm" variant="outline">Archive</Button>
+                </form>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
       <Card>
         <CardHeader><CardTitle>Create group</CardTitle></CardHeader>
         <CardContent>
