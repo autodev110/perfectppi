@@ -139,6 +139,21 @@ BEGIN
     RAISE EXCEPTION 'repeat request was not idempotent';
   END IF;
 
+  -- The seller learns about the request exactly once and never who asked.
+  IF (SELECT count(*) FROM public.notifications
+      WHERE user_id = (SELECT seller_id FROM marketplace_test_ids)
+        AND type = 'listing_inspection_requested'
+        AND data->>'request_id' = v_request.id::text) <> 1 THEN
+    RAISE EXCEPTION 'seller should receive one inspection-request notice per created request';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.notifications
+    WHERE type = 'listing_inspection_requested'
+      AND (data ? 'requester_id' OR data ? 'buyer_id')
+  ) THEN
+    RAISE EXCEPTION 'seller notice must not carry the buyer identity';
+  END IF;
+
   BEGIN
     PERFORM public.request_marketplace_inspection(
       (SELECT seller_id FROM marketplace_test_ids),

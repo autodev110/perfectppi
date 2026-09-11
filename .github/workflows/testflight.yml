@@ -109,6 +109,11 @@ jobs:
           DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
           DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
           DISTRIBUTION_PROFILE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_PROVISIONING_PROFILE_BASE64 }}
+          # Escape hatch for internal builds only: ship without Sign in with
+          # Apple while the App ID/profile are being updated. Such a build
+          # hides the Apple button and must not be submitted for App Review
+          # (Guideline 4.8 requires Sign in with Apple next to Google sign-in).
+          ALLOW_MISSING_APPLE_SIGN_IN: ${{ vars.TESTFLIGHT_ALLOW_MISSING_APPLE_SIGN_IN }}
         run: |
           missing=0
           for name in DISTRIBUTION_CERTIFICATE_BASE64 DISTRIBUTION_CERTIFICATE_PASSWORD DISTRIBUTION_PROFILE_BASE64; do
@@ -179,8 +184,13 @@ jobs:
             echo "::error::The App Store provisioning profile must include the production push-notification entitlement."
             exit 1
           fi
-          if [[ "$profile_apple_sign_in" != "Default" ]]; then
-            echo "::error::The App Store provisioning profile must include Sign in with Apple. Enable it for com.perfectppi.app, regenerate a manual App Store profile, and replace APPLE_DISTRIBUTION_PROVISIONING_PROFILE_BASE64."
+          if [[ "$profile_apple_sign_in" == "Default" ]]; then
+            echo "APPLE_SIGN_IN_ENABLED=YES" >> "$GITHUB_ENV"
+          elif [[ "$ALLOW_MISSING_APPLE_SIGN_IN" == "true" ]]; then
+            echo "::warning::The provisioning profile does not include Sign in with Apple. Because TESTFLIGHT_ALLOW_MISSING_APPLE_SIGN_IN=true, this build drops the entitlement and hides the Apple button. It is for internal testers only and cannot pass App Review; regenerate the profile and remove the variable."
+            echo "APPLE_SIGN_IN_ENABLED=NO" >> "$GITHUB_ENV"
+          else
+            echo "::error::The App Store provisioning profile does not include Sign in with Apple, which the app's entitlements require. In Apple Developer > Identifiers > com.perfectppi.app enable 'Sign In with Apple', then regenerate the manual App Store Connect profile (Profiles > PerfectPPI App Store CI > Edit > Save) and replace APPLE_DISTRIBUTION_PROVISIONING_PROFILE_BASE64 with the new file. To ship an internal-only build without it in the meantime, set the testflight environment variable TESTFLIGHT_ALLOW_MISSING_APPLE_SIGN_IN=true."
             exit 1
           fi
           for domain in \
@@ -330,6 +340,13 @@ jobs:
           archive_path="$RUNNER_TEMP/PerfectPPI-${BUILD_NUMBER}.xcarchive"
           echo "ARCHIVE_PATH=$archive_path" >> "$GITHUB_ENV"
 
+          release_entitlements="mobile-app/PerfectPPI/Resources/PerfectPPI-Release.entitlements"
+          if [[ "$APPLE_SIGN_IN_ENABLED" == "NO" ]]; then
+            # The profile cannot sign this entitlement; drop it for this
+            # archive only. The matching Info.plist flag hides the button.
+            /usr/libexec/PlistBuddy -c 'Delete :com.apple.developer.applesignin' "$release_entitlements"
+          fi
+
           xcodebuild \
             -project "$IOS_PROJECT" \
             -scheme "$IOS_SCHEME" \
@@ -340,6 +357,7 @@ jobs:
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             PERFECTPPI_PROVISIONING_PROFILE_UUID="$PROVISIONING_PROFILE_UUID" \
             PERFECTPPI_SIGNING_KEYCHAIN="$SIGNING_KEYCHAIN" \
+            PERFECTPPI_APPLE_SIGN_IN_ENABLED="$APPLE_SIGN_IN_ENABLED" \
             clean archive
 
       - name: Verify the archive before upload
@@ -380,9 +398,20 @@ jobs:
             echo "::error::The signed archive does not have the production push-notification entitlement."
             exit 1
           fi
-          if [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.applesignin:0' "$signed_entitlements" 2>/dev/null || true)" != "Default" ]]; then
-            echo "::error::The signed archive does not have the Sign in with Apple entitlement."
-            exit 1
+          signed_apple_sign_in="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.applesignin:0' "$signed_entitlements" 2>/dev/null || true)"
+          bundled_apple_sign_in="$(plutil -extract PerfectPPIAppleSignInEnabled raw "$info_plist" 2>/dev/null || true)"
+          if [[ "$APPLE_SIGN_IN_ENABLED" == "YES" ]]; then
+            if [[ "$signed_apple_sign_in" != "Default" || "$bundled_apple_sign_in" != "YES" ]]; then
+              echo "::error::The signed archive does not have the Sign in with Apple entitlement."
+              exit 1
+            fi
+          else
+            # An internal-only build: the entitlement must be absent (or the
+            # profile would have rejected it) and the app must hide the button.
+            if [[ -n "$signed_apple_sign_in" || "$bundled_apple_sign_in" != "NO" ]]; then
+              echo "::error::Sign in with Apple was meant to be disabled for this build, but the archive still advertises it."
+              exit 1
+            fi
           fi
 
           version="$(plutil -extract CFBundleShortVersionString raw "$info_plist")"
@@ -414,6 +443,9 @@ jobs:
             echo "- Commit: \`$GITHUB_SHA\`"
             echo "- Version: \`$MARKETING_VERSION ($BUILD_NUMBER)\`"
             echo "- Bundle: \`$IOS_BUNDLE_ID\`"
+            if [[ "$APPLE_SIGN_IN_ENABLED" != "YES" ]]; then
+              echo "- :warning: Sign in with Apple is disabled in this build (profile lacks the capability). Internal testing only; do not submit it for App Review."
+            fi
             echo "- Apple will process the build before TestFlight displays it."
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -430,3 +462,4 @@ jobs:
           rm -f mobile-app/.env
           rm -f mobile-app/PerfectPPI/Resources/AppConfig.plist
           rm -rf mobile-app/PerfectPPI.xcodeproj
+          git checkout -- mobile-app/PerfectPPI/Resources/PerfectPPI-Release.entitlements 2>/dev/null || true

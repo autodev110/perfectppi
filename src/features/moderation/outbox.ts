@@ -87,13 +87,13 @@ async function moderatorRecipients(): Promise<string[]> {
     .eq("capability", "queue_read")
     .is("revoked_at", null);
   const candidates = [...new Set((data ?? []).map((row) => row.profile_id))];
+  // A suspended or pending holder keeps the grant row but must not be paged.
   const eligible = await Promise.all(candidates.map(async (profileId) => {
-    const { data: hasCapability, error } = await admin.rpc("moderation_has_capability", {
+    const { data: available, error } = await admin.rpc("social_profile_is_available", {
       p_profile_id: profileId,
-      p_capability: "queue_read",
     });
     if (error) throw new Error(`moderator eligibility check failed: ${error.message}`);
-    return hasCapability ? profileId : null;
+    return available ? profileId : null;
   }));
   return eligible.filter((profileId): profileId is string => Boolean(profileId));
 }

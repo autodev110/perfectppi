@@ -88,7 +88,22 @@ struct CommunityFeedView: View {
             }
             .accessibilityLabel("New Post")
 
+            // Plan 7.4: search/discover access from the Community header.
+            if auth.capabilities.capabilities.friendsDiscovery {
+                NavigationLink {
+                    PeopleSearchView()
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .accessibilityLabel("Find people")
+            }
+
             Menu {
+                NavigationLink {
+                    FriendsView()
+                } label: {
+                    Label("Friends", systemImage: "person.2")
+                }
                 if auth.capabilities.capabilities.groups {
                     Button {
                         showingGroups = true
@@ -534,8 +549,30 @@ struct CommunityPostDetailView: View {
     private var postSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
-                Text(authorName)
-                    .font(.headline)
+                // Tapping the author opens their social profile (plan 9.1);
+                // the profile route re-checks visibility server-side.
+                if let username = post.author?.username, !isMyPost {
+                    NavigationLink {
+                        MemberProfileView(username: username)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Avatar(name: authorName, size: 34)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(authorName).font(.headline)
+                                Text("@\(username)").font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("View \(authorName)'s profile")
+                } else {
+                    Text(authorName)
+                        .font(.headline)
+                }
                 if post.postType == .question {
                     Label(acceptedAnswerCommentId == nil ? "Question / troubleshooting" : "Solved question",
                           systemImage: acceptedAnswerCommentId == nil ? "questionmark.bubble" : "checkmark.circle.fill")

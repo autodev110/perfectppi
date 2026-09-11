@@ -67,9 +67,14 @@ targets:
               - perfectppi
         LSApplicationQueriesSchemes:
           - https
+        # Mirrors the com.apple.developer.applesignin entitlement. CI sets the
+        # build setting to NO only for an internal build signed with a profile
+        # that lacks the capability; the login screen then hides the button.
+        PerfectPPIAppleSignInEnabled: "$(PERFECTPPI_APPLE_SIGN_IN_ENABLED)"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.perfectppi.app
+        PERFECTPPI_APPLE_SIGN_IN_ENABLED: "YES"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 79P499H2M4

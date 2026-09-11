@@ -43,8 +43,13 @@ const ENFORCED_BY: Partial<Record<FeatureFlagCode, string>> = {
   specialist_image_safeguard: "launch-mode photo gate",
 };
 
-export default async function AdminFlagsPage() {
+export default async function AdminFlagsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; changed?: string }>;
+}) {
   await requireRole(["admin"]);
+  const { error: actionError, changed } = await searchParams;
   const snapshot = await getFeatureFlags({ fresh: true });
   const { data: rows } = await createAdminClient()
     .from("product_feature_flags")
@@ -75,6 +80,16 @@ export default async function AdminFlagsPage() {
         {snapshot.emergencyOff.length > 0 ? (
           <p className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             Emergency override active (PERFECTPPI_EMERGENCY_OFF): {snapshot.emergencyOff.join(", ")} forced off regardless of the values below.
+          </p>
+        ) : null}
+        {actionError ? (
+          <p role="alert" className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {actionError}
+          </p>
+        ) : null}
+        {changed ? (
+          <p role="status" className="mt-2 rounded-md border border-emerald-300/60 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+            {changed} updated. The change is audited below and live within 30 seconds.
           </p>
         ) : null}
         {snapshot.source === "safe_defaults" ? (

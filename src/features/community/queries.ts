@@ -409,6 +409,59 @@ export async function getCommunityPostById(id: string) {
   return (await withPostLikeState([visiblePost], viewerId))[0] ?? null;
 }
 
+// Posts on a member's social profile (plan 9.1 "Posts" section): the
+// author's active general posts, each re-checked against the canonical
+// visibility policy for this viewer. Group posts stay under Groups.
+export async function getMemberCommunityPosts(profileId: string, page = 1, perPage = 20) {
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId) return [];
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+
+  const admin = createAdminClient();
+  const { data: candidates } = await admin
+    .from("community_posts")
+    .select("id")
+    .eq("author_id", profileId)
+    .is("group_id", null)
+    .eq("status", "active")
+    .eq("moderation_status", "active")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range((safePage - 1) * perPage, safePage * perPage - 1);
+  if (!candidates?.length) return [];
+
+  const visibility = await Promise.all(candidates.map(async (candidate) => {
+    const { data: visible } = await admin.rpc("social_can_view_community_post", {
+      p_viewer_id: viewerId,
+      p_post_id: candidate.id,
+      p_include_muted: true,
+    });
+    return visible ? candidate.id : null;
+  }));
+  const postIds = visibility.filter((id): id is string => id !== null);
+  if (postIds.length === 0) return [];
+
+  const { data } = await admin
+    .from("community_posts")
+    .select(COMMUNITY_FEED_SELECT)
+    .in("id", postIds)
+    .order("created_at", { ascending: true, referencedTable: "community_comments" });
+  const posts = (data ?? []) as unknown as CommunityPost[];
+  const blockedCommentAuthors = await getBlockedProfileIds(
+    viewerId,
+    posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id)),
+  );
+  const byId = new Map(posts.map((post) => [post.id, {
+    ...post,
+    comments: (post.comments ?? []).filter((comment) => !blockedCommentAuthors.has(comment.author_id)),
+  }]));
+  const ordered = postIds.flatMap((id) => {
+    const post = byId.get(id);
+    return post ? [toCommunityFeedPost(post, viewerId)] : [];
+  });
+  return withPostLikeState(ordered, viewerId);
+}
+
 const ARCHIVE_EXPIRY_DAYS = 30;
 
 export function archiveExpiresAt(updatedAt: string): Date {

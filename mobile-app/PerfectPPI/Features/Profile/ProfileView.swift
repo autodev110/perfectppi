@@ -446,6 +446,7 @@ private struct EditProfileView: View {
     @State private var defaultAudience: CommunityPostAudience
     @State private var discoverable: Bool
     @State private var allowExactUsernameLookup: Bool
+    @State private var friendRequestPolicy: FriendRequestPolicy
     @State private var saving = false
     @State private var error: String?
 
@@ -458,6 +459,7 @@ private struct EditProfileView: View {
         _defaultAudience = State(initialValue: profile.defaultPostAudience ?? .friends)
         _discoverable = State(initialValue: profile.discoverable ?? true)
         _allowExactUsernameLookup = State(initialValue: profile.allowExactUsernameLookup ?? true)
+        _friendRequestPolicy = State(initialValue: profile.friendRequestPolicy ?? .everyone)
     }
 
     var body: some View {
@@ -479,7 +481,12 @@ private struct EditProfileView: View {
                 }
                 Toggle("Appear in discovery", isOn: $discoverable)
                 Toggle("Allow exact username lookup", isOn: $allowExactUsernameLookup)
-                Text("Turning your profile private immediately changes Public profile posts to Friends.")
+                Picker("Friend requests from", selection: $friendRequestPolicy) {
+                    ForEach(FriendRequestPolicy.allCases) { policy in
+                        Text(policy.label).tag(policy)
+                    }
+                }
+                Text("Turning your profile private immediately changes Public profile posts to Friends. Blocked members can never send you a request.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -523,7 +530,8 @@ private struct EditProfileView: View {
                     isPublic: isPublic,
                     defaultPostAudience: isPublic ? defaultAudience : .friends,
                     discoverable: discoverable,
-                    allowExactUsernameLookup: allowExactUsernameLookup
+                    allowExactUsernameLookup: allowExactUsernameLookup,
+                    friendRequestPolicy: friendRequestPolicy
                 )
             )
             onSave(updated)

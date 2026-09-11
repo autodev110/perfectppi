@@ -4724,6 +4724,7 @@ export type Database = {
       notification_type:
         | "friend_request"
         | "friend_request_accepted"
+        | "listing_inspection_requested"
         | "moderation_decision"
         | "moderation_case"
         | "report_received"

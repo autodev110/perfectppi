@@ -121,18 +121,22 @@ struct LoginView: View {
 
                         // Sign in with Apple ships alongside Google (App Store
                         // Review Guideline 4.8); both land on the same username
-                        // completion gate.
-                        SignInWithAppleButton(mode == .signIn ? .signIn : .signUp) { request in
-                            request.requestedScopes = [.fullName, .email]
-                            request.nonce = AppleSignIn.sha256Hex(appleNonce)
-                        } onCompletion: { outcome in
-                            Task { await handleApple(outcome) }
+                        // completion gate. An internal CI build signed without
+                        // the entitlement hides the button instead of showing
+                        // one that cannot work.
+                        if AppConfig.appleSignInEnabled {
+                            SignInWithAppleButton(mode == .signIn ? .signIn : .signUp) { request in
+                                request.requestedScopes = [.fullName, .email]
+                                request.nonce = AppleSignIn.sha256Hex(appleNonce)
+                            } onCompletion: { outcome in
+                                Task { await handleApple(outcome) }
+                            }
+                            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                            .frame(height: 50)
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                            .disabled(isWorking)
+                            .accessibilityIdentifier("auth.signInWithApple")
                         }
-                        .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-                        .frame(height: 50)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-                        .disabled(isWorking)
-                        .accessibilityIdentifier("auth.signInWithApple")
 
                         Button {
                             Task { await oauth(.google) }

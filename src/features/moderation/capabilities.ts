@@ -27,15 +27,15 @@ export async function getModerationCapabilities(profileId: string): Promise<Capa
     .filter((value): value is ModerationCapability =>
       (MODERATION_CAPABILITIES as readonly string[]).includes(value),
     );
-  const effective = await Promise.all(candidates.map(async (capability) => {
-    const { data: allowed, error: capabilityError } = await admin.rpc("moderation_has_capability", {
-      p_profile_id: profileId,
-      p_capability: capability,
-    });
-    if (capabilityError) throw new Error(capabilityError.message);
-    return allowed ? capability : null;
-  }));
-  return new Set(effective.filter((value): value is ModerationCapability => Boolean(value)));
+  if (candidates.length === 0) return new Set();
+  // moderation_has_capability() = active grant AND an available (claimed,
+  // unsuspended) holder; the grant list above already covers the first half,
+  // so one availability check replaces a round trip per capability.
+  const { data: available, error: availabilityError } = await admin.rpc("social_profile_is_available", {
+    p_profile_id: profileId,
+  });
+  if (availabilityError) throw new Error(availabilityError.message);
+  return available ? new Set(candidates) : new Set();
 }
 
 /**

@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, CheckCheck, MessageSquare, ShieldCheck, CreditCard, FileText, Wrench, Flag, Gavel, UserPlus, UserCheck, CheckCircle2, CircleAlert } from "lucide-react";
+import { Bell, CheckCheck, MessageSquare, ShieldCheck, CreditCard, FileText, Wrench, Flag, Gavel, UserPlus, UserCheck, CheckCircle2, CircleAlert, ClipboardCheck } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils/formatting";
 import type { Database } from "@/types/database";
 
@@ -35,6 +35,7 @@ const typeStyle: Record<
   report_received: { icon: Flag, color: "text-slate-600", bg: "bg-slate-50" },
   friend_request: { icon: UserPlus, color: "text-sky-600", bg: "bg-sky-50" },
   friend_request_accepted: { icon: UserCheck, color: "text-emerald-600", bg: "bg-emerald-50" },
+  listing_inspection_requested: { icon: ClipboardCheck, color: "text-teal-600", bg: "bg-teal-50" },
   answer_accepted: { icon: CheckCircle2, color: "text-teal", bg: "bg-teal/10" },
   accepted_answer_unavailable: { icon: CircleAlert, color: "text-amber-600", bg: "bg-amber-50" },
 };
@@ -97,6 +98,10 @@ export function NotificationBell({ messagesBase }: { messagesBase: string }) {
       return `/profile/${encodeURIComponent(data.username)}`;
     }
     if (n.type === "friend_request_accepted") return "/dashboard/friends";
+    if (n.type === "listing_inspection_requested" && typeof data.vehicle_id === "string") {
+      return `/vehicle/${data.vehicle_id}?tab=marketplace`;
+    }
+    if (n.type === "listing_inspection_requested") return "/dashboard/listings";
     if (n.type === "answer_accepted" || n.type === "accepted_answer_unavailable") return "/community";
     return null;
   }

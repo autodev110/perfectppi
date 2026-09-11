@@ -31,6 +31,7 @@ enum ProfilesAPI {
         let defaultPostAudience: CommunityPostAudience?
         let discoverable: Bool?
         let allowExactUsernameLookup: Bool?
+        var friendRequestPolicy: FriendRequestPolicy? = nil
     }
 
     static func updateMe(_ payload: UpdatePayload) async throws -> Profile {

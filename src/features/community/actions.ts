@@ -92,11 +92,16 @@ async function getCurrentProfileId() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, role, is_public, default_post_audience")
+    .select("id, role, is_public, default_post_audience, username_state")
     .eq("auth_user_id", user.id)
     .single();
 
   if (!profile) return { error: "Profile not found" as const };
+  // Server actions are reachable without the page guard, so a pending
+  // (username-less) account must be refused here, not only by requireRole.
+  if (profile.username_state !== "claimed") {
+    return { error: "Choose a username before continuing" as const };
+  }
 
   return {
     profileId: profile.id,

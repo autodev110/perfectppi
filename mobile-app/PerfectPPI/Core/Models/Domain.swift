@@ -25,6 +25,7 @@ struct Profile: Codable, Identifiable, Hashable {
     let defaultPostAudience: CommunityPostAudience?
     let discoverable: Bool?
     let allowExactUsernameLookup: Bool?
+    let friendRequestPolicy: FriendRequestPolicy?
     let phone: String?
     let createdAt: Date?
 
@@ -137,6 +138,168 @@ struct MarketplaceInspectionSummary: Codable, Hashable {
 struct MarketplaceInspectionRequestSummary: Codable, Hashable {
     let requestId: String
     let status: PpiRequestStatus
+}
+
+// MARK: - Social (plan 9, 10, 12)
+
+/// Server-computed relationship between the viewer and another member. The
+/// server owns the transitions; the app only renders the control that fits.
+enum FriendRelationshipState: String, Codable {
+    /// The viewer's own profile ("self" on the wire; `.self` is a metatype in Swift).
+    case me = "self"
+    case blocked
+    case friends
+    case outgoingRequest = "outgoing_request"
+    case incomingRequest = "incoming_request"
+    case none
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = FriendRelationshipState(rawValue: raw) ?? .unknown
+    }
+}
+
+enum FriendRequestPolicy: String, Codable, CaseIterable, Identifiable {
+    case everyone
+    case friendsOfFriends = "friends_of_friends"
+    case nobody
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .everyone: "Everyone"
+        case .friendsOfFriends: "Friends of friends"
+        case .nobody: "Nobody"
+        }
+    }
+}
+
+enum FriendAction: String, Encodable {
+    case request, accept, decline, cancel, remove
+}
+
+struct PersonSummary: Codable, Identifiable, Hashable {
+    let id: String
+    let username: String?
+    let displayName: String?
+    let avatarUrl: String?
+
+    var label: String { displayName ?? username.map { "@\($0)" } ?? "PerfectPPI member" }
+}
+
+struct PeopleSearchResult: Codable, Identifiable, Hashable {
+    let id: String
+    let username: String?
+    let displayName: String?
+    let avatarUrl: String?
+    let isPublic: Bool
+    let exactMatch: Bool
+    let relationshipState: FriendRelationshipState
+    let mutualFriendCount: Int
+
+    var person: PersonSummary {
+        PersonSummary(id: id, username: username, displayName: displayName, avatarUrl: avatarUrl)
+    }
+}
+
+struct FriendRequestSummary: Codable, Identifiable, Hashable {
+    let id: String
+    let username: String?
+    let displayName: String?
+    let avatarUrl: String?
+    let direction: String
+    let createdAt: Date?
+
+    var person: PersonSummary {
+        PersonSummary(id: id, username: username, displayName: displayName, avatarUrl: avatarUrl)
+    }
+}
+
+struct FriendSummary: Codable, Identifiable, Hashable {
+    let id: String
+    let username: String?
+    let displayName: String?
+    let avatarUrl: String?
+    let isPublic: Bool
+    let friendsSince: Date?
+
+    var person: PersonSummary {
+        PersonSummary(id: id, username: username, displayName: displayName, avatarUrl: avatarUrl)
+    }
+}
+
+struct FriendsOverview: Codable {
+    let enabled: Bool
+    let friends: [FriendSummary]
+    let incoming: [FriendRequestSummary]
+    let outgoing: [FriendRequestSummary]
+}
+
+struct MemberProfileBadge: Codable, Hashable {
+    let code: String
+    let label: String
+    let description: String
+}
+
+struct MemberProfileIdentity: Codable, Hashable {
+    let id: String
+    let username: String?
+    let displayName: String?
+    let avatarUrl: String?
+    let bio: String?
+    let role: String
+    let isPublic: Bool
+    let createdAt: Date?
+    let badges: [MemberProfileBadge]
+}
+
+struct MemberProfileRelationship: Codable, Hashable {
+    let state: FriendRelationshipState
+    let mutualFriendCount: Int
+    let friendsEnabled: Bool
+    let mutedByMe: Bool
+    let blockedByMe: Bool
+    let canViewRestricted: Bool
+}
+
+struct MemberProfileVehicle: Codable, Identifiable, Hashable {
+    struct Media: Codable, Hashable {
+        let url: String
+        let isPrimary: Bool
+        let sortOrder: Int
+    }
+
+    let id: String
+    let year: Int?
+    let make: String?
+    let model: String?
+    let trim: String?
+    let mileage: Int?
+    let vehicleMedia: [Media]
+
+    var label: String {
+        let parts = [year.map(String.init), make, model, trim].compactMap { $0 }
+        return parts.isEmpty ? "Vehicle" : parts.joined(separator: " ")
+    }
+}
+
+struct MemberProfileListing: Codable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let askingPriceCents: Int
+    let location: String?
+    let vehicleId: String
+}
+
+/// The social profile as another member sees it (plan 9.1).
+struct MemberProfile: Codable {
+    let profile: MemberProfileIdentity
+    let relationship: MemberProfileRelationship
+    let vehicles: [MemberProfileVehicle]
+    let listings: [MemberProfileListing]
+    let posts: [CommunityPost]
 }
 
 // MARK: - Community

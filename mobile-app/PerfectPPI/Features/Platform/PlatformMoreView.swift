@@ -35,6 +35,12 @@ struct PlatformMoreView: View {
                 }
 
                 NavigationLink {
+                    FriendsView()
+                } label: {
+                    Label("Friends", systemImage: "person.2")
+                }
+
+                NavigationLink {
                     MediaPackagesView()
                 } label: {
                     Label("Media Packages", systemImage: "photo.on.rectangle")

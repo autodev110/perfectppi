@@ -47,6 +47,8 @@
 	<string>PerfectPPI can save photos you capture to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>PerfectPPI lets you choose photos and videos for inspections, posts, and message attachments.</string>
+	<key>PerfectPPIAppleSignInEnabled</key>
+	<string>$(PERFECTPPI_APPLE_SIGN_IN_ENABLED)</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

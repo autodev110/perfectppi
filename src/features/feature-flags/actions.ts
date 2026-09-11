@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { FEATURE_FLAG_CODES, invalidateFeatureFlagCache, resolveFeatureFlagEnvironment } from "@/lib/feature-flags";
@@ -28,7 +29,17 @@ export async function setFeatureFlag(formData: FormData) {
     p_enabled: parsed.data.enabled,
     p_reason: parsed.data.reason,
   });
-  if (error) return { error: "The flag could not be changed." };
+  if (error) {
+    // 20260911020000: production changes need the legal_hold_review grant on
+    // top of an active admin account. Say so instead of failing silently.
+    if (error.message.includes("moderation capability required")) {
+      return { error: "Production flags can only be changed by an admin holding the legal_hold_review capability (granted on /admin/moderation/access)." };
+    }
+    if (error.message.includes("Administrator access required")) {
+      return { error: "An active administrator account is required." };
+    }
+    return { error: "The flag could not be changed." };
+  }
 
   invalidateFeatureFlagCache();
   revalidatePath("/admin/flags");
@@ -36,5 +47,7 @@ export async function setFeatureFlag(formData: FormData) {
 }
 
 export async function setFeatureFlagForm(formData: FormData): Promise<void> {
-  await setFeatureFlag(formData);
+  const result = await setFeatureFlag(formData);
+  if (!result.data) redirect(`/admin/flags?error=${encodeURIComponent(result.error ?? "The flag could not be changed.")}`);
+  redirect(`/admin/flags?changed=${encodeURIComponent(result.data.flagCode)}`);
 }

@@ -172,8 +172,10 @@ base64 -i /absolute/path/to/perfectppi-app-store.mobileprovision | pbcopy
 ```
 
 The workflow validates the profile's team, bundle ID, distribution
-entitlements, Sign in with Apple, Associated Domains, expiration, manual
-management, and certificate fingerprint before it builds. It imports the
+entitlements, Sign in with Apple (strict unless
+`TESTFLIGHT_ALLOW_MISSING_APPLE_SIGN_IN=true`, see the failure guide),
+Associated Domains, expiration, manual management, and certificate
+fingerprint before it builds. It imports the
 certificate into an ephemeral keychain, installs the profile only for the
 duration of the job, and removes both afterward.
 
@@ -262,14 +264,44 @@ both binary secrets together. The workflow rejects an expired or Xcode-managed
 profile, the wrong bundle ID, missing production entitlements, or a profile
 that does not include the supplied certificate.
 
-### Sign in with Apple or Xcode-managed profile error
+### "The App Store provisioning profile does not include Sign in with Apple"
 
-Enable **Sign in with Apple**, **Associated Domains**, and **Push Notifications**
-on the `com.perfectppi.app` identifier. Generate a new manual **App Store
-Connect** profile as described above and replace
-`APPLE_DISTRIBUTION_PROVISIONING_PROFILE_BASE64`. Exporting from Xcode produces
-an Xcode-managed profile, which is not suitable for this manual CI signing
-flow.
+The app's Release entitlements request `com.apple.developer.applesignin`, so
+Xcode can only sign with a profile generated *after* the capability was
+enabled on the App ID. A profile created earlier fails this check (and would
+fail the archive step anyway). Fix it in the Apple Developer portal:
+
+1. **Identifiers > `com.perfectppi.app` > Capabilities**: tick **Sign In with
+   Apple** (leave it as the primary App ID) and save.
+2. **Profiles > `PerfectPPI App Store CI` > Edit > Save**, then download the
+   regenerated `.mobileprovision`. Editing an existing profile re-issues it
+   with the App ID's current capabilities; the certificate does not change.
+3. `base64 -i /path/to/PerfectPPI_App_Store_CI.mobileprovision | pbcopy` and
+   replace `APPLE_DISTRIBUTION_PROVISIONING_PROFILE_BASE64` in the
+   `testflight` environment.
+4. Rerun the workflow. The step log prints the profile's entitlements; the
+   archive verification confirms the signed app carries the entitlement.
+
+Sign in with Apple also needs the Apple provider enabled in the hosted
+Supabase project (client ID `com.perfectppi.app`) and the `APPLE_SIGN_IN_*`
+server variables before the button works end to end.
+
+**Temporary escape hatch (internal testers only).** If a build must go out
+before the profile is regenerated, add the `testflight` environment variable
+`TESTFLIGHT_ALLOW_MISSING_APPLE_SIGN_IN=true`. The workflow then archives with
+the entitlement removed and stamps `PerfectPPIAppleSignInEnabled=NO` into the
+app, which hides the Apple button on the login screen. The run shows a warning
+and the step summary marks the build. Such a build cannot pass App Review
+(Guideline 4.8 requires Sign in with Apple wherever Google sign-in is
+offered): do not submit it, and remove the variable as soon as the profile is
+fixed so the check becomes strict again.
+
+### Xcode-managed profile error
+
+Exporting from Xcode produces an Xcode-managed profile, which is not suitable
+for this manual CI signing flow. Generate a manual **App Store Connect**
+profile in the Apple Developer portal as described above and replace
+`APPLE_DISTRIBUTION_PROVISIONING_PROFILE_BASE64`.
 
 ### Package lock mismatch
 
