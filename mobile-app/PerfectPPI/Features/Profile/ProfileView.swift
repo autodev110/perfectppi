@@ -447,6 +447,7 @@ private struct EditProfileView: View {
     @State private var discoverable: Bool
     @State private var allowExactUsernameLookup: Bool
     @State private var friendRequestPolicy: FriendRequestPolicy
+    @State private var showingAdvanced = false
     @State private var saving = false
     @State private var error: String?
 
@@ -464,7 +465,7 @@ private struct EditProfileView: View {
 
     var body: some View {
         Form {
-            Section("Public Profile") {
+            Section("Profile") {
                 TextField("Display name", text: $displayName)
                 if let username = profile.username {
                     LabeledContent("Username", value: "@\(username)")
@@ -474,24 +475,45 @@ private struct EditProfileView: View {
                 }
                 TextField("Bio", text: $bio, axis: .vertical)
                     .lineLimit(3...6)
-                Toggle("Public profile", isOn: $isPublic)
+            }
+
+            // Plan 9.3: privacy and the default audience first; granular
+            // choices under Advanced Privacy with their defaults spelled out.
+            Section {
+                Toggle("Public inside PerfectPPI", isOn: $isPublic)
                 Picker("Default post audience", selection: $defaultAudience) {
                     Text("Friends").tag(CommunityPostAudience.friends)
                     if isPublic { Text("Public inside PerfectPPI").tag(CommunityPostAudience.public) }
                 }
-                Toggle("Appear in discovery", isOn: $discoverable)
-                Toggle("Allow exact username lookup", isOn: $allowExactUsernameLookup)
-                Picker("Friend requests from", selection: $friendRequestPolicy) {
-                    ForEach(FriendRequestPolicy.allCases) { policy in
-                        Text(policy.label).tag(policy)
+                if let username = profile.username {
+                    NavigationLink {
+                        MemberProfileView(username: username, asStranger: true)
+                    } label: {
+                        Label("View as stranger", systemImage: "eye")
                     }
                 }
-                Text("Turning your profile private immediately changes Public profile posts to Friends. Blocked members can never send you a request.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Privacy")
+            } footer: {
+                Text("Turning your profile private immediately changes Public profile posts to Friends. Nothing is published to the open web.")
             }
             .onChange(of: isPublic) { _, value in
                 if !value { defaultAudience = .friends }
+            }
+
+            Section {
+                DisclosureGroup("Advanced privacy", isExpanded: $showingAdvanced) {
+                    Toggle("Appear in discovery", isOn: $discoverable)
+                    Toggle("Allow exact username lookup", isOn: $allowExactUsernameLookup)
+                    Picker("Friend requests from", selection: $friendRequestPolicy) {
+                        ForEach(FriendRequestPolicy.allCases) { policy in
+                            Text(policy.label).tag(policy)
+                        }
+                    }
+                    Text("Defaults: discovery on, exact lookup on, requests from everyone. Blocked members can never send you a request.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if let error {

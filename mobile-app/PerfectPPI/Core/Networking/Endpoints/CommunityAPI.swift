@@ -151,6 +151,27 @@ enum CommunityAPI {
         )
     }
 
+    struct SavePayload: Encodable { let saved: Bool }
+    struct SaveResult: Decodable {
+        let postId: String
+        let saved: Bool
+    }
+
+    /// Private bookmark (plan Phase 1B); the author is never told.
+    static func setSaved(postId: String, saved: Bool) async throws -> SaveResult {
+        try await APIClient.shared.post(
+            "/api/community/posts/\(postId)/save",
+            body: SavePayload(saved: saved)
+        )
+    }
+
+    static func saved(page: Int = 1) async throws -> [CommunityPost] {
+        try await APIClient.shared.get(
+            "/api/community/saved",
+            query: [URLQueryItem(name: "page", value: String(max(page, 1)))]
+        )
+    }
+
     struct ReportPayload: Encodable {
         let entityType: String
         let entityId: String

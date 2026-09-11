@@ -3120,6 +3120,24 @@ export type Database = {
         }
         Relationships: []
       }
+      community_post_saves: {
+        Row: {
+          created_at: string
+          post_id: string
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          post_id: string
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          post_id?: string
+          profile_id?: string
+        }
+        Relationships: []
+      }
       friend_request_events: {
         Row: {
           actor_id: string
@@ -4369,6 +4387,22 @@ export type Database = {
           p_is_public: boolean
         }
         Returns: Database["public"]["Tables"]["profiles"]["Row"]
+      }
+      set_community_post_save: {
+        Args: { p_actor_profile_id: string; p_post_id: string; p_saved: boolean }
+        Returns: Json
+      }
+      community_post_save_states: {
+        Args: { p_viewer_id: string; p_post_ids: string[] }
+        Returns: { post_id: string; saved: boolean }[]
+      }
+      list_saved_community_post_ids: {
+        Args: { p_viewer_id: string; p_limit?: number; p_offset?: number }
+        Returns: { post_id: string; saved_at: string }[]
+      }
+      member_activity_badges: {
+        Args: { p_profile_id: string }
+        Returns: Json
       }
       friend_mutual_ids: {
         Args: { p_first_id: string; p_second_id: string }

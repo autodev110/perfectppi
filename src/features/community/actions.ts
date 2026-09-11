@@ -130,6 +130,7 @@ export type CommunityPublishData = {
 
 export type CommunityFinalizeData = CommunityPublishData & { published: boolean };
 export type CommunityLikeData = { postId: string; liked: boolean; likeCount: number };
+export type CommunitySaveData = { postId: string; saved: boolean };
 
 function rejected(code: PublicationOutcome, message?: string): CommunityActionResult<never> {
   return { error: message ?? PUBLICATION_OUTCOME_MESSAGES[code], code };
@@ -495,6 +496,38 @@ export async function setCommunityPostLike(
 
   revalidatePath("/community");
   revalidatePath("/community/groups");
+  return { data: result.data };
+}
+
+const postSaveSchema = z.object({
+  postId: z.string().uuid(),
+  saved: z.boolean(),
+});
+const postSaveResultSchema = z.object({
+  postId: z.string().uuid(),
+  saved: z.boolean(),
+});
+
+// Private bookmark (plan Phase 1B). Saving requires current visibility;
+// unsaving always works so a member can clear something they lost access to.
+export async function setCommunityPostSave(
+  input: unknown,
+): Promise<CommunityActionResult<CommunitySaveData>> {
+  const parsed = postSaveSchema.safeParse(input);
+  if (!parsed.success) return rejected("validation_failed", "Invalid save request");
+  const profile = await getCurrentProfileId();
+  if (profile.error !== undefined) return { error: profile.error };
+
+  const { data, error } = await createAdminClient().rpc("set_community_post_save", {
+    p_actor_profile_id: profile.profileId,
+    p_post_id: parsed.data.postId,
+    p_saved: parsed.data.saved,
+  });
+  if (error) return { error: "This post is no longer available." };
+  const result = postSaveResultSchema.safeParse(data);
+  if (!result.success) return { error: "The save could not be updated." };
+
+  revalidatePath("/dashboard/saved");
   return { data: result.data };
 }
 

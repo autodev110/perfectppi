@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate, formatMileage, getInitials } from "@/lib/utils/formatting";
-import { Car, MessageSquare, Plus, Tag, Users, Warehouse } from "lucide-react";
+import { Car, MessageSquare, Plus, Tag, Users, Warehouse, Bookmark } from "lucide-react";
 import { PostMediaCarousel } from "@/components/shared/post-media-carousel";
 import { requireRole } from "@/features/auth/guards";
 import { MemberSafetyActions } from "@/components/shared/member-safety-actions";
@@ -14,6 +14,7 @@ import { SafetyNotice } from "@/components/shared/safety-notice";
 import { CommunityReportControl } from "@/components/shared/community-report-control";
 import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-control";
 import { CommunityLikeButton } from "@/components/shared/community-like-button";
+import { CommunitySaveButton } from "@/components/shared/community-save-button";
 import { getFeatureFlags, toClientCapabilities } from "@/lib/feature-flags";
 import type { CommunityFeedFilter } from "@/features/social/relationships";
 
@@ -107,6 +108,12 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                 </Link>
               </Button>
             ) : null}
+            <Button asChild variant="outline" className="h-12 rounded-xl px-6">
+              <Link href="/dashboard/saved">
+                <Bookmark className="mr-2 h-4 w-4" />
+                Saved
+              </Link>
+            </Button>
             <Button asChild className="h-12 rounded-xl px-6">
               <Link href="/dashboard/posts/new">
                 <Plus className="mr-2 h-4 w-4" />
@@ -160,7 +167,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
               const primaryMedia = post.vehicle?.vehicle_media?.find((media) => media.is_primary) ?? post.vehicle?.vehicle_media?.[0];
 
               return (
-                <article key={post.id} className="overflow-hidden rounded-[1.5rem] bg-surface-container-lowest shadow-sm ghost-border">
+                <article key={post.id} id={`post-${post.id}`} className="overflow-hidden rounded-[1.5rem] bg-surface-container-lowest shadow-sm ghost-border">
                   <div className="p-6">
                     <div className="mb-5 flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
@@ -259,6 +266,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                         initialCount={post.like_count}
                         disabled={!post.can_like}
                       />
+                      <CommunitySaveButton postId={post.id} initialSaved={post.saved_by_viewer} />
                       <div className="flex items-center gap-2">
                         <MessageSquare className="h-4 w-4 text-on-surface-variant" />
                         {post.comments.length} comment{post.comments.length === 1 ? "" : "s"}

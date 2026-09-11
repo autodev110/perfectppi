@@ -10,6 +10,8 @@ struct CommunityFeedView: View {
     @State private var showingMyPosts = false
     @State private var showingGuidelines = false
     @State private var showingGroups = false
+    @State private var showingSaved = false
+    @State private var showingNotifications = false
     @State private var feedFilter: CommunityFeedFilter = .all
 
     var body: some View {
@@ -38,6 +40,12 @@ struct CommunityFeedView: View {
             ModeratedPostsView {
                 reloadToken = UUID()
             }
+        }
+        .sheet(isPresented: $showingSaved) {
+            NavigationStack { SavedPostsView() }
+        }
+        .sheet(isPresented: $showingNotifications) {
+            NavigationStack { NotificationsView() }
         }
     }
 
@@ -88,6 +96,18 @@ struct CommunityFeedView: View {
             }
             .accessibilityLabel("New Post")
 
+            // Plan 7.4 / 22.2: the global Notifications destination with the
+            // same unread count the More tab shows; no second inbox.
+            Button {
+                showingNotifications = true
+            } label: {
+                Image(systemName: auth.badges.unreadNotifications > 0 ? "bell.badge" : "bell")
+                    .symbolRenderingMode(auth.badges.unreadNotifications > 0 ? .multicolor : .monochrome)
+            }
+            .accessibilityLabel(auth.badges.unreadNotifications > 0
+                ? "Notifications, \(auth.badges.unreadNotifications) unread"
+                : "Notifications")
+
             // Plan 7.4: search/discover access from the Community header.
             if auth.capabilities.capabilities.friendsDiscovery {
                 NavigationLink {
@@ -115,6 +135,11 @@ struct CommunityFeedView: View {
                     showingMyPosts = true
                 } label: {
                     Label("My Posts and Reviews", systemImage: "person.crop.rectangle.stack")
+                }
+                Button {
+                    showingSaved = true
+                } label: {
+                    Label("Saved Items", systemImage: "bookmark")
                 }
                 Button {
                     showingGuidelines = true
@@ -281,6 +306,8 @@ struct CommunityPostRow: View {
     @State private var liked: Bool
     @State private var likeCount: Int
     @State private var liking = false
+    @State private var saved: Bool
+    @State private var saving = false
     @State private var reportTarget: ReportTarget?
     @State private var reportAccepted = false
     @State private var reportConfirmed = false
@@ -291,6 +318,7 @@ struct CommunityPostRow: View {
         self.onReported = onReported
         _liked = State(initialValue: post.likedByViewer ?? false)
         _likeCount = State(initialValue: post.likeCount ?? 0)
+        _saved = State(initialValue: post.savedByViewer ?? false)
     }
 
     var body: some View {
@@ -372,6 +400,16 @@ struct CommunityPostRow: View {
                 .disabled(liking || post.canLike == false)
                 .accessibilityLabel(post.canLike == false ? "\(likeCount) likes" : liked ? "Unlike post" : "Like post")
 
+                Button {
+                    Task { await toggleSaved() }
+                } label: {
+                    Image(systemName: saved ? "bookmark.fill" : "bookmark")
+                        .foregroundStyle(saved ? Theme.Palette.primary : .secondary)
+                }
+                .buttonStyle(.borderless)
+                .disabled(saving)
+                .accessibilityLabel(saved ? "Remove from saved" : "Save post")
+
                 if let count = post.comments?.count, count > 0 {
                     Label("\(count) comment\(count == 1 ? "" : "s")", systemImage: "bubble.left")
                         .foregroundStyle(.secondary)
@@ -429,6 +467,23 @@ struct CommunityPostRow: View {
         } catch {
             liked = previousLiked
             likeCount = previousCount
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// Optimistic private save; reconciles to the server answer, rolls back
+    /// on failure. Never notifies the author.
+    private func toggleSaved() async {
+        guard !saving else { return }
+        let previous = saved
+        saved.toggle()
+        saving = true
+        defer { saving = false }
+        do {
+            let result = try await CommunityAPI.setSaved(postId: post.id, saved: saved)
+            saved = result.saved
+        } catch {
+            saved = previous
             self.error = error.localizedDescription
         }
     }

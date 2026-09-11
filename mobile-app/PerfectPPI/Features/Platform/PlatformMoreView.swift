@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlatformMoreView: View {
     let profile: Profile
+    @EnvironmentObject private var auth: AuthStore
 
     var body: some View {
         List {
@@ -32,12 +33,14 @@ struct PlatformMoreView: View {
                     MessagesView(currentProfileId: profile.id)
                 } label: {
                     Label("Messages", systemImage: "bubble.left.and.bubble.right")
+                        .badge(auth.badges.unreadMessages)
                 }
 
                 NavigationLink {
                     FriendsView()
                 } label: {
                     Label("Friends", systemImage: "person.2")
+                        .badge(auth.badges.pendingFriendRequests)
                 }
 
                 NavigationLink {
@@ -50,6 +53,7 @@ struct PlatformMoreView: View {
                     NotificationsView()
                 } label: {
                     Label("Notifications", systemImage: "bell")
+                        .badge(auth.badges.unreadNotifications)
                 }
             }
 
@@ -63,5 +67,6 @@ struct PlatformMoreView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("More")
+        .task { await auth.refreshBadges() }
     }
 }

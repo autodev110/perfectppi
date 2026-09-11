@@ -23,6 +23,10 @@ enum ProfilesAPI {
         try await APIClient.shared.get("/api/profiles/me")
     }
 
+    static func activityBadges() async throws -> ActivityBadges {
+        try await APIClient.shared.get("/api/me/badges")
+    }
+
     struct UpdatePayload: Encodable {
         let displayName: String?
         let bio: String?

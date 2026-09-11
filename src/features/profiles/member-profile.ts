@@ -13,6 +13,7 @@ import {
   type FriendRelationshipState,
 } from "@/features/social/friends";
 import { getMemberCommunityPosts, type CommunityFeedPost } from "@/features/community/queries";
+import { applyStrangerPreview } from "@/lib/social/stranger-preview";
 
 export type MemberProfileVehicle = {
   id: string;
@@ -46,8 +47,12 @@ export type MemberProfile = {
     role: string;
     is_public: boolean;
     created_at: string;
-    /** Plan 9.1 badges with definitions the client can show verbatim. */
-    badges: { code: "verified_technician"; label: string; description: string }[];
+    /**
+     * Factual labels with definitions the client shows verbatim. Plan 26:
+     * no "Verified" wording until the verification policy (proof source,
+     * verifier, expiry, revocation, disputes) exists.
+     */
+    badges: { code: "technician_profile"; label: string; description: string }[];
   };
   relationship: {
     state: FriendRelationshipState;
@@ -63,7 +68,10 @@ export type MemberProfile = {
   posts: CommunityFeedPost[];
 };
 
-export async function getMemberProfile(username: string): Promise<MemberProfile | null> {
+export async function getMemberProfile(
+  username: string,
+  options: { asStranger?: boolean } = {},
+): Promise<MemberProfile | null> {
   const profile = await getPublicProfile(username);
   if (!profile) return null;
 
@@ -86,13 +94,13 @@ export async function getMemberProfile(username: string): Promise<MemberProfile 
   const badges: MemberProfile["profile"]["badges"] = [];
   if (profile.role === "technician" && technician.data) {
     badges.push({
-      code: "verified_technician",
-      label: "Verified Technician",
-      description: "Has a PerfectPPI technician profile and performs inspections through the platform.",
+      code: "technician_profile",
+      label: "Technician on PerfectPPI",
+      description: "This member has a technician profile and performs inspections through PerfectPPI. This is not an identity, licensing, or employment verification.",
     });
   }
 
-  return {
+  const dto: MemberProfile = {
     profile: {
       id: profile.id,
       username: profile.username,
@@ -135,4 +143,8 @@ export async function getMemberProfile(username: string): Promise<MemberProfile 
     })),
     posts,
   };
+
+  // Plan 9.3 "View as Stranger": only the owner may preview themselves.
+  if (options.asStranger && state === "self") return applyStrangerPreview(dto);
+  return dto;
 }

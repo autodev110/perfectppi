@@ -18,6 +18,7 @@ export const navConfig = {
     { label: "Listings", href: "/dashboard/listings", icon: "Tag" },
     { label: "Posts", href: "/dashboard/posts", icon: "Newspaper" },
     { label: "Friends", href: "/dashboard/friends", icon: "Users" },
+    { label: "Saved", href: "/dashboard/saved", icon: "Bookmark" },
     { label: "Inspections", href: "/dashboard/ppi", icon: "ClipboardCheck" },
     { label: "Warranties", href: "/dashboard/warranty", icon: "Shield" },
     { label: "Messages", href: "/dashboard/messages", icon: "MessageSquare" },

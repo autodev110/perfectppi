@@ -42,10 +42,15 @@ enum SocialAPI {
         )
     }
 
-    static func memberProfile(username: String) async throws -> MemberProfile {
+    /// `asStranger` asks for the owner's privacy preview (plan 9.3); the
+    /// server ignores it for anyone else's profile.
+    static func memberProfile(username: String, asStranger: Bool = false) async throws -> MemberProfile {
         let cleaned = username.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "@", with: "")
         let encoded = cleaned.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? cleaned
-        return try await APIClient.shared.get("/api/profiles/\(encoded)")
+        return try await APIClient.shared.get(
+            "/api/profiles/\(encoded)",
+            query: asStranger ? [URLQueryItem(name: "view", value: "stranger")] : []
+        )
     }
 }

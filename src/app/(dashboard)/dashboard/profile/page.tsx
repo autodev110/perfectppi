@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Eye } from "lucide-react";
 import type { Database } from "@/types/database";
 import { SocialPrivacyFields } from "@/components/shared/social-privacy-fields";
 import { SafetyRelationships } from "@/components/shared/safety-relationships";
@@ -62,13 +62,21 @@ export default function ProfilePage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <h1 className="font-heading text-2xl font-bold">Edit Profile</h1>
-        {profile?.is_public && profile?.username && (
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/profile/${profile.username}`} target="_blank">
-              <ExternalLink className="mr-2 h-3.5 w-3.5" />
-              View Public Profile
-            </Link>
-          </Button>
+        {profile?.username && (
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/dashboard/profile/preview">
+                <Eye className="mr-2 h-3.5 w-3.5" />
+                View as stranger
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/profile/${profile.username}`} target="_blank">
+                <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                View My Profile
+              </Link>
+            </Button>
+          </div>
         )}
       </div>
 

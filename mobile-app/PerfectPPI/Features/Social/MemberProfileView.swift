@@ -6,6 +6,8 @@ import SwiftUI
 /// not a friend simply has empty sections with an explanation.
 struct MemberProfileView: View {
     let username: String
+    /// Plan 9.3 "View as Stranger": the owner's privacy preview.
+    var asStranger: Bool = false
 
     @EnvironmentObject private var auth: AuthStore
     @Environment(\.dismiss) private var dismiss
@@ -13,8 +15,10 @@ struct MemberProfileView: View {
 
     var body: some View {
         AsyncContent(
-            load: { try await SocialAPI.memberProfile(username: username) },
-            loaded: { profile in MemberProfileContent(profile: profile, reload: { reloadToken = UUID() }) },
+            load: { try await SocialAPI.memberProfile(username: username, asStranger: asStranger) },
+            loaded: { profile in
+                MemberProfileContent(profile: profile, isPreview: asStranger, reload: { reloadToken = UUID() })
+            },
             failure: { error, retry in
                 if let apiError = error as? APIError, case .notFound = apiError {
                     EmptyStateCard(
@@ -29,7 +33,7 @@ struct MemberProfileView: View {
             }
         )
         .id(reloadToken)
-        .navigationTitle("@\(username)")
+        .navigationTitle(asStranger ? "Preview as stranger" : "@\(username)")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -48,6 +52,7 @@ private enum MemberProfileSection: String, CaseIterable, Identifiable {
 
 private struct MemberProfileContent: View {
     let profile: MemberProfile
+    var isPreview: Bool = false
     let reload: () -> Void
 
     @EnvironmentObject private var auth: AuthStore
@@ -60,20 +65,33 @@ private struct MemberProfileContent: View {
     @State private var messaging = false
     @State private var error: String?
 
-    init(profile: MemberProfile, reload: @escaping () -> Void) {
+    init(profile: MemberProfile, isPreview: Bool = false, reload: @escaping () -> Void) {
         self.profile = profile
+        self.isPreview = isPreview
         self.reload = reload
         _relationship = State(initialValue: profile.relationship.state)
         _muted = State(initialValue: profile.relationship.mutedByMe)
     }
 
     private var identity: MemberProfileIdentity { profile.profile }
-    private var isMe: Bool { relationship == .me || auth.profile?.id == identity.id }
+    // In preview mode the owner is rendered as a stranger would see them.
+    private var isMe: Bool { !isPreview && (relationship == .me || auth.profile?.id == identity.id) }
     private var name: String { identity.displayName ?? identity.username.map { "@\($0)" } ?? "PerfectPPI member" }
     private var canMessage: Bool { !isMe && relationship == .friends }
 
     var body: some View {
         List {
+            if isPreview {
+                Section {
+                    Label(
+                        "This is what a signed-in member who is not your friend sees. Friends see anything you mark Friends; nobody outside PerfectPPI sees your profile.",
+                        systemImage: "eye"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+            }
+
             Section {
                 header
             }
@@ -99,7 +117,7 @@ private struct MemberProfileContent: View {
         }
         .listStyle(.insetGrouped)
         .toolbar {
-            if !isMe {
+            if !isMe && !isPreview {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button(muted ? "Unmute Member" : "Mute Member", systemImage: muted ? "speaker.wave.2" : "speaker.slash") {
@@ -164,7 +182,7 @@ private struct MemberProfileContent: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(identity.badges, id: \.code) { badge in
-                            Label(badge.label, systemImage: "checkmark.seal.fill")
+                            Label(badge.label, systemImage: "wrench.and.screwdriver")
                                 .font(.caption.weight(.semibold))
                                 .padding(.horizontal, 10).padding(.vertical, 5)
                                 .background(Theme.Palette.primary.opacity(0.12))
@@ -182,7 +200,18 @@ private struct MemberProfileContent: View {
                     .foregroundStyle(.primary.opacity(0.9))
             }
 
-            if !isMe {
+            if isPreview {
+                // Inert controls: they show the affordance a stranger gets.
+                HStack(spacing: 10) {
+                    Label("Add Friend", systemImage: "person.badge.plus")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(Theme.Palette.primary.opacity(0.12))
+                        .foregroundStyle(Theme.Palette.primary)
+                        .clipShape(Capsule())
+                }
+                .accessibilityLabel("Strangers can send you a friend request")
+            } else if !isMe {
                 HStack(spacing: 10) {
                     FriendActionButton(
                         profileId: identity.id,

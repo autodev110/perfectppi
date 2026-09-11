@@ -29,6 +29,10 @@ final class AuthStore: ObservableObject {
     @Published private(set) var capabilities: ClientCapabilities = .conservative
     private var capabilitiesFetchedAt: Date?
 
+    /// Navigation badge counts (plan 7.1 / 22.2). Refreshed with
+    /// capabilities and whenever a screen that changes them asks.
+    @Published private(set) var badges: ActivityBadges = .none
+
     /// The signed-in profile, if any. Convenience for views that need the
     /// current user (e.g. optimistic UI) without switching on `state`.
     var profile: Profile? {
@@ -234,6 +238,19 @@ final class AuthStore: ObservableObject {
             capabilitiesFetchedAt = Date()
         } catch {
             // Keep the previous snapshot.
+        }
+        await refreshBadges()
+    }
+
+    /// Best-effort badge refresh; a failure keeps the last counts rather than
+    /// flashing zeros.
+    func refreshBadges() async {
+        guard profile != nil, profile?.needsUsername == false else {
+            badges = .none
+            return
+        }
+        if let fresh = try? await ProfilesAPI.activityBadges() {
+            badges = fresh
         }
     }
 

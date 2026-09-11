@@ -336,6 +336,19 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let canManageAcceptedAnswer: Bool?
     let likeCount: Int?
     let likedByViewer: Bool?
+    /// Private bookmark state for the viewer (plan Phase 1B).
+    let savedByViewer: Bool?
+}
+
+/// Counts behind navigation badges (plan 7.1 / 22.2), from /api/me/badges.
+struct ActivityBadges: Codable, Equatable {
+    let unreadNotifications: Int
+    let pendingFriendRequests: Int
+    let unreadMessages: Int
+
+    static let none = ActivityBadges(unreadNotifications: 0, pendingFriendRequests: 0, unreadMessages: 0)
+
+    var total: Int { unreadNotifications + pendingFriendRequests + unreadMessages }
 }
 
 struct CommunityPostGroup: Codable, Identifiable, Hashable {

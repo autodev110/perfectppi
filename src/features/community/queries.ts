@@ -66,6 +66,8 @@ export type CommunityFeedPost = Pick<
   can_manage_accepted_answer: boolean;
   like_count: number;
   liked_by_viewer: boolean;
+  /** Private bookmark (plan Phase 1B); never shown to other members. */
+  saved_by_viewer: boolean;
   report_context: string | null;
   /** Plan 15.5: present when the post involves a high-consequence repair topic. */
   safety_notice: SafetyNotice | null;
@@ -220,6 +222,7 @@ function toCommunityFeedPost(
     can_manage_accepted_answer: post.post_type === "question" && post.author_id === viewerId,
     like_count: 0,
     liked_by_viewer: false,
+    saved_by_viewer: false,
     report_context: post.author_id === viewerId ? null : createReportContext({
       viewerId,
       entityType: "community_post",
@@ -291,22 +294,65 @@ function toCommunityFeedPost(
   };
 }
 
+// Viewer-specific reaction state (likes, private saves) layered onto posts
+// that already passed the visibility policy.
 async function withPostLikeState(posts: CommunityFeedPost[], viewerId: string) {
   if (posts.length === 0) return posts;
-  const { data, error } = await createAdminClient().rpc("community_post_like_summaries", {
-    p_viewer_id: viewerId,
-    p_post_ids: posts.map((post) => post.id),
-  });
-  if (error) {
-    console.error("community_post_like_summaries failed", error);
-    return posts;
-  }
+  const admin = createAdminClient();
+  const postIds = posts.map((post) => post.id);
+  const [{ data, error }, { data: saves, error: saveError }] = await Promise.all([
+    admin.rpc("community_post_like_summaries", { p_viewer_id: viewerId, p_post_ids: postIds }),
+    admin.rpc("community_post_save_states", { p_viewer_id: viewerId, p_post_ids: postIds }),
+  ]);
+  if (error) console.error("community_post_like_summaries failed", error);
+  if (saveError) console.error("community_post_save_states failed", saveError);
   const summaries = new Map((data ?? []).map((summary) => [summary.post_id, summary]));
+  const saved = new Set((saves ?? []).filter((row) => row.saved).map((row) => row.post_id));
   return posts.map((post) => ({
     ...post,
-    like_count: Number(summaries.get(post.id)?.like_count ?? 0),
-    liked_by_viewer: summaries.get(post.id)?.liked_by_viewer ?? false,
+    like_count: Number(summaries.get(post.id)?.like_count ?? post.like_count),
+    liked_by_viewer: summaries.get(post.id)?.liked_by_viewer ?? post.liked_by_viewer,
+    saved_by_viewer: saved.has(post.id),
   }));
+}
+
+/** Saved posts in save order; hidden or removed posts drop out silently. */
+export async function getSavedCommunityPosts(page = 1, perPage = 20) {
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId) return [];
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const admin = createAdminClient();
+  const { data: savedRows, error } = await admin.rpc("list_saved_community_post_ids", {
+    p_viewer_id: viewerId,
+    p_limit: perPage,
+    p_offset: (safePage - 1) * perPage,
+  });
+  if (error) {
+    console.error("list_saved_community_post_ids failed", error);
+    return [];
+  }
+  const postIds = (savedRows ?? []).map((row) => row.post_id);
+  if (postIds.length === 0) return [];
+
+  const { data } = await admin
+    .from("community_posts")
+    .select(COMMUNITY_FEED_SELECT)
+    .in("id", postIds)
+    .order("created_at", { ascending: true, referencedTable: "community_comments" });
+  const posts = (data ?? []) as unknown as CommunityPost[];
+  const [blockedCommentAuthors, memberGroupIds] = await Promise.all([
+    getBlockedProfileIds(viewerId, posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id))),
+    activeMembershipGroupIds(viewerId, posts),
+  ]);
+  const byId = new Map(posts.map((post) => [post.id, {
+    ...post,
+    comments: (post.comments ?? []).filter((comment) => !blockedCommentAuthors.has(comment.author_id)),
+  }]));
+  const ordered = postIds.flatMap((id) => {
+    const post = byId.get(id);
+    return post ? [toCommunityFeedPost(post, viewerId, memberGroupIds)] : [];
+  });
+  return withPostLikeState(ordered, viewerId);
 }
 
 async function activeMembershipGroupIds(viewerId: string, posts: CommunityPost[]) {
