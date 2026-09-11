@@ -15,6 +15,8 @@ const updateProfileSchema = z.object({
   discoverable: z.boolean().optional(),
   allow_exact_username_lookup: z.boolean().optional(),
   friend_request_policy: z.enum(["everyone", "friends_of_friends", "nobody"]).optional(),
+  allow_friend_messages: z.boolean().optional(),
+  allow_group_message_requests: z.boolean().optional(),
 });
 
 const certificationLevelSchema = z.enum([
@@ -84,6 +86,12 @@ export async function updateProfile(formData: FormData) {
   raw.allow_exact_username_lookup =
     formData.get("allow_exact_username_lookup") === "true" ||
     formData.get("allow_exact_username_lookup") === "on";
+  raw.allow_friend_messages =
+    formData.get("allow_friend_messages") === "true" ||
+    formData.get("allow_friend_messages") === "on";
+  raw.allow_group_message_requests =
+    formData.get("allow_group_message_requests") === "true" ||
+    formData.get("allow_group_message_requests") === "on";
 
   const parsed = updateProfileSchema.safeParse(raw);
   if (!parsed.success) {
@@ -105,6 +113,8 @@ export async function updateProfile(formData: FormData) {
     discoverable,
     allow_exact_username_lookup,
     friend_request_policy,
+    allow_friend_messages,
+    allow_group_message_requests,
     ...profileUpdates
   } = parsed.data;
 
@@ -125,6 +135,8 @@ export async function updateProfile(formData: FormData) {
     p_discoverable: discoverable ?? true,
     p_allow_exact_username_lookup: allow_exact_username_lookup ?? true,
     p_friend_request_policy: friend_request_policy ?? null,
+    p_allow_friend_messages: allow_friend_messages ?? true,
+    p_allow_group_message_requests: allow_group_message_requests ?? false,
   });
   if (privacyError) return { error: "Privacy settings could not be updated" };
 

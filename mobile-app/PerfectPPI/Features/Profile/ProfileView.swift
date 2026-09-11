@@ -447,6 +447,8 @@ private struct EditProfileView: View {
     @State private var discoverable: Bool
     @State private var allowExactUsernameLookup: Bool
     @State private var friendRequestPolicy: FriendRequestPolicy
+    @State private var allowFriendMessages: Bool
+    @State private var allowGroupMessageRequests: Bool
     @State private var showingAdvanced = false
     @State private var saving = false
     @State private var error: String?
@@ -461,6 +463,8 @@ private struct EditProfileView: View {
         _discoverable = State(initialValue: profile.discoverable ?? true)
         _allowExactUsernameLookup = State(initialValue: profile.allowExactUsernameLookup ?? true)
         _friendRequestPolicy = State(initialValue: profile.friendRequestPolicy ?? .everyone)
+        _allowFriendMessages = State(initialValue: profile.allowFriendMessages ?? true)
+        _allowGroupMessageRequests = State(initialValue: profile.allowGroupMessageRequests ?? false)
     }
 
     var body: some View {
@@ -510,7 +514,9 @@ private struct EditProfileView: View {
                             Text(policy.label).tag(policy)
                         }
                     }
-                    Text("Defaults: discovery on, exact lookup on, requests from everyone. Blocked members can never send you a request.")
+                    Toggle("Messages with friends", isOn: $allowFriendMessages)
+                    Toggle("Requests from group members", isOn: $allowGroupMessageRequests)
+                    Text("Friend messages require both people to allow them. Group members may send one introduction that stays in Requests until you accept it.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -553,7 +559,9 @@ private struct EditProfileView: View {
                     defaultPostAudience: isPublic ? defaultAudience : .friends,
                     discoverable: discoverable,
                     allowExactUsernameLookup: allowExactUsernameLookup,
-                    friendRequestPolicy: friendRequestPolicy
+                    friendRequestPolicy: friendRequestPolicy,
+                    allowFriendMessages: allowFriendMessages,
+                    allowGroupMessageRequests: allowGroupMessageRequests
                 )
             )
             onSave(updated)

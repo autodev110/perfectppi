@@ -5,6 +5,13 @@ enum MessagesAPI {
         try await APIClient.shared.get("/api/messages/conversations")
     }
 
+    static func requests() async throws -> [ConversationSummary] {
+        try await APIClient.shared.get(
+            "/api/messages/conversations",
+            query: [URLQueryItem(name: "box", value: "requests")]
+        )
+    }
+
     static func conversation(id: String) async throws -> ConversationThread {
         try await APIClient.shared.get("/api/messages/conversations/\(id)")
     }
@@ -21,6 +28,17 @@ enum MessagesAPI {
         try await APIClient.shared.postCamel(
             "/api/messages/conversations",
             body: CreateConversationPayload(participantId: participantId)
+        )
+    }
+
+    private struct RequestDecisionPayload: Encodable {
+        let decision: String
+    }
+
+    static func decideRequest(conversationId: String, accept: Bool) async throws {
+        let _: Empty = try await APIClient.shared.patch(
+            "/api/messages/conversations/\(conversationId)",
+            body: RequestDecisionPayload(decision: accept ? "accept" : "decline")
         )
     }
 

@@ -43,6 +43,8 @@ export interface ConversationSummary {
     "id" | "sender_id" | "content" | "status" | "created_at" | "has_attachment"
   > | null;
   unread_count: number;
+  request_status: "pending" | "accepted";
+  requested_by: string | null;
 }
 
 export interface ConversationThread {
@@ -51,6 +53,8 @@ export interface ConversationThread {
   participants: ConversationProfile[];
   listing_context: ConversationListingContext | null;
   messages: MessageRow[];
+  request_status: "pending" | "accepted";
+  requested_by: string | null;
 }
 
 export interface MessageRecipient {
@@ -58,6 +62,8 @@ export interface MessageRecipient {
   display_name: string | null;
   username: string | null;
   role: ProfileRow["role"];
+  contact_mode: "message" | "request";
+  shared_group_name: string | null;
 }
 
 async function getMyProfileId() {
@@ -119,7 +125,10 @@ async function getListingContexts(
   return byId;
 }
 
-export async function getConversations(limit = 50): Promise<ConversationSummary[]> {
+async function getConversationBox(
+  box: "inbox" | "requests",
+  limit = 50,
+): Promise<ConversationSummary[]> {
   const { supabase, profileId } = await getMyProfileId();
   if (!profileId) return [];
 
@@ -127,7 +136,7 @@ export async function getConversations(limit = 50): Promise<ConversationSummary[
     .from("conversation_participants")
     .select("conversation_id")
     .eq("profile_id", profileId)
-    .limit(limit);
+    .limit(Math.max(limit * 4, 100));
 
   const conversationIds = (myMemberships ?? []).map((row) => row.conversation_id);
   if (conversationIds.length === 0) return [];
@@ -143,7 +152,7 @@ export async function getConversations(limit = 50): Promise<ConversationSummary[
   const [{ data: conversations }, { data: memberships }, { data: messages }] = await Promise.all([
     admin
       .from("conversations")
-      .select("id, created_at, marketplace_listing_id")
+      .select("id, created_at, marketplace_listing_id, request_status, requested_by")
       .in("id", conversationIds)
       .order("created_at", { ascending: false }),
     admin
@@ -158,6 +167,14 @@ export async function getConversations(limit = 50): Promise<ConversationSummary[
   ]);
 
   if (!conversations || conversations.length === 0) return [];
+  const visibleConversations = conversations.filter((conversation) => (
+    box === "requests"
+      ? conversation.request_status === "pending" && conversation.requested_by !== profileId
+      : conversation.request_status === "accepted"
+        || (conversation.request_status === "pending" && conversation.requested_by === profileId)
+  ));
+  if (visibleConversations.length === 0) return [];
+  const visibleConversationIds = new Set(visibleConversations.map((conversation) => conversation.id));
 
   const profileIds = Array.from(
     new Set((memberships ?? []).map((row) => row.profile_id)),
@@ -218,7 +235,7 @@ export async function getConversations(limit = 50): Promise<ConversationSummary[
     }
   }
 
-  const summaries = conversations.map((conversation) => {
+  const summaries = visibleConversations.map((conversation) => {
     const memberIds = membershipsByConversation.get(conversation.id) ?? [];
     const participants = memberIds
       .map((id) => profileById.get(id))
@@ -236,11 +253,14 @@ export async function getConversations(limit = 50): Promise<ConversationSummary[
         : null,
       last_message: firstMessageByConversation.get(conversation.id) ?? null,
       unread_count: unreadCountByConversation.get(conversation.id) ?? 0,
+      request_status: conversation.request_status as "pending" | "accepted",
+      requested_by: conversation.requested_by,
     };
   });
 
   const dedupedByParticipantSet = new Map<string, ConversationSummary>();
   for (const summary of summaries) {
+    if (box === "requests" && !summary.last_message) continue;
     const memberIds = membershipsByConversation.get(summary.id) ?? [];
     const key = [...memberIds].sort().join(":");
     const current = dedupedByParticipantSet.get(key);
@@ -258,12 +278,22 @@ export async function getConversations(limit = 50): Promise<ConversationSummary[
   );
 
   return Array.from(dedupedByParticipantSet.values())
+    .filter((summary) => visibleConversationIds.has(summary.id))
     .filter((summary) => summary.other_participants.every((profile) => !blockedIds.has(profile.id)))
     .sort((a, b) => {
     const aActivityAt = a.last_message?.created_at ?? a.created_at;
     const bActivityAt = b.last_message?.created_at ?? b.created_at;
     return new Date(bActivityAt).getTime() - new Date(aActivityAt).getTime();
-    });
+    })
+    .slice(0, limit);
+}
+
+export async function getConversations(limit = 50) {
+  return getConversationBox("inbox", limit);
+}
+
+export async function getMessageRequests(limit = 50) {
+  return getConversationBox("requests", limit);
 }
 
 export async function getMessageRecipientsDirectory(limit = 100): Promise<MessageRecipient[]> {
@@ -271,16 +301,68 @@ export async function getMessageRecipientsDirectory(limit = 100): Promise<Messag
   if (!profileId) return [];
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const [{ data }, { data: me }, { data: myFriendships }, { data: myGroups }] = await Promise.all([
+    admin
     .from("profiles")
-    .select("id, display_name, username, role")
+    .select("id, display_name, username, role, allow_friend_messages, allow_group_message_requests")
     .neq("id", profileId)
     .eq("discoverable", true)
     .eq("username_state", "claimed")
     .order("display_name", { ascending: true, nullsFirst: false })
-    .limit(limit);
+    .limit(Math.max(limit * 3, 100)),
+    admin.from("profiles").select("allow_friend_messages").eq("id", profileId).single(),
+    admin
+      .from("friend_relationships")
+      .select("profile_low_id, profile_high_id")
+      .eq("status", "friends")
+      .or(`profile_low_id.eq.${profileId},profile_high_id.eq.${profileId}`),
+    admin
+      .from("community_group_memberships")
+      .select("group_id")
+      .eq("profile_id", profileId)
+      .eq("status", "active"),
+  ]);
 
-  const profiles = (data ?? []) as MessageRecipient[];
+  const rawProfiles = data ?? [];
+  const friendIds = new Set((myFriendships ?? []).map((row) => (
+    row.profile_low_id === profileId ? row.profile_high_id : row.profile_low_id
+  )));
+  const groupIds = (myGroups ?? []).map((row) => row.group_id);
+  const [{ data: sharedMemberships }, { data: sharedGroups }] = await Promise.all([
+    groupIds.length && rawProfiles.length
+      ? admin
+          .from("community_group_memberships")
+          .select("profile_id, group_id")
+          .in("profile_id", rawProfiles.map((profile) => profile.id))
+          .in("group_id", groupIds)
+          .eq("status", "active")
+      : Promise.resolve({ data: [] as Array<{ profile_id: string; group_id: string }> }),
+    groupIds.length
+      ? admin.from("community_groups").select("id, name").in("id", groupIds).eq("status", "active")
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+  ]);
+  const groupNameById = new Map((sharedGroups ?? []).map((group) => [group.id, group.name]));
+  const firstSharedGroupByProfile = new Map<string, string>();
+  for (const membership of sharedMemberships ?? []) {
+    if (!firstSharedGroupByProfile.has(membership.profile_id)) {
+      firstSharedGroupByProfile.set(membership.profile_id, membership.group_id);
+    }
+  }
+  const profiles = rawProfiles.flatMap<MessageRecipient>((profile) => {
+    const isFriend = friendIds.has(profile.id);
+    const sharedGroupId = firstSharedGroupByProfile.get(profile.id);
+    if (isFriend && me?.allow_friend_messages && profile.allow_friend_messages) {
+      return [{ ...profile, contact_mode: "message" as const, shared_group_name: null }];
+    }
+    if (sharedGroupId && profile.allow_group_message_requests) {
+      return [{
+        ...profile,
+        contact_mode: "request" as const,
+        shared_group_name: groupNameById.get(sharedGroupId) ?? "a shared group",
+      }];
+    }
+    return [];
+  });
   const [blockedIds, { data: enforcementActions }] = await Promise.all([
     getBlockedProfileIds(profileId, profiles.map((profile) => profile.id)),
     profiles.length
@@ -295,7 +377,9 @@ export async function getMessageRecipientsDirectory(limit = 100): Promise<Messag
   const unavailableIds = new Set((enforcementActions ?? [])
     .filter((action) => new Date(action.starts_at).getTime() <= now && (!action.ends_at || new Date(action.ends_at).getTime() > now))
     .map((action) => action.profile_id));
-  return profiles.filter((profile) => !blockedIds.has(profile.id) && !unavailableIds.has(profile.id));
+  return profiles
+    .filter((profile) => !blockedIds.has(profile.id) && !unavailableIds.has(profile.id))
+    .slice(0, limit);
 }
 
 export async function getConversation(conversationId: string): Promise<ConversationThread | null> {
@@ -329,7 +413,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
   const [{ data: conversation }, { data: participants }, { data: messages }] = await Promise.all([
     admin
       .from("conversations")
-      .select("id, created_at, marketplace_listing_id")
+      .select("id, created_at, marketplace_listing_id, request_status, requested_by")
       .eq("id", conversationId)
       .maybeSingle(),
     admin
@@ -343,7 +427,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
       .order("created_at", { ascending: true }),
   ]);
 
-  if (!conversation) return null;
+  if (!conversation || conversation.request_status === "declined") return null;
 
   const participantIds = Array.from(new Set((participants ?? []).map((p) => p.profile_id)));
   const [{ data: profiles }, listingContexts] = await Promise.all([
@@ -366,6 +450,8 @@ export async function getConversation(conversationId: string): Promise<Conversat
       ? listingContexts.get(conversation.marketplace_listing_id) ?? null
       : null,
     messages: await Promise.all(((messages ?? []) as MessageRow[]).map(authorizeAttachment)),
+    request_status: conversation.request_status as "pending" | "accepted",
+    requested_by: conversation.requested_by,
   };
 }
 

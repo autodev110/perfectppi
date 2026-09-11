@@ -40,6 +40,8 @@ export default async function ConversationPage({
       participants={conversation.participants}
       listingContext={conversation.listing_context}
       messages={conversation.messages}
+      requestStatus={conversation.request_status}
+      requestedBy={conversation.requested_by}
       highlightMessageId={highlightMessageId}
     />
   );

@@ -9,6 +9,12 @@ struct MessagesView: View {
 
     @State private var reloadToken = UUID()
     @State private var showingComposer = false
+    @State private var selectedBox = 0
+
+    private struct MessageBoxes {
+        let inbox: [ConversationSummary]
+        let requests: [ConversationSummary]
+    }
 
     init(currentProfileId: String? = nil) {
         self.currentProfileId = currentProfileId
@@ -16,13 +22,28 @@ struct MessagesView: View {
 
     var body: some View {
         AsyncContent(
-            load: { try await MessagesAPI.conversations() },
-            loaded: { conversations in
-                Group {
+            load: {
+                async let inbox = MessagesAPI.conversations()
+                async let requests = MessagesAPI.requests()
+                return try await MessageBoxes(inbox: inbox, requests: requests)
+            },
+            loaded: { boxes in
+                VStack(spacing: 0) {
+                    Picker("Mailbox", selection: $selectedBox) {
+                        Text("Inbox").tag(0)
+                        Text(boxes.requests.isEmpty ? "Requests" : "Requests \(boxes.requests.count)").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+
+                    let conversations = selectedBox == 0 ? boxes.inbox : boxes.requests
                     if conversations.isEmpty {
                         EmptyStateCard(
-                            title: "No messages yet",
-                            message: "Conversations with sellers, buyers, technicians, and shops will appear here.",
+                            title: selectedBox == 0 ? "No messages yet" : "No message requests",
+                            message: selectedBox == 0
+                                ? "Accepted conversations and marketplace inquiries will appear here."
+                                : "Eligible group-member introductions wait here until you accept or decline them.",
                             systemImage: "bubble.left.and.bubble.right"
                         )
                         .padding()
@@ -123,6 +144,7 @@ struct MessageThreadView: View {
     let conversationId: String
     let currentProfileId: String?
 
+    @Environment(\.dismiss) private var dismiss
     @State private var thread: ConversationThread?
     @State private var error: Error?
     @State private var draft = ""
@@ -136,10 +158,50 @@ struct MessageThreadView: View {
     @State private var photoAccessBlocked = false
     @StateObject private var uploadProgress = UploadProgressModel()
 
+    private var incomingRequest: Bool {
+        thread?.requestStatus == "pending" && thread?.requestedBy != currentProfileId
+    }
+
+    private var outgoingRequest: Bool {
+        thread?.requestStatus == "pending" && thread?.requestedBy == currentProfileId
+    }
+
+    private var canCompose: Bool {
+        thread?.requestStatus != "pending" || (outgoingRequest && thread?.messages.isEmpty == true)
+    }
+
     var body: some View {
         Group {
             if let thread {
                 VStack(spacing: 0) {
+                    if incomingRequest {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Message request").font(.headline)
+                            Text("Opening this request does not send a read receipt. Accept it before replying.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            HStack {
+                                Button("Accept") { Task { await decideRequest(accept: true) } }
+                                    .buttonStyle(.borderedProminent)
+                                Button("Decline", role: .destructive) { Task { await decideRequest(accept: false) } }
+                                    .buttonStyle(.bordered)
+                            }
+                            .disabled(sending)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background(Color.orange.opacity(0.1))
+                    } else if outgoingRequest {
+                        Text(thread.messages.isEmpty
+                             ? "Send one introduction. You can continue after this member accepts."
+                             : "Message request sent. Waiting for this member to accept.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background(Theme.Palette.subtle)
+                    }
+
                     ScrollViewReader { proxy in
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: 10) {
@@ -161,6 +223,7 @@ struct MessageThreadView: View {
                     }
 
                     Divider()
+                    if canCompose {
                     VStack(spacing: 8) {
                         if let attachment {
                             VStack(alignment: .leading, spacing: 6) {
@@ -236,6 +299,13 @@ struct MessageThreadView: View {
                         }
                     }
                     .padding()
+                    } else {
+                        Text(incomingRequest ? "Accept this request to reply." : "Waiting for this member to accept your request.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                    }
                 }
             } else if let error {
                 ErrorView(message: error.localizedDescription) { Task { await load() } }
@@ -334,6 +404,22 @@ struct MessageThreadView: View {
         } catch {
             composerError = error.localizedDescription
             photoAccessBlocked = false
+        }
+    }
+
+    private func decideRequest(accept: Bool) async {
+        guard !sending else { return }
+        sending = true
+        defer { sending = false }
+        do {
+            try await MessagesAPI.decideRequest(conversationId: conversationId, accept: accept)
+            if accept {
+                await load()
+            } else {
+                dismiss()
+            }
+        } catch {
+            composerError = error.localizedDescription
         }
     }
 
@@ -448,6 +534,11 @@ private struct NewConversationView: View {
                                     Text(recipient.role?.rawValue.replacingOccurrences(of: "_", with: " ") ?? "member")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                    if recipient.contactMode == "request" {
+                                        Text("Request via \(recipient.sharedGroupName ?? "shared group")")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
                                 Spacer()
                                 if creating && selectedRecipient?.id == recipient.id {

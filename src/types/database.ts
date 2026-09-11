@@ -1698,16 +1698,28 @@ export type Database = {
           created_at: string
           id: string
           marketplace_listing_id: string | null
+          request_context_group_id: string | null
+          request_resolved_at: string | null
+          request_status: string
+          requested_by: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           marketplace_listing_id?: string | null
+          request_context_group_id?: string | null
+          request_resolved_at?: string | null
+          request_status?: string
+          requested_by?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           marketplace_listing_id?: string | null
+          request_context_group_id?: string | null
+          request_resolved_at?: string | null
+          request_status?: string
+          requested_by?: string | null
         }
         Relationships: [
           {
@@ -1715,6 +1727,20 @@ export type Database = {
             columns: ["marketplace_listing_id"]
             isOneToOne: false
             referencedRelation: "marketplace_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_request_context_group_id_fkey"
+            columns: ["request_context_group_id"]
+            isOneToOne: false
+            referencedRelation: "community_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -3386,6 +3412,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          allow_friend_messages: boolean
+          allow_group_message_requests: boolean
           allow_exact_username_lookup: boolean
           auth_user_id: string
           avatar_url: string | null
@@ -3405,6 +3433,8 @@ export type Database = {
           username_state: string
         }
         Insert: {
+          allow_friend_messages?: boolean
+          allow_group_message_requests?: boolean
           allow_exact_username_lookup?: boolean
           auth_user_id: string
           avatar_url?: string | null
@@ -3424,6 +3454,8 @@ export type Database = {
           username_state?: string
         }
         Update: {
+          allow_friend_messages?: boolean
+          allow_group_message_requests?: boolean
           allow_exact_username_lookup?: boolean
           auth_user_id?: string
           avatar_url?: string | null
@@ -4506,6 +4538,8 @@ export type Database = {
       }
       set_own_social_privacy: {
         Args: {
+          p_allow_friend_messages?: boolean | null
+          p_allow_group_message_requests?: boolean | null
           p_allow_exact_username_lookup?: boolean
           p_default_post_audience: Database["public"]["Enums"]["community_post_audience"]
           p_discoverable?: boolean

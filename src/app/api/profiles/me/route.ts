@@ -34,6 +34,8 @@ const updateSchema = z.object({
   discoverable: z.boolean().optional(),
   allow_exact_username_lookup: z.boolean().optional(),
   friend_request_policy: z.enum(["everyone", "friends_of_friends", "nobody"]).optional(),
+  allow_friend_messages: z.boolean().optional(),
+  allow_group_message_requests: z.boolean().optional(),
 });
 
 export async function PATCH(request: Request) {
@@ -57,7 +59,7 @@ export async function PATCH(request: Request) {
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("username_state, is_public, default_post_audience, discoverable, allow_exact_username_lookup, friend_request_policy")
+    .select("username_state, is_public, default_post_audience, discoverable, allow_exact_username_lookup, friend_request_policy, allow_friend_messages, allow_group_message_requests")
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (!currentProfile) {
@@ -76,6 +78,8 @@ export async function PATCH(request: Request) {
     discoverable,
     allow_exact_username_lookup,
     friend_request_policy,
+    allow_friend_messages,
+    allow_group_message_requests,
     ...profileUpdates
   } = parsed.data;
 
@@ -98,7 +102,9 @@ export async function PATCH(request: Request) {
     || default_post_audience !== undefined
     || discoverable !== undefined
     || allow_exact_username_lookup !== undefined
-    || friend_request_policy !== undefined;
+    || friend_request_policy !== undefined
+    || allow_friend_messages !== undefined
+    || allow_group_message_requests !== undefined;
 
   if (touchesPrivacy) {
     const nextPublic = is_public ?? currentProfile.is_public;
@@ -111,6 +117,8 @@ export async function PATCH(request: Request) {
       p_allow_exact_username_lookup:
         allow_exact_username_lookup ?? currentProfile.allow_exact_username_lookup,
       p_friend_request_policy: friend_request_policy ?? null,
+      p_allow_friend_messages: allow_friend_messages ?? null,
+      p_allow_group_message_requests: allow_group_message_requests ?? null,
     });
     if (privacyError) {
       return NextResponse.json({ error: "Privacy settings could not be updated" }, { status: 500 });

@@ -15,6 +15,11 @@ const createConversationSchema = z.object({
   marketplaceListingId: z.string().uuid().optional(),
 });
 
+const messageRequestDecisionSchema = z.object({
+  conversationId: z.string().uuid(),
+  decision: z.enum(["accept", "decline"]),
+});
+
 const sendMessageSchema = z.object({
   conversationId: z.string().uuid(),
   content: z.string().trim().max(4000),
@@ -56,8 +61,80 @@ export type CreateConversationResult =
         existing: boolean;
         /** True when this call pointed the thread at a different listing. */
         listingChanged: boolean;
+        requestStatus: "pending" | "accepted";
       };
     };
+
+async function resolveMessageEligibility(
+  actorId: string,
+  targetId: string,
+  marketplaceListingId?: string,
+): Promise<
+  | { kind: "accepted"; groupId: null }
+  | { kind: "pending"; groupId: string }
+  | { error: string }
+> {
+  const admin = createAdminClient();
+
+  if (marketplaceListingId) {
+    const { data: listing } = await admin
+      .from("marketplace_listings")
+      .select("id")
+      .eq("id", marketplaceListingId)
+      .eq("seller_id", targetId)
+      .eq("status", "active")
+      .maybeSingle();
+    return listing ? { kind: "accepted", groupId: null } : { error: "Listing unavailable" };
+  }
+
+  const lowId = actorId < targetId ? actorId : targetId;
+  const highId = actorId < targetId ? targetId : actorId;
+  const [{ data: profiles }, { data: friendship }, { data: actorGroups }] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("id, allow_friend_messages, allow_group_message_requests")
+      .in("id", [actorId, targetId]),
+    admin
+      .from("friend_relationships")
+      .select("status")
+      .eq("profile_low_id", lowId)
+      .eq("profile_high_id", highId)
+      .eq("status", "friends")
+      .maybeSingle(),
+    admin
+      .from("community_group_memberships")
+      .select("group_id")
+      .eq("profile_id", actorId)
+      .eq("status", "active"),
+  ]);
+
+  const actor = profiles?.find((profile) => profile.id === actorId);
+  const target = profiles?.find((profile) => profile.id === targetId);
+  if (!actor || !target) return { error: "Profile unavailable" };
+
+  if (friendship) {
+    return actor.allow_friend_messages && target.allow_friend_messages
+      ? { kind: "accepted", groupId: null }
+      : { error: "Friend messages are disabled" };
+  }
+
+  if (!target.allow_group_message_requests || !actorGroups?.length) {
+    return { error: "This member is not accepting message requests" };
+  }
+
+  const { data: sharedMembership } = await admin
+    .from("community_group_memberships")
+    .select("group_id")
+    .eq("profile_id", targetId)
+    .eq("status", "active")
+    .in("group_id", actorGroups.map((row) => row.group_id))
+    .limit(1)
+    .maybeSingle();
+
+  return sharedMembership
+    ? { kind: "pending", groupId: sharedMembership.group_id }
+    : { error: "Only friends and eligible group members can message this person" };
+}
 
 export async function createConversation(input: {
   participantId: string;
@@ -88,6 +165,13 @@ export async function createConversation(input: {
 
   if (!participant || !participantAvailable) return { error: "Profile unavailable" };
 
+  const eligibility = await resolveMessageEligibility(
+    profile.id,
+    participantId,
+    parsed.data.marketplaceListingId,
+  );
+  if ("error" in eligibility) return { error: eligibility.error };
+
   // Use the admin client for the existence check so recursive RLS policies
   // on conversation_participants don't mask existing threads and cause
   // duplicate conversations between the same pair of users.
@@ -113,7 +197,7 @@ export async function createConversation(input: {
     const [{ data: existingConversations }, { data: existingMessages }] = await Promise.all([
       admin
         .from("conversations")
-        .select("id, created_at, marketplace_listing_id")
+        .select("id, created_at, marketplace_listing_id, request_status, requested_by")
         .in("id", sharedConversationIds),
       admin
         .from("messages")
@@ -154,8 +238,19 @@ export async function createConversation(input: {
     if (listingChanged) {
       await admin
         .from("conversations")
-        .update({ marketplace_listing_id: listingId })
+        .update({
+          marketplace_listing_id: listingId,
+          request_status: "accepted",
+          request_resolved_at: new Date().toISOString(),
+        })
         .eq("id", existingConversationId);
+    }
+
+    const existingConversation = existingConversations?.find(
+      (conversation) => conversation.id === existingConversationId,
+    );
+    if (existingConversation?.request_status === "declined" && !listingId) {
+      return { error: "This message request was declined" };
     }
 
     return {
@@ -163,6 +258,11 @@ export async function createConversation(input: {
         conversationId: existingConversationId,
         existing: true,
         listingChanged,
+        requestStatus: listingChanged
+          ? "accepted"
+          : existingConversation?.request_status === "pending"
+            ? "pending"
+            : "accepted",
       },
     };
   }
@@ -172,7 +272,12 @@ export async function createConversation(input: {
   // so insert(...).select() with user client can fail before participants exist.
   const { data: conversation, error: convoErr } = await admin
     .from("conversations")
-    .insert({ marketplace_listing_id: listingId })
+    .insert({
+      marketplace_listing_id: listingId,
+      request_status: eligibility.kind,
+      requested_by: profile.id,
+      request_context_group_id: eligibility.groupId,
+    })
     .select("id")
     .single();
 
@@ -190,6 +295,7 @@ export async function createConversation(input: {
 
   if (participantErr) {
     console.error("createConversation: failed to add participants", participantErr);
+    await admin.from("conversations").delete().eq("id", conversation.id);
     return { error: "Failed to add participants" };
   }
 
@@ -198,7 +304,14 @@ export async function createConversation(input: {
   revalidatePath("/org/messages");
   revalidatePath("/admin/messages");
 
-  return { data: { conversationId: conversation.id, existing: false, listingChanged: !!listingId } };
+  return {
+    data: {
+      conversationId: conversation.id,
+      existing: false,
+      listingChanged: !!listingId,
+      requestStatus: eligibility.kind,
+    },
+  };
 }
 
 export async function sendMessage(input: {
@@ -218,12 +331,32 @@ export async function sendMessage(input: {
 
   const { data: membership } = await admin
     .from("conversation_participants")
-    .select("conversation_id")
+    .select("conversation_id, conversations(request_status, requested_by, marketplace_listing_id, request_context_group_id)")
     .eq("conversation_id", parsed.data.conversationId)
     .eq("profile_id", profile.id)
     .maybeSingle();
 
   if (!membership) return { error: "Not authorized for this conversation" };
+
+  const conversation = membership.conversations as {
+    request_status: string;
+    requested_by: string | null;
+    marketplace_listing_id: string | null;
+    request_context_group_id: string | null;
+  } | null;
+  if (!conversation || conversation.request_status === "declined") {
+    return { error: "Conversation unavailable" };
+  }
+  if (conversation.request_status === "pending") {
+    if (conversation.requested_by !== profile.id) {
+      return { error: "Accept the message request before replying" };
+    }
+    const { count } = await admin
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("conversation_id", parsed.data.conversationId);
+    if ((count ?? 0) > 0) return { error: "Your message request is awaiting a response" };
+  }
 
   const { data: participants } = await admin
     .from("conversation_participants")
@@ -235,6 +368,24 @@ export async function sendMessage(input: {
     participants.map((participant) => canProfilesInteract(profile.id, participant.profile_id)),
   );
   if (allowed.some((value) => !value)) return { error: "Conversation unavailable" };
+
+  // New direct friend conversations remain subject to both participants'
+  // current privacy settings. Marketplace, accepted group requests, and
+  // legacy conversations keep their established access rules.
+  if (
+    conversation.request_status === "accepted"
+    && conversation.requested_by
+    && !conversation.marketplace_listing_id
+    && !conversation.request_context_group_id
+  ) {
+    const eligibility = await resolveMessageEligibility(
+      profile.id,
+      participants[0].profile_id,
+    );
+    if ("error" in eligibility || eligibility.kind !== "accepted") {
+      return { error: "Friend messages are disabled" };
+    }
+  }
 
   const hasAttachment = !!parsed.data.attachmentUrl;
   if (parsed.data.attachmentUrl) {
@@ -267,7 +418,10 @@ export async function sendMessage(input: {
 
   if (recipients && recipients.length > 0) {
     const senderName = profile.display_name || "New message";
-    const notificationText = parsed.data.content || "Sent an attachment";
+    const isRequest = conversation.request_status === "pending";
+    const notificationText = isRequest
+      ? "Sent you a message request"
+      : parsed.data.content || "Sent an attachment";
     const preview = notificationText.length > 100
       ? `${notificationText.slice(0, 100)}...`
       : notificationText;
@@ -309,12 +463,20 @@ export async function markConversationRead(conversationId: string) {
 
   const { data: membership } = await supabase
     .from("conversation_participants")
-    .select("conversation_id")
+    .select("conversation_id, conversations(request_status, requested_by)")
     .eq("conversation_id", conversationId)
     .eq("profile_id", profile.id)
     .maybeSingle();
 
   if (!membership) return { error: "Not authorized" };
+  const conversation = membership.conversations as {
+    request_status: string;
+    requested_by: string | null;
+  } | null;
+  if (!conversation || conversation.request_status === "declined") return { error: "Not authorized" };
+  if (conversation.request_status === "pending" && conversation.requested_by !== profile.id) {
+    return { success: true };
+  }
 
   const admin = createAdminClient();
   const readAt = new Date().toISOString();
@@ -345,4 +507,66 @@ export async function markConversationRead(conversationId: string) {
   // the messages list re-renders on next navigation.
 
   return { success: true };
+}
+
+export async function decideMessageRequest(input: {
+  conversationId: string;
+  decision: "accept" | "decline";
+}) {
+  const parsed = messageRequestDecisionSchema.safeParse(input);
+  if (!parsed.success) return { error: "Invalid message request decision" };
+
+  const auth = await getAuthProfile();
+  if (!auth) return { error: "Not authenticated" };
+  const { profile } = auth;
+  const admin = createAdminClient();
+
+  const { data: conversation } = await admin
+    .from("conversations")
+    .select("id, request_status, requested_by, conversation_participants(profile_id)")
+    .eq("id", parsed.data.conversationId)
+    .maybeSingle();
+  const participants = (conversation?.conversation_participants ?? []) as Array<{ profile_id: string }>;
+  if (
+    !conversation
+    || conversation.request_status !== "pending"
+    || conversation.requested_by === profile.id
+    || !participants.some((participant) => participant.profile_id === profile.id)
+  ) {
+    return { error: "Message request unavailable" };
+  }
+
+  const nextStatus = parsed.data.decision === "accept" ? "accepted" : "declined";
+  const { data: updated, error } = await admin
+    .from("conversations")
+    .update({ request_status: nextStatus, request_resolved_at: new Date().toISOString() })
+    .eq("id", parsed.data.conversationId)
+    .eq("request_status", "pending")
+    .select("id")
+    .maybeSingle();
+  if (error || !updated) return { error: "Message request was already handled" };
+
+  if (nextStatus === "accepted" && conversation.requested_by) {
+    await admin.from("notifications").insert({
+      user_id: conversation.requested_by,
+      type: "message_received",
+      title: profile.display_name || "Message request accepted",
+      body: "Accepted your message request",
+      data: { conversation_id: conversation.id },
+    });
+  }
+
+  await admin
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("user_id", profile.id)
+    .eq("type", "message_received")
+    .is("read_at", null)
+    .contains("data", { conversation_id: conversation.id });
+
+  revalidatePath("/dashboard/messages");
+  revalidatePath("/tech/messages");
+  revalidatePath("/org/messages");
+  revalidatePath("/admin/messages");
+  return { data: { conversationId: conversation.id, status: nextStatus } };
 }

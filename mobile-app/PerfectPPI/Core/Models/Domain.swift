@@ -26,6 +26,8 @@ struct Profile: Codable, Identifiable, Hashable {
     let discoverable: Bool?
     let allowExactUsernameLookup: Bool?
     let friendRequestPolicy: FriendRequestPolicy?
+    let allowFriendMessages: Bool?
+    let allowGroupMessageRequests: Bool?
     let phone: String?
     let createdAt: Date?
 
@@ -674,6 +676,8 @@ struct ConversationSummary: Codable, Identifiable, Hashable {
     let listingContext: ConversationListingContext?
     let lastMessage: ConversationLastMessage?
     let unreadCount: Int
+    let requestStatus: String?
+    let requestedBy: String?
 }
 
 struct ConversationMessage: Codable, Identifiable, Hashable {
@@ -694,6 +698,8 @@ struct ConversationThread: Codable, Identifiable, Hashable {
     let participants: [ConversationProfile]
     let listingContext: ConversationListingContext?
     let messages: [ConversationMessage]
+    let requestStatus: String?
+    let requestedBy: String?
 }
 
 struct MessageRecipient: Codable, Identifiable, Hashable {
@@ -701,12 +707,15 @@ struct MessageRecipient: Codable, Identifiable, Hashable {
     let displayName: String?
     let username: String?
     let role: UserRole?
+    let contactMode: String?
+    let sharedGroupName: String?
 }
 
 struct CreateConversationResult: Codable, Hashable {
     let conversationId: String
     let existing: Bool
     let listingChanged: Bool?
+    let requestStatus: String?
 }
 
 // MARK: - Reviews

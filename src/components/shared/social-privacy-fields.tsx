@@ -9,6 +9,8 @@ type Profile = Pick<
   | "discoverable"
   | "allow_exact_username_lookup"
   | "friend_request_policy"
+  | "allow_friend_messages"
+  | "allow_group_message_requests"
 >;
 
 // Plan 9.3: profile privacy and the default audience up top; discovery,
@@ -54,7 +56,7 @@ export function SocialPrivacyFields({ profile }: { profile: Profile | null }) {
       <details className="group rounded-xl border p-4">
         <summary className="cursor-pointer text-sm font-semibold">
           Advanced privacy
-          <span className="ml-2 font-normal text-muted-foreground">discovery, username lookup, friend requests</span>
+          <span className="ml-2 font-normal text-muted-foreground">discovery, requests, messages</span>
         </summary>
         <div className="mt-4 space-y-4">
           <label className="flex items-start gap-3">
@@ -91,6 +93,20 @@ export function SocialPrivacyFields({ profile }: { profile: Profile | null }) {
             </select>
             <p className="text-xs text-muted-foreground">Default: everyone. You can still send requests yourself, and blocked members can never send one.</p>
           </div>
+          <label className="flex items-start gap-3">
+            <input type="checkbox" name="allow_friend_messages" value="true" defaultChecked={profile?.allow_friend_messages ?? true} className="mt-1 rounded" />
+            <span>
+              <span className="block text-sm font-medium">Messages with friends</span>
+              <span className="block text-xs text-muted-foreground">Allow friends to start and continue direct conversations. Both people must allow friend messages.</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3">
+            <input type="checkbox" name="allow_group_message_requests" value="true" defaultChecked={profile?.allow_group_message_requests ?? false} className="mt-1 rounded" />
+            <span>
+              <span className="block text-sm font-medium">Requests from group members</span>
+              <span className="block text-xs text-muted-foreground">People in a group with you may send one introduction. Their thread stays in Requests until you accept it. Default: off.</span>
+            </span>
+          </label>
         </div>
       </details>
     </div>

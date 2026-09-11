@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
-import { getConversations } from "@/features/messages/queries";
+import { getConversations, getMessageRequests } from "@/features/messages/queries";
 import { createConversation } from "@/features/messages/actions";
 import { z } from "zod";
 
@@ -9,11 +9,13 @@ const createConversationSchema = z.object({
 });
 
 // GET /api/messages/conversations — list conversations for authenticated user
-export async function GET() {
+export async function GET(req: NextRequest) {
   const auth = await requireApiRole(["consumer", "technician", "org_manager", "admin"]);
   if ("response" in auth) return auth.response;
 
-  const data = await getConversations();
+  const data = req.nextUrl.searchParams.get("box") === "requests"
+    ? await getMessageRequests()
+    : await getConversations();
   return NextResponse.json({ data });
 }
 

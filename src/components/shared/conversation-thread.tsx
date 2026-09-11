@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { markConversationRead, sendMessage } from "@/features/messages/actions";
+import { decideMessageRequest, markConversationRead, sendMessage } from "@/features/messages/actions";
 import { uploadFile } from "@/features/uploads/client";
 import {
   conversationPeopleLabel,
@@ -77,6 +77,8 @@ export function ConversationThread({
   listingContext,
   messages: initialMessages,
   highlightMessageId,
+  requestStatus: initialRequestStatus,
+  requestedBy,
 }: {
   conversationId: string;
   routeBase: string;
@@ -85,6 +87,8 @@ export function ConversationThread({
   listingContext?: ConversationListingContext | null;
   messages: MessageRow[];
   highlightMessageId?: string;
+  requestStatus: "pending" | "accepted";
+  requestedBy: string | null;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<MessageRow[]>(initialMessages);
@@ -95,6 +99,7 @@ export function ConversationThread({
   const [isPending, startTransition] = useTransition();
   const [liveConnected, setLiveConnected] = useState(false);
   const [flashedMessageId, setFlashedMessageId] = useState<string | null>(null);
+  const [requestStatus, setRequestStatus] = useState(initialRequestStatus);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const threadScrollRef = useRef<HTMLDivElement | null>(null);
@@ -122,6 +127,9 @@ export function ConversationThread({
   const peopleLabel =
     conversationPeopleLabel(participants, myProfileId) || "No participants";
   const carLabel = listingCarLabel(listingContext);
+  const incomingRequest = requestStatus === "pending" && requestedBy !== myProfileId;
+  const outgoingRequest = requestStatus === "pending" && requestedBy === myProfileId;
+  const canCompose = requestStatus === "accepted" || (outgoingRequest && messages.length === 0);
 
   const refetch = useCallback(async () => {
     const response = await fetch(`/api/messages/conversations/${conversationId}/messages`, {
@@ -194,8 +202,8 @@ export function ConversationThread({
     const hasUnreadIncoming = messages.some(
       (message) => message.sender_id !== myProfileId && message.status === "unread",
     );
-    if (hasUnreadIncoming) void markCurrentConversationRead();
-  }, [markCurrentConversationRead, messages, myProfileId]);
+    if (hasUnreadIncoming && !incomingRequest) void markCurrentConversationRead();
+  }, [incomingRequest, markCurrentConversationRead, messages, myProfileId]);
 
   // Polling fallback — every 6s, refetch so new messages from the other party land even without realtime.
   useEffect(() => {
@@ -254,7 +262,7 @@ export function ConversationThread({
 
   function handleSend() {
     const content = draft.trim();
-    if ((!content && !attachment) || isPending) return;
+    if ((!content && !attachment) || isPending || !canCompose) return;
 
     setError(null);
     const selectedAttachment = attachment;
@@ -326,6 +334,26 @@ export function ConversationThread({
 
   const grouped = useMemo(() => groupByDay(messages), [messages]);
 
+  function handleRequestDecision(decision: "accept" | "decline") {
+    if (isPending) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await decideMessageRequest({ conversationId, decision });
+      if ("error" in result) {
+        setError(result.error ?? "Could not update the message request");
+        return;
+      }
+      if (decision === "decline") {
+        router.push(routeBase);
+        router.refresh();
+        return;
+      }
+      setRequestStatus("accepted");
+      await markCurrentConversationRead();
+      router.refresh();
+    });
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -368,6 +396,22 @@ export function ConversationThread({
         </div>
 
         <CardContent className="p-0">
+          {incomingRequest ? (
+            <div className="border-b border-outline-variant/10 bg-amber-50 px-5 py-4 text-amber-950">
+              <p className="text-sm font-bold">Message request</p>
+              <p className="mt-1 text-xs">This group member can only continue messaging if you accept. Opening this request does not send a read receipt.</p>
+              <div className="mt-3 flex gap-2">
+                <Button size="sm" onClick={() => handleRequestDecision("accept")} disabled={isPending}>Accept</Button>
+                <Button size="sm" variant="outline" onClick={() => handleRequestDecision("decline")} disabled={isPending}>Decline</Button>
+              </div>
+            </div>
+          ) : outgoingRequest ? (
+            <div className="border-b border-outline-variant/10 bg-surface-container-low px-5 py-3 text-xs text-muted-foreground">
+              {messages.length === 0
+                ? "Send one introduction. You can continue after this member accepts your request."
+                : "Message request sent. You can continue if this member accepts."}
+            </div>
+          ) : null}
           <div
             ref={threadScrollRef}
             className="h-[60vh] max-h-[640px] min-h-[420px] overflow-y-auto bg-gradient-to-b from-surface-container-lowest to-surface-container-low/40 px-4 py-5 sm:px-6"
@@ -489,7 +533,11 @@ export function ConversationThread({
             {error ? (
               <p className="mb-2 text-xs font-medium text-destructive">{error}</p>
             ) : null}
-            {attachment ? (
+            {!canCompose ? (
+              <p className="rounded-xl bg-surface-container-low px-4 py-3 text-center text-xs text-muted-foreground">
+                {incomingRequest ? "Accept this request to reply." : "Waiting for this member to accept your request."}
+              </p>
+            ) : attachment ? (
               <div className="mb-2 rounded-xl border border-outline-variant/20 bg-surface-container-low px-3 py-2">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
@@ -534,7 +582,7 @@ export function ConversationThread({
                 event.currentTarget.value = "";
               }}
             />
-            <div className="flex items-end gap-2">
+            {canCompose ? <div className="flex items-end gap-2">
               <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 rounded-xl" onClick={() => attachmentInputRef.current?.click()} disabled={isPending} aria-label="Add attachment">
                 <Paperclip className="h-4 w-4" />
               </Button>
@@ -556,7 +604,7 @@ export function ConversationThread({
               >
                 <SendHorizontal className="h-4 w-4" />
               </Button>
-            </div>
+            </div> : null}
             <div className="mt-1.5 flex items-center justify-between px-1">
               <p className="text-[10px] text-muted-foreground">
                 Enter to send · Shift+Enter for a new line

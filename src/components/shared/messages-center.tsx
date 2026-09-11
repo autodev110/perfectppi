@@ -71,6 +71,7 @@ function avatarHue(id: string) {
 
 export function MessagesCenter({
   conversations,
+  requests,
   recipients,
   routeBase,
   myProfileId,
@@ -78,6 +79,7 @@ export function MessagesCenter({
   description,
 }: {
   conversations: ConversationSummary[];
+  requests: ConversationSummary[];
   recipients: MessageRecipient[];
   routeBase: string;
   myProfileId: string;
@@ -89,7 +91,7 @@ export function MessagesCenter({
   const [selectedRecipient, setSelectedRecipient] = useState<string>("");
   const [recipientQuery, setRecipientQuery] = useState("");
   const [conversationQuery, setConversationQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [filter, setFilter] = useState<"all" | "unread" | "requests">("all");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -135,7 +137,7 @@ export function MessagesCenter({
 
   const filteredConversations = useMemo(() => {
     const q = conversationQuery.trim().toLowerCase();
-    let list = conversations;
+    let list = filter === "requests" ? requests : conversations;
     if (filter === "unread") list = list.filter((c) => c.unread_count > 0);
     if (!q) return list;
     return list.filter((conversation) => {
@@ -143,7 +145,7 @@ export function MessagesCenter({
       const preview = conversationPreview(conversation).toLowerCase();
       return name.includes(q) || preview.includes(q);
     });
-  }, [conversations, conversationQuery, filter, myProfileId]);
+  }, [conversations, requests, conversationQuery, filter, myProfileId]);
 
   function handleStartConversation(participantId?: string) {
     const target = participantId ?? selectedRecipient;
@@ -190,7 +192,7 @@ export function MessagesCenter({
               <DialogHeader>
                 <DialogTitle className="font-heading text-xl">Start a conversation</DialogTitle>
                 <DialogDescription>
-                  Search and select someone to message. Conversations are private.
+                  Friends receive messages directly. Eligible group members receive one private request to accept or decline.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
@@ -239,8 +241,10 @@ export function MessagesCenter({
                                 <p className="truncate text-sm font-semibold text-foreground">
                                   {label}
                                 </p>
-                                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                                  {recipient.role}
+                                <p className="text-[11px] text-muted-foreground">
+                                  {recipient.contact_mode === "request"
+                                    ? `Message request via ${recipient.shared_group_name ?? "shared group"}`
+                                    : `${recipient.role} · Friend`}
                                 </p>
                               </div>
                               {isSelected ? (
@@ -291,6 +295,21 @@ export function MessagesCenter({
                 </span>
               </button>
               <button
+                onClick={() => setFilter("requests")}
+                className={`rounded-full px-3 py-1 transition-colors ${
+                  filter === "requests"
+                    ? "bg-surface-container-lowest text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Requests
+                {requests.length > 0 ? (
+                  <span className="ml-1.5 rounded-full bg-accent px-1.5 text-[10px] text-white">
+                    {requests.length}
+                  </span>
+                ) : null}
+              </button>
+              <button
                 onClick={() => setFilter("unread")}
                 className={`rounded-full px-3 py-1 transition-colors ${
                   filter === "unread"
@@ -324,14 +343,20 @@ export function MessagesCenter({
               <Inbox className="h-6 w-6 text-muted-foreground" />
             </div>
             <p className="text-base font-bold text-foreground">
-              {filter === "unread" ? "No unread messages" : "No conversations yet"}
+              {filter === "unread"
+                ? "No unread messages"
+                : filter === "requests"
+                  ? "No message requests"
+                  : "No conversations yet"}
             </p>
             <p className="mt-1 max-w-xs text-xs text-muted-foreground">
               {filter === "unread"
                 ? "You're all caught up. Switch to 'All' to see every thread."
-                : "Start a new conversation to message technicians and other users."}
+                : filter === "requests"
+                  ? "Eligible group-member introductions will wait here until you accept or decline them."
+                  : "Start a conversation with a friend or eligible group member."}
             </p>
-            {filter !== "unread" ? (
+            {filter === "all" ? (
               <Button
                 onClick={() => setDialogOpen(true)}
                 size="sm"
@@ -386,6 +411,9 @@ export function MessagesCenter({
                           }`}
                         >
                           {peopleLabel}
+                          {filter === "requests" ? (
+                            <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wider text-accent">Request</span>
+                          ) : null}
                           {carLabel ? (
                             <span className="ml-1.5 text-xs font-semibold text-muted-foreground">
                               · {carLabel}
