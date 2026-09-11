@@ -262,7 +262,7 @@ export async function createCommunityPostFromInput(
   if (groupId) {
     const { data: membership } = await admin
       .from("community_group_memberships")
-      .select("group:community_groups!community_group_memberships_group_id_fkey(id, status, visibility, join_policy, is_staff_curated)")
+      .select("role, group:community_groups!community_group_memberships_group_id_fkey(id, status, visibility, join_policy, posting_policy)")
       .eq("group_id", groupId)
       .eq("profile_id", profile.profileId)
       .eq("status", "active")
@@ -272,11 +272,13 @@ export async function createCommunityPostFromInput(
       status: string;
       visibility: string;
       join_policy: string;
-      is_staff_curated: boolean;
+      posting_policy: string;
     } | null;
-    if (!group || group.status !== "active" || group.visibility !== "public"
-      || group.join_policy !== "open" || !group.is_staff_curated) {
+    if (!group || group.status !== "active" || group.visibility !== "public" || group.join_policy !== "open") {
       return { error: "Join this group before posting." };
+    }
+    if (group.posting_policy === "moderators" && membership?.role === "member") {
+      return { error: "Only this group's moderators can post here. You can still comment." };
     }
   }
 

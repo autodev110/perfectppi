@@ -491,11 +491,33 @@ struct CommunityGroupSummary: Codable, Identifiable, Hashable {
     let isMember: Bool
     let membershipRole: String?
     let isSuggested: Bool
+    /// Directory badge for PerfectPPI-curated groups (plan 13.6).
+    let isStaffCurated: Bool?
+    let locationRegion: String?
+    /// "members" or "moderators" (announcement group).
+    let postingPolicy: String?
 }
 
 struct CommunityGroupDirectory: Codable, Hashable {
     let enabled: Bool
+    /// Whether this member may create groups (server flag `group_creation`).
+    let creationEnabled: Bool?
     let groups: [CommunityGroupSummary]
+}
+
+/// Editable group settings (plan 13.2). Slug only applies on create.
+struct CommunityGroupSettingsPayload: Encodable {
+    var slug: String?
+    var name: String
+    var description: String
+    var category: String
+    var rules: [String]
+    var vehicleMake: String
+    var vehicleModel: String
+    var yearStart: Int?
+    var yearEnd: Int?
+    var locationRegion: String
+    var postingPolicy: String
 }
 
 struct CommunityGroupDetail: Codable, Hashable {

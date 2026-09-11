@@ -63,14 +63,25 @@ export default async function CommunityGroupPage({
           <div className="p-7 sm:p-9">
             <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
               <div className="max-w-2xl">
-                <div className="mb-3 flex flex-wrap gap-2"><Badge>Public group</Badge><Badge variant="outline">Open to join</Badge></div>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <Badge>Public group</Badge>
+                  <Badge variant="outline">Open to join</Badge>
+                  {group.is_staff_curated ? <Badge variant="secondary">PerfectPPI curated</Badge> : null}
+                  {group.posting_policy === "moderators" ? <Badge variant="outline">Announcements only</Badge> : null}
+                  {group.location_region ? <Badge variant="outline">{group.location_region}</Badge> : null}
+                </div>
                 <h1 className="font-heading text-3xl font-extrabold tracking-tight sm:text-4xl">{group.name}</h1>
                 <p className="mt-3 leading-relaxed text-on-surface-variant">{group.description}</p>
                 <p className="mt-4 flex items-center gap-2 text-sm text-on-surface-variant"><Users className="h-4 w-4" />{group.member_count} member{group.member_count === 1 ? "" : "s"}</p>
               </div>
               <div className="flex flex-col items-end gap-2">
                 <GroupMembershipButton groupId={group.id} initialJoined={group.is_member} owner={group.membership_role === "owner"} />
-                {viewerRole === "owner" ? <GroupArchiveButton slug={group.slug} /> : null}
+                {viewerRole === "owner" ? (
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button asChild size="sm" variant="outline"><Link href={`/community/groups/${group.slug}/settings`}>Group settings</Link></Button>
+                    <GroupArchiveButton slug={group.slug} />
+                  </div>
+                ) : null}
               </div>
             </div>
             {group.rules.length ? (
@@ -87,7 +98,11 @@ export default async function CommunityGroupPage({
             <Link href={baseHref} className={`rounded-xl px-4 py-2 text-sm font-bold ${!showMembers ? "bg-surface-container-lowest shadow-sm" : "text-on-surface-variant"}`}>Posts</Link>
             <Link href={`${baseHref}?tab=members`} className={`rounded-xl px-4 py-2 text-sm font-bold ${showMembers ? "bg-surface-container-lowest shadow-sm" : "text-on-surface-variant"}`}>Members</Link>
           </nav>
-          {group.is_member ? <Button asChild><Link href={`/dashboard/posts/new?group=${group.slug}`}><Plus className="mr-2 h-4 w-4" />Post to group</Link></Button> : <p className="text-sm text-on-surface-variant">Join to post or comment</p>}
+          {group.is_member && (group.posting_policy !== "moderators" || canModerate)
+            ? <Button asChild><Link href={`/dashboard/posts/new?group=${group.slug}`}><Plus className="mr-2 h-4 w-4" />Post to group</Link></Button>
+            : group.is_member
+              ? <p className="text-sm text-on-surface-variant">Only moderators post here; members can comment</p>
+              : <p className="text-sm text-on-surface-variant">Join to post or comment</p>}
         </div>
 
         {showMembers ? (

@@ -23,6 +23,12 @@ export type CommunityGroupSummary = {
   is_member: boolean;
   membership_role: "owner" | "moderator" | "member" | null;
   is_suggested: boolean;
+  /** Directory badge only (plan 13.6 launch set); no longer a gate. */
+  is_staff_curated: boolean;
+  location_region: string | null;
+  /** "members" (anyone posts) or "moderators" (announcement group). */
+  posting_policy: string;
+  created_by: string | null;
 };
 
 const membershipSchema = z.object({
@@ -54,10 +60,10 @@ export async function getCommunityGroups(): Promise<CommunityGroupSummary[]> {
   const admin = createAdminClient();
   const { data: groups, error } = await admin
     .from("community_groups")
-    .select("id, slug, name, description, category, rules, avatar_url, cover_url, vehicle_make, vehicle_model, year_start, year_end")
+    .select("id, slug, name, description, category, rules, avatar_url, cover_url, vehicle_make, vehicle_model, year_start, year_end, is_staff_curated, location_region, posting_policy, created_by")
     .eq("status", "active")
     .eq("visibility", "public")
-    .eq("is_staff_curated", true)
+    .order("is_staff_curated", { ascending: false })
     .order("name");
   if (error || !groups?.length) {
     if (error) console.error("community group directory failed", error.message);

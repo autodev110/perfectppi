@@ -480,6 +480,8 @@ export type Database = {
           id: string
           is_staff_curated: boolean
           join_policy: Database["public"]["Enums"]["community_group_join_policy"]
+          location_region: string | null
+          posting_policy: string
           name: string
           rules: string[]
           slug: string
@@ -501,6 +503,8 @@ export type Database = {
           id?: string
           is_staff_curated?: boolean
           join_policy?: Database["public"]["Enums"]["community_group_join_policy"]
+          location_region?: string | null
+          posting_policy?: string
           name: string
           rules?: string[]
           slug: string
@@ -522,6 +526,8 @@ export type Database = {
           id?: string
           is_staff_curated?: boolean
           join_policy?: Database["public"]["Enums"]["community_group_join_policy"]
+          location_region?: string | null
+          posting_policy?: string
           name?: string
           rules?: string[]
           slug?: string
@@ -3150,6 +3156,27 @@ export type Database = {
         }
         Relationships: []
       }
+      community_group_creation_events: {
+        Row: {
+          actor_id: string
+          created_at: string
+          group_id: string | null
+          id: number
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          group_id?: string | null
+          id?: never
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          group_id?: string | null
+          id?: never
+        }
+        Relationships: []
+      }
       community_group_moderation_events: {
         Row: {
           action: string
@@ -4653,6 +4680,44 @@ export type Database = {
           role: Database["public"]["Enums"]["community_group_role"]
           joined_at: string
         }[]
+      }
+      community_group_is_live: {
+        Args: { p_group_id: string }
+        Returns: boolean
+      }
+      create_community_group: {
+        Args: {
+          p_actor_profile_id: string
+          p_slug: string
+          p_name: string
+          p_description: string
+          p_category: string
+          p_rules?: string[]
+          p_vehicle_make?: string | null
+          p_vehicle_model?: string | null
+          p_year_start?: number | null
+          p_year_end?: number | null
+          p_location_region?: string | null
+          p_posting_policy?: string
+        }
+        Returns: Database["public"]["Tables"]["community_groups"]["Row"]
+      }
+      update_community_group_settings: {
+        Args: {
+          p_actor_profile_id: string
+          p_group_id: string
+          p_name: string
+          p_description: string
+          p_category: string
+          p_rules: string[]
+          p_vehicle_make: string | null
+          p_vehicle_model: string | null
+          p_year_start: number | null
+          p_year_end: number | null
+          p_location_region: string | null
+          p_posting_policy: string
+        }
+        Returns: Database["public"]["Tables"]["community_groups"]["Row"]
       }
       community_group_role_of: {
         Args: { p_profile_id: string; p_group_id: string }

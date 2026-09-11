@@ -258,6 +258,22 @@ enum CommunityAPI {
         )
     }
 
+    struct GroupSlugResult: Decodable {
+        let id: String
+        let slug: String
+    }
+
+    /// Member-created Public/Open group (plan 13.2); the server applies
+    /// account-age, enforcement, and rate limits.
+    static func createGroup(_ payload: CommunityGroupSettingsPayload) async throws -> GroupSlugResult {
+        try await APIClient.shared.postCamel("/api/community/groups", body: payload)
+    }
+
+    /// Owner-only settings update; the slug is never changed.
+    static func updateGroupSettings(slug: String, _ payload: CommunityGroupSettingsPayload) async throws -> GroupSlugResult {
+        try await APIClient.shared.patchCamel("/api/community/groups/\(slug)", body: payload)
+    }
+
     static func groupMembers(slug: String, page: Int = 1) async throws -> CommunityGroupMembersPage {
         try await APIClient.shared.get(
             "/api/community/groups/\(slug)/members",

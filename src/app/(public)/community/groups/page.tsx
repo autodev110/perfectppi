@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { GroupMembershipButton } from "@/components/shared/group-membership-button";
 import { requireRole } from "@/features/auth/guards";
 import { getCommunityGroups, groupsEnabled } from "@/features/social/groups";
-import { ArrowLeft, CarFront, Sparkles, Users } from "lucide-react";
+import { groupCreationEnabled } from "@/features/social/group-create";
+import { ArrowLeft, CarFront, Sparkles, Users, Plus, ShieldCheck } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Groups - PerfectPPI" };
@@ -15,7 +16,7 @@ function categoryLabel(category: string) {
 
 export default async function CommunityGroupsPage() {
   await requireRole(["consumer", "technician", "org_manager", "admin"]);
-  const enabled = await groupsEnabled();
+  const [enabled, canCreate] = await Promise.all([groupsEnabled(), groupCreationEnabled()]);
   const groups = enabled ? await getCommunityGroups() : [];
 
   return (
@@ -24,10 +25,15 @@ export default async function CommunityGroupsPage() {
         <Button asChild variant="ghost" className="mb-5 -ml-3">
           <Link href="/community"><ArrowLeft className="mr-2 h-4 w-4" />Community</Link>
         </Button>
-        <div className="mb-9 max-w-3xl">
-          <Badge className="mb-4 bg-secondary-container text-on-secondary-container hover:bg-secondary-container">Curated Groups</Badge>
-          <h1 className="font-heading text-4xl font-extrabold tracking-tight text-on-surface sm:text-5xl">Find your corner of the garage.</h1>
-          <p className="mt-4 text-on-surface-variant">Join staff-curated public groups for the cars and topics you care about. Group posting unlocks after you join.</p>
+        <div className="mb-9 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-3xl">
+            <Badge className="mb-4 bg-secondary-container text-on-secondary-container hover:bg-secondary-container">Groups</Badge>
+            <h1 className="font-heading text-4xl font-extrabold tracking-tight text-on-surface sm:text-5xl">Find your corner of the garage.</h1>
+            <p className="mt-4 text-on-surface-variant">Public groups for the cars and topics you care about — curated by PerfectPPI or started by members. Group posting unlocks after you join.</p>
+          </div>
+          {canCreate ? (
+            <Button asChild className="h-12 rounded-xl px-6"><Link href="/community/groups/new"><Plus className="mr-2 h-4 w-4" />Create group</Link></Button>
+          ) : null}
         </div>
 
         {!enabled ? (
@@ -49,7 +55,10 @@ export default async function CommunityGroupsPage() {
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                     <CarFront className="h-6 w-6" />
                   </div>
-                  {group.is_suggested ? <Badge variant="outline"><Sparkles className="mr-1 h-3 w-3" />Matches your Garage</Badge> : null}
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {group.is_staff_curated ? <Badge variant="secondary"><ShieldCheck className="mr-1 h-3 w-3" />PerfectPPI curated</Badge> : null}
+                    {group.is_suggested ? <Badge variant="outline"><Sparkles className="mr-1 h-3 w-3" />Matches your Garage</Badge> : null}
+                  </div>
                 </div>
                 <Link href={`/community/groups/${group.slug}`} className="group/link">
                   <h2 className="font-heading text-xl font-extrabold tracking-tight group-hover/link:text-primary">{group.name}</h2>
@@ -58,6 +67,8 @@ export default async function CommunityGroupsPage() {
                 <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-on-surface-variant">
                   <Badge variant="secondary">{categoryLabel(group.category)}</Badge>
                   <span>{group.member_count} member{group.member_count === 1 ? "" : "s"}</span>
+                  {group.location_region ? <span>· {group.location_region}</span> : null}
+                  {group.posting_policy === "moderators" ? <span>· Announcements only</span> : null}
                 </div>
                 <div className="mt-5 flex items-center justify-between gap-3">
                   <Button asChild variant="ghost" className="-ml-3"><Link href={`/community/groups/${group.slug}`}>Open group</Link></Button>

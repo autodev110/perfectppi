@@ -6,7 +6,6 @@ import SwiftUI
 struct VehicleCommunityPostsView: View {
     let vehicle: Vehicle
     @State private var reloadToken = UUID()
-    @State private var showingComposer = false
 
     var body: some View {
         AsyncContent(
@@ -40,9 +39,6 @@ struct VehicleCommunityPostsView: View {
         .id(reloadToken)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showingComposer) {
-            NewCommunityPostView(preselectedVehicleId: vehicle.id) { reloadToken = UUID() }
-        }
     }
 
     private var title: String {

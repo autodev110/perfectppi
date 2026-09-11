@@ -3,11 +3,17 @@ import SwiftUI
 struct CommunityGroupsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var reloadToken = UUID()
+    @State private var showingCreate = false
+    @State private var creationEnabled = false
 
     var body: some View {
         NavigationStack {
             AsyncContent(
-                load: { try await CommunityAPI.groups() },
+                load: {
+                    let directory = try await CommunityAPI.groups()
+                    creationEnabled = directory.creationEnabled ?? false
+                    return directory
+                },
                 loaded: { directory in
                     Group {
                         if !directory.enabled {
@@ -52,6 +58,17 @@ struct CommunityGroupsView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
+                if creationEnabled {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { showingCreate = true } label: { Image(systemName: "plus") }
+                            .accessibilityLabel("Create group")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingCreate) {
+                NavigationStack {
+                    GroupSettingsView(mode: .create) { _ in reloadToken = UUID() }
+                }
             }
         }
     }
@@ -67,8 +84,17 @@ struct CommunityGroupsView: View {
                     .foregroundStyle(Theme.Palette.primary)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(group.name).font(.headline)
-                    Text("\(group.memberCount) member\(group.memberCount == 1 ? "" : "s")")
+                    HStack(spacing: 6) {
+                        Text(group.name).font(.headline)
+                        if group.isStaffCurated == true {
+                            Image(systemName: "checkmark.shield.fill")
+                                .font(.caption)
+                                .foregroundStyle(Theme.Palette.primary)
+                                .accessibilityLabel("PerfectPPI curated")
+                        }
+                    }
+                    Text("\(group.memberCount) member\(group.memberCount == 1 ? "" : "s")"
+                         + (group.locationRegion.map { " · \($0)" } ?? ""))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -92,6 +118,7 @@ struct CommunityGroupDetailView: View {
     @State private var showingComposer = false
     @State private var membershipBusy = false
     @State private var showingArchive = false
+    @State private var showingSettings = false
     @State private var searchQuery = ""
     @State private var searchResults: [CommunityPost]?
     @State private var searching = false
@@ -126,6 +153,16 @@ struct CommunityGroupDetailView: View {
                     Label("\(detail.group.memberCount) members", systemImage: "person.3")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if detail.group.postingPolicy == "moderators" {
+                        Label("Announcements only — members can comment", systemImage: "megaphone")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if detail.group.isStaffCurated == true {
+                        Label("PerfectPPI curated", systemImage: "checkmark.shield")
+                            .font(.caption)
+                            .foregroundStyle(Theme.Palette.primary)
+                    }
                     if detail.group.isMember {
                         Button(membershipTitle(detail.group)) {
                             Task { await updateMembership(detail.group) }
@@ -209,13 +246,14 @@ struct CommunityGroupDetailView: View {
         .navigationTitle(detail.group.name)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if detail.group.isMember {
+                if detail.group.isMember && (detail.group.postingPolicy != "moderators" || canModerate) {
                     Button { showingComposer = true } label: {
                         Label("Post to group", systemImage: "plus.bubble")
                     }
                 }
                 if detail.group.membershipRole == "owner" {
                     Menu {
+                        Button("Group settings", systemImage: "gearshape") { showingSettings = true }
                         Button("Archive group", systemImage: "archivebox", role: .destructive) { showingArchive = true }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -227,6 +265,14 @@ struct CommunityGroupDetailView: View {
         .sheet(isPresented: $showingComposer) {
             NewCommunityPostView(preselectedGroupId: detail.group.id) {
                 reloadToken = UUID()
+            }
+        }
+        .sheet(isPresented: $showingSettings) {
+            NavigationStack {
+                GroupSettingsView(mode: .edit(slug: detail.group.slug), initial: detail.group) { _ in
+                    reloadToken = UUID()
+                    onMembershipChanged()
+                }
             }
         }
         .confirmationDialog("Archive this group?", isPresented: $showingArchive, titleVisibility: .visible) {
