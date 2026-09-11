@@ -15,6 +15,7 @@ import { appealModerationItem } from "@/features/moderation/actions";
 import { Textarea } from "@/components/ui/textarea";
 import { requireRole } from "@/features/auth/guards";
 import { getEnforcementNotices } from "@/features/moderation/queries";
+import { CommunityMentionText } from "@/components/shared/community-mention-text";
 
 type PageProps = {
   searchParams: Promise<{ tab?: string }>;
@@ -172,7 +173,7 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
                           </Badge>
                         )}
                       </div>
-                      <p className="max-w-3xl whitespace-pre-wrap text-sm text-muted-foreground">{post.content}</p>
+                      <CommunityMentionText content={post.content} mentions={post.mentions} className="block max-w-3xl whitespace-pre-wrap text-sm text-muted-foreground" />
                       <PostMediaManager
                         postId={post.id}
                         media={post.media}

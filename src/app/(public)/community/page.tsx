@@ -15,6 +15,7 @@ import { CommunityReportControl } from "@/components/shared/community-report-con
 import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-control";
 import { CommunityLikeButton } from "@/components/shared/community-like-button";
 import { CommunitySaveButton } from "@/components/shared/community-save-button";
+import { CommunityMentionText } from "@/components/shared/community-mention-text";
 import { getFeatureFlags, toClientCapabilities } from "@/lib/feature-flags";
 import type { CommunityFeedFilter } from "@/features/social/relationships";
 
@@ -203,9 +204,11 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                       </div>
                     </div>
 
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">
-                      {post.content}
-                    </p>
+                    <CommunityMentionText
+                      content={post.content}
+                      mentions={post.mentions}
+                      className="block whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant"
+                    />
                     {post.safety_notice ? (
                       <div className="mt-4">
                         <SafetyNotice notice={post.safety_notice} />
@@ -299,7 +302,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                                 ) : null}
                               </div>
                             </div>
-                            <p className="whitespace-pre-wrap text-sm text-on-surface-variant">{comment.content}</p>
+                            <CommunityMentionText content={comment.content} mentions={comment.mentions} className="block whitespace-pre-wrap text-sm text-on-surface-variant" />
                           </div>
                         ))}
                       </div>

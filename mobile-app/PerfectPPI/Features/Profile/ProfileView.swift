@@ -449,6 +449,7 @@ private struct EditProfileView: View {
     @State private var friendRequestPolicy: FriendRequestPolicy
     @State private var allowFriendMessages: Bool
     @State private var allowGroupMessageRequests: Bool
+    @State private var mentionPolicy: MentionPolicy
     @State private var showingAdvanced = false
     @State private var saving = false
     @State private var error: String?
@@ -465,6 +466,7 @@ private struct EditProfileView: View {
         _friendRequestPolicy = State(initialValue: profile.friendRequestPolicy ?? .everyone)
         _allowFriendMessages = State(initialValue: profile.allowFriendMessages ?? true)
         _allowGroupMessageRequests = State(initialValue: profile.allowGroupMessageRequests ?? false)
+        _mentionPolicy = State(initialValue: profile.mentionPolicy ?? .friendsAndGroups)
     }
 
     var body: some View {
@@ -516,7 +518,12 @@ private struct EditProfileView: View {
                     }
                     Toggle("Messages with friends", isOn: $allowFriendMessages)
                     Toggle("Requests from group members", isOn: $allowGroupMessageRequests)
-                    Text("Friend messages require both people to allow them. Group members may send one introduction that stays in Requests until you accept it.")
+                    Picker("Mentions from", selection: $mentionPolicy) {
+                        ForEach(MentionPolicy.allCases) { policy in
+                            Text(policy.label).tag(policy)
+                        }
+                    }
+                    Text("Friend messages require both people to allow them. Group members may send one introduction that stays in Requests until you accept it. Mentions notify you only when you can view the post.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -561,7 +568,8 @@ private struct EditProfileView: View {
                     allowExactUsernameLookup: allowExactUsernameLookup,
                     friendRequestPolicy: friendRequestPolicy,
                     allowFriendMessages: allowFriendMessages,
-                    allowGroupMessageRequests: allowGroupMessageRequests
+                    allowGroupMessageRequests: allowGroupMessageRequests,
+                    mentionPolicy: mentionPolicy
                 )
             )
             onSave(updated)

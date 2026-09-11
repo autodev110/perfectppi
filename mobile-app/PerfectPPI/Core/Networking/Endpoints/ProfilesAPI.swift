@@ -38,6 +38,7 @@ enum ProfilesAPI {
         var friendRequestPolicy: FriendRequestPolicy? = nil
         var allowFriendMessages: Bool? = nil
         var allowGroupMessageRequests: Bool? = nil
+        var mentionPolicy: MentionPolicy? = nil
     }
 
     static func updateMe(_ payload: UpdatePayload) async throws -> Profile {

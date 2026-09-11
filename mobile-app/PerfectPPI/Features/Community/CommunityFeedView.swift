@@ -359,7 +359,7 @@ struct CommunityPostRow: View {
                     .foregroundStyle(Theme.Palette.primary)
             }
 
-            Text(post.content)
+            CommunityMentionText(content: post.content, mentions: post.mentions)
                 .font(.subheadline)
                 .foregroundStyle(.primary.opacity(0.9))
                 .lineLimit(4)
@@ -635,7 +635,7 @@ struct CommunityPostDetailView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Theme.Palette.primary)
                 }
-                Text(post.content)
+                CommunityMentionText(content: post.content, mentions: post.mentions)
                     .font(.body)
                 if let notice = post.safetyNotice {
                     CommunitySafetyNoticeView(notice: notice, compact: false)
@@ -757,7 +757,7 @@ struct CommunityPostDetailView: View {
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(Theme.Palette.primary)
                         }
-                        Text(item.content)
+                        CommunityMentionText(content: item.content, mentions: item.mentions)
                             .font(.subheadline)
                         if post.postType == .question,
                            post.canManageAcceptedAnswer == true,
@@ -1550,6 +1550,58 @@ private struct VehicleMiniCard: View {
         let parts = [vehicle.year.map(String.init), vehicle.make, vehicle.model, vehicle.trim]
             .compactMap { $0 }
         return parts.isEmpty ? "Vehicle" : parts.joined(separator: " ")
+    }
+}
+
+private struct CommunityMentionText: View {
+    let content: String
+    let mentions: [CommunityMention]?
+
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var router: URLRouter
+
+    var body: some View {
+        Text(attributedContent)
+            .environment(\.openURL, OpenURLAction { url in
+                Task { await router.handle(url, authStore: auth) }
+                return .handled
+            })
+    }
+
+    private var attributedContent: AttributedString {
+        var result = AttributedString()
+        let destinations = Dictionary(uniqueKeysWithValues: (mentions ?? []).compactMap { mention in
+            mention.profile?.username.map {
+                (mention.renderedUsername.lowercased(), $0)
+            }
+        })
+        guard !destinations.isEmpty,
+              let expression = try? NSRegularExpression(
+                pattern: "(^|[^A-Za-z0-9_])(@([A-Za-z0-9_]{4,16}))(?![A-Za-z0-9_])"
+              ) else {
+            return AttributedString(content)
+        }
+
+        let fullRange = NSRange(content.startIndex..<content.endIndex, in: content)
+        var cursor = content.startIndex
+        for match in expression.matches(in: content, range: fullRange) {
+            guard let sourceRange = Range(match.range(at: 2), in: content) else { continue }
+            let rendered = String(content[sourceRange].dropFirst()).lowercased()
+            guard let username = destinations[rendered],
+                  let encoded = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                  let url = URL(string: "perfectppi://profile/\(encoded)") else { continue }
+
+            result.append(AttributedString(content[cursor..<sourceRange.lowerBound]))
+            let label = String(content[sourceRange])
+            let linked = try? AttributedString(
+                markdown: "[\(label)](\(url.absoluteString))",
+                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+            )
+            result.append(linked ?? AttributedString(label))
+            cursor = sourceRange.upperBound
+        }
+        result.append(AttributedString(content[cursor...]))
+        return result
     }
 }
 

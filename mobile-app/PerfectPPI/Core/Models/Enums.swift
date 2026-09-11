@@ -194,6 +194,7 @@ enum NotificationType: String, Codable {
     case friendRequestAccepted = "friend_request_accepted"
     case postComment = "post_comment"
     case postLikes = "post_likes"
+    case postMention = "post_mention"
     case groupPostRemoved = "group_post_removed"
     case groupRoleChanged = "group_role_changed"
     case groupInvitation = "group_invitation"
@@ -235,6 +236,24 @@ enum CommunityFeedFilter: String, CaseIterable, Identifiable {
         case .all: "All"
         case .friends: "Friends"
         case .myCars: "My Cars"
+        }
+    }
+}
+
+enum MentionPolicy: String, Codable, CaseIterable, Identifiable {
+    case everyone
+    case friendsAndGroups = "friends_and_groups"
+    case friends
+    case nobody
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .everyone: "Everyone who can see the post"
+        case .friendsAndGroups: "Friends and group members"
+        case .friends: "Friends only"
+        case .nobody: "Nobody"
         }
     }
 }

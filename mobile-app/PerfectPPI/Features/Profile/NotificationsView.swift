@@ -197,7 +197,7 @@ private struct NotificationRow: View {
     private var icon: String {
         switch item.type {
         case .friendRequest, .friendRequestAccepted: "person.2"
-        case .postComment: "bubble.left"
+        case .postComment, .postMention: "bubble.left"
         case .groupPostRemoved, .groupRoleChanged, .groupJoinRequest, .groupJoinDecision: "person.3"
         case .groupInvitation: "envelope.badge.person.crop"
         case .postLikes: "heart"

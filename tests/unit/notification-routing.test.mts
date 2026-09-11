@@ -10,6 +10,7 @@ describe("notification deep links (plan 22.1)", () => {
       kind: "post", id: "p1", secondaryId: "c1",
     });
     assert.equal(notificationDestinationIntent("post_likes", { post_id: "p1" }).kind, "post");
+    assert.equal(notificationDestinationIntent("post_mention", { post_id: "p1", comment_id: "c1" }).kind, "post");
     assert.equal(notificationDestinationIntent("friend_request", { requester_id: "x" }).kind, "friends");
     assert.deepEqual(notificationDestinationIntent("friend_request_accepted", { username: "Bea" }), {
       kind: "profile", id: "Bea", secondaryId: null,

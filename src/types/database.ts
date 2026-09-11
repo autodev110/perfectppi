@@ -271,6 +271,65 @@ export type Database = {
           },
         ]
       }
+      community_mentions: {
+        Row: {
+          author_id: string
+          comment_id: string | null
+          created_at: string
+          id: string
+          mentioned_profile_id: string
+          post_id: string | null
+          rendered_username: string
+        }
+        Insert: {
+          author_id: string
+          comment_id?: string | null
+          created_at?: string
+          id?: string
+          mentioned_profile_id: string
+          post_id?: string | null
+          rendered_username: string
+        }
+        Update: {
+          author_id?: string
+          comment_id?: string | null
+          created_at?: string
+          id?: string
+          mentioned_profile_id?: string
+          post_id?: string | null
+          rendered_username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_mentions_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_mentions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "community_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_mentions_mentioned_profile_id_fkey"
+            columns: ["mentioned_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_mentions_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_comment_revisions: {
         Row: {
           author_id: string | null
@@ -3446,6 +3505,7 @@ export type Database = {
           id: string
           is_developer: boolean
           is_public: boolean
+          mention_policy: string
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
           username: string | null
@@ -3467,6 +3527,7 @@ export type Database = {
           id?: string
           is_developer?: boolean
           is_public?: boolean
+          mention_policy?: string
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
           username?: string | null
@@ -3488,6 +3549,7 @@ export type Database = {
           id?: string
           is_developer?: boolean
           is_public?: boolean
+          mention_policy?: string
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
           username?: string | null
@@ -4575,6 +4637,7 @@ export type Database = {
           p_discoverable?: boolean
           p_friend_request_policy?: string | null
           p_is_public: boolean
+          p_mention_policy?: string | null
         }
         Returns: Database["public"]["Tables"]["profiles"]["Row"]
       }
@@ -5110,6 +5173,7 @@ export type Database = {
         | "listing_inspection_requested"
         | "post_comment"
         | "post_likes"
+        | "post_mention"
         | "group_post_removed"
         | "group_role_changed"
         | "group_invitation"
@@ -5349,6 +5413,15 @@ export const Constants = {
         "report_received",
         "answer_accepted",
         "accepted_answer_unavailable",
+        "post_comment",
+        "post_likes",
+        "post_mention",
+        "group_post_removed",
+        "group_role_changed",
+        "group_invitation",
+        "group_join_request",
+        "group_join_decision",
+        "saved_listing_updated",
       ],
       org_member_role: ["technician", "manager"],
       payment_method: ["card", "bank_transfer", "financing"],

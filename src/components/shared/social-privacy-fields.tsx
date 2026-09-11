@@ -11,6 +11,7 @@ type Profile = Pick<
   | "friend_request_policy"
   | "allow_friend_messages"
   | "allow_group_message_requests"
+  | "mention_policy"
 >;
 
 // Plan 9.3: profile privacy and the default audience up top; discovery,
@@ -107,6 +108,21 @@ export function SocialPrivacyFields({ profile }: { profile: Profile | null }) {
               <span className="block text-xs text-muted-foreground">People in a group with you may send one introduction. Their thread stays in Requests until you accept it. Default: off.</span>
             </span>
           </label>
+          <div className="space-y-2">
+            <Label htmlFor="mention_policy">Who can mention you</Label>
+            <select
+              id="mention_policy"
+              name="mention_policy"
+              defaultValue={profile?.mention_policy ?? "friends_and_groups"}
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+            >
+              <option value="everyone">Everyone who can see the post</option>
+              <option value="friends_and_groups">Friends and group members</option>
+              <option value="friends">Friends only</option>
+              <option value="nobody">Nobody</option>
+            </select>
+            <p className="text-xs text-muted-foreground">Mentions link to your profile and notify you only when you can view the post. Default: friends and group members.</p>
+          </div>
         </div>
       </details>
     </div>

@@ -28,6 +28,7 @@ struct Profile: Codable, Identifiable, Hashable {
     let friendRequestPolicy: FriendRequestPolicy?
     let allowFriendMessages: Bool?
     let allowGroupMessageRequests: Bool?
+    var mentionPolicy: MentionPolicy? = nil
     let phone: String?
     let createdAt: Date?
 
@@ -329,6 +330,7 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let group: CommunityPostGroup?
     let media: [CommunityPostMedia]?
     let comments: [CommunityComment]?
+    var mentions: [CommunityMention]? = nil
     let reportContext: String?
     /// Plan 15.5: server-computed label for high-consequence repair topics.
     /// Absent on endpoints that return raw rows (My Posts) and on old servers.
@@ -424,6 +426,14 @@ struct CommunityComment: Codable, Identifiable, Hashable {
     let updatedAt: Date?
     let author: Profile?
     let reportContext: String?
+    var mentions: [CommunityMention]? = nil
+}
+
+struct CommunityMention: Codable, Identifiable, Hashable {
+    let id: String
+    let mentionedProfileId: String
+    let renderedUsername: String
+    let profile: Profile?
 }
 
 // MARK: - Capabilities

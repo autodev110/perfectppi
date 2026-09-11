@@ -41,6 +41,7 @@ const typeStyle: Record<
   accepted_answer_unavailable: { icon: CircleAlert, color: "text-amber-600", bg: "bg-amber-50" },
   post_comment: { icon: MessageSquare, color: "text-teal", bg: "bg-teal/10" },
   post_likes: { icon: Heart, color: "text-rose-600", bg: "bg-rose-50" },
+  post_mention: { icon: MessageSquare, color: "text-sky-600", bg: "bg-sky-50" },
   group_post_removed: { icon: Warehouse, color: "text-amber-600", bg: "bg-amber-50" },
   group_role_changed: { icon: Warehouse, color: "text-teal", bg: "bg-teal/10" },
   group_invitation: { icon: UserPlus, color: "text-teal", bg: "bg-teal/10" },

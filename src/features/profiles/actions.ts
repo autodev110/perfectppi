@@ -17,6 +17,7 @@ const updateProfileSchema = z.object({
   friend_request_policy: z.enum(["everyone", "friends_of_friends", "nobody"]).optional(),
   allow_friend_messages: z.boolean().optional(),
   allow_group_message_requests: z.boolean().optional(),
+  mention_policy: z.enum(["everyone", "friends_and_groups", "friends", "nobody"]).optional(),
 });
 
 const certificationLevelSchema = z.enum([
@@ -115,6 +116,7 @@ export async function updateProfile(formData: FormData) {
     friend_request_policy,
     allow_friend_messages,
     allow_group_message_requests,
+    mention_policy,
     ...profileUpdates
   } = parsed.data;
 
@@ -137,6 +139,7 @@ export async function updateProfile(formData: FormData) {
     p_friend_request_policy: friend_request_policy ?? null,
     p_allow_friend_messages: allow_friend_messages ?? true,
     p_allow_group_message_requests: allow_group_message_requests ?? false,
+    p_mention_policy: mention_policy ?? "friends_and_groups",
   });
   if (privacyError) return { error: "Privacy settings could not be updated" };
 

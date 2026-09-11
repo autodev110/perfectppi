@@ -15,6 +15,7 @@ final class URLRouter: ObservableObject {
         case warrantyOrder(id: String)
         /// /notifications/{id}: resolve through the server (plan 22.1).
         case notification(id: String)
+        case profile(username: String)
         case unknown
     }
 
@@ -49,6 +50,15 @@ final class URLRouter: ObservableObject {
 
         if parts.count >= 2, parts[0] == "notifications", UUID(uuidString: parts[1]) != nil {
             selectedRoute = .notification(id: parts[1])
+            return true
+        }
+
+        if url.host == "profile", let username = parts.first, !username.isEmpty {
+            selectedRoute = .profile(username: username)
+            return true
+        }
+        if parts.count >= 2, parts[0] == "profile", !parts[1].isEmpty {
+            selectedRoute = .profile(username: parts[1])
             return true
         }
 

@@ -26,9 +26,14 @@ type Listing = Database["public"]["Tables"]["marketplace_listings"]["Row"];
 type CommunityPostRow = Database["public"]["Tables"]["community_posts"]["Row"];
 type CommunityPostMediaRow = Database["public"]["Tables"]["community_post_media"]["Row"];
 type CommunityCommentRow = Database["public"]["Tables"]["community_comments"]["Row"];
+type CommunityMentionRow = Database["public"]["Tables"]["community_mentions"]["Row"];
 type CommunityGroupRow = Database["public"]["Tables"]["community_groups"]["Row"];
 
 type CommunityFeedProfile = Pick<Profile, "id" | "display_name" | "username" | "avatar_url">;
+export type CommunityMention = Pick<
+  CommunityMentionRow,
+  "id" | "mentioned_profile_id" | "rendered_username"
+> & { profile: Pick<Profile, "id" | "username"> | null };
 type CommunityFeedVehicleMedia = Pick<
   VehicleMedia,
   "id" | "vehicle_id" | "url" | "media_type" | "is_primary" | "sort_order" | "uploaded_at"
@@ -49,6 +54,7 @@ type CommunityFeedComment = Pick<
   CommunityCommentRow,
   "id" | "post_id" | "author_id" | "content" | "status" | "created_at" | "updated_at"
 > & { author: CommunityFeedProfile | null; report_context: string | null };
+type CommunityFeedCommentWithMentions = CommunityFeedComment & { mentions: CommunityMention[] };
 type CommunityFeedGroup = Pick<CommunityGroupRow, "id" | "slug" | "name" | "avatar_url">;
 
 export type CommunityFeedPost = Pick<
@@ -59,7 +65,8 @@ export type CommunityFeedPost = Pick<
   vehicle: CommunityFeedVehicle | null;
   marketplace_listing: CommunityFeedListing | null;
   media: CommunityFeedMedia[];
-  comments: CommunityFeedComment[];
+  comments: CommunityFeedCommentWithMentions[];
+  mentions: CommunityMention[];
   group: CommunityFeedGroup | null;
   /** Plan 13.5: pinned by a group moderator; rendered ahead of the timeline. */
   group_pinned: boolean;
@@ -79,6 +86,7 @@ export type CommunityFeedPost = Pick<
 
 export type CommunityComment = CommunityCommentRow & {
   author: Profile | null;
+  mentions: CommunityMention[];
 };
 
 export type CommunityPost = CommunityPostRow & {
@@ -87,6 +95,7 @@ export type CommunityPost = CommunityPostRow & {
   marketplace_listing: Listing | null;
   media: CommunityPostMediaRow[];
   comments: CommunityComment[];
+  mentions: CommunityMention[];
   group: CommunityGroupRow | null;
 };
 
@@ -110,10 +119,18 @@ const COMMUNITY_POST_SELECT = `
   vehicle:vehicles!community_posts_vehicle_id_fkey(*, vehicle_media(*)),
   marketplace_listing:marketplace_listings!community_posts_marketplace_listing_id_fkey(*),
   group:community_groups!community_posts_group_id_fkey(*),
+  mentions:community_mentions!community_mentions_post_id_fkey(
+    id, mentioned_profile_id, rendered_username,
+    profile:profiles!community_mentions_mentioned_profile_id_fkey(id, username)
+  ),
   media:community_post_media!community_post_media_post_id_fkey(*),
   comments:community_comments!community_comments_post_id_fkey(
     *,
-    author:profiles!community_comments_author_id_fkey(id, display_name, username, avatar_url, is_public)
+    author:profiles!community_comments_author_id_fkey(id, display_name, username, avatar_url, is_public),
+    mentions:community_mentions!community_mentions_comment_id_fkey(
+      id, mentioned_profile_id, rendered_username,
+      profile:profiles!community_mentions_mentioned_profile_id_fkey(id, username)
+    )
   )
 `;
 
@@ -131,12 +148,20 @@ const COMMUNITY_FEED_SELECT = `
     id, vehicle_id, seller_id, title, asking_price_cents, location, status, created_at, updated_at
   ),
   group:community_groups!community_posts_group_id_fkey(id, slug, name, avatar_url),
+  mentions:community_mentions!community_mentions_post_id_fkey(
+    id, mentioned_profile_id, rendered_username,
+    profile:profiles!community_mentions_mentioned_profile_id_fkey(id, username)
+  ),
   media:community_post_media!community_post_media_post_id_fkey(
     id, post_id, url, media_type, content_type, sort_order, created_at, moderation_status
   ),
   comments:community_comments!community_comments_post_id_fkey(
     id, post_id, author_id, active_revision_id, content, status, created_at, updated_at, moderation_status,
-    author:profiles!community_comments_author_id_fkey(id, display_name, username, avatar_url, is_public)
+    author:profiles!community_comments_author_id_fkey(id, display_name, username, avatar_url, is_public),
+    mentions:community_mentions!community_mentions_comment_id_fkey(
+      id, mentioned_profile_id, rendered_username,
+      profile:profiles!community_mentions_mentioned_profile_id_fkey(id, username)
+    )
   )
 `;
 
@@ -239,6 +264,7 @@ function toCommunityFeedPost(
       revisionId: post.active_revision_id,
     }),
     safety_notice: buildSafetyNotice(post.content),
+    mentions: post.mentions ?? [],
     author: post.author ? {
       id: post.author.id,
       display_name: post.author.display_name,
@@ -293,6 +319,7 @@ function toCommunityFeedPost(
           entityId: comment.id,
           revisionId: comment.active_revision_id,
         }),
+        mentions: comment.mentions ?? [],
         author: comment.author ? {
           id: comment.author.id,
           display_name: comment.author.display_name,

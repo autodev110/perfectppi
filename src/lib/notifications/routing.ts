@@ -28,7 +28,7 @@ export const NOTIFICATION_CATEGORIES = ["social", "groups", "messages", "marketp
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
 export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, { label: string; description: string; locked: boolean }> = {
-  social: { label: "Community", description: "Friend requests, comments, likes, and accepted answers.", locked: false },
+  social: { label: "Community", description: "Friend requests, comments, mentions, likes, and accepted answers.", locked: false },
   groups: { label: "Groups", description: "Invitations, join requests and decisions, moderator actions on your group posts, and role changes.", locked: false },
   messages: { label: "Messages", description: "New direct messages.", locked: false },
   marketplace: { label: "Marketplace", description: "Inquiries and inspection requests on your listings, and changes to listings you saved.", locked: false },
@@ -49,6 +49,7 @@ export function notificationDestinationIntent(
   switch (type) {
     case "post_comment":
     case "post_likes":
+    case "post_mention":
     case "answer_accepted":
     case "accepted_answer_unavailable":
       return { kind: "post", id: str(d.post_id), secondaryId: str(d.comment_id) };

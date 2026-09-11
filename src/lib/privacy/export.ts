@@ -60,6 +60,8 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     performedSubmissions,
     communityPosts,
     communityComments,
+    authoredMentions,
+    receivedMentions,
     sentMessages,
     conversationParticipants,
     mediaPackages,
@@ -87,6 +89,8 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     rows("performed submissions", admin.from("ppi_submissions").select("*").eq("performer_id", profileId)),
     rows("community posts", admin.from("community_posts").select("*").eq("author_id", profileId)),
     rows("community comments", admin.from("community_comments").select("*").eq("author_id", profileId)),
+    rows("authored mentions", admin.from("community_mentions").select("*").eq("author_id", profileId)),
+    rows("received mentions", admin.from("community_mentions").select("*").eq("mentioned_profile_id", profileId)),
     rows("sent messages", admin.from("messages").select("*").eq("sender_id", profileId)),
     rows(
       "conversation participation",
@@ -266,6 +270,10 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     community: {
       posts: communityPosts,
       comments: mergeById(communityComments, postComments),
+      mentions: {
+        authored: authoredMentions,
+        received: receivedMentions,
+      },
       media: communityMedia,
       moderationItems,
       moderationEvents,

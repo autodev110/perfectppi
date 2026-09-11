@@ -34,7 +34,7 @@ private struct SignedInContainer: View {
     let profile: Profile
     @State private var hasAcceptedCurrentTerms: Bool?
     @State private var termsError: String?
-    @State private var linkedNotification: LinkedNotification?
+    @State private var linkedDestination: LinkedDestination?
 
     var body: some View {
         Group {
@@ -67,12 +67,21 @@ private struct SignedInContainer: View {
         // A push tap or universal link to /notifications/<id> lands here once
         // the account is usable; the sheet resolves it server-side.
         .onChange(of: router.selectedRoute) { _, route in
-            guard case .notification(let id)? = route, hasAcceptedCurrentTerms == true, !profile.needsUsername else { return }
-            linkedNotification = LinkedNotification(id: id)
-            router.selectedRoute = nil
+            consumeLinkedRoute(route)
         }
-        .sheet(item: $linkedNotification) { link in
-            NavigationStack { NotificationLinkView(notificationId: link.id) }
+        // A cold-launch link may arrive while auth or Terms acceptance is
+        // still loading. Consume the queued route as soon as the gate opens.
+        .onChange(of: hasAcceptedCurrentTerms) { _, accepted in
+            guard accepted == true else { return }
+            consumeLinkedRoute(router.selectedRoute)
+        }
+        .sheet(item: $linkedDestination) { destination in
+            NavigationStack {
+                switch destination {
+                case .notification(let id): NotificationLinkView(notificationId: id)
+                case .profile(let username): MemberProfileView(username: username)
+                }
+            }
         }
     }
 
@@ -106,6 +115,16 @@ private struct SignedInContainer: View {
         } catch {
             termsError = error.localizedDescription
         }
+    }
+
+    private func consumeLinkedRoute(_ route: URLRouter.Route?) {
+        guard let route, hasAcceptedCurrentTerms == true, !profile.needsUsername else { return }
+        switch route {
+        case .notification(let id): linkedDestination = .notification(id: id)
+        case .profile(let username): linkedDestination = .profile(username: username)
+        default: return
+        }
+        router.selectedRoute = nil
     }
 }
 
@@ -318,6 +337,14 @@ private struct MissingRoleView: View {
     }
 }
 
-private struct LinkedNotification: Identifiable {
-    let id: String
+private enum LinkedDestination: Identifiable {
+    case notification(id: String)
+    case profile(username: String)
+
+    var id: String {
+        switch self {
+        case .notification(let id): "notification:\(id)"
+        case .profile(let username): "profile:\(username.lowercased())"
+        }
+    }
 }
