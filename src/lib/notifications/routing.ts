@@ -29,7 +29,7 @@ export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
 export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, { label: string; description: string; locked: boolean }> = {
   social: { label: "Community", description: "Friend requests, comments, likes, and accepted answers.", locked: false },
-  groups: { label: "Groups", description: "Moderator actions on your group posts and role changes.", locked: false },
+  groups: { label: "Groups", description: "Invitations, join requests and decisions, moderator actions on your group posts, and role changes.", locked: false },
   messages: { label: "Messages", description: "New direct messages.", locked: false },
   marketplace: { label: "Marketplace", description: "Inquiries and inspection requests on your listings, and changes to listings you saved.", locked: false },
   inspections: { label: "Inspections", description: "Technician assignments and report updates.", locked: false },
@@ -68,6 +68,9 @@ export function notificationDestinationIntent(
       // A removed group post is only reachable from the author's own list.
       return { kind: "my_posts", id: null, secondaryId: null };
     case "group_role_changed":
+    case "group_invitation":
+    case "group_join_request":
+    case "group_join_decision":
       return { kind: "group", id: str(d.group_slug), secondaryId: str(d.group_id) };
     case "moderation_case":
       return { kind: "moderation_case", id: str(d.caseId), secondaryId: null };

@@ -29,6 +29,17 @@ describe("notification deep links (plan 22.1)", () => {
     assert.equal(notificationWebPath(notificationDestinationIntent("report_received", { caseId: "k" })), null);
   });
 
+  test("group invitations, requests, and decisions open the group (plan 13.3)", () => {
+    for (const type of ["group_invitation", "group_join_request", "group_join_decision", "group_role_changed"]) {
+      assert.deepEqual(notificationDestinationIntent(type, { group_slug: "e30-owners", group_id: "g1" }), {
+        kind: "group", id: "e30-owners", secondaryId: "g1",
+      });
+      assert.equal(notificationWebPath(notificationDestinationIntent(type, { group_slug: "e30-owners" })), "/community/groups/e30-owners");
+    }
+    // A removed post is only reachable from the author's own list.
+    assert.equal(notificationWebPath(notificationDestinationIntent("group_post_removed", { group_slug: "x" })), "/dashboard/posts?tab=review");
+  });
+
   test("malformed payloads degrade to a safe destination, never a crash", () => {
     assert.equal(notificationDestinationIntent("post_comment", null).id, null);
     assert.equal(notificationWebPath(notificationDestinationIntent("post_comment", null)), "/community");

@@ -45,10 +45,17 @@ async function intentAvailable(intent: NotificationDestinationIntent, viewerId: 
       if (!(await getFeatureFlags()).flags.groups) return false;
       const { data } = await admin
         .from("community_groups")
-        .select("id, status, visibility")
+        .select("id")
         .eq("slug", intent.id.toLowerCase())
         .maybeSingle();
-      return Boolean(data && data.status === "active" && data.visibility === "public");
+      if (!data) return false;
+      // Shell visibility: public and private groups, unlisted only for
+      // members, invitees, and requesters (plan 13.3).
+      const { data: visible } = await admin.rpc("community_group_shell_visible", {
+        p_viewer_id: viewerId,
+        p_group_id: data.id,
+      });
+      return visible === true;
     }
     case "profile": {
       if (!intent.id) return false;

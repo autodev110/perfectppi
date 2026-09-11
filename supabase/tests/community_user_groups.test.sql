@@ -147,8 +147,8 @@ $$;
 -- Nothing here is client-callable.
 DO $$
 BEGIN
-  IF has_function_privilege('authenticated', 'public.create_community_group(uuid,text,text,text,text,text[],text,text,integer,integer,text,text)', 'EXECUTE')
-     OR has_function_privilege('authenticated', 'public.update_community_group_settings(uuid,uuid,text,text,text,text[],text,text,integer,integer,text,text)', 'EXECUTE')
+  IF has_function_privilege('authenticated', 'public.create_community_group(uuid,text,text,text,text,text[],text,text,integer,integer,text,text,public.community_group_visibility,public.community_group_join_policy)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.update_community_group_settings(uuid,uuid,text,text,text,text[],text,text,integer,integer,text,text,public.community_group_visibility,public.community_group_join_policy)', 'EXECUTE')
      OR has_table_privilege('authenticated', 'public.community_group_creation_events', 'SELECT') THEN
     RAISE EXCEPTION 'group creation leaked to authenticated clients';
   END IF;

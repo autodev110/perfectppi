@@ -262,7 +262,7 @@ export async function createCommunityPostFromInput(
   if (groupId) {
     const { data: membership } = await admin
       .from("community_group_memberships")
-      .select("role, group:community_groups!community_group_memberships_group_id_fkey(id, status, visibility, join_policy, posting_policy)")
+      .select("role, group:community_groups!community_group_memberships_group_id_fkey(id, status, posting_policy)")
       .eq("group_id", groupId)
       .eq("profile_id", profile.profileId)
       .eq("status", "active")
@@ -270,11 +270,12 @@ export async function createCommunityPostFromInput(
     const group = membership?.group as unknown as {
       id: string;
       status: string;
-      visibility: string;
-      join_policy: string;
       posting_policy: string;
     } | null;
-    if (!group || group.status !== "active" || group.visibility !== "public" || group.join_policy !== "open") {
+    // Active membership in a live group is all that matters here; private
+    // and unlisted groups (plan 13.3) post the same way. The DB trigger
+    // re-checks this.
+    if (!group || group.status !== "active") {
       return { error: "Join this group before posting." };
     }
     if (group.posting_policy === "moderators" && membership?.role === "member") {

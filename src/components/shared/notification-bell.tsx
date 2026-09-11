@@ -43,6 +43,9 @@ const typeStyle: Record<
   post_likes: { icon: Heart, color: "text-rose-600", bg: "bg-rose-50" },
   group_post_removed: { icon: Warehouse, color: "text-amber-600", bg: "bg-amber-50" },
   group_role_changed: { icon: Warehouse, color: "text-teal", bg: "bg-teal/10" },
+  group_invitation: { icon: UserPlus, color: "text-teal", bg: "bg-teal/10" },
+  group_join_request: { icon: Warehouse, color: "text-sky-600", bg: "bg-sky-50" },
+  group_join_decision: { icon: Warehouse, color: "text-teal", bg: "bg-teal/10" },
   saved_listing_updated: { icon: Tag, color: "text-teal", bg: "bg-teal/10" },
 };
 

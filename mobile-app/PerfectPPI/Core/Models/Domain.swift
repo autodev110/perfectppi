@@ -351,10 +351,16 @@ struct ActivityBadges: Codable, Equatable {
     let unreadNotifications: Int
     let pendingFriendRequests: Int
     let unreadMessages: Int
+    /// Join requests waiting in groups this member moderates (plan 13.3).
+    var pendingGroupRequests: Int? = 0
+    /// Open invitations to join groups.
+    var groupInvitations: Int? = 0
 
     static let none = ActivityBadges(unreadNotifications: 0, pendingFriendRequests: 0, unreadMessages: 0)
 
     var total: Int { unreadNotifications + pendingFriendRequests + unreadMessages }
+    /// Everything waiting inside Groups: requests to review plus invitations.
+    var groupsTotal: Int { (pendingGroupRequests ?? 0) + (groupInvitations ?? 0) }
 }
 
 struct CommunityPostGroup: Codable, Identifiable, Hashable {
@@ -496,6 +502,37 @@ struct CommunityGroupSummary: Codable, Identifiable, Hashable {
     let locationRegion: String?
     /// "members" or "moderators" (announcement group).
     let postingPolicy: String?
+    /// "public", "private", or "unlisted" (plan 13.3); absent on old servers.
+    let visibility: String?
+    /// "open", "request_approval", or "invite_only".
+    let joinPolicy: String?
+    /// "active", "requested", "invited", or nil.
+    let membershipStatus: String?
+    /// Posts and members are readable (public group, or an active member).
+    let canViewContent: Bool?
+    /// Pending join requests; only populated for owners/moderators.
+    let pendingRequestCount: Int?
+
+    var isPrivate: Bool { visibility == "private" }
+    var isUnlisted: Bool { visibility == "unlisted" }
+    var requiresRequest: Bool { joinPolicy == "request_approval" }
+    var inviteOnly: Bool { joinPolicy == "invite_only" }
+    var hasRequested: Bool { membershipStatus == "requested" }
+    var isInvited: Bool { membershipStatus == "invited" }
+    var contentVisible: Bool { canViewContent ?? true }
+    var moderates: Bool { membershipRole == "owner" || membershipRole == "moderator" }
+}
+
+struct CommunityGroupInvitation: Codable, Identifiable, Hashable {
+    let groupId: String
+    let slug: String
+    let name: String
+    let description: String
+    let visibility: String
+    let invitedByLabel: String?
+    let invitedAt: Date?
+
+    var id: String { groupId }
 }
 
 struct CommunityGroupDirectory: Codable, Hashable {
@@ -503,6 +540,26 @@ struct CommunityGroupDirectory: Codable, Hashable {
     /// Whether this member may create groups (server flag `group_creation`).
     let creationEnabled: Bool?
     let groups: [CommunityGroupSummary]
+    /// Open invitations for the viewer (plan 13.3); absent on old servers.
+    let invitations: [CommunityGroupInvitation]?
+}
+
+/// A pending join request as seen by a moderator (plan 13.3).
+struct CommunityGroupJoinRequest: Codable, Identifiable, Hashable {
+    let id: String
+    let username: String?
+    let displayName: String?
+    let avatarUrl: String?
+    let requestedAt: Date?
+    let message: String?
+
+    var person: PersonSummary {
+        PersonSummary(id: id, username: username, displayName: displayName, avatarUrl: avatarUrl)
+    }
+}
+
+struct CommunityGroupJoinRequestsPage: Codable {
+    let requests: [CommunityGroupJoinRequest]
 }
 
 /// Editable group settings (plan 13.2). Slug only applies on create.
@@ -518,6 +575,8 @@ struct CommunityGroupSettingsPayload: Encodable {
     var yearEnd: Int?
     var locationRegion: String
     var postingPolicy: String
+    var visibility: String = "public"
+    var joinPolicy: String = "open"
 }
 
 struct CommunityGroupDetail: Codable, Hashable {

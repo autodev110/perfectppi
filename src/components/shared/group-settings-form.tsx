@@ -6,7 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { GROUP_CATEGORIES, GROUP_CATEGORY_LABELS } from "@/lib/social/group-options";
+import {
+  allowedJoinPolicies,
+  GROUP_CATEGORIES,
+  GROUP_CATEGORY_LABELS,
+  GROUP_JOIN_POLICY_LABELS,
+  GROUP_VISIBILITIES,
+  GROUP_VISIBILITY_LABELS,
+  type GroupJoinPolicyOption,
+  type GroupVisibilityOption,
+} from "@/lib/social/group-options";
 
 export type GroupSettingsValues = {
   slug?: string;
@@ -20,11 +29,14 @@ export type GroupSettingsValues = {
   yearEnd: number | null;
   locationRegion: string;
   postingPolicy: "members" | "moderators";
+  visibility: GroupVisibilityOption;
+  joinPolicy: GroupJoinPolicyOption;
 };
 
 // Create (mode "create", slug editable) or edit (mode "edit", slug fixed) a
-// member group (plan 13.2). Visibility and join policy are fixed to Public /
-// Open in this release; the form says so instead of hiding it.
+// member group (plan 13.2, 13.3). Visibility drives the join policies on
+// offer: Public groups may be Open; Private and Unlisted groups need request
+// approval or invitations.
 export function GroupSettingsForm({
   mode,
   initial,
@@ -42,6 +54,13 @@ export function GroupSettingsForm({
 
   function update<K extends keyof GroupSettingsValues>(key: K, value: GroupSettingsValues[K]) {
     setValues((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateVisibility(visibility: GroupVisibilityOption) {
+    setValues((current) => {
+      const policies = allowedJoinPolicies(visibility);
+      return { ...current, visibility, joinPolicy: policies.includes(current.joinPolicy) ? current.joinPolicy : policies[0] };
+    });
   }
 
   async function submit(event: React.FormEvent) {
@@ -115,6 +134,20 @@ export function GroupSettingsForm({
           </select>
         </div>
         <div className="space-y-2">
+          <Label htmlFor="group-visibility">Visibility</Label>
+          <select id="group-visibility" value={values.visibility} onChange={(e) => updateVisibility(e.target.value as GroupVisibilityOption)} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" aria-describedby="group-visibility-help">
+            {GROUP_VISIBILITIES.map((visibility) => <option key={visibility} value={visibility}>{GROUP_VISIBILITY_LABELS[visibility].label}</option>)}
+          </select>
+          <p id="group-visibility-help" className="text-xs text-muted-foreground">{GROUP_VISIBILITY_LABELS[values.visibility].hint}</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="group-join">How members join</Label>
+          <select id="group-join" value={values.joinPolicy} onChange={(e) => update("joinPolicy", e.target.value as GroupJoinPolicyOption)} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" aria-describedby="group-join-help">
+            {allowedJoinPolicies(values.visibility).map((policy) => <option key={policy} value={policy}>{GROUP_JOIN_POLICY_LABELS[policy].label}</option>)}
+          </select>
+          <p id="group-join-help" className="text-xs text-muted-foreground">{GROUP_JOIN_POLICY_LABELS[values.joinPolicy].hint}</p>
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="group-make">Make (optional)</Label>
           <Input id="group-make" maxLength={64} value={values.vehicleMake} onChange={(e) => update("vehicleMake", e.target.value)} placeholder="Mazda" />
         </div>
@@ -141,7 +174,9 @@ export function GroupSettingsForm({
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        Groups are Public and Open to join in this release: any signed-in member can see and join them. Private and invite-only groups come later.
+        {mode === "edit" && values.joinPolicy === "open"
+          ? "Switching to Open admits anyone whose request is still pending."
+          : "Private and unlisted group posts never appear in profiles, search, or notification previews for non-members."}
       </p>
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       <div className="flex gap-2">

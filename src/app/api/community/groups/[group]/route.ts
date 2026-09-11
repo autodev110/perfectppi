@@ -18,10 +18,14 @@ export async function GET(
 
   const requestedPage = Number(new URL(request.url).searchParams.get("page") ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const [posts, pinned] = await Promise.all([
-    getCommunityGroupPosts(group.id, page, 20),
-    page === 1 ? getCommunityGroupPinnedPosts(group.id) : Promise.resolve([]),
-  ]);
+  // Private/unlisted content stays locked until the viewer is a member; the
+  // post RPCs enforce this too, so skipping them is only a shortcut.
+  const [posts, pinned] = group.can_view_content
+    ? await Promise.all([
+      getCommunityGroupPosts(group.id, page, 20),
+      page === 1 ? getCommunityGroupPinnedPosts(group.id) : Promise.resolve([]),
+    ])
+    : [[], []];
   return NextResponse.json(
     { data: { group, pinned, posts, page, hasMore: posts.length === 20 } },
     { headers: { "Cache-Control": "private, no-store" } },
@@ -30,7 +34,7 @@ export async function GET(
 
 const SETTINGS_STATUS: Record<GroupCreateOutcome, number> = {
   invalid: 400, feature_unavailable: 503, account_too_new: 403, restricted: 403,
-  rate_limited: 429, slug_taken: 409, forbidden: 403, failed: 500,
+  rate_limited: 429, slug_taken: 409, policy_not_allowed: 400, forbidden: 403, failed: 500,
 };
 
 // PATCH /api/community/groups/<slug> — owner-only settings (plan 13.4).

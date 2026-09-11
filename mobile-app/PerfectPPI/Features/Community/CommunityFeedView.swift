@@ -128,7 +128,8 @@ struct CommunityFeedView: View {
                     Button {
                         showingGroups = true
                     } label: {
-                        Label("Groups", systemImage: "person.3")
+                        let waiting = auth.badges.groupsTotal
+                        Label(waiting > 0 ? "Groups · \(waiting) waiting" : "Groups", systemImage: "person.3")
                     }
                 }
                 Button {

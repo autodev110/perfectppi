@@ -429,25 +429,40 @@ export type Database = {
       }
       community_group_memberships: {
         Row: {
+          decided_at: string | null
+          decided_by: string | null
           group_id: string
+          invited_by: string | null
           joined_at: string
           profile_id: string
+          request_message: string | null
+          requested_at: string | null
           role: Database["public"]["Enums"]["community_group_role"]
           status: Database["public"]["Enums"]["community_group_membership_status"]
           updated_at: string
         }
         Insert: {
+          decided_at?: string | null
+          decided_by?: string | null
           group_id: string
+          invited_by?: string | null
           joined_at?: string
           profile_id: string
+          request_message?: string | null
+          requested_at?: string | null
           role?: Database["public"]["Enums"]["community_group_role"]
           status?: Database["public"]["Enums"]["community_group_membership_status"]
           updated_at?: string
         }
         Update: {
+          decided_at?: string | null
+          decided_by?: string | null
           group_id?: string
+          invited_by?: string | null
           joined_at?: string
           profile_id?: string
+          request_message?: string | null
+          requested_at?: string | null
           role?: Database["public"]["Enums"]["community_group_role"]
           status?: Database["public"]["Enums"]["community_group_membership_status"]
           updated_at?: string
@@ -4699,6 +4714,8 @@ export type Database = {
           p_year_end?: number | null
           p_location_region?: string | null
           p_posting_policy?: string
+          p_visibility?: Database["public"]["Enums"]["community_group_visibility"]
+          p_join_policy?: Database["public"]["Enums"]["community_group_join_policy"]
         }
         Returns: Database["public"]["Tables"]["community_groups"]["Row"]
       }
@@ -4716,8 +4733,57 @@ export type Database = {
           p_year_end: number | null
           p_location_region: string | null
           p_posting_policy: string
+          p_visibility?: Database["public"]["Enums"]["community_group_visibility"] | null
+          p_join_policy?: Database["public"]["Enums"]["community_group_join_policy"] | null
         }
         Returns: Database["public"]["Tables"]["community_groups"]["Row"]
+      }
+      community_group_content_visible: {
+        Args: { p_viewer_id: string; p_group_id: string }
+        Returns: boolean
+      }
+      community_group_shell_visible: {
+        Args: { p_viewer_id: string; p_group_id: string }
+        Returns: boolean
+      }
+      request_group_membership: {
+        Args: { p_actor_profile_id: string; p_group_id: string; p_message?: string | null }
+        Returns: Json
+      }
+      decide_group_join_request: {
+        Args: { p_actor_profile_id: string; p_group_id: string; p_target_profile_id: string; p_approve: boolean }
+        Returns: Json
+      }
+      invite_to_group: {
+        Args: { p_actor_profile_id: string; p_group_id: string; p_target_profile_id: string }
+        Returns: Json
+      }
+      list_group_join_requests: {
+        Args: { p_actor_profile_id: string; p_group_id: string }
+        Returns: {
+          profile_id: string
+          username: string | null
+          display_name: string | null
+          avatar_url: string | null
+          requested_at: string
+          request_message: string | null
+        }[]
+      }
+      list_my_group_invitations: {
+        Args: { p_actor_profile_id: string }
+        Returns: {
+          group_id: string
+          slug: string
+          name: string
+          description: string
+          visibility: Database["public"]["Enums"]["community_group_visibility"]
+          invited_by_label: string | null
+          invited_at: string
+        }[]
+      }
+      list_visible_group_ids: {
+        Args: { p_viewer_id: string }
+        Returns: { group_id: string }[]
       }
       community_group_role_of: {
         Args: { p_profile_id: string; p_group_id: string }
@@ -4959,7 +5025,7 @@ export type Database = {
       community_content_status: "active" | "hidden" | "archived"
       community_feed_filter: "all" | "friends" | "my_cars"
       community_group_join_policy: "open" | "request_approval" | "invite_only"
-      community_group_membership_status: "active" | "left" | "removed" | "banned"
+      community_group_membership_status: "active" | "left" | "removed" | "banned" | "requested" | "invited"
       community_group_post_status: "active" | "group_removed"
       community_group_role: "owner" | "moderator" | "member"
       community_group_status: "active" | "archived"
@@ -4982,6 +5048,9 @@ export type Database = {
         | "post_likes"
         | "group_post_removed"
         | "group_role_changed"
+        | "group_invitation"
+        | "group_join_request"
+        | "group_join_decision"
         | "saved_listing_updated"
         | "moderation_decision"
         | "moderation_case"

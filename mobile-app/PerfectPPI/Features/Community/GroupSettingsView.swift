@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Create or edit a member group (plan 13.2 / 13.4). Public and Open to join
-/// in this release; the form says so instead of hiding the choice.
+/// Create or edit a member group (plan 13.2 / 13.3 / 13.4). Visibility drives
+/// the join policies on offer: Public groups may be Open; Private and
+/// Unlisted groups need request approval or invitations.
 struct GroupSettingsView: View {
     enum Mode: Equatable {
         case create
@@ -23,6 +24,8 @@ struct GroupSettingsView: View {
     @State private var yearEnd = ""
     @State private var locationRegion = ""
     @State private var postingPolicy = "members"
+    @State private var visibility = "public"
+    @State private var joinPolicy = "open"
     @State private var saving = false
     @State private var error: String?
 
@@ -46,7 +49,24 @@ struct GroupSettingsView: View {
             _yearEnd = State(initialValue: initial.yearEnd.map(String.init) ?? "")
             _locationRegion = State(initialValue: initial.locationRegion ?? "")
             _postingPolicy = State(initialValue: initial.postingPolicy ?? "members")
+            _visibility = State(initialValue: initial.visibility ?? "public")
+            _joinPolicy = State(initialValue: initial.joinPolicy ?? "open")
         }
+    }
+
+    private static let visibilities: [(String, String, String)] = [
+        ("public", "Public", "Listed in the directory; anyone signed in can read posts."),
+        ("private", "Private", "Listed in the directory; only members can read posts."),
+        ("unlisted", "Unlisted", "Hidden from the directory; reached by link or invitation."),
+    ]
+    private static let joinPolicies: [(String, String, String)] = [
+        ("open", "Open", "Anyone can join instantly."),
+        ("request_approval", "Request approval", "Members ask to join; moderators approve."),
+        ("invite_only", "Invite only", "Moderators invite members."),
+    ]
+
+    private var allowedJoinPolicies: [(String, String, String)] {
+        Self.joinPolicies.filter { visibility == "public" || $0.0 != "open" }
     }
 
     var body: some View {
@@ -58,7 +78,9 @@ struct GroupSettingsView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .onChange(of: slug) { _, value in
-                            let cleaned = value.lowercased().filter { $0.isLetter && $0.isASCII || $0.isNumber || $0 == "-" }
+                            let cleaned = value.lowercased().filter {
+                                ($0.isASCII && ($0.isLetter || $0.isNumber)) || $0 == "-"
+                            }
                             if cleaned != value { slug = cleaned }
                         }
                     Text("Lowercase letters, numbers, and hyphens. This cannot be changed later.")
@@ -73,6 +95,23 @@ struct GroupSettingsView: View {
                     Text("All members").tag("members")
                     Text("Moderators only (announcements)").tag("moderators")
                 }
+            }
+
+            Section {
+                Picker("Visibility", selection: $visibility) {
+                    ForEach(Self.visibilities, id: \.0) { code, label, _ in Text(label).tag(code) }
+                }
+                .onChange(of: visibility) { _, value in
+                    if value != "public" && joinPolicy == "open" { joinPolicy = "request_approval" }
+                }
+                Picker("How members join", selection: $joinPolicy) {
+                    ForEach(allowedJoinPolicies, id: \.0) { code, label, _ in Text(label).tag(code) }
+                }
+            } header: {
+                Text("Access")
+            } footer: {
+                Text((Self.visibilities.first { $0.0 == visibility }?.2 ?? "") + " "
+                     + (Self.joinPolicies.first { $0.0 == joinPolicy }?.2 ?? ""))
             }
 
             Section {
@@ -95,7 +134,9 @@ struct GroupSettingsView: View {
             } header: {
                 Text("Rules (up to 12)")
             } footer: {
-                Text("Groups are Public and Open to join in this release: any signed-in member can see and join them.")
+                Text(mode != .create && joinPolicy == "open"
+                     ? "Switching to Open admits anyone whose request is still pending."
+                     : "Private and unlisted group posts never appear to non-members in profiles, search, or notification previews.")
             }
 
             if let error {
@@ -136,7 +177,9 @@ struct GroupSettingsView: View {
             yearStart: Int(yearStart),
             yearEnd: Int(yearEnd),
             locationRegion: locationRegion.trimmingCharacters(in: .whitespaces),
-            postingPolicy: postingPolicy
+            postingPolicy: postingPolicy,
+            visibility: visibility,
+            joinPolicy: joinPolicy
         )
         do {
             let result: CommunityAPI.GroupSlugResult

@@ -159,3 +159,93 @@ export function GroupArchiveButton({ slug }: { slug: string }) {
     </div>
   );
 }
+
+// Approve / decline one pending join request (plan 13.3).
+export function GroupJoinRequestControls({ slug, profileId }: { slug: string; profileId: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<"approve_request" | "decline_request" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run(action: "approve_request" | "decline_request") {
+    setBusy(action);
+    setError(null);
+    try {
+      await moderate(slug, { action, profileId });
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The change could not be applied.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex gap-1">
+        <Button type="button" size="sm" disabled={busy !== null} onClick={() => run("approve_request")}>
+          {busy === "approve_request" ? "Approving…" : "Approve"}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" disabled={busy !== null} onClick={() => run("decline_request")}>
+          {busy === "decline_request" ? "Declining…" : "Decline"}
+        </Button>
+      </div>
+      {error ? <p role="alert" className="text-xs text-destructive">{error}</p> : null}
+    </div>
+  );
+}
+
+// Invite a member by username (plan 13.3). The server resolves the username
+// and applies the blocked / unavailable and daily-limit rules.
+export function GroupInviteForm({ slug }: { slug: string }) {
+  const router = useRouter();
+  const [username, setUsername] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    const handle = username.trim().replace(/^@/, "");
+    if (!handle || busy) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/community/groups/${encodeURIComponent(slug)}/moderation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "invite", username: handle }),
+      });
+      const payload = (await response.json().catch(() => null)) as { data?: { status?: string; changed?: boolean }; error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error ?? "The invitation could not be sent.");
+      const status = payload?.data?.status;
+      setNotice({
+        tone: "ok",
+        text: status === "active"
+          ? `@${handle} is now a member.`
+          : payload?.data?.changed === false ? `@${handle} already has an invitation.` : `Invitation sent to @${handle}.`,
+      });
+      setUsername("");
+      router.refresh();
+    } catch (caught) {
+      setNotice({ tone: "error", text: caught instanceof Error ? caught.message : "The invitation could not be sent." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-2" aria-label="Invite a member">
+      <div className="flex gap-2">
+        <input
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+          maxLength={64}
+          placeholder="@username"
+          aria-label="Username to invite"
+          className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+        />
+        <Button type="submit" disabled={busy || !username.trim()}>{busy ? "Inviting…" : "Invite"}</Button>
+      </div>
+      {notice ? <p role={notice.tone === "error" ? "alert" : "status"} className={`text-xs ${notice.tone === "error" ? "text-destructive" : "text-on-surface-variant"}`}>{notice.text}</p> : null}
+    </form>
+  );
+}

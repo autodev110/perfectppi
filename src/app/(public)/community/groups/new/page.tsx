@@ -24,7 +24,7 @@ export default async function NewGroupPage() {
           {enabled ? (
             <GroupSettingsForm
               mode="create"
-              initial={{ slug: "", name: "", description: "", category: "general", rules: [], vehicleMake: "", vehicleModel: "", yearStart: null, yearEnd: null, locationRegion: "", postingPolicy: "members" }}
+              initial={{ slug: "", name: "", description: "", category: "general", rules: [], vehicleMake: "", vehicleModel: "", yearStart: null, yearEnd: null, locationRegion: "", postingPolicy: "members", visibility: "public", joinPolicy: "open" }}
             />
           ) : (
             <p className="text-sm text-on-surface-variant">Creating groups is not available yet. You can join any existing group in the meantime.</p>

@@ -3,9 +3,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GroupMembershipButton } from "@/components/shared/group-membership-button";
 import { requireRole } from "@/features/auth/guards";
-import { getCommunityGroups, groupsEnabled } from "@/features/social/groups";
+import { getCommunityGroups, getMyGroupInvitations, groupsEnabled } from "@/features/social/groups";
 import { groupCreationEnabled } from "@/features/social/group-create";
-import { ArrowLeft, CarFront, Sparkles, Users, Plus, ShieldCheck } from "lucide-react";
+import { GROUP_JOIN_POLICY_LABELS, GROUP_VISIBILITY_LABELS } from "@/lib/social/group-options";
+import { ArrowLeft, CarFront, Sparkles, Users, Plus, ShieldCheck, Lock, EyeOff, Mail } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Groups - PerfectPPI" };
@@ -17,7 +18,7 @@ function categoryLabel(category: string) {
 export default async function CommunityGroupsPage() {
   await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const [enabled, canCreate] = await Promise.all([groupsEnabled(), groupCreationEnabled()]);
-  const groups = enabled ? await getCommunityGroups() : [];
+  const [groups, invitations] = enabled ? await Promise.all([getCommunityGroups(), getMyGroupInvitations()]) : [[], []];
 
   return (
     <main className="min-h-screen bg-surface px-6 pb-20 pt-24 sm:px-8">
@@ -29,12 +30,29 @@ export default async function CommunityGroupsPage() {
           <div className="max-w-3xl">
             <Badge className="mb-4 bg-secondary-container text-on-secondary-container hover:bg-secondary-container">Groups</Badge>
             <h1 className="font-heading text-4xl font-extrabold tracking-tight text-on-surface sm:text-5xl">Find your corner of the garage.</h1>
-            <p className="mt-4 text-on-surface-variant">Public groups for the cars and topics you care about — curated by PerfectPPI or started by members. Group posting unlocks after you join.</p>
+            <p className="mt-4 text-on-surface-variant">Groups for the cars and topics you care about — curated by PerfectPPI or started by members. Public groups are open to read; private groups share posts with members only.</p>
           </div>
           {canCreate ? (
             <Button asChild className="h-12 rounded-xl px-6"><Link href="/community/groups/new"><Plus className="mr-2 h-4 w-4" />Create group</Link></Button>
           ) : null}
         </div>
+
+        {invitations.length > 0 ? (
+          <section className="mb-8 rounded-[1.5rem] bg-primary/5 p-6 ghost-border" aria-label="Group invitations">
+            <h2 className="flex items-center gap-2 font-heading text-lg font-extrabold"><Mail className="h-5 w-5 text-primary" />You&rsquo;re invited</h2>
+            <ul className="mt-4 space-y-3">
+              {invitations.map((invitation) => (
+                <li key={invitation.group_id} className="flex flex-col gap-3 rounded-2xl bg-surface-container-lowest p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <Link href={`/community/groups/${invitation.slug}`} className="font-bold hover:text-primary">{invitation.name}</Link>
+                    <p className="text-xs text-on-surface-variant">{invitation.invited_by_label ?? "A moderator"} invited you · {GROUP_VISIBILITY_LABELS[invitation.visibility].label} group</p>
+                  </div>
+                  <GroupMembershipButton groupId={invitation.group_id} status="invited" />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {!enabled ? (
           <div className="rounded-3xl bg-surface-container-lowest p-10 text-center ghost-border">
@@ -56,8 +74,11 @@ export default async function CommunityGroupsPage() {
                     <CarFront className="h-6 w-6" />
                   </div>
                   <div className="flex flex-wrap justify-end gap-2">
+                    {group.visibility === "private" ? <Badge variant="outline"><Lock className="mr-1 h-3 w-3" />Private</Badge> : null}
+                    {group.visibility === "unlisted" ? <Badge variant="outline"><EyeOff className="mr-1 h-3 w-3" />Unlisted</Badge> : null}
                     {group.is_staff_curated ? <Badge variant="secondary"><ShieldCheck className="mr-1 h-3 w-3" />PerfectPPI curated</Badge> : null}
                     {group.is_suggested ? <Badge variant="outline"><Sparkles className="mr-1 h-3 w-3" />Matches your Garage</Badge> : null}
+                    {group.pending_request_count > 0 ? <Badge>{group.pending_request_count} request{group.pending_request_count === 1 ? "" : "s"}</Badge> : null}
                   </div>
                 </div>
                 <Link href={`/community/groups/${group.slug}`} className="group/link">
@@ -68,11 +89,12 @@ export default async function CommunityGroupsPage() {
                   <Badge variant="secondary">{categoryLabel(group.category)}</Badge>
                   <span>{group.member_count} member{group.member_count === 1 ? "" : "s"}</span>
                   {group.location_region ? <span>· {group.location_region}</span> : null}
+                  {group.join_policy !== "open" ? <span>· {GROUP_JOIN_POLICY_LABELS[group.join_policy].label}</span> : null}
                   {group.posting_policy === "moderators" ? <span>· Announcements only</span> : null}
                 </div>
                 <div className="mt-5 flex items-center justify-between gap-3">
                   <Button asChild variant="ghost" className="-ml-3"><Link href={`/community/groups/${group.slug}`}>Open group</Link></Button>
-                  <GroupMembershipButton groupId={group.id} initialJoined={group.is_member} owner={group.membership_role === "owner"} />
+                  <GroupMembershipButton groupId={group.id} status={group.membership_status} joinPolicy={group.join_policy} owner={group.membership_role === "owner"} />
                 </div>
               </article>
             ))}

@@ -19,12 +19,13 @@ import {
 } from "@/features/community/queries";
 import { requireRole } from "@/features/auth/guards";
 import { getCommunityGroup } from "@/features/social/groups";
-import { getGroupMembers, getViewerGroupRole } from "@/features/social/group-tools";
-import { GroupArchiveButton, GroupMemberModerationMenu, GroupPostModerationMenu } from "@/components/shared/group-moderation-controls";
+import { getGroupJoinRequests, getGroupMembers, getViewerGroupRole } from "@/features/social/group-tools";
+import { GroupArchiveButton, GroupInviteForm, GroupJoinRequestControls, GroupMemberModerationMenu, GroupPostModerationMenu } from "@/components/shared/group-moderation-controls";
+import { GROUP_JOIN_POLICY_LABELS, GROUP_VISIBILITY_LABELS } from "@/lib/social/group-options";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDate, getInitials } from "@/lib/utils/formatting";
-import { ArrowLeft, MessageSquare, Pin, Plus, Search, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, Lock, MessageSquare, Pin, Plus, Search, ShieldCheck, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -43,14 +44,18 @@ export default async function CommunityGroupPage({
   const requestedPage = Number(query.page ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const search = (query.q ?? "").trim();
-  const showMembers = query.tab === "members";
-  const [posts, pinned, viewerRole, members] = await Promise.all([
-    search ? searchCommunityGroupPosts(group.id, search, page, 20) : getCommunityGroupPosts(group.id, page, 20),
-    search || page > 1 ? Promise.resolve([] as CommunityFeedPost[]) : getCommunityGroupPinnedPosts(group.id),
-    getViewerGroupRole(group.id),
-    showMembers ? getGroupMembers(group.id, 1, 100) : Promise.resolve([]),
-  ]);
+  const locked = !group.can_view_content;
+  const showMembers = !locked && query.tab === "members";
+  const viewerRole = await getViewerGroupRole(group.id);
   const canModerate = viewerRole === "owner" || viewerRole === "moderator";
+  const showRequests = canModerate && query.tab === "requests";
+  const showPosts = !locked && !showMembers && !showRequests;
+  const [posts, pinned, members, requests] = await Promise.all([
+    !showPosts ? Promise.resolve([] as CommunityFeedPost[]) : search ? searchCommunityGroupPosts(group.id, search, page, 20) : getCommunityGroupPosts(group.id, page, 20),
+    !showPosts || search || page > 1 ? Promise.resolve([] as CommunityFeedPost[]) : getCommunityGroupPinnedPosts(group.id),
+    showMembers ? getGroupMembers(group.id, 1, 100) : Promise.resolve([]),
+    showRequests ? getGroupJoinRequests(group.id) : Promise.resolve([]),
+  ]);
   const baseHref = `/community/groups/${group.slug}`;
   const pageHref = (nextPage: number) => `${baseHref}?${new URLSearchParams({ ...(search ? { q: search } : {}), page: String(nextPage) })}`;
 
@@ -64,8 +69,8 @@ export default async function CommunityGroupPage({
             <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
               <div className="max-w-2xl">
                 <div className="mb-3 flex flex-wrap gap-2">
-                  <Badge>Public group</Badge>
-                  <Badge variant="outline">Open to join</Badge>
+                  <Badge>{group.visibility === "public" ? "Public group" : `${GROUP_VISIBILITY_LABELS[group.visibility].label} group`}</Badge>
+                  <Badge variant="outline">{group.join_policy === "open" ? "Open to join" : GROUP_JOIN_POLICY_LABELS[group.join_policy].label}</Badge>
                   {group.is_staff_curated ? <Badge variant="secondary">PerfectPPI curated</Badge> : null}
                   {group.posting_policy === "moderators" ? <Badge variant="outline">Announcements only</Badge> : null}
                   {group.location_region ? <Badge variant="outline">{group.location_region}</Badge> : null}
@@ -75,7 +80,7 @@ export default async function CommunityGroupPage({
                 <p className="mt-4 flex items-center gap-2 text-sm text-on-surface-variant"><Users className="h-4 w-4" />{group.member_count} member{group.member_count === 1 ? "" : "s"}</p>
               </div>
               <div className="flex flex-col items-end gap-2">
-                <GroupMembershipButton groupId={group.id} initialJoined={group.is_member} owner={group.membership_role === "owner"} />
+                <GroupMembershipButton groupId={group.id} status={group.membership_status} joinPolicy={group.join_policy} owner={group.membership_role === "owner"} />
                 {viewerRole === "owner" ? (
                   <div className="flex flex-wrap justify-end gap-2">
                     <Button asChild size="sm" variant="outline"><Link href={`/community/groups/${group.slug}/settings`}>Group settings</Link></Button>
@@ -93,10 +98,31 @@ export default async function CommunityGroupPage({
           </div>
         </section>
 
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
+        {locked ? (
+          <section className="mt-8 rounded-3xl bg-surface-container-lowest p-10 text-center ghost-border" aria-label="Members-only content">
+            <Lock className="mx-auto mb-3 h-9 w-9 text-on-surface-variant/40" />
+            <p className="font-semibold">Posts and members are visible to members only.</p>
+            <p className="mt-1 text-sm text-on-surface-variant">
+              {group.membership_status === "requested"
+                ? "Your request is waiting for a moderator."
+                : group.membership_status === "invited"
+                  ? "Accept the invitation above to see what members are sharing."
+                  : group.join_policy === "invite_only"
+                    ? "A moderator has to invite you."
+                    : "Ask to join and a moderator will review your request."}
+            </p>
+          </section>
+        ) : null}
+
+        <div className={`mt-8 flex flex-wrap items-center justify-between gap-4 ${locked ? "hidden" : ""}`}>
           <nav className="flex gap-1 rounded-2xl bg-surface-container-low p-1.5 ghost-border" aria-label="Group sections">
-            <Link href={baseHref} className={`rounded-xl px-4 py-2 text-sm font-bold ${!showMembers ? "bg-surface-container-lowest shadow-sm" : "text-on-surface-variant"}`}>Posts</Link>
+            <Link href={baseHref} className={`rounded-xl px-4 py-2 text-sm font-bold ${showPosts ? "bg-surface-container-lowest shadow-sm" : "text-on-surface-variant"}`}>Posts</Link>
             <Link href={`${baseHref}?tab=members`} className={`rounded-xl px-4 py-2 text-sm font-bold ${showMembers ? "bg-surface-container-lowest shadow-sm" : "text-on-surface-variant"}`}>Members</Link>
+            {canModerate && group.join_policy === "request_approval" ? (
+              <Link href={`${baseHref}?tab=requests`} className={`rounded-xl px-4 py-2 text-sm font-bold ${showRequests ? "bg-surface-container-lowest shadow-sm" : "text-on-surface-variant"}`}>
+                Requests{group.pending_request_count > 0 ? <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">{group.pending_request_count}</span> : null}
+              </Link>
+            ) : null}
           </nav>
           {group.is_member && (group.posting_policy !== "moderators" || canModerate)
             ? <Button asChild><Link href={`/dashboard/posts/new?group=${group.slug}`}><Plus className="mr-2 h-4 w-4" />Post to group</Link></Button>
@@ -104,6 +130,33 @@ export default async function CommunityGroupPage({
               ? <p className="text-sm text-on-surface-variant">Only moderators post here; members can comment</p>
               : <p className="text-sm text-on-surface-variant">Join to post or comment</p>}
         </div>
+
+        {showRequests ? (
+          <section className="mt-5 space-y-2" aria-label="Join requests">
+            {requests.length === 0 ? (
+              <p className="rounded-3xl bg-surface-container-lowest p-8 text-center text-sm text-on-surface-variant ghost-border">No pending requests.</p>
+            ) : requests.map((request) => (
+              <div key={request.id} className="flex flex-col gap-3 rounded-2xl bg-surface-container-lowest px-4 py-3 shadow-sm ghost-border sm:flex-row sm:items-center sm:justify-between">
+                <Link href={request.username ? `/profile/${request.username}` : "#"} className="flex min-w-0 items-start gap-3">
+                  <Avatar className="h-9 w-9"><AvatarImage src={request.avatar_url ?? ""} /><AvatarFallback className="text-xs">{getInitials(request.display_name ?? request.username ?? "U")}</AvatarFallback></Avatar>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold">{request.display_name ?? request.username ?? "PerfectPPI member"}</span>
+                    <span className="block text-xs text-on-surface-variant">{request.username ? `@${request.username} · ` : ""}asked {formatDate(request.requested_at)}</span>
+                    {request.message ? <span className="mt-1 block text-sm text-on-surface-variant">&ldquo;{request.message}&rdquo;</span> : null}
+                  </span>
+                </Link>
+                <GroupJoinRequestControls slug={group.slug} profileId={request.id} />
+              </div>
+            ))}
+          </section>
+        ) : null}
+
+        {showMembers && canModerate ? (
+          <section className="mt-5 rounded-2xl bg-surface-container-lowest p-4 shadow-sm ghost-border" aria-label="Invite a member">
+            <h2 className="mb-2 text-sm font-bold">Invite a member</h2>
+            <GroupInviteForm slug={group.slug} />
+          </section>
+        ) : null}
 
         {showMembers ? (
           <section className="mt-5 space-y-2" aria-label="Group members">
@@ -126,7 +179,7 @@ export default async function CommunityGroupPage({
           </section>
         ) : null}
 
-        {!showMembers ? (
+        {showPosts ? (
           <form action={baseHref} method="get" role="search" className="mt-5 flex gap-2">
             <Input name="q" defaultValue={search} placeholder="Search this group" maxLength={100} aria-label="Search this group" />
             <Button type="submit" variant="outline"><Search className="mr-2 h-4 w-4" />Search</Button>
@@ -134,7 +187,7 @@ export default async function CommunityGroupPage({
           </form>
         ) : null}
 
-        {!showMembers && pinned.length > 0 ? (
+        {showPosts && pinned.length > 0 ? (
           <section className="mt-5 space-y-3" aria-label="Pinned posts">
             <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-on-surface-variant"><Pin className="h-4 w-4" />Pinned</h2>
             {pinned.map((post) => (
@@ -150,7 +203,7 @@ export default async function CommunityGroupPage({
           </section>
         ) : null}
 
-        <div className={`mt-5 space-y-5 ${showMembers ? "hidden" : ""}`}>
+        <div className={`mt-5 space-y-5 ${!showPosts ? "hidden" : ""}`}>
           {search && posts.length === 0 ? (
             <div className="rounded-3xl bg-surface-container-lowest p-10 text-center ghost-border"><Search className="mx-auto mb-3 h-9 w-9 text-on-surface-variant/40" /><p className="font-semibold">No posts match &ldquo;{search}&rdquo;.</p></div>
           ) : posts.length === 0 ? (
@@ -172,7 +225,7 @@ export default async function CommunityGroupPage({
             </article>
           ))}
         </div>
-        {!showMembers ? <nav className="mt-6 flex justify-between" aria-label="Group post pages">{page > 1 ? <Button asChild variant="outline"><Link href={pageHref(page - 1)}>Previous</Link></Button> : <span />}{posts.length === 20 ? <Button asChild variant="outline"><Link href={pageHref(page + 1)}>Next</Link></Button> : <span />}</nav> : null}
+        {showPosts ? <nav className="mt-6 flex justify-between" aria-label="Group post pages">{page > 1 ? <Button asChild variant="outline"><Link href={pageHref(page - 1)}>Previous</Link></Button> : <span />}{posts.length === 20 ? <Button asChild variant="outline"><Link href={pageHref(page + 1)}>Next</Link></Button> : <span />}</nav> : null}
       </div>
     </main>
   );

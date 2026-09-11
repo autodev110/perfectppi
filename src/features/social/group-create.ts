@@ -1,6 +1,6 @@
-// Member-created groups (plan 13.2, Phase 1C first slice): Public / Open
-// only, behind the `group_creation` flag. The database enforces account age,
-// enforcement state, rate limits, and slug uniqueness; this module validates
+// Member-created groups (plan 13.2, 13.3), behind the `group_creation` flag.
+// The database enforces account age, enforcement state, rate limits, slug
+// uniqueness, and the visibility / join-policy table; this module validates
 // shape, checks the flag, and maps outcomes to sentences.
 import "server-only";
 
@@ -10,7 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { FEATURE_UNAVAILABLE_MESSAGE, isFeatureEnabled } from "@/lib/feature-flags";
 
-import { GROUP_CATEGORIES } from "@/lib/social/group-options";
+import { GROUP_CATEGORIES, GROUP_JOIN_POLICIES, GROUP_VISIBILITIES, isAllowedGroupPolicy } from "@/lib/social/group-options";
 
 export { GROUP_CATEGORIES, GROUP_CATEGORY_LABELS, type GroupCategory } from "@/lib/social/group-options";
 
@@ -27,15 +27,20 @@ export const groupSettingsSchema = z.object({
   yearEnd: z.coerce.number().int().min(1886).max(2100).optional().nullable(),
   locationRegion: z.string().trim().max(80).optional().or(z.literal("")),
   postingPolicy: z.enum(["members", "moderators"]).default("members"),
+  visibility: z.enum(GROUP_VISIBILITIES).default("public"),
+  joinPolicy: z.enum(GROUP_JOIN_POLICIES).default("open"),
 }).refine((value) => !value.yearStart || !value.yearEnd || value.yearStart <= value.yearEnd, {
   message: "The first year must not be after the last year",
   path: ["yearEnd"],
+}).refine((value) => isAllowedGroupPolicy(value.visibility, value.joinPolicy), {
+  message: "Private and unlisted groups need request approval or invitations",
+  path: ["joinPolicy"],
 });
 
 export const createGroupSchema = groupSettingsSchema.and(z.object({ slug: slugSchema }));
 
 export type GroupCreateOutcome =
-  | "invalid" | "feature_unavailable" | "account_too_new" | "restricted" | "rate_limited" | "slug_taken" | "forbidden" | "failed";
+  | "invalid" | "feature_unavailable" | "account_too_new" | "restricted" | "rate_limited" | "slug_taken" | "policy_not_allowed" | "forbidden" | "failed";
 
 export const GROUP_CREATE_MESSAGES: Record<Exclude<GroupCreateOutcome, "invalid">, string> = {
   feature_unavailable: FEATURE_UNAVAILABLE_MESSAGE.group_creation ?? "Creating groups is not available yet.",
@@ -43,6 +48,7 @@ export const GROUP_CREATE_MESSAGES: Record<Exclude<GroupCreateOutcome, "invalid"
   restricted: "Group creation is unavailable for this account while a posting restriction is active.",
   rate_limited: "You have created a lot of groups recently. You can create up to two per day and own up to five.",
   slug_taken: "That group address is already taken. Choose a different one.",
+  policy_not_allowed: "Private and unlisted groups need request approval or invitations.",
   forbidden: "Only the group owner can change these settings.",
   failed: "The group could not be saved. Please try again.",
 };
@@ -70,8 +76,9 @@ function classify(error: { code?: string; message?: string }): GroupCreateResult
       : message.includes("group_creation_restricted") ? "restricted"
         : message.includes("group_creation_rate_limited") ? "rate_limited"
           : message.includes("group_slug_taken") || error.code === "23505" ? "slug_taken"
-            : error.code === "42501" ? "forbidden"
-              : "failed";
+            : message.includes("group_policy_not_allowed") ? "policy_not_allowed"
+              : error.code === "42501" ? "forbidden"
+                : "failed";
   if (outcome === "failed") console.warn("group create/update failed", { code: error.code, message: message.slice(0, 300) });
   return { ok: false, outcome, message: GROUP_CREATE_MESSAGES[outcome] };
 }
@@ -106,6 +113,8 @@ export async function createCommunityGroup(input: unknown): Promise<GroupCreateR
     p_year_end: parsed.data.yearEnd ?? null,
     p_location_region: parsed.data.locationRegion || null,
     p_posting_policy: parsed.data.postingPolicy,
+    p_visibility: parsed.data.visibility,
+    p_join_policy: parsed.data.joinPolicy,
   });
   if (error || !data) return classify(error ?? {});
   revalidatePath("/community/groups");
@@ -134,6 +143,8 @@ export async function updateCommunityGroupSettings(groupId: string, input: unkno
     p_year_end: parsed.data.yearEnd ?? null,
     p_location_region: parsed.data.locationRegion || null,
     p_posting_policy: parsed.data.postingPolicy,
+    p_visibility: parsed.data.visibility,
+    p_join_policy: parsed.data.joinPolicy,
   });
   if (error || !data) return classify(error ?? {});
   revalidatePath("/community/groups");

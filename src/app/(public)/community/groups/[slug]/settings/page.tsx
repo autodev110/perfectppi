@@ -38,6 +38,8 @@ export default async function GroupSettingsPage({ params }: { params: Promise<{ 
               yearEnd: group.year_end,
               locationRegion: group.location_region ?? "",
               postingPolicy: group.posting_policy === "moderators" ? "moderators" : "members",
+              visibility: group.visibility,
+              joinPolicy: group.join_policy,
             }}
           />
         </div>

@@ -248,14 +248,45 @@ enum CommunityAPI {
         )
     }
 
-    struct GroupMembershipPayload: Encodable { let joined: Bool }
-    struct GroupMembershipResult: Decodable { let joined: Bool; let changed: Bool }
+    /// Membership moves (plan 13.3). `join` also accepts an invitation;
+    /// `leave` also cancels a pending request or declines an invitation.
+    enum GroupMembershipAction: String, Encodable {
+        case join, leave, request
+        case cancelRequest = "cancel_request"
+        case acceptInvite = "accept_invite"
+        case declineInvite = "decline_invite"
+    }
+
+    private struct GroupMembershipPayload: Encodable {
+        let action: GroupMembershipAction
+        let message: String?
+    }
+
+    struct GroupMembershipResult: Decodable {
+        /// "active", "requested", or "none".
+        let status: String
+        let joined: Bool
+        let changed: Bool
+    }
 
     static func setGroupMembership(id: String, joined: Bool) async throws -> GroupMembershipResult {
+        try await setGroupMembership(id: id, action: joined ? .join : .leave)
+    }
+
+    static func setGroupMembership(
+        id: String,
+        action: GroupMembershipAction,
+        message: String? = nil
+    ) async throws -> GroupMembershipResult {
         try await APIClient.shared.post(
             "/api/community/groups/\(id)/membership",
-            body: GroupMembershipPayload(joined: joined)
+            body: GroupMembershipPayload(action: action, message: message)
         )
+    }
+
+    /// Pending join requests; the server returns 403 for non-moderators.
+    static func groupJoinRequests(slug: String) async throws -> CommunityGroupJoinRequestsPage {
+        try await APIClient.shared.get("/api/community/groups/\(slug)/requests")
     }
 
     struct GroupSlugResult: Decodable {
@@ -263,8 +294,8 @@ enum CommunityAPI {
         let slug: String
     }
 
-    /// Member-created Public/Open group (plan 13.2); the server applies
-    /// account-age, enforcement, and rate limits.
+    /// Member-created group (plan 13.2, 13.3); the server applies
+    /// account-age, enforcement, rate limits, and the visibility table.
     static func createGroup(_ payload: CommunityGroupSettingsPayload) async throws -> GroupSlugResult {
         try await APIClient.shared.postCamel("/api/community/groups", body: payload)
     }
@@ -299,13 +330,32 @@ enum CommunityAPI {
         case makeMember = "make_member"
         case transferOwnership = "transfer_ownership"
         case archive
+        case approveRequest = "approve_request"
+        case declineRequest = "decline_request"
+        case invite
     }
 
     private struct GroupModerationPayload: Encodable {
         let action: GroupModerationAction
         let postId: String?
         let profileId: String?
+        let username: String?
         let reason: String?
+    }
+
+    struct GroupInviteResult: Decodable {
+        /// "invited" (sent), "active" (crossed request → member), or unchanged.
+        let status: String?
+        let changed: Bool?
+    }
+
+    /// Invite a member by username (plan 13.3); the server resolves the
+    /// handle and applies block / availability and daily-limit rules.
+    static func inviteToGroup(slug: String, username: String) async throws -> GroupInviteResult {
+        try await APIClient.shared.postCamel(
+            "/api/community/groups/\(slug)/moderation",
+            body: GroupModerationPayload(action: .invite, postId: nil, profileId: nil, username: username, reason: nil)
+        )
     }
 
     /// Owner/moderator tools (plan 13.4 / 13.7). The server decides what the
@@ -319,7 +369,7 @@ enum CommunityAPI {
     ) async throws {
         let _: Empty = try await APIClient.shared.postCamel(
             "/api/community/groups/\(slug)/moderation",
-            body: GroupModerationPayload(action: action, postId: postId, profileId: profileId, reason: reason)
+            body: GroupModerationPayload(action: action, postId: postId, profileId: profileId, username: nil, reason: reason)
         )
     }
 }

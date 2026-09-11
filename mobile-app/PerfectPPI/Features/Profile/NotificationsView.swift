@@ -198,7 +198,8 @@ private struct NotificationRow: View {
         switch item.type {
         case .friendRequest, .friendRequestAccepted: "person.2"
         case .postComment: "bubble.left"
-        case .groupPostRemoved, .groupRoleChanged: "person.3"
+        case .groupPostRemoved, .groupRoleChanged, .groupJoinRequest, .groupJoinDecision: "person.3"
+        case .groupInvitation: "envelope.badge.person.crop"
         case .postLikes: "heart"
         case .answerAccepted, .acceptedAnswerUnavailable: "checkmark.circle"
         case .messageReceived: "envelope"

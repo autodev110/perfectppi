@@ -21,6 +21,15 @@ export type GroupMember = {
   joined_at: string;
 };
 
+export type GroupJoinRequest = {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  requested_at: string;
+  message: string | null;
+};
+
 export const GROUP_MODERATION_ACTIONS = [
   "pin",
   "unpin",
@@ -33,6 +42,9 @@ export const GROUP_MODERATION_ACTIONS = [
   "make_member",
   "transfer_ownership",
   "archive",
+  "approve_request",
+  "decline_request",
+  "invite",
 ] as const;
 export type GroupModerationAction = (typeof GROUP_MODERATION_ACTIONS)[number];
 
@@ -41,6 +53,8 @@ const moderationSchema = z.object({
   action: z.enum(GROUP_MODERATION_ACTIONS),
   postId: z.string().uuid().optional(),
   profileId: z.string().uuid().optional(),
+  /** `invite` may name the member by username instead of id. */
+  username: z.string().trim().min(1).max(64).optional(),
   reason: z.string().trim().max(300).optional(),
 });
 
@@ -84,6 +98,28 @@ export async function getGroupMembers(groupId: string, page = 1, perPage = 50): 
   }));
 }
 
+/** Pending join requests, moderators only (plan 13.3); empty for everyone else. */
+export async function getGroupJoinRequests(groupId: string): Promise<GroupJoinRequest[]> {
+  const viewerId = await currentProfileId();
+  if (!viewerId || !(await isFeatureEnabled("groups"))) return [];
+  const { data, error } = await createAdminClient().rpc("list_group_join_requests", {
+    p_actor_profile_id: viewerId,
+    p_group_id: groupId,
+  });
+  if (error) {
+    if (error.code !== "42501") console.error("list_group_join_requests failed", error.message);
+    return [];
+  }
+  return (data ?? []).map((row) => ({
+    id: row.profile_id,
+    username: row.username,
+    display_name: row.display_name,
+    avatar_url: row.avatar_url,
+    requested_at: row.requested_at,
+    message: row.request_message,
+  }));
+}
+
 export async function getViewerGroupRole(groupId: string): Promise<GroupRole | null> {
   const viewerId = await currentProfileId();
   if (!viewerId) return null;
@@ -97,10 +133,27 @@ export async function getViewerGroupRole(groupId: string): Promise<GroupRole | n
 function classify(error: { code?: string; message?: string }): Exclude<GroupModerationResult, { ok: true }> {
   const message = error.message ?? "";
   if (error.code === "42501") return { ok: false, outcome: "forbidden", message: "You do not have permission to do that in this group." };
+  if (message.includes("request unavailable")) return { ok: false, outcome: "not_found", message: "That request is no longer pending." };
+  if (message.includes("member unavailable")) return { ok: false, outcome: "not_found", message: "That member could not be found." };
   if (error.code === "P0002") return { ok: false, outcome: "not_found", message: "That post or member is not available." };
+  if (message.includes("group_invite_rate_limited")) {
+    return { ok: false, outcome: "conflict", message: "You have sent a lot of invitations today. Try again tomorrow." };
+  }
   if (error.code === "23514") return { ok: false, outcome: "conflict", message: message.replace(/^.*?:\s*/, "") || "That change is not allowed." };
   console.warn("group moderation failed", { code: error.code, message });
   return { ok: false, outcome: "conflict", message: "The change could not be applied." };
+}
+
+async function resolveProfileId(admin: ReturnType<typeof createAdminClient>, username?: string) {
+  if (!username) return null;
+  const { data } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("username_normalized", username.replace(/^@/, "").toLowerCase())
+    .eq("username_state", "claimed")
+    .eq("allow_exact_username_lookup", true)
+    .maybeSingle();
+  return data?.id ?? null;
 }
 
 export async function moderateGroup(input: unknown): Promise<GroupModerationResult> {
@@ -112,10 +165,21 @@ export async function moderateGroup(input: unknown): Promise<GroupModerationResu
   const actorId = await currentProfileId();
   if (!actorId) return { ok: false, outcome: "forbidden", message: "Sign in to manage groups." };
 
-  const { groupId, action, postId, profileId, reason } = parsed.data;
+  const { groupId, action, postId, reason, username } = parsed.data;
   const admin = createAdminClient();
   const needsPost = ["pin", "unpin", "remove_post", "restore_post"].includes(action);
-  const needsProfile = ["remove_member", "ban_member", "unban_member", "make_moderator", "make_member", "transfer_ownership"].includes(action);
+  const needsProfile = [
+    "remove_member", "ban_member", "unban_member", "make_moderator", "make_member", "transfer_ownership",
+    "approve_request", "decline_request", "invite",
+  ].includes(action);
+  const profileId = action === "invite"
+    // Invitations are username-only so callers cannot bypass the member's
+    // exact-lookup privacy preference with a raw profile id.
+    ? await resolveProfileId(admin, username)
+    : parsed.data.profileId;
+  if (action === "invite" && !profileId) {
+    return { ok: false, outcome: "not_found", message: "No member with that username could be found." };
+  }
   if ((needsPost && !postId) || (needsProfile && !profileId)) {
     return { ok: false, outcome: "invalid", message: "Invalid group action." };
   }
@@ -159,6 +223,16 @@ export async function moderateGroup(input: unknown): Promise<GroupModerationResu
         });
       case "archive":
         return admin.rpc("archive_group", { p_actor_profile_id: actorId, p_group_id: groupId, p_reason: reason ?? null });
+      case "approve_request":
+      case "decline_request":
+        return admin.rpc("decide_group_join_request", {
+          p_actor_profile_id: actorId,
+          p_group_id: groupId,
+          p_target_profile_id: profileId!,
+          p_approve: action === "approve_request",
+        });
+      case "invite":
+        return admin.rpc("invite_to_group", { p_actor_profile_id: actorId, p_group_id: groupId, p_target_profile_id: profileId! });
     }
   })();
   const { data, error } = await call;

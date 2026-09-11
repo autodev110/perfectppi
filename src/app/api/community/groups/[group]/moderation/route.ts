@@ -7,7 +7,8 @@ const ROLES = ["consumer", "technician", "org_manager", "admin"] as const;
 const STATUS = { invalid: 400, feature_unavailable: 503, forbidden: 403, not_found: 404, conflict: 409 } as const;
 
 // POST /api/community/groups/<slug>/moderation
-// { action, postId?, profileId?, reason? } — owner/moderator tools (plan 13.4/13.7).
+// { action, postId?, profileId?, username?, reason? } — owner/moderator tools
+// (plan 13.4/13.7) plus approve_request / decline_request / invite (13.3).
 export async function POST(request: NextRequest, { params }: { params: Promise<{ group: string }> }) {
   const auth = await requireApiRole([...ROLES]);
   if ("response" in auth) return auth.response;
