@@ -28,10 +28,18 @@ export async function POST(
   });
 
   if (result.error !== undefined) {
-    return NextResponse.json(
-      { error: result.error, code: result.code ?? null },
+    const response = NextResponse.json(
+      {
+        error: result.error,
+        code: result.code ?? null,
+        retryAfterSeconds: result.retryAfterSeconds ?? null,
+      },
       { status: result.code ? PUBLICATION_OUTCOME_STATUS[result.code] : 400 },
     );
+    if (result.retryAfterSeconds) {
+      response.headers.set("Retry-After", String(result.retryAfterSeconds));
+    }
+    return response;
   }
 
   return NextResponse.json({ data: result.data }, { status: 201 });

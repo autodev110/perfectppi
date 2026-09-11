@@ -23,10 +23,17 @@ export async function POST(
 
   if ("error" in result) {
     const code = "code" in result ? result.code : undefined;
-    return NextResponse.json(
-      { error: result.error, code: code ?? null },
+    const retryAfterSeconds = "retryAfterSeconds" in result
+      ? result.retryAfterSeconds
+      : undefined;
+    const response = NextResponse.json(
+      { error: result.error, code: code ?? null, retryAfterSeconds: retryAfterSeconds ?? null },
       { status: code ? PUBLICATION_OUTCOME_STATUS[code] : 400 },
     );
+    if (retryAfterSeconds) {
+      response.headers.set("Retry-After", String(retryAfterSeconds));
+    }
+    return response;
   }
 
   return NextResponse.json({ data: result.data }, { status: 201 });

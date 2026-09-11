@@ -3,28 +3,41 @@ import SwiftUI
 struct ConsumerTabs: View {
     let profile: Profile
     @EnvironmentObject private var auth: AuthStore
+    @State private var selectedTab: ConsumerTab = .inspections
 
     var body: some View {
-        TabView {
-            NavigationStack { ConsumerDashboardView() }
-                .tabItem { Label("Home", systemImage: "house") }
+        TabView(selection: $selectedTab) {
+            NavigationStack { MessagesView(currentProfileId: profile.id) }
+                .tabItem { Label("Messages", systemImage: "bubble.left.and.bubble.right") }
+                .badge(auth.badges.unreadMessages)
+                .tag(ConsumerTab.messages)
 
             NavigationStack { VehiclesListView() }
                 .tabItem { Label("Garage", systemImage: "car") }
+                .tag(ConsumerTab.garage)
 
             NavigationStack { ConsumerPpiListView() }
                 .tabItem { Label("Inspections", systemImage: "checkmark.seal") }
+                .tag(ConsumerTab.inspections)
 
-            // Plan 7.1: badges instead of extra tabs. Community carries the
-            // notification bell; More carries messages and friend requests.
             NavigationStack { CommunityFeedView() }
                 .tabItem { Label("Community", systemImage: "text.bubble") }
                 .badge(auth.badges.unreadNotifications)
+                .tag(ConsumerTab.community)
 
             NavigationStack { PlatformMoreView(profile: profile) }
                 .tabItem { Label("More", systemImage: "ellipsis.circle") }
-                .badge(auth.badges.unreadMessages + auth.badges.pendingFriendRequests)
+                .badge(auth.badges.pendingFriendRequests)
+                .tag(ConsumerTab.more)
         }
         .task { await auth.refreshBadges() }
     }
+}
+
+private enum ConsumerTab: Hashable {
+    case messages
+    case garage
+    case inspections
+    case community
+    case more
 }

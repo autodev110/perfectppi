@@ -39,19 +39,29 @@ struct VehiclesListView: View {
 
         List {
             if !vehicles.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(GarageFilter.allCases) { filter in
-                            Button(filter.label) { garageFilter = filter }
-                                .buttonStyle(.bordered)
-                                .buttonBorderShape(.capsule)
-                                .tint(garageFilter == filter ? Theme.Palette.primary : .secondary)
+                Section {
+                    HStack(spacing: 12) {
+                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(Theme.Palette.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Show vehicles")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Filter your Garage")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
+                        Spacer(minLength: 12)
+                        Picker("Show vehicles", selection: $garageFilter) {
+                            ForEach(GarageFilter.allCases) { filter in
+                                Text(filter.label).tag(filter)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                     }
-                    .padding(.horizontal, 2)
+                    .padding(.vertical, 3)
                 }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
             }
 
             if vehicles.isEmpty {
@@ -158,7 +168,7 @@ private struct GarageVehicleRow: View {
                 }
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .lineLimit(2)
             }
         }
         .padding(.vertical, 5)
@@ -241,6 +251,28 @@ struct VehicleDetailView: View {
         Group {
             if let vehicle {
                 List {
+                    Section {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(vehicle.nickname?.isEmpty == false
+                                 ? (vehicle.nickname ?? vehicleName(vehicle))
+                                 : vehicleName(vehicle))
+                                .font(.title3.weight(.bold))
+                                .fixedSize(horizontal: false, vertical: true)
+                            if vehicle.nickname?.isEmpty == false {
+                                Text(vehicleName(vehicle))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Label(
+                                (vehicle.ownershipState ?? .owned).label,
+                                systemImage: "key.fill"
+                            )
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.Palette.primary)
+                        }
+                        .padding(.vertical, 6)
+                    }
+
                     if let media = vehicle.vehicleMedia, !media.isEmpty {
                         Section("Photos and videos") {
                             ScrollView(.horizontal, showsIndicators: false) {
@@ -252,38 +284,42 @@ struct VehicleDetailView: View {
                                         .frame(width: 260, height: 190)
                                     }
                                 }
+                                .padding(.horizontal, 16)
                             }
-                            .listRowInsets(EdgeInsets())
+                            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                         }
                     }
 
-                    Section("Details") {
-                        if let nickname = vehicle.nickname {
-                            LabeledContent("Nickname", value: nickname)
-                        }
-                        LabeledContent("Vehicle", value: vehicleName(vehicle))
-                        LabeledContent("Garage relationship", value: (vehicle.ownershipState ?? .owned).label)
+                    Section("Vehicle details") {
+                        VehicleDetailRow(
+                            label: "Vehicle",
+                            value: vehicleName(vehicle),
+                            systemImage: "car"
+                        )
                         if let vin = vehicle.vin {
-                            LabeledContent("VIN", value: vin)
+                            VehicleDetailRow(
+                                label: "VIN",
+                                value: vin,
+                                systemImage: "barcode.viewfinder",
+                                monospaced: true
+                            )
                         }
                         if let mileage = vehicle.mileage {
-                            LabeledContent {
-                                VStack(alignment: .trailing, spacing: 2) {
-                                    Text("\(mileage.formatted()) mi")
-                                    if let updatedAt = vehicle.mileageUpdatedAt {
-                                        Text("Updated \(updatedAt, style: .date)")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            } label: {
-                                Text("Mileage")
-                            }
+                            VehicleDetailRow(
+                                label: "Mileage",
+                                value: mileageDetail(mileage, updatedAt: vehicle.mileageUpdatedAt),
+                                systemImage: "gauge.with.dots.needle.50percent"
+                            )
                         }
-                        LabeledContent("Visibility", value: vehicle.visibility?.rawValue.capitalized ?? "—")
+                        VehicleDetailRow(
+                            label: "Visibility",
+                            value: vehicle.visibility?.rawValue.capitalized ?? "Not set",
+                            systemImage: vehicle.visibility == .public ? "globe" : "lock.fill"
+                        )
                         Button("Edit Vehicle", systemImage: "pencil") {
                             showingEdit = true
                         }
+                        .padding(.vertical, 4)
                     }
 
                     Section("Actions") {
@@ -340,6 +376,7 @@ struct VehicleDetailView: View {
                         Text("Deleting this vehicle also removes its inspections, reports, listings, and uploaded media.")
                     }
                 }
+                .listSectionSpacing(18)
             } else if let error {
                 ErrorView(message: error.localizedDescription) {
                     Task { await load() }
@@ -567,6 +604,42 @@ struct VehicleDetailView: View {
             .compactMap { $0 }
             .joined(separator: " ")
         return label.isEmpty ? "Unnamed Vehicle" : label
+    }
+
+    private func mileageDetail(_ mileage: Int, updatedAt: Date?) -> String {
+        guard let updatedAt else { return "\(mileage.formatted()) mi" }
+        return "\(mileage.formatted()) mi · Updated \(updatedAt.formatted(date: .abbreviated, time: .omitted))"
+    }
+}
+
+private struct VehicleDetailRow: View {
+    let label: String
+    let value: String
+    let systemImage: String
+    var monospaced = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage)
+                .frame(width: 22, height: 22)
+                .foregroundStyle(Theme.Palette.primary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                if monospaced {
+                    Text(value)
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                } else {
+                    Text(value)
+                        .font(.body.weight(.medium))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.vertical, 4)
     }
 }
 

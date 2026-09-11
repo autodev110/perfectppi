@@ -30,13 +30,6 @@ struct PlatformMoreView: View {
 
             Section("Work") {
                 NavigationLink {
-                    MessagesView(currentProfileId: profile.id)
-                } label: {
-                    Label("Messages", systemImage: "bubble.left.and.bubble.right")
-                        .badge(auth.badges.unreadMessages)
-                }
-
-                NavigationLink {
                     FriendsView()
                 } label: {
                     Label("Friends", systemImage: "person.2")

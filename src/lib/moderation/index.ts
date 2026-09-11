@@ -2,6 +2,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/database";
 import type { ModerationEntityType, ModerationResult } from "./types";
 import { statusForDecision } from "./types";
+import {
+  COMMUNITY_RATE_LIMIT_WINDOW_MS,
+  countableCommunityPostActivity,
+  evaluateCommunityRateLimit,
+  type CommunityRateLimit,
+} from "./rate-limit";
 
 export { moderateImage, moderateImageLaunchMode, moderateText, moderateVideo } from "./policy";
 export { moderationUserMessage, publicStatusForDecision, statusForDecision } from "./types";
@@ -83,15 +89,62 @@ export async function getActivePostingRestriction(profileId: string, media = fal
   return data;
 }
 
-export async function isCommunityRateLimited(profileId: string, entity: "post" | "comment") {
+export async function getCommunityRateLimit(
+  profileId: string,
+  entity: "post" | "comment",
+): Promise<CommunityRateLimit> {
   const admin = createAdminClient();
-  const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const now = Date.now();
+  const since = new Date(now - COMMUNITY_RATE_LIMIT_WINDOW_MS).toISOString();
   const table = entity === "post" ? "community_posts" : "community_comments";
   const limit = entity === "post" ? 5 : 20;
-  const { count } = await admin
+  const { data: rows, error } = await admin
     .from(table)
-    .select("id", { count: "exact", head: true })
+    .select("id, created_at")
     .eq("author_id", profileId)
-    .gte("created_at", since);
-  return (count ?? 0) >= limit;
+    .gte("created_at", since)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[community-rate-limit] Could not read recent activity", {
+      entity,
+      profileId,
+      message: error.message,
+    });
+    return { limited: true, retryAfterSeconds: 60 };
+  }
+
+  const acceptedRows = rows ?? [];
+  if (entity === "post" && acceptedRows.length > 0) {
+    const { data: assemblies, error: assemblyError } = await admin
+      .from("community_post_assemblies")
+      .select("post_id, state")
+      .in("post_id", acceptedRows.map((row) => row.id));
+    if (assemblyError) {
+      console.error("[community-rate-limit] Could not verify post drafts", {
+        profileId,
+        message: assemblyError.message,
+      });
+      return { limited: true, retryAfterSeconds: 60 };
+    }
+
+    const assemblyStateByPost = new Map(
+      (assemblies ?? []).map((assembly) => [assembly.post_id, assembly.state]),
+    );
+    return evaluateCommunityRateLimit(
+      countableCommunityPostActivity(acceptedRows.map((row) => ({
+        id: row.id,
+        createdAt: row.created_at,
+        assemblyState: assemblyStateByPost.get(row.id) ?? null,
+      }))),
+      limit,
+      now,
+    );
+  }
+
+  return evaluateCommunityRateLimit(
+    acceptedRows.map((row) => row.created_at),
+    limit,
+    now,
+  );
 }

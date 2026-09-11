@@ -172,21 +172,34 @@ final class APIClient {
 
     private func assertStatus(response: URLResponse, body: Data) throws {
         guard let http = response as? HTTPURLResponse else { return }
+        let parsed = try? decoder.decode(ServerErrorBody.self, from: body)
         switch http.statusCode {
         case 200..<300: return
         case 401:
             Task { await onUnauthorized() }
             throw APIError.notAuthenticated
         case 403:
-            throw APIError.forbidden
+            if parsed?.error == nil && parsed?.code == nil {
+                throw APIError.forbidden
+            }
+            throw APIError.serverResponse(
+                status: http.statusCode,
+                code: parsed?.code,
+                message: parsed?.error,
+                retryAfterSeconds: parsed?.retryAfterSeconds
+            )
         case 404:
             throw APIError.notFound
         default:
-            let parsed = try? decoder.decode(ServerErrorBody.self, from: body)
             if parsed?.code == "duplicate_vin", let vehicle = parsed?.existingVehicle {
                 throw APIError.duplicateVehicle(vehicle)
             }
-            throw APIError.server(status: http.statusCode, message: parsed?.error)
+            throw APIError.serverResponse(
+                status: http.statusCode,
+                code: parsed?.code,
+                message: parsed?.error,
+                retryAfterSeconds: parsed?.retryAfterSeconds
+            )
         }
     }
 }

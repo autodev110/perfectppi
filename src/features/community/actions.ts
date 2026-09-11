@@ -10,7 +10,7 @@ import { UPLOAD_LIMITS } from "@/config/constants";
 import { communityUploadReferenceSchema } from "@/features/uploads/url";
 import {
   getActivePostingRestriction,
-  isCommunityRateLimited,
+  getCommunityRateLimit,
   moderateImage,
   moderateImageLaunchMode,
   moderateText,
@@ -37,6 +37,7 @@ import {
   evaluateTextForPublication,
   type PublicationOutcome,
 } from "@/lib/moderation/launch-policy";
+import { communityRateLimitMessage } from "@/lib/moderation/rate-limit";
 import { FEATURE_UNAVAILABLE_MESSAGE, getFeatureFlags } from "@/lib/feature-flags";
 import { notificationLink, pushAllowed } from "@/features/notifications/preferences";
 import { pushToProfile } from "@/lib/push/dispatch";
@@ -122,7 +123,12 @@ function nullableUuid(value: FormDataEntryValue | null) {
 // message is display-only and never carries the private rule that matched.
 export type CommunityActionResult<T> =
   | { data: T; error?: undefined; code?: undefined }
-  | { data?: undefined; error: string; code?: PublicationOutcome };
+  | {
+      data?: undefined;
+      error: string;
+      code?: PublicationOutcome;
+      retryAfterSeconds?: number;
+    };
 
 export type CommunityPublishData = {
   id: string;
@@ -134,8 +140,16 @@ export type CommunityFinalizeData = CommunityPublishData & { published: boolean 
 export type CommunityLikeData = { postId: string; liked: boolean; likeCount: number };
 export type CommunitySaveData = { postId: string; saved: boolean };
 
-function rejected(code: PublicationOutcome, message?: string): CommunityActionResult<never> {
-  return { error: message ?? PUBLICATION_OUTCOME_MESSAGES[code], code };
+function rejected(
+  code: PublicationOutcome,
+  message?: string,
+  retryAfterSeconds?: number,
+): CommunityActionResult<never> {
+  return {
+    error: message ?? PUBLICATION_OUTCOME_MESSAGES[code],
+    code,
+    ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
+  };
 }
 
 // Launch mode records the deterministic allow decision for audit without any
@@ -230,8 +244,13 @@ export async function createCommunityPostFromInput(
     }
   }
 
-  if (await isCommunityRateLimited(profile.profileId, "post")) {
-    return rejected("rate_limited");
+  const postRateLimit = await getCommunityRateLimit(profile.profileId, "post");
+  if (postRateLimit.limited) {
+    return rejected(
+      "rate_limited",
+      communityRateLimitMessage("post", postRateLimit.retryAfterSeconds),
+      postRateLimit.retryAfterSeconds,
+    );
   }
 
   const groupId = parsed.data.groupId ?? null;
@@ -555,6 +574,18 @@ export async function addCommunityPostMedia(input: unknown) {
 
   if (await getActivePostingRestriction(profile.profileId, true)) {
     return rejected("posting_restricted", "Media uploads are unavailable for this account");
+  }
+
+  // Media moderation can finalize an assembly before the client's explicit
+  // finalize request. Recheck here so failed drafts remain retryable without
+  // allowing pre-created drafts to bypass the publish limit.
+  const postRateLimit = await getCommunityRateLimit(profile.profileId, "post");
+  if (postRateLimit.limited) {
+    return rejected(
+      "rate_limited",
+      communityRateLimitMessage("post", postRateLimit.retryAfterSeconds),
+      postRateLimit.retryAfterSeconds,
+    );
   }
 
   const admin = createAdminClient();
@@ -969,8 +1000,13 @@ export async function createCommunityCommentFromInput(
   if (await getActivePostingRestriction(profile.profileId)) {
     return rejected("posting_restricted", "Community commenting is unavailable for this account");
   }
-  if (await isCommunityRateLimited(profile.profileId, "comment")) {
-    return rejected("rate_limited", "You are commenting too quickly. Please wait a few minutes and try again.");
+  const commentRateLimit = await getCommunityRateLimit(profile.profileId, "comment");
+  if (commentRateLimit.limited) {
+    return rejected(
+      "rate_limited",
+      communityRateLimitMessage("comment", commentRateLimit.retryAfterSeconds),
+      commentRateLimit.retryAfterSeconds,
+    );
   }
 
   const evaluated = evaluateTextForPublication(parsed.data.content, "comment");

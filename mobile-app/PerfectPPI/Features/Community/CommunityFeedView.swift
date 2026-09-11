@@ -1205,18 +1205,29 @@ struct NewCommunityPostView: View {
                         }
 
                         Section("Attach") {
+                            Picker("Listing", selection: $selectedListingId) {
+                                Text("None").tag("")
+                                ForEach(options.listings) { listing in
+                                    Text(listing.title).tag(listing.id)
+                                }
+                            }
+                            .onChange(of: selectedListingId) { _, listingId in
+                                selectedVehicleId = options.listings
+                                    .first(where: { $0.id == listingId })?.vehicleId ?? ""
+                            }
+
                             Picker("Vehicle", selection: $selectedVehicleId) {
                                 Text("None").tag("")
                                 ForEach(options.vehicles) { vehicle in
                                     Text(vehicleLabel(vehicle)).tag(vehicle.id)
                                 }
                             }
+                            .disabled(!selectedListingId.isEmpty)
 
-                            Picker("Listing", selection: $selectedListingId) {
-                                Text("None").tag("")
-                                ForEach(options.listings) { listing in
-                                    Text(listing.title).tag(listing.id)
-                                }
+                            if !selectedListingId.isEmpty {
+                                Text("The selected listing already includes its vehicle.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
 
