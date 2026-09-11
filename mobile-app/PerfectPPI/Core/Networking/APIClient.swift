@@ -108,8 +108,17 @@ final class APIClient {
         let (data, response) = try await safeData(req)
         try assertStatus(response: response, body: data)
 
-        if T.self == Empty.self || data.isEmpty {
-            return Empty() as! T
+        if T.self == Empty.self {
+            guard let empty = Empty() as? T else {
+                throw APIError.unknown(NSError(domain: "APIClient", code: 1))
+            }
+            return empty
+        }
+        if data.isEmpty {
+            throw APIError.decoding(.dataCorrupted(.init(
+                codingPath: [],
+                debugDescription: "The server returned an empty response for a non-empty endpoint."
+            )))
         }
 
         do {

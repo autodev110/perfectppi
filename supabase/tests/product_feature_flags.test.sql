@@ -17,6 +17,8 @@ INSERT INTO auth.users (
 
 UPDATE public.profiles SET role = 'admin'
 WHERE auth_user_id = '57000000-0000-0000-0000-000000000001';
+SELECT id AS flags_admin_profile_id FROM public.profiles
+WHERE auth_user_id = '57000000-0000-0000-0000-000000000001' \gset
 
 -- Launch configuration is seeded for every environment (plan 3.6).
 DO $$
@@ -88,7 +90,7 @@ BEGIN
 END
 $$;
 SELECT public.grant_moderation_capability(
-  (SELECT id FROM public.profiles WHERE auth_user_id = '57000000-0000-0000-0000-000000000001'),
+  :'flags_admin_profile_id'::uuid,
   'legal_hold_review',
   'designated production release and safety reviewer'
 );

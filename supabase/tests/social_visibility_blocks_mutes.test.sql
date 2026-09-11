@@ -31,6 +31,8 @@ WHERE auth_user_id IN (
   '54000000-0000-0000-0000-000000000002',
   '54000000-0000-0000-0000-000000000003'
 );
+SELECT id AS social_bob_profile_id FROM public.profiles
+WHERE auth_user_id = '54000000-0000-0000-0000-000000000002' \gset
 
 INSERT INTO public.friend_relationships (
   profile_low_id, profile_high_id, requested_by, status, responded_at
@@ -117,7 +119,7 @@ SELECT set_config(
   true
 );
 SELECT public.set_own_profile_block(
-  (SELECT id FROM public.profiles WHERE auth_user_id = '54000000-0000-0000-0000-000000000002'),
+  :'social_bob_profile_id'::uuid,
   true
 );
 RESET ROLE;
