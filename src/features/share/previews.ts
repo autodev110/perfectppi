@@ -4,6 +4,7 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { NEUTRAL_SHARE_CARD, shareCardTitle, sharePath } from "@/lib/share/links";
 
 const POST_TYPE_LABEL: Record<string, string> = { question: "Question", general: "Post" };
@@ -20,6 +21,7 @@ export async function getPostSharePreview(postId: string) {
 }
 
 export async function getGroupSharePreview(slug: string) {
+  if (!(await isFeatureEnabled("groups"))) return null;
   const { data, error } = await createAdminClient().rpc("community_group_share_preview", { p_slug: slug });
   if (error) {
     console.error("community_group_share_preview failed", error.message);
@@ -29,6 +31,7 @@ export async function getGroupSharePreview(slug: string) {
 }
 
 export async function getProfileSharePreview(username: string) {
+  if (!(await isFeatureEnabled("social_profiles"))) return null;
   const { data, error } = await createAdminClient().rpc("profile_share_preview", { p_username: username });
   if (error) {
     console.error("profile_share_preview failed", error.message);

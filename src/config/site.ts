@@ -56,6 +56,7 @@ export const navConfig = {
     { label: "Moderation Access", href: "/admin/moderation/access", icon: "Shield" },
     { label: "Evidence Retention", href: "/admin/moderation/retention", icon: "ScrollText" },
     { label: "Feature Flags", href: "/admin/flags", icon: "ToggleLeft" },
+    { label: "Social Readiness", href: "/admin/social-readiness", icon: "ListChecks" },
     { label: "Technicians", href: "/admin/technicians", icon: "Wrench" },
     { label: "Organizations", href: "/admin/organizations", icon: "Building2" },
     {

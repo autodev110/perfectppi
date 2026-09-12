@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authorizeWorkerRequest } from "@/features/partner/worker-auth";
 import { runDeliveryWorkerTick } from "@/features/partner/delivery";
+import { runTrackedWorker } from "@/features/operations/worker-runs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,17 +21,14 @@ async function handle(request: Request) {
   const limit = Number(new URL(request.url).searchParams.get("limit") ?? 10);
 
   try {
-    const result = await runDeliveryWorkerTick({
+    const result = await runTrackedWorker("deliveries", () => runDeliveryWorkerTick({
       limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 50) : 10,
-    });
+    }));
 
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("delivery worker: tick failed", error);
-    return NextResponse.json(
-      { error: "worker_failed", message: String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "worker_failed" }, { status: 500 });
   }
 }
 

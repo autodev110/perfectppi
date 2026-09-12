@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authorizeWorkerRequest } from "@/features/partner/worker-auth";
 import { runSavedSearchNotifications } from "@/features/marketplace/saved-searches";
+import { runTrackedWorker } from "@/features/operations/worker-runs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ async function handle(request: Request) {
   const unauthorized = authorizeWorkerRequest(request);
   if (unauthorized) return unauthorized;
   try {
-    const result = await runSavedSearchNotifications();
+    const result = await runTrackedWorker("marketplace_saved_searches", runSavedSearchNotifications);
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("saved search worker failed", error);

@@ -36,11 +36,16 @@ const SAFETY_CONTROLS: ReadonlySet<FeatureFlagCode> = new Set([
 // Where each flag is checked today. A flag with no enforcement point is
 // recorded configuration only; do not present it as a working kill switch.
 const ENFORCED_BY: Partial<Record<FeatureFlagCode, string>> = {
+  social_profiles: "member profile APIs, pages, and share previews",
+  friends_discovery: "people discovery and friendship expansion",
+  groups: "group reads, membership, moderation, images, and posting",
+  group_creation: "member group creation",
   community_text_posts: "post + comment creation, composer UI",
   community_photo_uploads: "upload reservations, media attach, composer UI",
   community_video_uploads: "upload reservations, media attach, iOS/web pickers",
   automated_post_moderation: "post, comment, and photo publication path",
   specialist_image_safeguard: "launch-mode photo gate",
+  events: "event reads, creation, RSVP, updates, and photo attachments",
 };
 
 export default async function AdminFlagsPage({

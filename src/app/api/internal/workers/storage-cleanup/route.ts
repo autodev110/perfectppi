@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authorizeWorkerRequest } from "@/features/partner/worker-auth";
 import { runStorageCleanup } from "@/features/uploads/cleanup";
 import { runPrivacyFulfillment } from "@/lib/privacy/fulfillment";
+import { runTrackedWorker } from "@/features/operations/worker-runs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,10 +11,10 @@ async function handle(request: Request) {
   const unauthorized = authorizeWorkerRequest(request);
   if (unauthorized) return unauthorized;
   try {
-    const [storage, privacy] = await Promise.all([
+    const [storage, privacy] = await runTrackedWorker("storage_cleanup", () => Promise.all([
       runStorageCleanup(),
       runPrivacyFulfillment(),
-    ]);
+    ]));
     return NextResponse.json({ storage, privacy }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("storage cleanup worker failed", error);

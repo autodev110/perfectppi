@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBlockedProfileIds } from "@/features/social/relationships";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 async function getViewerProfileId() {
   const supabase = await createClient();
@@ -32,6 +33,7 @@ export async function getMyProfile() {
 }
 
 export async function getPublicProfile(username: string) {
+  if (!(await isFeatureEnabled("social_profiles"))) return null;
   const viewerId = await getViewerProfileId();
   if (!viewerId) return null;
   const admin = createAdminClient();
@@ -70,6 +72,9 @@ export async function getProfileById(id: string) {
 }
 
 export async function getProfilePublicContent(profileId: string) {
+  if (!(await isFeatureEnabled("social_profiles"))) {
+    return { vehicles: [], listings: [], posts: [], ppis: [] };
+  }
   const viewerId = await getViewerProfileId();
   if (!viewerId) return { vehicles: [], listings: [], posts: [], ppis: [] };
   const admin = createAdminClient();

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authorizeWorkerRequest } from "@/features/partner/worker-auth";
 import { runOutputWorkerTick } from "@/features/outputs/worker";
+import { runTrackedWorker } from "@/features/operations/worker-runs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,17 +24,14 @@ async function handle(request: Request) {
   const limit = Number(new URL(request.url).searchParams.get("limit") ?? 3);
 
   try {
-    const result = await runOutputWorkerTick({
+    const result = await runTrackedWorker("outputs", () => runOutputWorkerTick({
       limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 10) : 3,
-    });
+    }));
 
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("outputs worker: tick failed", error);
-    return NextResponse.json(
-      { error: "worker_failed", message: String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "worker_failed" }, { status: 500 });
   }
 }
 

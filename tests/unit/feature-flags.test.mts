@@ -82,4 +82,12 @@ describe("feature flags: client projection", () => {
     assert.ok(!("automatedPostModeration" in projection.capabilities));
     assert.ok(!("reportAutoHide" in projection.capabilities));
   });
+
+  test("server profile and share reads enforce the social profile kill switch", () => {
+    const queries = readFileSync(new URL("../../src/features/profiles/queries.ts", import.meta.url), "utf8");
+    const previews = readFileSync(new URL("../../src/features/share/previews.ts", import.meta.url), "utf8");
+    assert.match(queries, /isFeatureEnabled\("social_profiles"\)/);
+    assert.match(previews, /isFeatureEnabled\("social_profiles"\)/);
+    assert.match(previews, /isFeatureEnabled\("groups"\)/);
+  });
 });

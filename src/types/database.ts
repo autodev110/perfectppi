@@ -2703,6 +2703,36 @@ export type Database = {
         }
         Relationships: []
       }
+      operational_worker_runs: {
+        Row: {
+          completed_at: string | null
+          duration_ms: number | null
+          error_code: string | null
+          id: string
+          started_at: string
+          status: string
+          worker_code: string
+        }
+        Insert: {
+          completed_at?: string | null
+          duration_ms?: number | null
+          error_code?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          worker_code: string
+        }
+        Update: {
+          completed_at?: string | null
+          duration_ms?: number | null
+          error_code?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          worker_code?: string
+        }
+        Relationships: []
+      }
       outbound_events: {
         Row: {
           attempt_count: number

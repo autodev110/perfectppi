@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authorizeWorkerRequest } from "@/features/partner/worker-auth";
 import { processModerationOutbox } from "@/features/moderation/outbox";
+import { runTrackedWorker } from "@/features/operations/worker-runs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ async function handle(request: Request) {
   const unauthorized = authorizeWorkerRequest(request);
   if (unauthorized) return unauthorized;
   try {
-    const report = await processModerationOutbox();
+    const report = await runTrackedWorker("moderation_outbox", () => processModerationOutbox());
     return NextResponse.json(report, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("moderation outbox worker failed", error);
