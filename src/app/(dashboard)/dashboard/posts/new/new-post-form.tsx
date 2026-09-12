@@ -35,6 +35,12 @@ type NewPostFormProps = {
     communityPhotoUploads: boolean;
     communityVideoUploads: boolean;
   };
+  eventPhotoContext?: {
+    id: string;
+    title: string;
+    groupId: string | null;
+    groupSlug: string | null;
+  } | null;
 };
 
 function vehicleLabel(vehicle: CommunityPostOptionVehicle | null) {
@@ -51,8 +57,9 @@ export function NewPostForm({
   defaultAudience,
   canPostPublic,
   capabilities,
+  eventPhotoContext,
 }: NewPostFormProps) {
-  const videoAllowed = capabilities.communityVideoUploads;
+  const videoAllowed = capabilities.communityVideoUploads && !eventPhotoContext;
   const mediaAllowed = capabilities.communityPhotoUploads;
   const acceptTypes = videoAllowed
     ? "image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime"
@@ -61,7 +68,7 @@ export function NewPostForm({
   const requestedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
   const [attachmentType, setAttachmentType] = useState(requestedVehicle ? "vehicle" : "none");
   const requestedGroup = groups.find((group) => group.slug === selectedGroupSlug);
-  const [groupId, setGroupId] = useState(requestedGroup?.id ?? "");
+  const [groupId, setGroupId] = useState(eventPhotoContext?.groupId ?? requestedGroup?.id ?? "");
   const [audience, setAudience] = useState<"public" | "friends">(
     canPostPublic ? defaultAudience : "friends",
   );
@@ -91,10 +98,17 @@ export function NewPostForm({
     setLoading(true);
     setError(null);
 
+    if (eventPhotoContext && media.length === 0) {
+      setError("Add at least one photo from the event.");
+      setLoading(false);
+      return;
+    }
+
     if (attachmentType !== "vehicle") formData.set("vehicle_id", "");
     if (attachmentType !== "listing") formData.set("listing_id", "");
     formData.set("details", JSON.stringify(detailsFromFields(postType, typeFields)));
     formData.set("expected_media_count", String(media.length));
+    if (eventPhotoContext) formData.set("event_id", eventPhotoContext.id);
     if (media.length > 0) {
       creationToken.current ??= crypto.randomUUID();
       formData.set("creation_token", creationToken.current);
@@ -160,7 +174,8 @@ export function NewPostForm({
 
     const destinationGroup = groups.find((group) => group.id === groupId);
     router.push(createdModerationStatus.current === "active"
-      ? destinationGroup ? `/community/groups/${destinationGroup.slug}` : "/dashboard/posts"
+      ? eventPhotoContext ? `/community/events/${eventPhotoContext.id}`
+        : destinationGroup ? `/community/groups/${destinationGroup.slug}` : "/dashboard/posts"
       : "/dashboard/posts?tab=review");
     router.refresh();
   }
@@ -194,7 +209,15 @@ export function NewPostForm({
 
   return (
     <form action={handleSubmit} className="space-y-5">
+      {eventPhotoContext ? <input type="hidden" name="event_id" value={eventPhotoContext.id} /> : null}
       <fieldset disabled={draftLocked} className="contents">
+      {eventPhotoContext ? (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-primary">Event photo thread</p>
+          <p className="mt-1 font-heading font-bold">{eventPhotoContext.title}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Photos only. Your caption and images go through the standard Community review.</p>
+        </div>
+      ) : null}
       <div className="space-y-2">
         <Label htmlFor="group_id">Post destination</Label>
         <select
@@ -202,11 +225,13 @@ export function NewPostForm({
           name="group_id"
           value={groupId}
           onChange={(event) => setGroupId(event.target.value)}
+          disabled={Boolean(eventPhotoContext)}
           className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
         >
           <option value="">My feed</option>
           {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
         </select>
+        {eventPhotoContext ? <input type="hidden" name="group_id" value={eventPhotoContext.groupId ?? ""} /> : null}
         <p className="text-xs text-muted-foreground">
           {groups.length ? "Only groups you have joined appear here." : "Join a Community group to post there."}
         </p>
@@ -240,10 +265,12 @@ export function NewPostForm({
           name="post_type"
           value={postType}
           onChange={(event) => setPostType(event.target.value as PostType)}
+          disabled={Boolean(eventPhotoContext)}
           className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
         >
           {POST_TYPES.map((type) => <option key={type} value={type}>{POST_TYPE_LABELS[type].label}</option>)}
         </select>
+        {eventPhotoContext ? <input type="hidden" name="post_type" value="general" /> : null}
         <p className="text-xs text-muted-foreground">
           {postType === "question"
             ? "Responses can be marked as the accepted answer after publishing."
@@ -254,14 +281,14 @@ export function NewPostForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="content">{postType === "question" ? "Question" : "Post"} *</Label>
+          <Label htmlFor="content">{eventPhotoContext ? "Caption" : postType === "question" ? "Question" : "Post"} *</Label>
         <Textarea
           id="content"
           name="content"
           rows={7}
           maxLength={1200}
           required
-          placeholder={postType === "question"
+          placeholder={eventPhotoContext ? "What should other attendees know about these photos?" : postType === "question"
             ? "Describe the symptoms, when they happen, and what you have already checked."
             : POST_TYPE_LABELS[postType].prompt}
         />
@@ -283,8 +310,8 @@ export function NewPostForm({
       {mediaAllowed ? <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <Label htmlFor="post-media">{videoAllowed ? "Photos and videos" : "Photos"}</Label>
-            <p className="text-xs text-muted-foreground">Add up to 10 photos. Their order becomes the carousel order.</p>
+            <Label htmlFor="post-media">Photos{eventPhotoContext ? " *" : ""}</Label>
+            <p className="text-xs text-muted-foreground">Add {eventPhotoContext ? "1 to " : "up to "}10 photos. Their order becomes the carousel order.</p>
           </div>
           <span className="text-xs font-semibold text-muted-foreground">{media.length}/{MAX_MEDIA}</span>
         </div>

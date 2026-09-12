@@ -571,6 +571,49 @@ export type Database = {
           },
         ]
       }
+      community_event_photo_posts: {
+        Row: {
+          contributor_id: string
+          created_at: string
+          event_id: string
+          post_id: string
+        }
+        Insert: {
+          contributor_id: string
+          created_at?: string
+          event_id: string
+          post_id: string
+        }
+        Update: {
+          contributor_id?: string
+          created_at?: string
+          event_id?: string
+          post_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_event_photo_posts_contributor_id_fkey"
+            columns: ["contributor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_event_photo_posts_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "community_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_event_photo_posts_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_event_rsvps: {
         Row: {
           created_at: string
@@ -5182,6 +5225,14 @@ export type Database = {
         Args: { p_actor_profile_id: string; p_comment_id: string; p_event_id: string }
         Returns: string
       }
+      attach_community_event_photo_post: {
+        Args: { p_actor_profile_id: string; p_event_id: string; p_post_id: string }
+        Returns: boolean
+      }
+      can_contribute_community_event_photos: {
+        Args: { p_event_id: string; p_viewer_id: string }
+        Returns: boolean
+      }
       cancel_community_event: {
         Args: { p_actor_profile_id: string; p_event_id: string; p_reason: string }
         Returns: boolean
@@ -5223,6 +5274,10 @@ export type Database = {
       list_visible_community_event_ids: {
         Args: { p_group_id?: string | null; p_include_past?: boolean; p_viewer_id: string }
         Returns: { event_id: string }[]
+      }
+      list_community_event_photo_post_ids: {
+        Args: { p_event_id: string; p_viewer_id: string }
+        Returns: { post_id: string }[]
       }
       set_community_event_rsvp: {
         Args: {

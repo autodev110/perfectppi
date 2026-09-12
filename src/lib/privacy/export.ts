@@ -63,6 +63,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     communityComments,
     organizedEvents,
     eventRsvps,
+    contributedEventPhotos,
     communityPostSaves,
     marketplaceListingSaves,
     marketplaceSavedSearches,
@@ -104,6 +105,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     rows("community comments", admin.from("community_comments").select("*").eq("author_id", profileId)),
     rows("organized community events", admin.from("community_events").select("*").eq("organizer_id", profileId)),
     rows("community event RSVPs", admin.from("community_event_rsvps").select("*").eq("profile_id", profileId)),
+    rows("community event photo posts", admin.from("community_event_photo_posts").select("*").eq("contributor_id", profileId)),
     rows("saved community posts", admin.from("community_post_saves").select("*").eq("profile_id", profileId)),
     rows("saved marketplace listings", admin.from("marketplace_listing_saves").select("*").eq("profile_id", profileId)),
     rows("marketplace saved searches", admin.from("marketplace_saved_searches").select("*").eq("profile_id", profileId)),
@@ -308,6 +310,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
         organized: organizedEvents,
         rsvps: eventRsvps,
         officialUpdates: eventUpdates,
+        contributedPhotos: contributedEventPhotos,
       },
       mentions: {
         authored: authoredMentions,

@@ -57,6 +57,32 @@ describe("Community events safety and privacy", () => {
     assert.match(migration, /to_jsonb\(NEW\) - 'author_id'/);
   });
 
+  test("post-event photos are service-only, image-only, and attendee-gated", async () => {
+    const migration = await readFile(`${root}/supabase/migrations/20260912233000_community_event_photo_thread.sql`, "utf8");
+    assert.match(migration, /REVOKE ALL ON public\.community_event_photo_posts FROM PUBLIC, anon, authenticated/);
+    assert.match(migration, /event\.starts_at <= now\(\)/);
+    assert.match(migration, /rsvp\.status = 'going'/);
+    assert.match(migration, /media\.media_type <> 'image'/);
+    assert.match(migration, /event\.ends_at \+ interval '90 days'/);
+    assert.match(migration, /social_can_view_community_event\(p_viewer_id, event_photo\.event_id, true\)/);
+    assert.match(migration, /event_photo_uploader_mismatch/);
+    assert.match(migration, /TG_OP = 'INSERT'[\s\S]*can_contribute_community_event_photos/);
+  });
+
+  test("event photo posts use the existing moderated assembly pipeline", async () => {
+    const actionSource = await readFile(`${root}/src/features/community/actions.ts`, "utf8");
+    assert.match(actionSource, /attach_community_event_photo_post/);
+    assert.match(actionSource, /expectedMediaCount < 1/);
+    assert.match(actionSource, /community_photo_uploads/);
+    assert.match(actionSource, /revalidatePath\(`\/community\/events\/\$\{eventPhoto\.event_id\}`\)/);
+  });
+
+  test("event photo associations participate in account export", async () => {
+    const exportSource = await readFile(`${root}/src/lib/privacy/export.ts`, "utf8");
+    assert.match(exportSource, /community event photo posts/);
+    assert.match(exportSource, /contributedPhotos/);
+  });
+
   test("notification enum values commit in an earlier migration", async () => {
     const enumMigration = await readFile(`${root}/supabase/migrations/20260912230000_community_event_notification_types.sql`, "utf8");
     const schemaMigration = await readFile(`${root}/supabase/migrations/20260912231000_community_events.sql`, "utf8");

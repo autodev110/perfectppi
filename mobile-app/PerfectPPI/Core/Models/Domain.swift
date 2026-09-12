@@ -928,6 +928,8 @@ struct CommunityEventDetail: Codable, Hashable {
     let isOrganizer: Bool
     let announcement: CommunityPost
     let officialUpdateCommentIds: [String]
+    let photoPosts: [CommunityPost]
+    let canContributePhotos: Bool
 }
 
 struct CommunityEventCreatePayload: Encodable {

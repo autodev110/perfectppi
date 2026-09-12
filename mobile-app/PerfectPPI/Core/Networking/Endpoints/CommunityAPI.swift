@@ -52,6 +52,7 @@ enum CommunityAPI {
         var details: JSONValue? = nil
         let expectedMediaCount: Int
         let creationToken: String?
+        var eventId: String? = nil
     }
 
     private struct PollVotePayload: Encodable { let optionKey: String }

@@ -1273,13 +1273,23 @@ private struct CommunityReportSheet: View {
     }
 }
 
+struct CommunityEventPhotoContext: Identifiable {
+    let id: String
+    let title: String
+    let groupId: String?
+}
+
 struct NewCommunityPostView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthStore
     let onCreated: () -> Void
+    let eventPhotoContext: CommunityEventPhotoContext?
 
     private var caps: ClientCapabilities.Capabilities { auth.capabilities.capabilities }
-    private var pickerFilter: PHPickerFilter { caps.communityVideoUploads ? .any(of: [.images, .videos]) : .images }
+    private var allowsVideoUploads: Bool { caps.communityVideoUploads && eventPhotoContext == nil }
+    private var pickerFilter: PHPickerFilter {
+        allowsVideoUploads ? .any(of: [.images, .videos]) : .images
+    }
 
     @State private var content = ""
     @State private var audience: CommunityPostAudience = .friends
@@ -1308,11 +1318,13 @@ struct NewCommunityPostView: View {
     init(
         preselectedVehicleId: String? = nil,
         preselectedGroupId: String? = nil,
+        eventPhotoContext: CommunityEventPhotoContext? = nil,
         onCreated: @escaping () -> Void
     ) {
         self.onCreated = onCreated
+        self.eventPhotoContext = eventPhotoContext
         _selectedVehicleId = State(initialValue: preselectedVehicleId ?? "")
-        _selectedGroupId = State(initialValue: preselectedGroupId ?? "")
+        _selectedGroupId = State(initialValue: eventPhotoContext?.groupId ?? preselectedGroupId ?? "")
     }
 
     var body: some View {
@@ -1321,6 +1333,15 @@ struct NewCommunityPostView: View {
                 load: { try await CommunityAPI.options() },
                 loaded: { options in
                     Form {
+                        if let eventPhotoContext {
+                            Section("Event photo thread") {
+                                Label(eventPhotoContext.title, systemImage: "calendar.badge.checkmark")
+                                    .font(.headline)
+                                Text("Photos only. Your caption and images use the standard Community safety review.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                         if !caps.communityTextPosts {
                             Section {
                                 Label("Community posting is temporarily unavailable. Please try again later.",
@@ -1336,6 +1357,7 @@ struct NewCommunityPostView: View {
                                     Text(type.label).tag(type)
                                 }
                             }
+                            .disabled(eventPhotoContext != nil)
                             TextEditor(text: $content)
                                 .frame(minHeight: 140)
                                 .disabled(!caps.communityTextPosts)
@@ -1346,15 +1368,17 @@ struct NewCommunityPostView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        PostTypeFieldsSection(
-                            type: postType,
-                            fields: $typeFields,
-                            inspections: options.inspections ?? [],
-                            attachedVehicleId: attachedVehicleId(options)
-                        )
+                        if eventPhotoContext == nil {
+                            PostTypeFieldsSection(
+                                type: postType,
+                                fields: $typeFields,
+                                inspections: options.inspections ?? [],
+                                attachedVehicleId: attachedVehicleId(options)
+                            )
+                        }
 
                         Section("Audience") {
-                            if caps.groups, !options.groups.isEmpty {
+                            if eventPhotoContext == nil, caps.groups, !options.groups.isEmpty {
                                 Picker("Post to", selection: $selectedGroupId) {
                                     Text("My feed").tag("")
                                     ForEach(options.groups) { group in
@@ -1417,11 +1441,11 @@ struct NewCommunityPostView: View {
                                     .foregroundStyle(.secondary)
                             }
                         } else {
-                        Section("\(caps.communityVideoUploads ? "Photos and videos" : "Photos") (\(media.count)/10)") {
+                        Section("\(allowsVideoUploads ? "Photos and videos" : "Photos") (\(media.count)/10)") {
                             Button {
                                 Task { await openPhotoLibrary() }
                             } label: {
-                                Label(caps.communityVideoUploads ? "Choose Photos or Videos" : "Choose Photos",
+                                Label(allowsVideoUploads ? "Choose Photos or Videos" : "Choose Photos",
                                       systemImage: "photo.on.rectangle.angled")
                             }
                             .disabled(media.count >= 10)
@@ -1434,17 +1458,7 @@ struct NewCommunityPostView: View {
                             .disabled(media.count >= 10)
 
                             ForEach(media) { item in
-                                HStack {
-                                    Image(systemName: item.kind == .video ? "video.fill" : "photo.fill")
-                                        .foregroundStyle(Theme.Palette.primary)
-                                    Text(item.filename).lineLimit(1)
-                                    Spacer()
-                                    Button(role: .destructive) {
-                                        media.removeAll { $0.id == item.id }
-                                    } label: {
-                                        Image(systemName: "trash")
-                                    }
-                                }
+                                mediaAttachmentRow(item)
                             }
                         }
                         }
@@ -1479,7 +1493,7 @@ struct NewCommunityPostView: View {
                     ErrorView(message: error.localizedDescription, retry: retry)
                 }
             )
-            .navigationTitle("New Post")
+            .navigationTitle(eventPhotoContext == nil ? "New Post" : "Add Event Photos")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1490,7 +1504,8 @@ struct NewCommunityPostView: View {
                         Task { await save() }
                     }
                     .disabled(saving || !caps.communityTextPosts
-                              || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                              || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                              || (eventPhotoContext != nil && media.isEmpty))
                 }
             }
             .photosPicker(
@@ -1537,7 +1552,7 @@ struct NewCommunityPostView: View {
         for item in items.prefix(max(0, 10 - media.count)) {
             do {
                 let picked = try await AttachmentPickerSupport.load(item)
-                if picked.kind == .video, !caps.communityVideoUploads {
+                if picked.kind == .video, !allowsVideoUploads {
                     // Legacy entry point copy (plan 21.3); the server refuses
                     // video reservations regardless.
                     self.error = "Video posts are coming later. Please choose photos only."
@@ -1576,9 +1591,27 @@ struct NewCommunityPostView: View {
         return selectedVehicleId
     }
 
+    private func mediaAttachmentRow(_ item: PickedAttachment) -> some View {
+        HStack {
+            Image(systemName: item.kind == .video ? "video.fill" : "photo.fill")
+                .foregroundStyle(Theme.Palette.primary)
+            Text(item.filename).lineLimit(1)
+            Spacer()
+            Button(role: .destructive) {
+                media.removeAll { $0.id == item.id }
+            } label: {
+                Image(systemName: "trash")
+            }
+        }
+    }
+
     private func save() async {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !saving else { return }
+        if eventPhotoContext != nil && media.isEmpty {
+            error = "Add at least one photo from the event."
+            return
+        }
         if let message = typeFields.validationMessage(
             for: postType,
             photoCount: media.count,
@@ -1610,7 +1643,8 @@ struct NewCommunityPostView: View {
                         postType: postType,
                         details: typeFields.details(for: postType),
                         expectedMediaCount: media.count,
-                        creationToken: media.isEmpty ? nil : creationToken
+                        creationToken: media.isEmpty ? nil : creationToken,
+                        eventId: eventPhotoContext?.id
                     )
                 )
                 postId = response.id
@@ -2047,6 +2081,7 @@ struct CommunityEventDetailView: View {
     @State private var reportTarget: ReportTarget?
     @State private var reportConfirmed = false
     @State private var error: String?
+    @State private var photoEvent: CommunityEventPhotoContext?
 
     var body: some View {
         AsyncContent(
@@ -2060,6 +2095,11 @@ struct CommunityEventDetailView: View {
         .sheet(item: $reportTarget) { target in
             CommunityReportSheet { reasonCode, details in
                 await submitReport(target: target, reasonCode: reasonCode, details: details)
+            }
+        }
+        .sheet(item: $photoEvent) { context in
+            NewCommunityPostView(eventPhotoContext: context) {
+                reloadToken = UUID()
             }
         }
         .alert("Cancel event", isPresented: $showingCancellation) {
@@ -2128,6 +2168,29 @@ struct CommunityEventDetailView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(item.content)
                             if let date = item.createdAt { Text(date, style: .relative).font(.caption).foregroundStyle(.secondary) }
+                        }
+                    }
+                }
+            }
+            if event.startsAt <= Date() {
+                Section("Post-event photos") {
+                    if event.canContributePhotos {
+                        Button {
+                            photoEvent = CommunityEventPhotoContext(
+                                id: event.id,
+                                title: event.title,
+                                groupId: event.groupId
+                            )
+                        } label: {
+                            Label("Add photos", systemImage: "camera")
+                        }
+                    }
+                    if event.photoPosts.isEmpty {
+                        Text("No approved event photos yet.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(event.photoPosts) { post in
+                            CommunityPostRow(post: post) { reloadToken = UUID() }
                         }
                     }
                 }

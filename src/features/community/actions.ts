@@ -60,6 +60,7 @@ const postSchema = z.object({
   vehicleId: z.string().uuid().optional().nullable(),
   listingId: z.string().uuid().optional().nullable(),
   groupId: z.string().uuid().optional().nullable(),
+  eventId: z.string().uuid().optional().nullable(),
   expectedMediaCount: z.coerce.number().int().min(0).max(10).default(0),
   creationToken: creationTokenSchema.optional().nullable(),
 }).superRefine((value, context) => {
@@ -251,6 +252,7 @@ export async function createCommunityPost(formData: FormData) {
     vehicleId: nullableUuid(formData.get("vehicle_id")),
     listingId: nullableUuid(formData.get("listing_id")),
     groupId: nullableUuid(formData.get("group_id")),
+    eventId: nullableUuid(formData.get("event_id")),
     expectedMediaCount: formData.get("expected_media_count") || 0,
     creationToken: nullableUuid(formData.get("creation_token")),
   });
@@ -275,6 +277,34 @@ export async function createCommunityPostFromInput(
     return rejected("posting_unavailable", FEATURE_UNAVAILABLE_MESSAGE.community_text_posts);
   }
 
+  const admin = createAdminClient();
+  let eventGroupId: string | null | undefined;
+  if (parsed.data.eventId) {
+    if (!flags.flags.events || !flags.flags.community_photo_uploads) {
+      return rejected("posting_unavailable", "Event photo sharing is temporarily unavailable.");
+    }
+    if (parsed.data.expectedMediaCount < 1) {
+      return rejected("validation_failed", "Add at least one photo from the event.");
+    }
+    if (parsed.data.postType !== "general") {
+      return rejected("validation_failed", "Event photo posts must use the standard post type.");
+    }
+    const [{ data: canContribute }, { data: event }] = await Promise.all([
+      admin.rpc("can_contribute_community_event_photos", {
+        p_viewer_id: profile.profileId,
+        p_event_id: parsed.data.eventId,
+      }),
+      admin.from("community_events").select("group_id").eq("id", parsed.data.eventId).maybeSingle(),
+    ]);
+    if (!canContribute || !event) {
+      return rejected("validation_failed", "Event photos open when the event starts for the organizer and Going attendees.");
+    }
+    eventGroupId = event.group_id;
+    if ((parsed.data.groupId ?? null) !== eventGroupId) {
+      return rejected("validation_failed", "This event photo draft has the wrong destination.");
+    }
+  }
+
   const restriction = await getActivePostingRestriction(profile.profileId);
   if (restriction) {
     return rejected("posting_restricted", restriction.ends_at
@@ -282,7 +312,6 @@ export async function createCommunityPostFromInput(
       : undefined);
   }
 
-  const admin = createAdminClient();
   if (parsed.data.expectedMediaCount > 0 && parsed.data.creationToken) {
     const { data: existingAssembly } = await admin
       .from("community_post_assemblies")
@@ -297,6 +326,23 @@ export async function createCommunityPostFromInput(
         .eq("id", existingAssembly.post_id)
         .single();
       if (!existingPost) return { error: "Post draft is no longer available." };
+      if (parsed.data.eventId) {
+        const { data: linked } = await admin
+          .from("community_event_photo_posts")
+          .select("event_id, contributor_id")
+          .eq("post_id", existingPost.id)
+          .maybeSingle();
+        if (!linked) {
+          const attached = await admin.rpc("attach_community_event_photo_post", {
+            p_actor_profile_id: profile.profileId,
+            p_event_id: parsed.data.eventId,
+            p_post_id: existingPost.id,
+          });
+          if (attached.error) return { error: "This event photo draft is no longer available." };
+        } else if (linked.event_id !== parsed.data.eventId || linked.contributor_id !== profile.profileId) {
+          return { error: "These photos belong to a different event draft." };
+        }
+      }
       const moderationStatus = existingPost.moderation_status as ModerationStatus;
       return { data: {
         id: existingPost.id,
@@ -317,7 +363,7 @@ export async function createCommunityPostFromInput(
     );
   }
 
-  const groupId = parsed.data.groupId ?? null;
+  const groupId = eventGroupId !== undefined ? eventGroupId : (parsed.data.groupId ?? null);
   if (groupId && !flags.flags.groups) {
     return rejected("posting_unavailable", FEATURE_UNAVAILABLE_MESSAGE.groups);
   }
@@ -460,6 +506,22 @@ export async function createCommunityPostFromInput(
     return { error: friendlyDatabaseError(createError, "Your post could not be created. Please try again.", "create post") };
   }
 
+  if (parsed.data.eventId) {
+    const { error: attachError } = await admin.rpc("attach_community_event_photo_post", {
+      p_actor_profile_id: profile.profileId,
+      p_event_id: parsed.data.eventId,
+      p_post_id: data.id,
+    });
+    if (attachError) {
+      await admin.from("community_posts")
+        .update({ status: "archived" })
+        .eq("id", data.id)
+        .eq("author_id", profile.profileId);
+      console.warn("event photo post association failed", { message: attachError.message.slice(0, 300) });
+      return { error: "This event is no longer accepting photos." };
+    }
+  }
+
   if (launchMode) {
     // The content row is the visibility source of truth; the moderation item
     // is the compatibility aggregate (plan 29.7), so a recording failure is
@@ -477,6 +539,7 @@ export async function createCommunityPostFromInput(
       if (groupId) revalidatePath("/community/groups");
       revalidatePath("/dashboard/posts");
     }
+    if (parsed.data.eventId) revalidatePath(`/community/events/${parsed.data.eventId}`);
     revalidatePath("/admin/community");
     revalidatePath("/admin/moderation");
     return { data: { ...data, moderationStatus: "active" as const, moderationMessage: null } };
@@ -512,6 +575,7 @@ export async function createCommunityPostFromInput(
   revalidatePath("/dashboard/posts");
   revalidatePath("/admin/community");
   revalidatePath("/admin/moderation");
+  if (parsed.data.eventId) revalidatePath(`/community/events/${parsed.data.eventId}`);
 
   return {
     data: {
@@ -549,6 +613,12 @@ export async function finalizeCommunityPostAssembly(
     revalidatePath("/community");
     revalidatePath("/community/groups");
     revalidatePath("/dashboard/posts");
+    const { data: eventPhoto } = await createAdminClient()
+      .from("community_event_photo_posts")
+      .select("event_id")
+      .eq("post_id", result.data.postId)
+      .maybeSingle();
+    if (eventPhoto) revalidatePath(`/community/events/${eventPhoto.event_id}`);
   }
   revalidatePath("/admin/community");
   revalidatePath("/admin/moderation");

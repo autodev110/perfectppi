@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarDays, ExternalLink, LockKeyhole, MapPin, ShieldAlert, Users } from "lucide-react";
+import { CalendarDays, Camera, ExternalLink, Images, LockKeyhole, MapPin, ShieldAlert, Users } from "lucide-react";
 import { requireRole } from "@/features/auth/guards";
 import { getCommunityEvent } from "@/features/social/events";
 import { COMMUNITY_EVENT_TYPE_LABELS } from "@/features/social/events-policy";
@@ -8,6 +8,7 @@ import { CommunityEventOrganizerControls, CommunityEventRsvpControl } from "@/co
 import { CommunityReportControl } from "@/components/shared/community-report-control";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CommunityPostArticle } from "@/components/shared/community-post-article";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ function eventTime(value: string) {
 }
 
 export default async function CommunityEventPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireRole(["consumer", "technician", "org_manager", "admin"]);
+  const viewer = await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const event = await getCommunityEvent((await params).id);
   if (!event) notFound();
   const officialUpdates = event.announcement.comments.filter((comment) => event.official_update_comment_ids.includes(comment.id));
@@ -53,6 +54,27 @@ export default async function CommunityEventPage({ params }: { params: Promise<{
         </article>
 
         {officialUpdates.length ? <section className="mt-7 rounded-[1.5rem] bg-surface-container-lowest p-6 ghost-border"><h2 className="font-heading text-xl font-extrabold">Organizer updates</h2><div className="mt-4 space-y-3">{officialUpdates.map((update) => <div key={update.id} className="rounded-2xl bg-surface-container p-4"><p className="whitespace-pre-wrap text-sm">{update.content}</p><p className="mt-2 text-xs text-on-surface-variant">{eventTime(update.created_at)}</p></div>)}</div></section> : null}
+        {new Date(event.starts_at) <= new Date() ? (
+          <section className="mt-7">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-primary"><Images className="h-4 w-4" />Post-event photo thread</p>
+                <h2 className="mt-1 font-heading text-2xl font-extrabold">Photos from the event</h2>
+                <p className="mt-1 text-sm text-on-surface-variant">Shared by the organizer and attendees who marked Going.</p>
+              </div>
+              {event.can_contribute_photos ? <Button asChild><Link href={`/dashboard/posts/new?event=${event.id}`}><Camera className="mr-2 h-4 w-4" />Add photos</Link></Button> : null}
+            </div>
+            {event.photo_posts.length ? (
+              <div className="space-y-5">{event.photo_posts.map((post) => <CommunityPostArticle key={post.id} post={post} viewerId={viewer.id} />)}</div>
+            ) : (
+              <div className="rounded-[1.5rem] bg-surface-container-lowest p-7 text-center ghost-border">
+                <Images className="mx-auto h-8 w-8 text-on-surface-variant/50" />
+                <p className="mt-3 font-bold">No event photos yet</p>
+                <p className="mt-1 text-sm text-on-surface-variant">The first approved photo post will appear here.</p>
+              </div>
+            )}
+          </section>
+        ) : null}
         {event.is_organizer && event.status === "scheduled" ? <section className="mt-7 rounded-[1.5rem] bg-surface-container-lowest p-6 ghost-border"><h2 className="mb-5 font-heading text-xl font-extrabold">Organizer tools</h2><CommunityEventOrganizerControls eventId={event.id} /></section> : null}
       </div>
     </main>
