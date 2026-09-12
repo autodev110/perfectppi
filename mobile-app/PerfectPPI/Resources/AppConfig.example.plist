@@ -3,7 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>APIBaseURL</key>
-    <string>https://perfectppi.vercel.app</string>
+    <string>https://perfectppi.com</string>
+    <key>PublicSiteURL</key>
+    <string>https://perfectppi.com</string>
     <key>SupabaseURL</key>
     <string>https://YOUR-PROJECT.supabase.co</string>
     <key>SupabaseAnonKey</key>

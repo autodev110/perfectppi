@@ -83,12 +83,9 @@ SELECT set_config(
 
 DO $$
 BEGIN
-  IF (
-    SELECT count(*)
-    FROM public.conversation_participants
-    WHERE conversation_id = '43000000-0000-0000-0000-000000000001'
-      AND profile_id = current_setting('test.owner_profile_id')::uuid
-  ) <> 1 THEN
+  IF NOT public.am_i_in_conversation(
+    '43000000-0000-0000-0000-000000000001'
+  ) THEN
     RAISE EXCEPTION 'conversation member cannot authorize an attachment upload';
   END IF;
 
@@ -133,11 +130,9 @@ SELECT set_config(
 
 DO $$
 BEGIN
-  IF (
-    SELECT count(*)
-    FROM public.conversation_participants
-    WHERE conversation_id = '43000000-0000-0000-0000-000000000001'
-  ) <> 0 THEN
+  IF public.am_i_in_conversation(
+    '43000000-0000-0000-0000-000000000001'
+  ) THEN
     RAISE EXCEPTION 'non-member can authorize an attachment upload';
   END IF;
 

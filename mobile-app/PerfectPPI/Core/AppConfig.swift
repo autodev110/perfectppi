@@ -11,6 +11,14 @@ enum AppConfig {
         return url
     }()
 
+    static let publicSiteURL: URL = {
+        guard let s = stringValue(forKey: "PublicSiteURL"),
+              let url = URL(string: s) else {
+            fatalError("AppConfig.plist missing PublicSiteURL")
+        }
+        return url
+    }()
+
     static let supabaseURL: URL = {
         guard let s = stringValue(forKey: "SupabaseURL"),
               let url = URL(string: s) else {

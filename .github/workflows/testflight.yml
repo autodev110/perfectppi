@@ -59,7 +59,7 @@ jobs:
       IOS_BUNDLE_ID: com.perfectppi.app
       IOS_PROJECT: mobile-app/PerfectPPI.xcodeproj
       IOS_SCHEME: PerfectPPI
-      IOS_API_BASE_URL: ${{ vars.IOS_API_BASE_URL || 'https://perfectppi.vercel.app' }}
+      IOS_API_BASE_URL: ${{ vars.IOS_API_BASE_URL || 'https://perfectppi.com' }}
       IOS_SUPABASE_URL: ${{ secrets.IOS_SUPABASE_URL }}
       IOS_SUPABASE_ANON_KEY: ${{ secrets.IOS_SUPABASE_ANON_KEY }}
       ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -299,6 +299,7 @@ jobs:
 
           app_config="mobile-app/PerfectPPI/Resources/AppConfig.plist"
           [[ "$(plutil -extract APIBaseURL raw "$app_config")" == "$IOS_API_BASE_URL" ]]
+          [[ "$(plutil -extract PublicSiteURL raw "$app_config")" == "https://perfectppi.com" ]]
           [[ "$(plutil -extract SupabaseURL raw "$app_config")" == "$IOS_SUPABASE_URL" ]]
           [[ "$(plutil -extract SupabaseAnonKey raw "$app_config")" == "$IOS_SUPABASE_ANON_KEY" ]]
           if grep -Eq 'YOUR-|localhost|127\.0\.0\.1' "$app_config"; then
@@ -375,6 +376,7 @@ jobs:
           [[ "$(plutil -extract CFBundleIdentifier raw "$info_plist")" == "$IOS_BUNDLE_ID" ]]
           [[ "$(plutil -extract CFBundleVersion raw "$info_plist")" == "$BUILD_NUMBER" ]]
           [[ "$(plutil -extract APIBaseURL raw "$app_config")" == "$IOS_API_BASE_URL" ]]
+          [[ "$(plutil -extract PublicSiteURL raw "$app_config")" == "https://perfectppi.com" ]]
           [[ "$(plutil -extract SupabaseURL raw "$app_config")" == "$IOS_SUPABASE_URL" ]]
           [[ "$(plutil -extract SupabaseAnonKey raw "$app_config")" == "$IOS_SUPABASE_ANON_KEY" ]]
 

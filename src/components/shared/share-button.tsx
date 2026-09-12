@@ -22,7 +22,8 @@ export function ShareButton({
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
 
   async function share() {
-    const url = new URL(path, window.location.origin).toString();
+    const shareOrigin = process.env.NEXT_PUBLIC_SITE_URL || "https://perfectppi.com";
+    const url = new URL(path, shareOrigin).toString();
     try {
       if (typeof navigator.share === "function") {
         await navigator.share({ url, title });

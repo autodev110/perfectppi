@@ -5,24 +5,24 @@ import Foundation
 /// visibility rules, and the same paths open natively via universal links.
 enum ShareLinks {
     static func post(id: String) -> URL {
-        AppConfig.apiBaseURL.appendingPathComponent("community/posts/\(id)")
+        AppConfig.publicSiteURL.appendingPathComponent("community/posts/\(id)")
     }
 
     static func group(slug: String) -> URL {
-        AppConfig.apiBaseURL.appendingPathComponent("community/groups/\(slug)")
+        AppConfig.publicSiteURL.appendingPathComponent("community/groups/\(slug)")
     }
 
     static func profile(username: String) -> URL {
-        AppConfig.apiBaseURL.appendingPathComponent("profile/\(username)")
+        AppConfig.publicSiteURL.appendingPathComponent("profile/\(username)")
     }
 
     static func vehicle(id: String) -> URL {
-        AppConfig.apiBaseURL.appendingPathComponent("vehicle/\(id)")
+        AppConfig.publicSiteURL.appendingPathComponent("vehicle/\(id)")
     }
 
     static func vehicleBuild(id: String, entryId: String?) -> URL {
         var components = URLComponents(
-            url: AppConfig.apiBaseURL.appendingPathComponent("vehicle/\(id)"),
+            url: AppConfig.publicSiteURL.appendingPathComponent("vehicle/\(id)"),
             resolvingAgainstBaseURL: false
         )!
         components.queryItems = [URLQueryItem(name: "tab", value: "build")]
@@ -31,6 +31,6 @@ enum ShareLinks {
     }
 
     static func listing(id: String) -> URL {
-        AppConfig.apiBaseURL.appendingPathComponent("marketplace/listings/\(id)")
+        AppConfig.publicSiteURL.appendingPathComponent("marketplace/listings/\(id)")
     }
 }
