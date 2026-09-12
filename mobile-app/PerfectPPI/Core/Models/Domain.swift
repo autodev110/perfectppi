@@ -1376,3 +1376,45 @@ struct PerfectPpiSendResult: Codable, Hashable {
     let outputVersion: Int
     let alreadyQueued: Bool
 }
+
+// MARK: - Unified search (plan 27.2)
+
+struct SearchVehicleResult: Codable, Identifiable, Hashable {
+    let id: String
+    let year: Int?
+    let make: String?
+    let model: String?
+    let trim: String?
+    let nickname: String?
+    let visibility: String
+    let owner: PersonSummary?
+    let photoUrl: String?
+    let listingId: String?
+
+    var label: String { [year.map(String.init), make, model, trim].compactMap { $0 }.joined(separator: " ") }
+}
+
+struct SearchListingResult: Codable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let askingPriceCents: Int
+    let location: String?
+    let vehicleId: String
+    let vehicleLabel: String
+    let photoUrl: String?
+}
+
+struct SearchTechnicianResult: Codable, Identifiable, Hashable {
+    let id: String
+    let profileId: String
+    let username: String?
+    let displayName: String?
+    let avatarUrl: String?
+    let specialties: [String]
+    let serviceArea: String?
+    let certificationLevel: String
+    let totalInspections: Int
+    let avgRating: Double
+
+    var person: PersonSummary { PersonSummary(id: profileId, username: username, displayName: displayName, avatarUrl: avatarUrl) }
+}

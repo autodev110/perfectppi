@@ -10,6 +10,7 @@ struct CommunityFeedView: View {
     @State private var showingMyPosts = false
     @State private var showingGuidelines = false
     @State private var showingGroups = false
+    @State private var showingSearch = false
     @State private var showingSaved = false
     @State private var showingNotifications = false
     @State private var feedFilter: CommunityFeedFilter = .all
@@ -27,6 +28,9 @@ struct CommunityFeedView: View {
         .toolbar { communityToolbar }
         .sheet(isPresented: $showingGuidelines) {
             SafariWebView(url: PolicyPage.communityGuidelines.url)
+        }
+        .sheet(isPresented: $showingSearch) {
+            CommunitySearchView()
         }
         .sheet(isPresented: $showingGroups) {
             CommunityGroupsView()
@@ -119,6 +123,11 @@ struct CommunityFeedView: View {
             }
 
             Menu {
+                Button {
+                    showingSearch = true
+                } label: {
+                    Label("Search", systemImage: "magnifyingglass")
+                }
                 NavigationLink {
                     FriendsView()
                 } label: {

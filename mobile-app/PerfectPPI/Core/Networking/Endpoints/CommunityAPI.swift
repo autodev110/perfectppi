@@ -277,6 +277,73 @@ enum CommunityAPI {
         try await APIClient.shared.get("/api/community/moderation/notices")
     }
 
+    enum SearchTab: String, CaseIterable, Identifiable {
+        case posts, people, groups, vehicles, listings, technicians
+        var id: String { rawValue }
+        var label: String { rawValue.capitalized }
+    }
+
+    /// Decoded per tab so each result type keeps its own model.
+    enum SearchResults {
+        case posts([CommunityPost])
+        case people([PeopleSearchResult])
+        case groups([CommunityGroupSummary])
+        case vehicles([SearchVehicleResult])
+        case listings([SearchListingResult])
+        case technicians([SearchTechnicianResult])
+
+        var isEmpty: Bool {
+            switch self {
+            case .posts(let items): items.isEmpty
+            case .people(let items): items.isEmpty
+            case .groups(let items): items.isEmpty
+            case .vehicles(let items): items.isEmpty
+            case .listings(let items): items.isEmpty
+            case .technicians(let items): items.isEmpty
+            }
+        }
+    }
+
+    struct SearchPage {
+        let tab: SearchTab
+        let query: String
+        let page: Int
+        let hasMore: Bool
+        let suggestions: [String]
+        let results: SearchResults
+    }
+
+    private struct SearchEnvelope<Item: Decodable>: Decodable {
+        let query: String
+        let page: Int
+        let hasMore: Bool
+        let suggestions: [String]
+        let items: [Item]
+    }
+
+    /// Unified search (plan 27.2); the server applies visibility before
+    /// returning anything.
+    static func search(_ query: String, tab: SearchTab, page: Int = 1) async throws -> SearchPage {
+        let params = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "tab", value: tab.rawValue),
+            URLQueryItem(name: "page", value: String(max(page, 1))),
+        ]
+        func load<Item: Decodable>(_: Item.Type, wrap: ([Item]) -> SearchResults) async throws -> SearchPage {
+            let envelope: SearchEnvelope<Item> = try await APIClient.shared.get("/api/community/search", query: params)
+            return SearchPage(tab: tab, query: envelope.query, page: envelope.page, hasMore: envelope.hasMore,
+                              suggestions: envelope.suggestions, results: wrap(envelope.items))
+        }
+        switch tab {
+        case .posts: return try await load(CommunityPost.self) { .posts($0) }
+        case .people: return try await load(PeopleSearchResult.self) { .people($0) }
+        case .groups: return try await load(CommunityGroupSummary.self) { .groups($0) }
+        case .vehicles: return try await load(SearchVehicleResult.self) { .vehicles($0) }
+        case .listings: return try await load(SearchListingResult.self) { .listings($0) }
+        case .technicians: return try await load(SearchTechnicianResult.self) { .technicians($0) }
+        }
+    }
+
     static func groups() async throws -> CommunityGroupDirectory {
         try await APIClient.shared.get("/api/community/groups")
     }

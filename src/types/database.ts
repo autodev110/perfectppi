@@ -4003,6 +4003,12 @@ export type Database = {
           },
         ]
       }
+      vehicle_make_aliases: {
+        Row: { alias: string; canonical: string }
+        Insert: { alias: string; canonical: string }
+        Update: { alias?: string; canonical?: string }
+        Relationships: []
+      }
       vehicle_build_entries: {
         Row: {
           category: string
@@ -5362,6 +5368,34 @@ export type Database = {
       cast_community_poll_vote: {
         Args: { p_actor_profile_id: string; p_post_id: string; p_option_key: string }
         Returns: Json
+      }
+      community_search_terms: {
+        Args: { p_query: string }
+        Returns: { terms: string[]; makes: string[]; years: number[]; codes: string[] }[]
+      }
+      search_community_posts: {
+        Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_offset?: number }
+        Returns: { post_id: string; rank: number }[]
+      }
+      search_community_groups: {
+        Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_offset?: number }
+        Returns: { group_id: string; rank: number }[]
+      }
+      search_vehicles: {
+        Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_offset?: number }
+        Returns: { vehicle_id: string; rank: number }[]
+      }
+      search_marketplace_listings: {
+        Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_offset?: number }
+        Returns: { listing_id: string; rank: number }[]
+      }
+      search_technicians: {
+        Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_offset?: number }
+        Returns: { technician_id: string; profile_id: string; rank: number }[]
+      }
+      search_make_suggestions: {
+        Args: { p_query: string }
+        Returns: { suggestion: string }[]
       }
       community_group_owner_available: {
         Args: { p_group_id: string }

@@ -514,7 +514,7 @@ async function activeMembershipGroupIds(viewerId: string, posts: CommunityPost[]
   return new Map((data ?? []).map((membership) => [membership.group_id, membership.role]));
 }
 
-async function getCommunityViewerId() {
+export async function getCommunityViewerId() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
@@ -818,6 +818,11 @@ export async function getCommunityPostOptions() {
     defaultAudience: profile.default_post_audience,
     canPostPublic: profile.is_public,
   };
+}
+
+/** Feed-shaped posts for ids the database already cleared for this viewer (search, group lists). */
+export async function getCommunityPostsForViewer(viewerId: string, postIds: string[]) {
+  return hydrateGroupPostIds(viewerId, postIds);
 }
 
 // Shared hydration for a list of visible post ids in a group.
