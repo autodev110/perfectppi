@@ -61,6 +61,8 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     performedSubmissions,
     communityPosts,
     communityComments,
+    organizedEvents,
+    eventRsvps,
     communityPostSaves,
     marketplaceListingSaves,
     marketplaceSavedSearches,
@@ -100,6 +102,8 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     rows("performed submissions", admin.from("ppi_submissions").select("*").eq("performer_id", profileId)),
     rows("community posts", admin.from("community_posts").select("*").eq("author_id", profileId)),
     rows("community comments", admin.from("community_comments").select("*").eq("author_id", profileId)),
+    rows("organized community events", admin.from("community_events").select("*").eq("organizer_id", profileId)),
+    rows("community event RSVPs", admin.from("community_event_rsvps").select("*").eq("profile_id", profileId)),
     rows("saved community posts", admin.from("community_post_saves").select("*").eq("profile_id", profileId)),
     rows("saved marketplace listings", admin.from("marketplace_listing_saves").select("*").eq("profile_id", profileId)),
     rows("marketplace saved searches", admin.from("marketplace_saved_searches").select("*").eq("profile_id", profileId)),
@@ -170,13 +174,15 @@ export async function buildAccountDataExport(profileId: string, user: User) {
   const submissions = mergeById(performedSubmissions, submissionsForRequests);
   const submissionIds = ids(submissions);
   const savedCollectionIds = ids(savedCollections);
+  const organizedEventIds = ids(organizedEvents);
 
-  const [vehicleMedia, vehicleBuildEntries, vehicleMaintenanceEvents, marketplaceListings, savedCollectionItems, sections, obdSnapshots, standardizedOutputs, vscOutputs] = await Promise.all([
+  const [vehicleMedia, vehicleBuildEntries, vehicleMaintenanceEvents, marketplaceListings, savedCollectionItems, eventUpdates, sections, obdSnapshots, standardizedOutputs, vscOutputs] = await Promise.all([
     rowsForIds("vehicle media", "vehicle_media", "vehicle_id", vehicleIds),
     rowsForIds("vehicle build entries", "vehicle_build_entries", "vehicle_id", vehicleIds),
     rowsForIds("vehicle maintenance events", "vehicle_maintenance_events", "vehicle_id", vehicleIds),
     rowsForIds("marketplace listings", "marketplace_listings", "vehicle_id", vehicleIds),
     rowsForIds("saved collection items", "saved_collection_items", "collection_id", savedCollectionIds),
+    rowsForIds("official event updates", "community_event_updates", "event_id", organizedEventIds),
     rowsForIds("inspection sections", "ppi_sections", "ppi_submission_id", submissionIds),
     rowsForIds("OBD snapshots", "obd_snapshots", "ppi_submission_id", submissionIds),
     rowsForIds("standardized outputs", "standardized_outputs", "ppi_submission_id", submissionIds),
@@ -298,6 +304,11 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     community: {
       posts: communityPosts,
       comments: mergeById(communityComments, postComments),
+      events: {
+        organized: organizedEvents,
+        rsvps: eventRsvps,
+        officialUpdates: eventUpdates,
+      },
       mentions: {
         authored: authoredMentions,
         received: receivedMentions,

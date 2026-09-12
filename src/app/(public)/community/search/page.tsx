@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, getInitials } from "@/lib/utils/formatting";
 import { sharePath } from "@/lib/share/links";
-import { ArrowLeft, Car, Lock, Search, Tag, Wrench } from "lucide-react";
+import { ArrowLeft, CalendarDays, Car, Lock, MapPin, Search, Tag, Wrench } from "lucide-react";
+import { getFeatureFlags } from "@/lib/feature-flags";
 
 export const metadata = { title: "Search — PerfectPPI Community" };
 export const dynamic = "force-dynamic";
@@ -36,7 +37,10 @@ export default async function CommunitySearchPage({ searchParams }: { searchPara
   const viewer = await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const params = await searchParams;
   const query = normalizeSearchQuery(params.q);
-  const tab: SearchTab = isSearchTab(params.tab) ? params.tab : "posts";
+  const flags = await getFeatureFlags();
+  const requestedTab: SearchTab = isSearchTab(params.tab) ? params.tab : "posts";
+  const tab: SearchTab = requestedTab === "events" && !flags.flags.events ? "posts" : requestedTab;
+  const visibleTabs = SEARCH_TABS.filter((entry) => entry !== "events" || flags.flags.events);
   const requestedPage = Number(params.page ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const results = query.length >= SEARCH_MIN_LENGTH ? await unifiedSearch(query, tab, page) : null;
@@ -50,7 +54,7 @@ export default async function CommunitySearchPage({ searchParams }: { searchPara
         <div className="mt-6"><SearchBox initialQuery={query} tab={tab} autoFocus={!query} /></div>
 
         <nav className="mt-6 flex flex-wrap gap-1 rounded-2xl bg-surface-container-low p-1.5 ghost-border" aria-label="Result types">
-          {SEARCH_TABS.map((entry) => (
+          {visibleTabs.map((entry) => (
             <Link
               key={entry}
               href={query ? href(query, entry) : `/community/search?tab=${entry}`}
@@ -132,7 +136,7 @@ export default async function CommunitySearchPage({ searchParams }: { searchPara
                 </div>
               </Link>
             ))
-          ) : (
+          ) : results.tab === "technicians" ? (
             results.items.map((technician) => (
               <Link key={technician.id} href={`/technicians/${technician.id}`} className="flex items-center gap-4 rounded-2xl bg-surface-container-lowest p-4 shadow-sm ghost-border hover:bg-surface-container">
                 <Avatar className="h-11 w-11"><AvatarImage src={technician.avatar_url ?? ""} /><AvatarFallback className="text-xs">{getInitials(technician.display_name ?? technician.username ?? "T")}</AvatarFallback></Avatar>
@@ -141,6 +145,17 @@ export default async function CommunitySearchPage({ searchParams }: { searchPara
                   <p className="text-xs text-on-surface-variant">
                     {[technician.service_area, technician.specialties.slice(0, 3).join(", "), `${technician.total_inspections} inspections`].filter(Boolean).join(" · ")}
                   </p>
+                </div>
+              </Link>
+            ))
+          ) : (
+            results.items.map((event) => (
+              <Link key={event.id} href={`/community/events/${event.id}`} className="flex items-start gap-4 rounded-2xl bg-surface-container-lowest p-4 shadow-sm ghost-border hover:bg-surface-container">
+                <CalendarDays className="mt-1 h-6 w-6 shrink-0 text-primary" />
+                <div className="min-w-0">
+                  <p className="font-bold">{event.title}</p>
+                  <p className="mt-1 text-xs text-on-surface-variant">{new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(event.starts_at))}</p>
+                  <p className="mt-1 flex items-center gap-1 text-xs text-on-surface-variant"><MapPin className="h-3 w-3" />{event.general_location} · {event.going_count} going</p>
                 </div>
               </Link>
             ))

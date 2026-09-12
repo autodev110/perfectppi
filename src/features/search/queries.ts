@@ -11,11 +11,12 @@ import { searchPeople, type PeopleSearchResult } from "@/features/social/friends
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { getPublicCredentialMap } from "@/features/technicians/credentials";
 import type { PublicTechnicianCredential } from "@/features/technicians/credential-types";
+import { searchCommunityEvents, type CommunityEventSummary } from "@/features/social/events";
 
-export const SEARCH_TABS = ["posts", "people", "groups", "vehicles", "listings", "technicians"] as const;
+export const SEARCH_TABS = ["posts", "people", "groups", "vehicles", "listings", "technicians", "events"] as const;
 export type SearchTab = (typeof SEARCH_TABS)[number];
 export const SEARCH_TAB_LABELS: Record<SearchTab, string> = {
-  posts: "Posts", people: "People", groups: "Groups", vehicles: "Vehicles", listings: "Listings", technicians: "Technicians",
+  posts: "Posts", people: "People", groups: "Groups", vehicles: "Vehicles", listings: "Listings", technicians: "Technicians", events: "Events",
 };
 export const SEARCH_PAGE_SIZE = 20;
 export const SEARCH_MIN_LENGTH = 2;
@@ -63,7 +64,8 @@ export type UnifiedSearchResults =
   | { tab: "groups"; items: CommunityGroupSummary[] }
   | { tab: "vehicles"; items: SearchVehicleResult[] }
   | { tab: "listings"; items: SearchListingResult[] }
-  | { tab: "technicians"; items: SearchTechnicianResult[] };
+  | { tab: "technicians"; items: SearchTechnicianResult[] }
+  | { tab: "events"; items: CommunityEventSummary[] };
 
 export type UnifiedSearchPage = UnifiedSearchResults & {
   query: string;
@@ -238,6 +240,12 @@ export async function unifiedSearch(rawQuery: string, tab: SearchTab, page = 1):
           }];
         }),
       };
+      break;
+    }
+    case "events": {
+      const found = await searchCommunityEvents(query, safePage, SEARCH_PAGE_SIZE);
+      result = { tab, items: found.events };
+      hasMore = found.hasMore;
       break;
     }
   }

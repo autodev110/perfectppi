@@ -22,7 +22,7 @@ struct CommunitySearchView: View {
             List {
                 Section {
                     Picker("Result type", selection: $tab) {
-                        ForEach(CommunityAPI.SearchTab.allCases) { entry in Text(entry.label).tag(entry) }
+                        ForEach(searchTabs) { entry in Text(entry.label).tag(entry) }
                     }
                     .pickerStyle(.menu)
                     .onChange(of: tab) { _, _ in
@@ -101,6 +101,10 @@ struct CommunitySearchView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
             }
         }
+    }
+
+    private var searchTabs: [CommunityAPI.SearchTab] {
+        CommunityAPI.SearchTab.allCases.filter { $0 != .events || auth.capabilities.capabilities.events }
     }
 
     @ViewBuilder
@@ -183,6 +187,14 @@ struct CommunitySearchView: View {
                 }
                 .disabled(technician.username == nil)
             }
+        case .events(let events):
+            ForEach(events) { event in
+                NavigationLink {
+                    CommunityEventDetailView(eventId: event.id)
+                } label: {
+                    CommunityEventRow(event: event)
+                }
+            }
         }
     }
 
@@ -249,6 +261,7 @@ struct CommunitySearchView: View {
         case (.vehicles(let a), .vehicles(let b)): .vehicles(a + b)
         case (.listings(let a), .listings(let b)): .listings(a + b)
         case (.technicians(let a), .technicians(let b)): .technicians(a + b)
+        case (.events(let a), .events(let b)): .events(a + b)
         default: second
         }
     }

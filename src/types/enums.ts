@@ -141,6 +141,8 @@ export type NotificationType =
   | "saved_listing_updated"
   | "saved_search_match"
   | "build_update"
+  | "event_cancelled"
+  | "event_update"
   | "listing_inspection_requested"
   | "moderation_decision"
   | "moderation_case"

@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, CheckCheck, MessageSquare, ShieldCheck, CreditCard, FileText, Wrench, Flag, Gavel, UserPlus, UserCheck, CheckCircle2, CircleAlert, ClipboardCheck, Heart, Warehouse, Tag } from "lucide-react";
+import { Bell, CheckCheck, MessageSquare, ShieldCheck, CreditCard, FileText, Wrench, Flag, Gavel, UserPlus, UserCheck, CheckCircle2, CircleAlert, ClipboardCheck, Heart, Warehouse, Tag, CalendarDays } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils/formatting";
 import type { Database } from "@/types/database";
 import { notificationDestinationIntent } from "@/lib/notifications/routing";
@@ -51,6 +51,8 @@ const typeStyle: Record<
   saved_listing_updated: { icon: Tag, color: "text-teal", bg: "bg-teal/10" },
   saved_search_match: { icon: Tag, color: "text-sky-600", bg: "bg-sky-50" },
   build_update: { icon: Wrench, color: "text-teal", bg: "bg-teal/10" },
+  event_cancelled: { icon: CalendarDays, color: "text-rose-600", bg: "bg-rose-50" },
+  event_update: { icon: CalendarDays, color: "text-teal", bg: "bg-teal/10" },
 };
 
 // Destinations resolve server-side in /notifications/<id>, which knows the

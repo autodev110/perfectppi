@@ -208,6 +208,7 @@ private struct NotificationRow: View {
         case .savedListingUpdated: "tag"
         case .savedSearchMatch: "magnifyingglass"
         case .buildUpdate: "wrench.adjustable"
+        case .eventCancelled, .eventUpdate: "calendar.badge.clock"
         case .moderationDecision, .moderationCase, .reportReceived: "shield"
         case .warrantyAvailable, .paymentCompleted: "creditcard"
         case .unknown: "bell"
@@ -227,6 +228,7 @@ enum NotificationRoute: Hashable, Identifiable {
     case listing(id: String)
     case marketplaceSearch(savedSearchId: String)
     case vehicleBuild(id: String, entryId: String?)
+    case event(id: String)
 
     var id: String {
         switch self {
@@ -240,6 +242,7 @@ enum NotificationRoute: Hashable, Identifiable {
         case .listing(let id): "listing:\(id)"
         case .marketplaceSearch(let id): "marketplace_search:\(id)"
         case .vehicleBuild(let id, let entryId): "vehicle_build:\(id):\(entryId ?? "")"
+        case .event(let id): "event:\(id)"
         }
     }
 
@@ -260,6 +263,7 @@ enum NotificationRoute: Hashable, Identifiable {
             self = .listing(id: listingId)
         case ("marketplace_search", let id?): self = .marketplaceSearch(savedSearchId: id)
         case ("vehicle_build", let id?): self = .vehicleBuild(id: id, entryId: destination.secondaryId)
+        case ("event", let id?): self = .event(id: id)
         default: return nil
         }
     }
@@ -304,6 +308,8 @@ struct NotificationRouteView: View {
         case .vehicleBuild(let id, let entryId):
             SafariWebView(url: ShareLinks.vehicleBuild(id: id, entryId: entryId))
                 .ignoresSafeArea()
+        case .event(let id):
+            CommunityEventDetailView(eventId: id)
         }
     }
 }

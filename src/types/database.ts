@@ -571,6 +571,169 @@ export type Database = {
           },
         ]
       }
+      community_event_rsvps: {
+        Row: {
+          created_at: string
+          event_id: string
+          profile_id: string
+          status: Database["public"]["Enums"]["community_event_rsvp_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          profile_id: string
+          status: Database["public"]["Enums"]["community_event_rsvp_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          profile_id?: string
+          status?: Database["public"]["Enums"]["community_event_rsvp_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_event_rsvps_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "community_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_event_rsvps_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_event_updates: {
+        Row: {
+          comment_id: string
+          created_at: string
+          event_id: string
+          id: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          event_id: string
+          id?: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_event_updates_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: true
+            referencedRelation: "community_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_event_updates_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "community_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_events: {
+        Row: {
+          announcement_post_id: string
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          capacity: number | null
+          client_request_id: string
+          cost_cents: number
+          created_at: string
+          ends_at: string
+          event_type: Database["public"]["Enums"]["community_event_type"]
+          exact_location: string
+          general_location: string
+          group_id: string | null
+          id: string
+          organizer_id: string
+          requirements: string | null
+          starts_at: string
+          status: Database["public"]["Enums"]["community_event_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          announcement_post_id: string
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          capacity?: number | null
+          client_request_id: string
+          cost_cents?: number
+          created_at?: string
+          ends_at: string
+          event_type: Database["public"]["Enums"]["community_event_type"]
+          exact_location: string
+          general_location: string
+          group_id?: string | null
+          id?: string
+          organizer_id: string
+          requirements?: string | null
+          starts_at: string
+          status?: Database["public"]["Enums"]["community_event_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          announcement_post_id?: string
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          capacity?: number | null
+          client_request_id?: string
+          cost_cents?: number
+          created_at?: string
+          ends_at?: string
+          event_type?: Database["public"]["Enums"]["community_event_type"]
+          exact_location?: string
+          general_location?: string
+          group_id?: string | null
+          id?: string
+          organizer_id?: string
+          requirements?: string | null
+          starts_at?: string
+          status?: Database["public"]["Enums"]["community_event_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_events_announcement_post_id_fkey"
+            columns: ["announcement_post_id"]
+            isOneToOne: true
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_events_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "community_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_events_organizer_id_fkey"
+            columns: ["organizer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_group_memberships: {
         Row: {
           decided_at: string | null
@@ -5015,6 +5178,64 @@ export type Database = {
         }
         Returns: string
       }
+      add_community_event_update: {
+        Args: { p_actor_profile_id: string; p_comment_id: string; p_event_id: string }
+        Returns: string
+      }
+      cancel_community_event: {
+        Args: { p_actor_profile_id: string; p_event_id: string; p_reason: string }
+        Returns: boolean
+      }
+      community_event_exact_location: {
+        Args: { p_event_id: string; p_viewer_id: string }
+        Returns: string | null
+      }
+      community_event_rsvp_summaries: {
+        Args: { p_event_ids: string[]; p_viewer_id: string }
+        Returns: {
+          event_id: string
+          going_count: number
+          interested_count: number
+          viewer_status: Database["public"]["Enums"]["community_event_rsvp_status"] | null
+        }[]
+      }
+      search_community_events: {
+        Args: { p_limit?: number; p_offset?: number; p_query: string; p_viewer_id: string }
+        Returns: { event_id: string }[]
+      }
+      create_community_event: {
+        Args: {
+          p_actor_profile_id: string
+          p_announcement_post_id: string
+          p_capacity: number | null
+          p_client_request_id: string
+          p_ends_at: string
+          p_event_type: Database["public"]["Enums"]["community_event_type"]
+          p_exact_location: string
+          p_general_location: string
+          p_group_id: string | null
+          p_requirements: string | null
+          p_starts_at: string
+          p_title: string
+        }
+        Returns: Database["public"]["Tables"]["community_events"]["Row"]
+      }
+      list_visible_community_event_ids: {
+        Args: { p_group_id?: string | null; p_include_past?: boolean; p_viewer_id: string }
+        Returns: { event_id: string }[]
+      }
+      set_community_event_rsvp: {
+        Args: {
+          p_actor_profile_id: string
+          p_event_id: string
+          p_status: Database["public"]["Enums"]["community_event_rsvp_status"]
+        }
+        Returns: Json
+      }
+      social_can_view_community_event: {
+        Args: { p_event_id: string; p_include_cancelled?: boolean; p_viewer_id: string }
+        Returns: boolean
+      }
       expire_community_post_assemblies: {
         Args: { p_limit?: number }
         Returns: number
@@ -6149,6 +6370,9 @@ export type Database = {
         | "submission_resubmitted"
       certification_level: "none" | "ase" | "master" | "oem_qualified"
       community_content_status: "active" | "hidden" | "archived"
+      community_event_rsvp_status: "going" | "interested" | "not_going"
+      community_event_status: "scheduled" | "cancelled" | "completed" | "removed"
+      community_event_type: "car_meet" | "track_day" | "car_show" | "shop_event" | "group_drive"
       community_feed_filter: "all" | "friends" | "my_cars"
       community_group_join_policy: "open" | "request_approval" | "invite_only"
       community_group_membership_status: "active" | "left" | "removed" | "banned" | "requested" | "invited"
@@ -6195,6 +6419,8 @@ export type Database = {
         | "payment_completed"
         | "message_received"
         | "build_update"
+        | "event_cancelled"
+        | "event_update"
       saved_collection_entity_type: "post" | "listing" | "vehicle" | "build"
       org_member_role: "technician" | "manager"
       payment_method: "card" | "bank_transfer" | "financing"
@@ -6394,6 +6620,9 @@ export const Constants = {
       ],
       certification_level: ["none", "ase", "master", "oem_qualified"],
       community_content_status: ["active", "hidden", "archived"],
+      community_event_rsvp_status: ["going", "interested", "not_going"],
+      community_event_status: ["scheduled", "cancelled", "completed", "removed"],
+      community_event_type: ["car_meet", "track_day", "car_show", "shop_event", "group_drive"],
       community_feed_filter: ["all", "friends", "my_cars"],
       community_post_audience: ["public", "friends"],
       community_post_assembly_state: ["assembling", "submitted", "finalized"],
@@ -6432,6 +6661,8 @@ export const Constants = {
         "group_join_decision",
         "saved_listing_updated",
         "build_update",
+        "event_cancelled",
+        "event_update",
       ],
       saved_collection_entity_type: ["post", "listing", "vehicle", "build"],
       org_member_role: ["technician", "manager"],

@@ -54,6 +54,14 @@ describe("notification deep links (plan 22.1)", () => {
     assert.equal(notificationWebPath(intent), "/vehicle/v1?tab=build#build-b1");
   });
 
+  test("event changes open the permission-checked event detail", () => {
+    for (const type of ["event_cancelled", "event_update"]) {
+      const intent = notificationDestinationIntent(type, { event_id: "e1", post_id: "p1" });
+      assert.deepEqual(intent, { kind: "event", id: "e1", secondaryId: "p1" });
+      assert.equal(notificationWebPath(intent), "/community/events/e1");
+    }
+  });
+
   test("group invitations, requests, and decisions open the group (plan 13.3)", () => {
     for (const type of ["group_invitation", "group_join_request", "group_join_decision", "group_role_changed"]) {
       assert.deepEqual(notificationDestinationIntent(type, { group_slug: "e30-owners", group_id: "g1" }), {

@@ -320,7 +320,7 @@ enum CommunityAPI {
     }
 
     enum SearchTab: String, CaseIterable, Identifiable {
-        case posts, people, groups, vehicles, listings, technicians
+        case posts, people, groups, vehicles, listings, technicians, events
         var id: String { rawValue }
         var label: String { rawValue.capitalized }
     }
@@ -333,6 +333,7 @@ enum CommunityAPI {
         case vehicles([SearchVehicleResult])
         case listings([SearchListingResult])
         case technicians([SearchTechnicianResult])
+        case events([CommunityEventSummary])
 
         var isEmpty: Bool {
             switch self {
@@ -342,6 +343,7 @@ enum CommunityAPI {
             case .vehicles(let items): items.isEmpty
             case .listings(let items): items.isEmpty
             case .technicians(let items): items.isEmpty
+            case .events(let items): items.isEmpty
             }
         }
     }
@@ -385,11 +387,60 @@ enum CommunityAPI {
         case .vehicles: return try await load(SearchVehicleResult.self) { .vehicles($0) }
         case .listings: return try await load(SearchListingResult.self) { .listings($0) }
         case .technicians: return try await load(SearchTechnicianResult.self) { .technicians($0) }
+        case .events: return try await load(CommunityEventSummary.self) { .events($0) }
         }
     }
 
     static func groups() async throws -> CommunityGroupDirectory {
         try await APIClient.shared.get("/api/community/groups")
+    }
+
+    static func events(includePast: Bool = false) async throws -> CommunityEventDirectory {
+        try await APIClient.shared.get(
+            "/api/community/events",
+            query: [URLQueryItem(name: "includePast", value: includePast ? "true" : "false")]
+        )
+    }
+
+    static func event(id: String) async throws -> CommunityEventDetail {
+        try await APIClient.shared.get("/api/community/events/\(id)")
+    }
+
+    static func createEvent(_ payload: CommunityEventCreatePayload) async throws -> CommunityEventCreateResult {
+        try await APIClient.shared.postCamel("/api/community/events", body: payload)
+    }
+
+    private struct EventRsvpPayload: Encodable { let status: String }
+
+    static func setEventRsvp(id: String, status: String) async throws -> CommunityEventRsvpResult {
+        try await APIClient.shared.postCamel(
+            "/api/community/events/\(id)/rsvp",
+            body: EventRsvpPayload(status: status)
+        )
+    }
+
+    private struct EventCancelPayload: Encodable { let reason: String }
+    struct EventCancelResult: Decodable { let cancelled: Bool }
+
+    static func cancelEvent(id: String, reason: String) async throws -> EventCancelResult {
+        try await APIClient.shared.postCamel(
+            "/api/community/events/\(id)/cancel",
+            body: EventCancelPayload(reason: reason)
+        )
+    }
+
+    private struct EventUpdatePayload: Encodable { let content: String }
+    struct EventUpdateResult: Decodable {
+        let id: String
+        let commentId: String
+        let moderationStatus: String
+    }
+
+    static func addEventUpdate(id: String, content: String) async throws -> EventUpdateResult {
+        try await APIClient.shared.postCamel(
+            "/api/community/events/\(id)/updates",
+            body: EventUpdatePayload(content: content)
+        )
     }
 
     static func group(slug: String, page: Int = 1) async throws -> CommunityGroupDetail {

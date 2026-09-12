@@ -10,6 +10,7 @@ struct CommunityFeedView: View {
     @State private var showingMyPosts = false
     @State private var showingGuidelines = false
     @State private var showingGroups = false
+    @State private var showingEvents = false
     @State private var showingSearch = false
     @State private var showingSaved = false
     @State private var showingNotifications = false
@@ -34,6 +35,9 @@ struct CommunityFeedView: View {
         }
         .sheet(isPresented: $showingGroups) {
             CommunityGroupsView()
+        }
+        .sheet(isPresented: $showingEvents) {
+            CommunityEventsView()
         }
         .sheet(isPresented: $showingComposer) {
             NewCommunityPostView {
@@ -139,6 +143,13 @@ struct CommunityFeedView: View {
                     } label: {
                         let waiting = auth.badges.groupsTotal
                         Label(waiting > 0 ? "Groups · \(waiting) waiting" : "Groups", systemImage: "person.3")
+                    }
+                }
+                if auth.capabilities.capabilities.events {
+                    Button {
+                        showingEvents = true
+                    } label: {
+                        Label("Events", systemImage: "calendar.badge.clock")
                     }
                 }
                 Button {
@@ -1819,4 +1830,401 @@ private struct MarketplaceListingMiniCard: View {
         .background(Theme.Palette.subtle)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
+}
+
+// MARK: - Community Events
+
+struct CommunityEventsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var reloadToken = UUID()
+    @State private var showingCreate = false
+
+    var body: some View {
+        NavigationStack {
+            AsyncContent(
+                load: { try await CommunityAPI.events() },
+                loaded: { directory in
+                    Group {
+                        if !directory.enabled {
+                            EmptyStateCard(
+                                title: "Events are unavailable",
+                                message: "Community events are temporarily paused.",
+                                systemImage: "calendar.badge.exclamationmark"
+                            )
+                            .padding()
+                        } else if directory.events.isEmpty {
+                            EmptyStateCard(
+                                title: "No upcoming events",
+                                message: "Create the first safe get-together for your community.",
+                                systemImage: "calendar.badge.plus"
+                            )
+                            .padding()
+                        } else {
+                            List(directory.events) { event in
+                                NavigationLink {
+                                    CommunityEventDetailView(eventId: event.id)
+                                } label: {
+                                    CommunityEventRow(event: event)
+                                }
+                            }
+                            .listStyle(.insetGrouped)
+                        }
+                    }
+                },
+                failure: { error, retry in
+                    ErrorView(message: error.localizedDescription, retry: retry)
+                }
+            )
+            .id(reloadToken)
+            .navigationTitle("Events")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingCreate = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Create event")
+                }
+            }
+            .sheet(isPresented: $showingCreate) {
+                CommunityEventCreateView {
+                    reloadToken = UUID()
+                }
+            }
+        }
+    }
+}
+
+struct CommunityEventRow: View {
+    let event: CommunityEventSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text(eventTypeLabel(event.eventType))
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Theme.Palette.primary)
+                if event.status == "cancelled" {
+                    Text("Cancelled").font(.caption.weight(.bold)).foregroundStyle(Theme.Palette.danger)
+                }
+                Spacer()
+                if event.isOrganizer { Text("You organize").font(.caption2).foregroundStyle(.secondary) }
+            }
+            Text(event.title).font(.headline)
+            Label(event.startsAt.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
+                .font(.subheadline)
+            Label(event.generalLocation, systemImage: "mappin.and.ellipse")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("\(event.goingCount) going · \(event.interestedCount) interested"
+                 + (event.capacity.map { " · \($0) capacity" } ?? ""))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 5)
+    }
+}
+
+private struct CommunityEventCreateView: View {
+    @Environment(\.dismiss) private var dismiss
+    let onCreated: () -> Void
+
+    @State private var title = ""
+    @State private var description = ""
+    @State private var eventType = "car_meet"
+    @State private var startsAt = Date().addingTimeInterval(24 * 60 * 60)
+    @State private var endsAt = Date().addingTimeInterval(26 * 60 * 60)
+    @State private var generalLocation = ""
+    @State private var exactLocation = ""
+    @State private var capacity = ""
+    @State private var requirements = ""
+    @State private var groupId = ""
+    @State private var clientRequestId = UUID().uuidString
+    @State private var groups: [CommunityGroupSummary] = []
+    @State private var submitting = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Event") {
+                    TextField("Title", text: $title)
+                    Picker("Type", selection: $eventType) {
+                        ForEach(["car_meet", "track_day", "car_show", "shop_event", "group_drive"], id: \.self) {
+                            Text(eventTypeLabel($0)).tag($0)
+                        }
+                    }
+                    Picker("Group", selection: $groupId) {
+                        Text("Community-wide").tag("")
+                        ForEach(groups) { group in Text(group.name).tag(group.id) }
+                    }
+                    TextField("Description", text: $description, axis: .vertical).lineLimit(3...6)
+                }
+                Section("Schedule") {
+                    DatePicker("Starts", selection: $startsAt, in: Date().addingTimeInterval(30 * 60)...)
+                    DatePicker("Ends", selection: $endsAt, in: startsAt...)
+                }
+                Section("Location privacy") {
+                    TextField("General area, e.g. Midtown Atlanta", text: $generalLocation)
+                    TextField("Exact attendee instructions", text: $exactLocation, axis: .vertical).lineLimit(2...5)
+                    Text("Only you and members marked Going receive the exact instructions.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Section("Details") {
+                    TextField("Capacity, optional", text: $capacity).keyboardType(.numberPad)
+                    TextField("Requirements, optional", text: $requirements, axis: .vertical).lineLimit(2...4)
+                }
+                Section {
+                    Label("Free events only. Street racing, takeovers, unsafe public-road driving, and live attendee tracking are prohibited.", systemImage: "shield.checkered")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if let error { Section { Text(error).foregroundStyle(Theme.Palette.danger) } }
+            }
+            .navigationTitle("New Event")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(submitting ? "Creating..." : "Create") { Task { await create() } }
+                        .disabled(submitting || !canSubmit)
+                }
+            }
+            .task {
+                guard groups.isEmpty else { return }
+                if let directory = try? await CommunityAPI.groups() {
+                    groups = directory.groups.filter {
+                        $0.isMember && ($0.postingPolicy == "members" || $0.membershipRole != "member")
+                    }
+                }
+            }
+        }
+    }
+
+    private var canSubmit: Bool {
+        title.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3
+            && description.trimmingCharacters(in: .whitespacesAndNewlines).count >= 10
+            && !generalLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !exactLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && endsAt > startsAt
+    }
+
+    @MainActor
+    private func create() async {
+        guard !submitting else { return }
+        submitting = true
+        defer { submitting = false }
+        do {
+            _ = try await CommunityAPI.createEvent(.init(
+                clientRequestId: clientRequestId,
+                title: title,
+                description: description,
+                eventType: eventType,
+                startsAt: startsAt,
+                endsAt: endsAt,
+                generalLocation: generalLocation,
+                exactLocation: exactLocation,
+                capacity: Int(capacity),
+                requirements: requirements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : requirements,
+                groupId: groupId.isEmpty ? nil : groupId
+            ))
+            onCreated()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+struct CommunityEventDetailView: View {
+    let eventId: String
+    @State private var reloadToken = UUID()
+    @State private var busy = false
+    @State private var update = ""
+    @State private var cancellationReason = ""
+    @State private var showingCancellation = false
+    @State private var reportTarget: ReportTarget?
+    @State private var reportConfirmed = false
+    @State private var error: String?
+
+    var body: some View {
+        AsyncContent(
+            load: { try await CommunityAPI.event(id: eventId) },
+            loaded: { event in eventContent(event) },
+            failure: { error, retry in ErrorView(message: error.localizedDescription, retry: retry) }
+        )
+        .id(reloadToken)
+        .navigationTitle("Event")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $reportTarget) { target in
+            CommunityReportSheet { reasonCode, details in
+                await submitReport(target: target, reasonCode: reasonCode, details: details)
+            }
+        }
+        .alert("Cancel event", isPresented: $showingCancellation) {
+            TextField("Reason for attendees", text: $cancellationReason)
+            Button("Keep event", role: .cancel) {}
+            Button("Cancel and notify", role: .destructive) { Task { await cancelEvent() } }
+                .disabled(cancellationReason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3)
+        } message: {
+            Text("Going and Interested members will receive a cancellation notification.")
+        }
+        .alert("Event error", isPresented: .constant(error != nil)) {
+            Button("OK") { error = nil }
+        } message: { Text(error ?? "Please try again.") }
+        .alert("Report received", isPresented: $reportConfirmed) {
+            Button("OK", role: .cancel) { reloadToken = UUID() }
+        } message: { Text("The event announcement is hidden while it is reviewed.") }
+    }
+
+    @ViewBuilder
+    private func eventContent(_ event: CommunityEventDetail) -> some View {
+        let updates = (event.announcement.comments ?? []).filter { event.officialUpdateCommentIds.contains($0.id) }
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text(eventTypeLabel(event.eventType)).font(.caption.weight(.bold)).foregroundStyle(Theme.Palette.primary)
+                        if event.status == "cancelled" { Text("Cancelled").font(.caption.weight(.bold)).foregroundStyle(Theme.Palette.danger) }
+                    }
+                    Text(event.title).font(.title2.bold())
+                    Text(eventDescription(event.announcement.content)).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 6)
+            }
+            Section("When and general area") {
+                Label(event.startsAt.formatted(date: .complete, time: .shortened), systemImage: "calendar")
+                Label(event.endsAt.formatted(date: .complete, time: .shortened), systemImage: "clock")
+                Label(event.generalLocation, systemImage: "mappin.and.ellipse")
+                Text("\(event.goingCount) going · \(event.interestedCount) interested"
+                     + (event.capacity.map { " · \($0) capacity" } ?? ""))
+                    .foregroundStyle(.secondary)
+            }
+            if let requirements = event.requirements {
+                Section("Requirements") { Text(requirements) }
+            }
+            if let exact = event.exactLocation {
+                Section("Private attendee instructions") {
+                    Label(exact, systemImage: "lock.fill")
+                    Text("Do not repost these instructions publicly.").font(.caption).foregroundStyle(.secondary)
+                }
+            } else if event.status == "scheduled" && !event.isOrganizer {
+                Section("Exact instructions") {
+                    Label("Mark Going to unlock the address and arrival details.", systemImage: "lock")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if event.status == "cancelled" {
+                Section("Cancelled") { Text(event.cancellationReason ?? "The organizer cancelled this event.") }
+            } else if !event.isOrganizer {
+                Section("RSVP") {
+                    rsvpButtons(event)
+                }
+            }
+            if !updates.isEmpty {
+                Section("Organizer updates") {
+                    ForEach(updates) { item in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.content)
+                            if let date = item.createdAt { Text(date, style: .relative).font(.caption).foregroundStyle(.secondary) }
+                        }
+                    }
+                }
+            }
+            Section("Organizer") {
+                Text(event.organizer.displayName ?? event.organizer.username ?? "PerfectPPI member")
+                if let username = event.organizer.username {
+                    NavigationLink("@\(username)") { MemberProfileView(username: username) }
+                }
+            }
+            Section("Discussion and safety") {
+                NavigationLink("Open event discussion") {
+                    CommunityPostDetailView(post: event.announcement) { reloadToken = UUID() }
+                }
+                if let context = event.announcement.reportContext {
+                    Button(role: .destructive) {
+                        reportTarget = .init(entityType: "community_post", entityId: event.announcement.id, contextToken: context)
+                    } label: { Label("Report event", systemImage: "flag") }
+                }
+                Label("PerfectPPI does not verify or supervise organizers. Use lawful roads and follow venue rules.", systemImage: "shield.checkered")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            if event.isOrganizer && event.status == "scheduled" {
+                Section("Organizer tools") {
+                    TextField("Weather, timing, or parking update", text: $update, axis: .vertical).lineLimit(2...5)
+                    Button("Post update") { Task { await postUpdate() } }
+                        .disabled(busy || update.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("Cancel event", role: .destructive) { showingCancellation = true }
+                        .disabled(busy)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    private func rsvpButtons(_ event: CommunityEventDetail) -> some View {
+        HStack {
+            ForEach([("going", "Going"), ("interested", "Interested"), ("not_going", "Not Going")], id: \.0) { value, label in
+                if event.viewerRsvp == value {
+                    Button(label) { Task { await setRsvp(value) } }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(busy || event.startsAt <= Date())
+                } else {
+                    Button(label) { Task { await setRsvp(value) } }
+                        .buttonStyle(.bordered)
+                        .disabled(busy || event.startsAt <= Date())
+                }
+            }
+        }
+    }
+
+    @MainActor private func setRsvp(_ status: String) async {
+        busy = true
+        defer { busy = false }
+        do { _ = try await CommunityAPI.setEventRsvp(id: eventId, status: status); reloadToken = UUID() }
+        catch { self.error = error.localizedDescription }
+    }
+
+    @MainActor private func postUpdate() async {
+        busy = true
+        defer { busy = false }
+        do { _ = try await CommunityAPI.addEventUpdate(id: eventId, content: update); update = ""; reloadToken = UUID() }
+        catch { self.error = error.localizedDescription }
+    }
+
+    @MainActor private func cancelEvent() async {
+        busy = true
+        defer { busy = false }
+        do { _ = try await CommunityAPI.cancelEvent(id: eventId, reason: cancellationReason); reloadToken = UUID() }
+        catch { self.error = error.localizedDescription }
+    }
+
+    @MainActor private func submitReport(target: ReportTarget, reasonCode: String, details: String?) async -> Bool {
+        do {
+            let _: Empty = try await CommunityAPI.report(entityType: target.entityType, entityId: target.entityId, reasonCode: reasonCode, details: details, contextToken: target.contextToken)
+            reportConfirmed = true
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
+        }
+    }
+}
+
+private func eventTypeLabel(_ value: String) -> String {
+    switch value {
+    case "car_meet": "Car meet"
+    case "track_day": "Track day"
+    case "car_show": "Car show"
+    case "shop_event": "Shop event"
+    case "group_drive": "Group drive"
+    default: "Event"
+    }
+}
+
+private func eventDescription(_ announcement: String) -> String {
+    let paragraphs = announcement.components(separatedBy: "\n\n")
+    return paragraphs.count > 1 ? paragraphs[1] : announcement
 }

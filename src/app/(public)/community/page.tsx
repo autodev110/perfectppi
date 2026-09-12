@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getCommunityPosts } from "@/features/community/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, Users, Warehouse, Bookmark } from "lucide-react";
+import { Plus, Search, Users, Warehouse, Bookmark, CalendarDays } from "lucide-react";
 import { requireRole } from "@/features/auth/guards";
 import { CommunityPostArticle } from "@/components/shared/community-post-article";
 import { getFeatureFlags, toClientCapabilities } from "@/lib/feature-flags";
@@ -89,6 +89,14 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                 <Link href="/community/groups">
                   <Warehouse className="mr-2 h-4 w-4" />
                   Groups
+                </Link>
+              </Button>
+            ) : null}
+            {capabilities.capabilities.events ? (
+              <Button asChild variant="outline" className="h-12 rounded-xl px-6">
+                <Link href="/community/events">
+                  <CalendarDays className="mr-2 h-4 w-4" />
+                  Events
                 </Link>
               </Button>
             ) : null}

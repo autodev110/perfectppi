@@ -127,6 +127,15 @@ async function intentAvailable(intent: NotificationDestinationIntent, viewerId: 
         .maybeSingle();
       return !!data;
     }
+    case "event": {
+      if (!intent.id || !(await getFeatureFlags()).flags.events) return false;
+      const { data } = await admin.rpc("social_can_view_community_event", {
+        p_viewer_id: viewerId,
+        p_event_id: intent.id,
+        p_include_cancelled: true,
+      });
+      return data === true;
+    }
     case "moderation_case": {
       const { data } = await admin.rpc("moderation_has_capability", {
         p_profile_id: viewerId,

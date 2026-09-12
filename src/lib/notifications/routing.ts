@@ -13,6 +13,7 @@ export type NotificationDestinationKind =
   | "listing_vehicle"
   | "marketplace_search"
   | "vehicle_build"
+  | "event"
   | "my_posts"
   | "moderation_case"
   | "organization"
@@ -31,7 +32,7 @@ export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
 export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, { label: string; description: string; locked: boolean }> = {
   social: { label: "Community", description: "Friend requests, comments, mentions, likes, accepted answers, and saved vehicle build updates.", locked: false },
-  groups: { label: "Groups", description: "Invitations, join requests and decisions, moderator actions on your group posts, and role changes.", locked: false },
+  groups: { label: "Groups & events", description: "Group invitations and decisions, moderator actions, and updates or cancellations for events you follow.", locked: false },
   messages: { label: "Messages", description: "New direct messages.", locked: false },
   marketplace: { label: "Marketplace", description: "Inquiries and inspection requests on your listings, changes to listings you saved, and new matches for saved searches.", locked: false },
   inspections: { label: "Inspections", description: "Technician assignments and report updates.", locked: false },
@@ -80,6 +81,9 @@ export function notificationDestinationIntent(
     case "group_join_request":
     case "group_join_decision":
       return { kind: "group", id: str(d.group_slug), secondaryId: str(d.group_id) };
+    case "event_cancelled":
+    case "event_update":
+      return { kind: "event", id: str(d.event_id), secondaryId: str(d.post_id) };
     case "moderation_case":
       return { kind: "moderation_case", id: str(d.caseId), secondaryId: null };
     case "tech_request_new":
@@ -103,6 +107,8 @@ export function notificationWebPath(intent: NotificationDestinationIntent, messa
       return intent.id ? `/community/posts/${encodeURIComponent(intent.id)}` : "/community";
     case "group":
       return intent.id ? `/community/groups/${encodeURIComponent(intent.id)}` : "/community/groups";
+    case "event":
+      return intent.id ? `/community/events/${encodeURIComponent(intent.id)}` : "/community/events";
     case "profile":
       return intent.id ? `/profile/${encodeURIComponent(intent.id)}` : "/dashboard/friends";
     case "friends":

@@ -864,6 +864,100 @@ struct CommunityGroupSearchPage: Codable {
     let hasMore: Bool
 }
 
+// MARK: - Community Events
+
+struct CommunityEventOrganizer: Codable, Hashable {
+    let id: String
+    let username: String?
+    let displayName: String?
+    let avatarUrl: String?
+}
+
+struct CommunityEventGroup: Codable, Hashable {
+    let id: String
+    let slug: String
+    let name: String
+}
+
+struct CommunityEventSummary: Codable, Identifiable, Hashable {
+    let id: String
+    let announcementPostId: String
+    let groupId: String?
+    let eventType: String
+    let title: String
+    let startsAt: Date
+    let endsAt: Date
+    let generalLocation: String
+    let exactLocation: String?
+    let capacity: Int?
+    let requirements: String?
+    let status: String
+    let cancellationReason: String?
+    let organizer: CommunityEventOrganizer
+    let group: CommunityEventGroup?
+    let goingCount: Int
+    let interestedCount: Int
+    let viewerRsvp: String?
+    let isOrganizer: Bool
+}
+
+struct CommunityEventDirectory: Codable, Hashable {
+    let enabled: Bool
+    let events: [CommunityEventSummary]
+}
+
+struct CommunityEventDetail: Codable, Hashable {
+    let id: String
+    let announcementPostId: String
+    let groupId: String?
+    let eventType: String
+    let title: String
+    let startsAt: Date
+    let endsAt: Date
+    let generalLocation: String
+    let exactLocation: String?
+    let capacity: Int?
+    let requirements: String?
+    let status: String
+    let cancellationReason: String?
+    let organizer: CommunityEventOrganizer
+    let group: CommunityEventGroup?
+    let goingCount: Int
+    let interestedCount: Int
+    let viewerRsvp: String?
+    let isOrganizer: Bool
+    let announcement: CommunityPost
+    let officialUpdateCommentIds: [String]
+}
+
+struct CommunityEventCreatePayload: Encodable {
+    let clientRequestId: String
+    let title: String
+    let description: String
+    let eventType: String
+    let startsAt: Date
+    let endsAt: Date
+    let generalLocation: String
+    let exactLocation: String
+    let capacity: Int?
+    let requirements: String?
+    let groupId: String?
+}
+
+struct CommunityEventCreateResult: Decodable {
+    let id: String
+    let announcementPostId: String
+    let moderationStatus: String
+}
+
+struct CommunityEventRsvpResult: Decodable {
+    let eventId: String
+    let status: String
+    let goingCount: Int
+    let interestedCount: Int
+    let exactLocation: String?
+}
+
 struct CommunityPostOptionVehicle: Codable, Identifiable, Hashable {
     let id: String
     let year: Int?
