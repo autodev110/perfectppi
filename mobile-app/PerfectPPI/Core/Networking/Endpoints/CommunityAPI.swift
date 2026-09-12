@@ -323,12 +323,14 @@ enum CommunityAPI {
 
     /// Unified search (plan 27.2); the server applies visibility before
     /// returning anything.
+    @MainActor
     static func search(_ query: String, tab: SearchTab, page: Int = 1) async throws -> SearchPage {
         let params = [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "tab", value: tab.rawValue),
             URLQueryItem(name: "page", value: String(max(page, 1))),
         ]
+        @MainActor
         func load<Item: Decodable>(_: Item.Type, wrap: ([Item]) -> SearchResults) async throws -> SearchPage {
             let envelope: SearchEnvelope<Item> = try await APIClient.shared.get("/api/community/search", query: params)
             return SearchPage(tab: tab, query: envelope.query, page: envelope.page, hasMore: envelope.hasMore,

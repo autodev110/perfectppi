@@ -245,6 +245,40 @@ enum MarketplaceAPI {
         )
     }
 
+    static func inspectionSharing(listingId: String, previewRequestId: String? = nil) async throws -> MarketplaceInspectionSharing {
+        let query = previewRequestId.map { [URLQueryItem(name: "preview", value: $0)] } ?? []
+        return try await APIClient.shared.get(
+            "/api/marketplace/listings/\(listingId)/inspection",
+            query: query
+        )
+    }
+
+    private struct AttachInspectionPayload: Encodable {
+        let requestId: String?
+
+        enum CodingKeys: String, CodingKey { case requestId }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            if let requestId {
+                try container.encode(requestId, forKey: .requestId)
+            } else {
+                try container.encodeNil(forKey: .requestId)
+            }
+        }
+    }
+
+    struct AttachInspectionResult: Decodable {
+        let attachedInspectionId: String?
+    }
+
+    static func attachInspection(listingId: String, requestId: String?) async throws -> AttachInspectionResult {
+        try await APIClient.shared.post(
+            "/api/marketplace/listings/\(listingId)/inspection",
+            body: AttachInspectionPayload(requestId: requestId)
+        )
+    }
+
     struct SavePayload: Encodable { let saved: Bool }
     struct SaveResult: Decodable {
         let listingId: String

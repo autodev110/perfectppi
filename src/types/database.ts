@@ -2141,9 +2141,11 @@ export type Database = {
       marketplace_listings: {
         Row: {
           asking_price_cents: number
+          attached_inspection_id: string | null
           created_at: string
           description: string | null
           id: string
+          inspection_shared_at: string | null
           location: string | null
           removed_at: string | null
           seller_id: string
@@ -2154,9 +2156,11 @@ export type Database = {
         }
         Insert: {
           asking_price_cents: number
+          attached_inspection_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
+          inspection_shared_at?: string | null
           location?: string | null
           removed_at?: string | null
           seller_id: string
@@ -2167,9 +2171,11 @@ export type Database = {
         }
         Update: {
           asking_price_cents?: number
+          attached_inspection_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
+          inspection_shared_at?: string | null
           location?: string | null
           removed_at?: string | null
           seller_id?: string
@@ -4663,6 +4669,26 @@ export type Database = {
       marketplace_seller_history: {
         Args: { p_seller_id: string }
         Returns: { active_count: number; sold_count: number; first_listed_at: string | null }[]
+      }
+      list_attachable_listing_inspections: {
+        Args: { p_actor_profile_id: string; p_listing_id: string }
+        Returns: {
+          request_id: string
+          scope: Database["public"]["Enums"]["inspection_scope"]
+          inspected_at: string
+          performer_type: Database["public"]["Enums"]["performer_type"]
+          performed_by: string
+          request_status: Database["public"]["Enums"]["ppi_request_status"]
+          attached: boolean
+        }[]
+      }
+      attach_listing_inspection: {
+        Args: { p_actor_profile_id: string; p_listing_id: string; p_request_id: string | null }
+        Returns: Database["public"]["Tables"]["marketplace_listings"]["Row"]
+      }
+      marketplace_inspection_report: {
+        Args: { p_viewer_id: string | null; p_request_id: string }
+        Returns: Json
       }
       set_marketplace_listing_status: {
         Args: { p_actor_profile_id: string; p_listing_id: string; p_status: Database["public"]["Enums"]["listing_status"] }

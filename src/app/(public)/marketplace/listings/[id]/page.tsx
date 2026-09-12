@@ -7,6 +7,7 @@ import { getCurrentSocialProfileId } from "@/features/social/relationships";
 import { ListingGallery } from "@/components/shared/listing-gallery";
 import { ListingManagePanel } from "@/components/shared/listing-manage-panel";
 import { ListingSaveButton } from "@/components/shared/listing-save-button";
+import { InspectionReportCard } from "@/components/shared/inspection-report-card";
 import { ShareButton } from "@/components/shared/share-button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import { formatCurrency, formatDate, formatMileage, getInitials } from "@/lib/ut
 import { NEUTRAL_SHARE_CARD, shareCardTitle, sharePath } from "@/lib/share/links";
 import { LISTING_STATUS_LABELS, isListingPublic } from "@/lib/marketplace/listing-status";
 import { SELLER_TYPE_LABELS } from "@/lib/marketplace/filters";
+import { inspectionAge } from "@/lib/marketplace/inspection-report";
 import {
   ArrowLeft,
   ArrowRight,
@@ -101,9 +103,9 @@ export default async function MarketplaceListingPage({ params, searchParams }: P
             <div className="flex flex-wrap items-center gap-2">
               {listing.status === "pending" ? <Badge className="bg-warning/15 text-on-surface hover:bg-warning/15">Sale pending</Badge> : null}
               {listing.inspection_summary ? (
-                <Badge className="gap-1.5 bg-teal/10 text-teal hover:bg-teal/10">
+                <Badge className={`gap-1.5 hover:bg-teal/10 ${inspectionAge(listing.inspection_summary.inspected_at).stale ? "bg-warning/15 text-on-surface" : "bg-teal/10 text-teal"}`}>
                   <ClipboardCheck className="h-3.5 w-3.5" />
-                  {listing.inspection_summary.scope === "dents_tires" ? "Dents & Tires" : "Complete"} inspection · {formatDate(listing.inspection_summary.inspected_at)}
+                  {listing.inspection_summary.scope === "dents_tires" ? "Dents & Tires (limited)" : "Complete"} inspection · {inspectionAge(listing.inspection_summary.inspected_at).label}
                 </Badge>
               ) : null}
             </div>
@@ -124,30 +126,32 @@ export default async function MarketplaceListingPage({ params, searchParams }: P
             </div>
           </section>
 
-          {/* 4. Inspection card */}
+          {/* 4. Inspection card: the seller-shared, redacted report (plan 25.3) */}
           <section className="rounded-[1.5rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
-            <h2 className="flex items-center gap-2 font-heading text-lg font-extrabold tracking-tight">
-              <ClipboardCheck className="h-5 w-5 text-teal" />Inspection
-            </h2>
-            {listing.inspection_summary ? (
-              <div className="mt-3 space-y-2 text-sm">
-                <dl className="grid gap-x-6 gap-y-1 sm:grid-cols-3">
-                  <div><dt className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Scope</dt><dd className="font-semibold">{listing.inspection_summary.scope === "dents_tires" ? "Dents & Tires" : "Complete inspection"}</dd></div>
-                  <div><dt className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Inspected</dt><dd className="font-semibold">{formatDate(listing.inspection_summary.inspected_at)}</dd></div>
-                  <div><dt className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Performed by</dt><dd className="font-semibold">{listing.inspection_summary.performed_by}</dd></div>
-                </dl>
-                <p className="text-xs text-on-surface-variant">
-                  Findings describe the vehicle on that date and are not a guarantee of its condition today. A limited scope covers only what it names.
-                  {isOwner ? (
-                    <> <Link href={`/dashboard/ppi/${listing.inspection_summary.request_id}`} className="font-semibold text-primary">Open your full report</Link>.</>
-                  ) : (
-                    <> The full report, technician notes, VIN, and private media are not shared publicly.</>
-                  )}
-                </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 font-heading text-lg font-extrabold tracking-tight">
+                <ClipboardCheck className="h-5 w-5 text-teal" />Inspection
+              </h2>
+              {isOwner ? (
+                <Link href={`/dashboard/listings/${listing.id}/inspection`} className="text-xs font-bold text-primary">
+                  {listing.inspection_report ? "Manage sharing" : "Share an inspection"}
+                </Link>
+              ) : null}
+            </div>
+            {listing.inspection_report ? (
+              <div className="mt-4">
+                <InspectionReportCard report={listing.inspection_report} />
+                {isOwner ? (
+                  <p className="mt-3 text-xs text-on-surface-variant">
+                    Buyers see exactly this. <Link href={`/dashboard/ppi/${listing.inspection_report.request_id}`} className="font-semibold text-primary">Open your full report</Link>.
+                  </p>
+                ) : null}
               </div>
             ) : (
               <p className="mt-3 text-sm text-on-surface-variant">
-                No PerfectPPI inspection is on record for this vehicle.{canContact ? " You can request an independent one below." : ""}
+                {isOwner
+                  ? "You have not shared an inspection on this listing. Buyers rely on inspection context — share one you requested for this vehicle, or request one."
+                  : `The seller has not shared a PerfectPPI inspection for this vehicle.${canContact ? " You can request an independent one below." : ""}`}
               </p>
             )}
           </section>

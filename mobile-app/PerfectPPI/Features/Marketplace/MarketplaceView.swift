@@ -567,6 +567,7 @@ private struct MarketplaceListingDetailView: View {
     @State private var saving = false
     @State private var galleryIndex = 0
     @State private var editing = false
+    @State private var sharingInspection = false
     @State private var confirmingRemove = false
     @State private var managing = false
     @State private var removed = false
@@ -683,14 +684,30 @@ private struct MarketplaceListingDetailView: View {
                 }
 
                 section("Inspection") {
-                    if let inspection = listing.inspectionSummary {
+                    if isOwner {
+                        Button {
+                            sharingInspection = true
+                        } label: {
+                            Label(listing.inspectionReport == nil ? "Share an inspection" : "Manage inspection sharing", systemImage: "checkmark.seal")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                    }
+                    if let report = listing.inspectionReport {
+                        MarketplaceInspectionReportCard(report: report, preview: false)
+                        if isOwner {
+                            NavigationLink {
+                                ConsumerPpiDetailView(requestId: report.requestId)
+                            } label: {
+                                Label("Open your full private report", systemImage: "doc.text")
+                                    .font(.caption.weight(.semibold))
+                            }
+                        }
+                    } else if let inspection = listing.inspectionSummary {
                         VStack(alignment: .leading, spacing: 6) {
                             row("Scope", inspection.scope == .dentsTires ? "Dents & Tires" : "Complete inspection")
                             row("Inspected", inspection.inspectedAt.formatted(date: .abbreviated, time: .omitted))
                             row("Performed by", inspection.performedBy)
-                            Text(isOwner
-                                 ? "Findings describe the vehicle on that date. Open the request from your Inspections list for the full report."
-                                 : "Findings describe the vehicle on that date and are not a guarantee of its condition today. The full report, technician notes, VIN, and private media are not shared publicly.")
+                            Text("Structured findings are temporarily unavailable. The scope, date, and performer above still describe the inspection the seller shared.")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                             if isOwner {
@@ -805,6 +822,14 @@ private struct MarketplaceListingDetailView: View {
             EditListingView(listing: listing) {
                 onChanged()
                 Task { await refresh() }
+            }
+        }
+        .sheet(isPresented: $sharingInspection) {
+            NavigationStack {
+                MarketplaceInspectionSharingView(listingId: listing.id) {
+                    onChanged()
+                    Task { await refresh() }
+                }
             }
         }
         .confirmationDialog(
@@ -1105,6 +1130,353 @@ private struct MarketplaceListingDetailView: View {
         } catch {
             notice = error.localizedDescription
         }
+    }
+}
+
+/// Seller-facing redaction preview and attach/detach controls (plan 25.3).
+private struct MarketplaceInspectionSharingView: View {
+    let listingId: String
+    var onChanged: () -> Void
+
+    @State private var options: [MarketplaceAttachableInspection] = []
+    @State private var selectedRequestId: String?
+    @State private var attachedRequestId: String?
+    @State private var report: MarketplaceInspectionReport?
+    @State private var loading = true
+    @State private var saving = false
+    @State private var error: String?
+    @State private var notice: String?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.spacing) {
+                Text("Choose an inspection you requested for this vehicle. The preview below is exactly what buyers can see.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                if loading {
+                    ProgressView("Loading inspections…")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 36)
+                } else if options.isEmpty {
+                    EmptyStateCard(
+                        title: "No inspection to share",
+                        message: "A submitted or completed inspection you requested for this vehicle will appear here.",
+                        systemImage: "checklist"
+                    )
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(options) { option in
+                            Button {
+                                Task { await select(option) }
+                            } label: {
+                                HStack(alignment: .top, spacing: 10) {
+                                    Image(systemName: selectedRequestId == option.requestId ? "largecircle.fill.circle" : "circle")
+                                        .foregroundStyle(selectedRequestId == option.requestId ? Theme.Palette.primary : .secondary)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(scopeLabel(option.scope))
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.primary)
+                                        Text("\(option.inspectedAt.formatted(date: .abbreviated, time: .omitted)) · \(option.performedBy)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        if option.attached {
+                                            Text("Currently shared")
+                                                .font(.caption2.weight(.semibold))
+                                                .foregroundStyle(Theme.Palette.success)
+                                        }
+                                    }
+                                    Spacer()
+                                }
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Theme.Palette.subtle)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    HStack(spacing: 10) {
+                        Button {
+                            Task { await publish() }
+                        } label: {
+                            Text(saving ? "Updating…" : "Publish selection")
+                        }
+                        .buttonStyle(PrimaryButtonStyle(isLoading: saving))
+                        .disabled(selectedRequestId == nil || saving)
+
+                        if attachedRequestId != nil {
+                            Button("Stop sharing", role: .destructive) {
+                                Task { await stopSharing() }
+                            }
+                            .buttonStyle(OutlineButtonStyle())
+                            .disabled(saving)
+                        }
+                    }
+
+                    if let report {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("What buyers will see")
+                                .font(.headline)
+                            Text(selectedRequestId == attachedRequestId
+                                 ? "This inspection is currently shared on the listing."
+                                 : "Nothing changes until you publish this selection.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            MarketplaceInspectionReportCard(report: report, preview: true)
+                        }
+                    }
+                }
+
+                if let error {
+                    Text(error)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.red)
+                        .accessibilityLabel("Error: \(error)")
+                }
+                if let notice {
+                    Text(notice)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.Palette.success)
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("Inspection sharing")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") { dismiss() }
+            }
+        }
+        .task { await load() }
+    }
+
+    @MainActor
+    private func load() async {
+        loading = true
+        error = nil
+        defer { loading = false }
+        do {
+            let data = try await MarketplaceAPI.inspectionSharing(listingId: listingId)
+            options = data.options
+            attachedRequestId = data.attachedInspectionId
+            let initialSelection = data.attachedInspectionId ?? data.options.first?.requestId
+            selectedRequestId = initialSelection
+            if data.attachedInspectionId == nil, let initialSelection {
+                report = try await MarketplaceAPI.inspectionSharing(
+                    listingId: listingId,
+                    previewRequestId: initialSelection
+                ).report
+            } else {
+                report = data.report
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func select(_ option: MarketplaceAttachableInspection) async {
+        selectedRequestId = option.requestId
+        error = nil
+        do {
+            report = try await MarketplaceAPI.inspectionSharing(
+                listingId: listingId,
+                previewRequestId: option.requestId
+            ).report
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func publish() async {
+        guard let selectedRequestId, !saving else { return }
+        saving = true
+        error = nil
+        notice = nil
+        defer { saving = false }
+        do {
+            let result = try await MarketplaceAPI.attachInspection(
+                listingId: listingId,
+                requestId: selectedRequestId
+            )
+            attachedRequestId = result.attachedInspectionId
+            options = options.map { option in
+                MarketplaceAttachableInspection(
+                    requestId: option.requestId,
+                    scope: option.scope,
+                    inspectedAt: option.inspectedAt,
+                    performerType: option.performerType,
+                    performedBy: option.performedBy,
+                    requestStatus: option.requestStatus,
+                    attached: option.requestId == result.attachedInspectionId
+                )
+            }
+            notice = "Inspection sharing updated."
+            onChanged()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func stopSharing() async {
+        guard !saving else { return }
+        saving = true
+        error = nil
+        notice = nil
+        defer { saving = false }
+        do {
+            _ = try await MarketplaceAPI.attachInspection(listingId: listingId, requestId: nil)
+            attachedRequestId = nil
+            options = options.map { option in
+                MarketplaceAttachableInspection(
+                    requestId: option.requestId,
+                    scope: option.scope,
+                    inspectedAt: option.inspectedAt,
+                    performerType: option.performerType,
+                    performedBy: option.performedBy,
+                    requestStatus: option.requestStatus,
+                    attached: false
+                )
+            }
+            notice = "The inspection is no longer shared."
+            onChanged()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func scopeLabel(_ scope: InspectionScope) -> String {
+        scope == .dentsTires ? "Dents & Tires (limited scope)" : "Complete inspection"
+    }
+}
+
+/// Buyer-safe inspection projection. It intentionally never computes a score
+/// or pass/fail and names withheld prompts without showing their values.
+private struct MarketplaceInspectionReportCard: View {
+    let report: MarketplaceInspectionReport
+    let preview: Bool
+
+    private var stale: Bool {
+        report.inspectedAt < (Calendar.current.date(byAdding: .month, value: -12, to: Date()) ?? Date())
+    }
+
+    private var ageLabel: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: report.inspectedAt, relativeTo: Date())
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                reportRow("Scope", report.scope == .dentsTires ? "Dents & Tires (limited)" : "Complete inspection")
+                reportRow("Inspected", "\(report.inspectedAt.formatted(date: .abbreviated, time: .omitted)) · \(ageLabel)")
+                reportRow("Performed by", report.performedBy)
+            }
+
+            if stale || report.scope == .dentsTires {
+                Label(caveat, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(Theme.Palette.warning)
+            } else {
+                Text(caveat)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(report.sections) { section in
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if section.items.isEmpty {
+                            Text("No structured findings were recorded in this section.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(section.items) { item in
+                                reportRow(item.prompt, answer(item))
+                            }
+                        }
+                        if !section.withheld.isEmpty {
+                            Label("\(preview ? "Withheld from buyers" : "Not shared"): \(section.withheld.joined(separator: "; "))", systemImage: "eye.slash")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        if section.notesWithheld {
+                            Label("Section notes are \(preview ? "withheld from buyers" : "not shared").", systemImage: "eye.slash")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        if section.mediaCount > 0 {
+                            Label("\(section.mediaCount) photo\(section.mediaCount == 1 ? "" : "s") \(preview ? "stay private" : "not shared").", systemImage: "photo.badge.exclamationmark")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.top, 8)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(sectionLabel(section.sectionType))
+                            .font(.subheadline.weight(.semibold))
+                        Text("\(section.completionState == "completed" ? "" : "Not completed · ")\(section.items.count) finding\(section.items.count == 1 ? "" : "s")")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Divider()
+            }
+
+            Text("\(report.withheldCount) item\(report.withheldCount == 1 ? "" : "s") and \(report.mediaCount) photo\(report.mediaCount == 1 ? "" : "s") are withheld. Free-text notes, private media, VIN, addresses, and documents stay private. PerfectPPI does not turn an inspection into a score or pass/fail.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var caveat: String {
+        var parts: [String] = []
+        if report.scope == .dentsTires {
+            parts.append("This inspection covered dents, body damage, wheels, and tires only.")
+        }
+        if stale {
+            parts.append("This inspection is over a year old, so the vehicle's condition may have changed.")
+        }
+        parts.append("Findings describe the vehicle on that date and are not a guarantee of its condition now.")
+        return parts.joined(separator: " ")
+    }
+
+    private func reportRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .top) {
+            Text(label).foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+            Text(value).fontWeight(.medium).multilineTextAlignment(.trailing)
+        }
+        .font(.caption)
+    }
+
+    private func answer(_ item: MarketplaceInspectionReportItem) -> String {
+        guard item.answerType == "yes_no" else { return item.value }
+        switch item.value.lowercased() {
+        case "yes", "true", "1": return "Yes"
+        case "no", "false", "0": return "No"
+        default: return item.value
+        }
+    }
+
+    private func sectionLabel(_ raw: String) -> String {
+        let labels = [
+            "vehicle_basics": "Vehicle Basics", "dashboard_warnings": "Dashboard & Warnings",
+            "exterior": "Exterior", "interior": "Interior", "engine_bay": "Engine Bay",
+            "tires_brakes": "Tires & Brakes", "suspension_steering": "Suspension & Steering",
+            "fluids": "Fluids", "electrical_controls": "Electrical & Controls",
+            "underbody": "Underbody", "road_test": "Road Test", "modifications": "Modifications",
+            "wheels_tires": "Wheels & Tires", "body_damage": "Body Damage"
+        ]
+        return labels[raw] ?? raw.replacingOccurrences(of: "_", with: " ").capitalized
     }
 }
 

@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createConversation, sendMessage } from "@/features/messages/actions";
 import { getMessagesBasePath } from "@/features/auth/routing";
 import { listingLifecycleMessage } from "@/lib/marketplace/listing-status";
+import { attachListingInspection } from "@/features/marketplace/inspection-sharing";
 
 const createListingSchema = z.object({
   vehicle_id: z.string().uuid("Choose a vehicle to list"),
@@ -175,6 +176,18 @@ export async function removeMarketplaceListing(listingId: string) {
 
   revalidateListing(listingId, before?.vehicle_id);
   return { success: true, mode: data as "soft" | "hard" };
+}
+
+/** Owner shares (or stops sharing) an inspection on the listing (plan 25.3). */
+export async function attachListingInspectionFromForm(formData: FormData) {
+  const listingId = String(formData.get("listing_id") ?? "");
+  const requestId = String(formData.get("request_id") ?? "");
+  if (!z.string().uuid().safeParse(listingId).success) return;
+  const result = await attachListingInspection(listingId, requestId && requestId !== "none" ? requestId : null);
+  const back = `/dashboard/listings/${listingId}/inspection`;
+  if (!result.ok) redirect(`${back}?error=${encodeURIComponent(result.message)}`);
+  revalidateListing(listingId);
+  redirect(`${back}?saved=1`);
 }
 
 export async function removeMarketplaceListingFromForm(formData: FormData) {

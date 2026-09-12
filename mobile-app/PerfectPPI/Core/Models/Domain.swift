@@ -188,6 +188,10 @@ struct MarketplaceListing: Codable, Identifiable, Hashable {
     let photos: [MarketplaceListingPhoto]?
     let highlights: [MarketplaceListingHighlight]?
     let sellerHistory: MarketplaceSellerHistory?
+    /// The inspection explicitly selected by the seller for this listing.
+    let attachedInspectionId: String?
+    /// Buyer-safe report projection, present on listing detail responses.
+    let inspectionReport: MarketplaceInspectionReport?
 }
 
 struct MarketplaceListingPhoto: Codable, Identifiable, Hashable {
@@ -222,6 +226,51 @@ struct MarketplaceInspectionSummary: Codable, Hashable {
 struct MarketplaceInspectionRequestSummary: Codable, Hashable {
     let requestId: String
     let status: PpiRequestStatus
+}
+
+struct MarketplaceInspectionReport: Codable, Hashable {
+    let requestId: String
+    let scope: InspectionScope
+    let inspectedAt: Date
+    let performerKind: String
+    let performedBy: String
+    let sections: [MarketplaceInspectionReportSection]
+    let withheldCount: Int
+    let mediaCount: Int
+}
+
+struct MarketplaceInspectionReportSection: Codable, Hashable, Identifiable {
+    var id: String { sectionType }
+    let sectionType: String
+    let completionState: String
+    let items: [MarketplaceInspectionReportItem]
+    let withheld: [String]
+    let notesWithheld: Bool
+    let mediaCount: Int
+}
+
+struct MarketplaceInspectionReportItem: Codable, Hashable, Identifiable {
+    var id: String { "\(prompt):\(answerType)" }
+    let prompt: String
+    let answerType: String
+    let value: String
+}
+
+struct MarketplaceAttachableInspection: Codable, Hashable, Identifiable {
+    var id: String { requestId }
+    let requestId: String
+    let scope: InspectionScope
+    let inspectedAt: Date
+    let performerType: PerformerType
+    let performedBy: String
+    let requestStatus: PpiRequestStatus
+    let attached: Bool
+}
+
+struct MarketplaceInspectionSharing: Codable {
+    let report: MarketplaceInspectionReport?
+    let options: [MarketplaceAttachableInspection]
+    let attachedInspectionId: String?
 }
 
 // MARK: - Social (plan 9, 10, 12)

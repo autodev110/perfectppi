@@ -53,6 +53,7 @@ const PUBLIC_LISTING_STATUSES = ["active", "pending"] as const;
 
 const LISTING_SELECT = `
   id, vehicle_id, seller_id, title, description, asking_price_cents, location, status, created_at, updated_at,
+  attached_inspection_id, inspection_shared_at, removed_at,
   vehicle:vehicles!marketplace_listings_vehicle_id_fkey(
     id, owner_id, year, make, model, trim, nickname, mileage, mileage_updated_at, visibility, created_at, updated_at,
     transmission, drivetrain, body_style,
@@ -64,6 +65,8 @@ const LISTING_SELECT = `
 type ListingRow = Omit<MarketplaceListing, "inspection_summary" | "inspection_request" | "viewer_is_seller" | "saved_by_viewer" | "seller_type">;
 
 import type { MarketplaceFilters } from "@/lib/marketplace/filters";
+import type { InspectionReport } from "@/lib/marketplace/inspection-report";
+import { getInspectionReport } from "@/features/marketplace/inspection-sharing";
 export type { MarketplaceFilters } from "@/lib/marketplace/filters";
 
 const contains = (haystack: string | null | undefined, needle: string | undefined) =>
@@ -173,18 +176,19 @@ async function addInspectionTrust(
   if (listings.length === 0) return [];
 
   const admin = createAdminClient();
-  const vehicleIds = [...new Set(listings.map((listing) => listing.vehicle_id))];
   const listingIds = listings.map((listing) => listing.id);
-  const { data: requestRows } = await admin
-    .from("ppi_requests")
-    .select("id, vehicle_id, requester_id, performer_type, inspection_scope, status")
-    .in("vehicle_id", vehicleIds)
-    .in("status", ["submitted", "completed"]);
+  // The badge follows the inspection the seller explicitly shared (plan
+  // 25.3), and only while that request is still submitted/completed.
+  const attachedIds = [...new Set(listings.map((listing) => listing.attached_inspection_id).filter((id): id is string => Boolean(id)))];
+  const { data: requestRows } = attachedIds.length > 0
+    ? await admin
+        .from("ppi_requests")
+        .select("id, vehicle_id, requester_id, performer_type, inspection_scope, status")
+        .in("id", attachedIds)
+        .in("status", ["submitted", "completed"])
+    : { data: [] };
 
-  const sellerByVehicle = new Map(listings.map((listing) => [listing.vehicle_id, listing.seller_id]));
-  const eligibleRequests = (requestRows ?? []).filter(
-    (request) => request.requester_id === sellerByVehicle.get(request.vehicle_id),
-  );
+  const eligibleRequests = requestRows ?? [];
   const requestIds = eligibleRequests.map((request) => request.id);
   const [{ data: submissionRows }, { data: openRequestRows }] = await Promise.all([
     requestIds.length > 0
@@ -223,7 +227,7 @@ async function addInspectionTrust(
     : { data: [] };
   const performerById = new Map((performerRows ?? []).map((profile) => [profile.id, profile]));
   const requestById = new Map(eligibleRequests.map((request) => [request.id, request]));
-  const inspectionByVehicle = new Map<string, MarketplaceInspectionSummary>();
+  const inspectionByRequest = new Map<string, MarketplaceInspectionSummary>();
 
   for (const submission of submissionRows ?? []) {
     const request = requestById.get(submission.ppi_request_id);
@@ -236,15 +240,12 @@ async function addInspectionTrust(
       : performer?.is_public
         ? performer.display_name ?? performer.username ?? "PerfectPPI technician"
         : "PerfectPPI technician";
-    const current = inspectionByVehicle.get(request.vehicle_id);
-    if (!current || inspectedAt > current.inspected_at) {
-      inspectionByVehicle.set(request.vehicle_id, {
-        request_id: request.id,
-        scope: request.inspection_scope,
-        inspected_at: inspectedAt,
-        performed_by: performedBy,
-      });
-    }
+    inspectionByRequest.set(request.id, {
+      request_id: request.id,
+      scope: request.inspection_scope,
+      inspected_at: inspectedAt,
+      performed_by: performedBy,
+    });
   }
 
   const openRequestByListing = new Map<string, MarketplaceInspectionRequestSummary>();
@@ -273,7 +274,7 @@ async function addInspectionTrust(
 
   return listings.map((listing) => ({
     ...listing,
-    inspection_summary: inspectionByVehicle.get(listing.vehicle_id) ?? null,
+    inspection_summary: (listing.attached_inspection_id && inspectionByRequest.get(listing.attached_inspection_id)) || null,
     inspection_request: openRequestByListing.get(listing.id) ?? null,
     viewer_is_seller: viewerId === listing.seller_id,
     saved_by_viewer: savedIds.has(listing.id),
@@ -436,6 +437,8 @@ export type MarketplaceListingDetail = MarketplaceListing & {
   /** Owner-published build/maintenance entries, labeled by source (plan 25.2 §6). */
   highlights: ListingHighlight[];
   seller_history: MarketplaceSellerHistory;
+  /** Redacted projection of the seller-shared inspection (plan 25.3). */
+  inspection_report: InspectionReport | null;
 };
 
 /**
@@ -446,7 +449,7 @@ export async function getMarketplaceListingDetail(listingId: string): Promise<Ma
   const listing = await getMarketplaceListing(listingId);
   if (!listing) return null;
   const admin = createAdminClient();
-  const [{ data: history }, { data: build }, { data: maintenance }] = await Promise.all([
+  const [{ data: history }, { data: build }, { data: maintenance }, inspectionReport] = await Promise.all([
     admin.rpc("marketplace_seller_history", { p_seller_id: listing.seller_id }),
     admin
       .from("vehicle_build_entries")
@@ -462,6 +465,7 @@ export async function getMarketplaceListingDetail(listingId: string): Promise<Ma
       .eq("is_public", true)
       .order("serviced_on", { ascending: false })
       .limit(4),
+    listing.attached_inspection_id ? getInspectionReport(listing.attached_inspection_id) : Promise.resolve(null),
   ]);
   const photos = (listing.vehicle?.vehicle_media ?? [])
     .filter((item) => item.media_type === "image")
@@ -493,6 +497,7 @@ export async function getMarketplaceListingDetail(listingId: string): Promise<Ma
       sold_count: historyRow?.sold_count ?? 0,
       first_listed_at: historyRow?.first_listed_at ?? null,
     },
+    inspection_report: inspectionReport,
   };
 }
 

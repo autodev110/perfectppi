@@ -14,7 +14,7 @@ import {
   type ListingManageAction,
   type ListingStatus,
 } from "@/lib/marketplace/listing-status";
-import { Pencil } from "lucide-react";
+import { ClipboardCheck, Pencil } from "lucide-react";
 
 const ACTION_FORMS: Record<Exclude<ListingManageAction, "remove">, (formData: FormData) => Promise<void>> = {
   resume: reactivateMarketplaceListing,
@@ -50,6 +50,9 @@ export function ListingManagePanel({
         <div className="mt-4 grid gap-2">
           <Link href={`/dashboard/listings/${listingId}/edit`} className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90">
             <Pencil className="h-4 w-4" />Edit details
+          </Link>
+          <Link href={`/dashboard/listings/${listingId}/inspection`} className="flex items-center justify-center gap-2 rounded-xl border border-primary/30 px-5 py-2.5 text-sm font-bold text-primary hover:bg-primary/5">
+            <ClipboardCheck className="h-4 w-4" />Inspection sharing
           </Link>
           {actions.filter((action): action is Exclude<ListingManageAction, "remove"> => action !== "remove").map((action) => (
             <form key={action} action={ACTION_FORMS[action]}>

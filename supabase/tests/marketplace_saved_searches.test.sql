@@ -30,8 +30,13 @@ INSERT INTO public.marketplace_listings (id, vehicle_id, seller_id, title, askin
 SELECT '7e000000-0000-0000-0000-000000000200', '7e000000-0000-0000-0000-000000000100', seller, 'Club edition Miata', 1850000, 'Portland, OR', 'active', now() - interval '2 days' FROM ss;
 INSERT INTO public.marketplace_listings (id, vehicle_id, seller_id, title, asking_price_cents, location, status, created_at)
 SELECT '7e000000-0000-0000-0000-000000000201', '7e000000-0000-0000-0000-000000000101', techseller, 'Low-mile RAV4', 2990000, 'Seattle, WA', 'active', now() - interval '2 days' FROM ss;
-INSERT INTO public.ppi_requests (vehicle_id, requester_id, whose_car, requester_role, performer_type, ppi_type, status)
-SELECT '7e000000-0000-0000-0000-000000000100', seller, 'own', 'selling', 'self', 'personal', 'completed' FROM ss;
+-- "Inspected" means the seller shared an inspection (plan 25.3): the seller's
+-- own completed self-inspection, attached to the Miata listing.
+INSERT INTO public.ppi_requests (id, vehicle_id, requester_id, whose_car, requester_role, performer_type, ppi_type, status, inspection_scope)
+SELECT '7e000000-0000-0000-0000-000000000300', '7e000000-0000-0000-0000-000000000100', seller, 'own', 'selling', 'self', 'personal', 'completed', 'complete' FROM ss;
+INSERT INTO public.ppi_submissions (ppi_request_id, performer_id, version, is_current, status, submitted_at, completed_at)
+SELECT '7e000000-0000-0000-0000-000000000300', seller, 1, true, 'completed', now() - interval '1 day', now() - interval '1 day' FROM ss;
+SELECT public.attach_listing_inspection((SELECT seller FROM ss), '7e000000-0000-0000-0000-000000000200', '7e000000-0000-0000-0000-000000000300');
 
 -- ---------------------------------------------------------------------------
 -- 1. Filter semantics
@@ -45,7 +50,7 @@ BEGIN
   IF public.marketplace_listing_matches_filters(miata, '{"maxMileage": 30000}') THEN RAISE EXCEPTION 'max mileage should exclude'; END IF;
   IF NOT public.marketplace_listing_matches_filters(rav, '{"maxMileage": 30000, "minYear": 2020, "maxPrice": 30000}') THEN RAISE EXCEPTION 'ranges should include'; END IF;
   IF public.marketplace_listing_matches_filters(rav, '{"maxPrice": 25000}') THEN RAISE EXCEPTION 'max price is in dollars'; END IF;
-  IF NOT public.marketplace_listing_matches_filters(miata, '{"inspected": true}') THEN RAISE EXCEPTION 'inspected should match the seller''s own inspection'; END IF;
+  IF NOT public.marketplace_listing_matches_filters(miata, '{"inspected": true}') THEN RAISE EXCEPTION 'inspected should match a shared inspection'; END IF;
   IF public.marketplace_listing_matches_filters(rav, '{"inspected": true}') THEN RAISE EXCEPTION 'uninspected listings must not match inspected'; END IF;
   IF NOT public.marketplace_listing_matches_filters(rav, '{"sellerType":"technician"}') OR public.marketplace_listing_matches_filters(miata, '{"sellerType":"technician"}') THEN
     RAISE EXCEPTION 'seller type should follow technician profiles';
