@@ -206,6 +206,7 @@ private struct NotificationRow: View {
         case .messageReceived: "envelope"
         case .listingInspectionRequested, .inspectionSubmitted, .inspectionUpdated, .techRequestNew, .techRequestAccepted: "checkmark.seal"
         case .savedListingUpdated: "tag"
+        case .savedSearchMatch: "magnifyingglass"
         case .moderationDecision, .moderationCase, .reportReceived: "shield"
         case .warrantyAvailable, .paymentCompleted: "creditcard"
         case .unknown: "bell"
@@ -223,6 +224,7 @@ enum NotificationRoute: Hashable, Identifiable {
     case myPosts
     case group(slug: String)
     case listing(id: String)
+    case marketplaceSearch(savedSearchId: String)
 
     var id: String {
         switch self {
@@ -234,6 +236,7 @@ enum NotificationRoute: Hashable, Identifiable {
         case .myPosts: "my_posts"
         case .group(let slug): "group:\(slug)"
         case .listing(let id): "listing:\(id)"
+        case .marketplaceSearch(let id): "marketplace_search:\(id)"
         }
     }
 
@@ -252,6 +255,7 @@ enum NotificationRoute: Hashable, Identifiable {
         case ("listing_vehicle", _):
             guard let listingId = destination.secondaryId else { return nil }
             self = .listing(id: listingId)
+        case ("marketplace_search", let id?): self = .marketplaceSearch(savedSearchId: id)
         default: return nil
         }
     }
@@ -291,6 +295,8 @@ struct NotificationRouteView: View {
             CommunityGroupDetailView(slug: slug)
         case .listing(let id):
             MarketplaceListingLoaderView(listingId: id)
+        case .marketplaceSearch(let savedSearchId):
+            MarketplaceView(currentProfileId: currentProfileId, savedSearchId: savedSearchId)
         }
     }
 }

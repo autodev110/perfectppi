@@ -17,6 +17,7 @@ type MarketplaceVehicleMedia = Pick<
 type MarketplaceVehicle = Pick<
   Database["public"]["Tables"]["vehicles"]["Row"],
   "id" | "owner_id" | "year" | "make" | "model" | "trim" | "nickname" | "mileage" | "mileage_updated_at" | "visibility" | "created_at" | "updated_at"
+  | "transmission" | "drivetrain" | "body_style"
 > & {
   vehicle_media: MarketplaceVehicleMedia[];
 };
@@ -43,29 +44,30 @@ export type MarketplaceListing = Listing & {
   viewer_is_seller: boolean;
   /** Private bookmark (plan 25.2 Save); never shown to the seller. */
   saved_by_viewer: boolean;
+  /** Plan 25.1 seller type: a listed technician / shop, or a private member. */
+  seller_type: "member" | "technician";
 };
 
 const LISTING_SELECT = `
   id, vehicle_id, seller_id, title, description, asking_price_cents, location, status, created_at, updated_at,
   vehicle:vehicles!marketplace_listings_vehicle_id_fkey(
     id, owner_id, year, make, model, trim, nickname, mileage, mileage_updated_at, visibility, created_at, updated_at,
+    transmission, drivetrain, body_style,
     vehicle_media(id, vehicle_id, url, media_type, is_primary, sort_order, uploaded_at, moderation_status)
   ),
   seller:profiles!marketplace_listings_seller_id_fkey(id, display_name, username, avatar_url, is_public)
 `;
 
-type ListingRow = Omit<MarketplaceListing, "inspection_summary" | "inspection_request" | "viewer_is_seller" | "saved_by_viewer">;
+type ListingRow = Omit<MarketplaceListing, "inspection_summary" | "inspection_request" | "viewer_is_seller" | "saved_by_viewer" | "seller_type">;
 
-export type MarketplaceFilters = {
-  q?: string;
-  make?: string;
-  model?: string;
-  minYear?: number;
-  maxYear?: number;
-  maxPrice?: number; // dollars
-  sort?: "newest" | "oldest" | "price_asc" | "price_desc" | "mileage_asc";
-};
+import type { MarketplaceFilters } from "@/lib/marketplace/filters";
+export type { MarketplaceFilters } from "@/lib/marketplace/filters";
 
+const contains = (haystack: string | null | undefined, needle: string | undefined) =>
+  !needle || (haystack ?? "").toLowerCase().includes(needle.toLowerCase());
+
+// Mirrors marketplace_listing_matches_filters in SQL (plan 25.1); the browse
+// page filters in memory over the visible active listings.
 function applyFilters(listings: MarketplaceListing[], filters: MarketplaceFilters): MarketplaceListing[] {
   let result = listings;
 
@@ -111,9 +113,26 @@ function applyFilters(listings: MarketplaceListing[], filters: MarketplaceFilter
   if (filters.maxPrice) {
     result = result.filter((l) => l.asking_price_cents <= filters.maxPrice! * 100);
   }
+  if (filters.maxMileage !== undefined) {
+    result = result.filter((l) => l.vehicle?.mileage != null && l.vehicle.mileage <= filters.maxMileage!);
+  }
+  result = result.filter((l) =>
+    contains(l.vehicle?.transmission, filters.transmission)
+    && contains(l.vehicle?.drivetrain, filters.drivetrain)
+    && contains(l.vehicle?.body_style, filters.bodyStyle)
+    && contains(l.location, filters.region));
+  if (filters.inspected) {
+    result = result.filter((l) => l.inspection_summary !== null);
+  }
+  if (filters.sellerType) {
+    result = result.filter((l) => (l.seller_type === "technician") === (filters.sellerType === "technician"));
+  }
 
   // Sort
-  if (filters.sort === "price_asc") {
+  if (filters.sort === "recently_inspected") {
+    result = [...result].sort((a, b) =>
+      (b.inspection_summary?.inspected_at ?? "").localeCompare(a.inspection_summary?.inspected_at ?? ""));
+  } else if (filters.sort === "price_asc") {
     result = [...result].sort((a, b) => a.asking_price_cents - b.asking_price_cents);
   } else if (filters.sort === "price_desc") {
     result = [...result].sort((a, b) => b.asking_price_cents - a.asking_price_cents);
@@ -243,6 +262,11 @@ async function addInspectionTrust(
     });
     for (const row of saveRows ?? []) if (row.saved) savedIds.add(row.listing_id);
   }
+  const sellerIds = [...new Set(listings.map((listing) => listing.seller_id))];
+  const { data: technicianSellers } = sellerIds.length
+    ? await admin.from("technician_profiles").select("profile_id").in("profile_id", sellerIds)
+    : { data: [] };
+  const technicianIds = new Set((technicianSellers ?? []).map((row) => row.profile_id));
 
   return listings.map((listing) => ({
     ...listing,
@@ -250,6 +274,7 @@ async function addInspectionTrust(
     inspection_request: openRequestByListing.get(listing.id) ?? null,
     viewer_is_seller: viewerId === listing.seller_id,
     saved_by_viewer: savedIds.has(listing.id),
+    seller_type: technicianIds.has(listing.seller_id) ? "technician" as const : "member" as const,
   }));
 }
 
@@ -313,6 +338,35 @@ export async function getMarketplaceListings(filters?: MarketplaceFilters) {
 
   const cleaned = await Promise.all(publicListings.map((item) => cleanListingMedia(item)));
   return applyFilters(await addInspectionTrust(cleaned, viewerId), filters ?? {});
+}
+
+export const MARKETPLACE_PAGE_SIZE = 24;
+
+export type MarketplaceListingPage = {
+  items: MarketplaceListing[];
+  page: number;
+  per_page: number;
+  total: number;
+  has_more: boolean;
+};
+
+/** One page of the browse results (plan 25.1); `page` is clamped to 1+. */
+export async function getMarketplaceListingsPage(
+  filters: MarketplaceFilters | undefined,
+  page = 1,
+  perPage = MARKETPLACE_PAGE_SIZE,
+): Promise<MarketplaceListingPage> {
+  const all = await getMarketplaceListings(filters);
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const size = Math.min(Math.max(Number.isInteger(perPage) ? perPage : MARKETPLACE_PAGE_SIZE, 1), 100);
+  const start = (safePage - 1) * size;
+  return {
+    items: all.slice(start, start + size),
+    page: safePage,
+    per_page: size,
+    total: all.length,
+    has_more: start + size < all.length,
+  };
 }
 
 export async function getVehicleActiveListing(vehicleId: string) {

@@ -33,6 +33,13 @@ describe("notification deep links (plan 22.1)", () => {
     assert.equal(notificationWebPath(notificationDestinationIntent("report_received", { caseId: "k" })), null);
   });
 
+  test("saved-search matches open the marketplace with the saved search applied (plan 25.1)", () => {
+    const intent = notificationDestinationIntent("saved_search_match", { saved_search_id: "s1", listing_id: "l1", count: 3 });
+    assert.deepEqual(intent, { kind: "marketplace_search", id: "s1", secondaryId: "l1" });
+    assert.equal(notificationWebPath(intent), "/marketplace?saved=s1");
+    assert.equal(notificationWebPath(notificationDestinationIntent("saved_search_match", {})), "/marketplace");
+  });
+
   test("group invitations, requests, and decisions open the group (plan 13.3)", () => {
     for (const type of ["group_invitation", "group_join_request", "group_join_decision", "group_role_changed"]) {
       assert.deepEqual(notificationDestinationIntent(type, { group_slug: "e30-owners", group_id: "g1" }), {

@@ -1,24 +1,160 @@
 import Foundation
 
-enum MarketplaceAPI {
-    static func list(
-        query: String? = nil,
-        make: String? = nil,
-        model: String? = nil,
-        minYear: Int? = nil,
-        maxYear: Int? = nil,
-        maxPrice: Int? = nil,
-        sort: String? = nil
-    ) async throws -> [MarketplaceListing] {
+/// Structured discovery filters (plan 25.1). Mirrors
+/// `src/lib/marketplace/filters.ts`: the same shape is the query string on
+/// `/api/marketplace/listings` and the JSON stored in a saved search.
+struct MarketplaceFilters: Codable, Hashable {
+    var q: String?
+    var make: String?
+    var model: String?
+    var minYear: Int?
+    var maxYear: Int?
+    /// Dollars.
+    var maxPrice: Int?
+    var maxMileage: Int?
+    var transmission: String?
+    var drivetrain: String?
+    var bodyStyle: String?
+    var region: String?
+    var inspected: Bool?
+    var sellerType: String?
+    var sort: String?
+
+    static let sorts: [(value: String, label: String)] = [
+        ("newest", "Newest"), ("oldest", "Oldest"), ("price_asc", "Price: low to high"),
+        ("price_desc", "Price: high to low"), ("mileage_asc", "Mileage: low to high"),
+        ("recently_inspected", "Recently inspected"),
+    ]
+    static let transmissions = ["Automatic", "Manual", "CVT"]
+    static let drivetrains = ["AWD", "4WD", "RWD", "FWD"]
+    static let bodyStyles = ["Sedan", "Coupe", "Hatchback", "Wagon", "SUV", "Truck", "Convertible", "Van"]
+    static let sellerTypes: [(value: String, label: String)] = [("member", "Private seller"), ("technician", "Technician / shop")]
+
+    static func sellerTypeLabel(_ value: String?) -> String? {
+        sellerTypes.first { $0.value == value }?.label
+    }
+
+    /// Blank text and the default sort dropped, so equality and "is anything
+    /// applied" behave like the server's `cleanFilters`.
+    var cleaned: MarketplaceFilters {
+        func text(_ value: String?) -> String? {
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        var copy = self
+        copy.q = text(q); copy.make = text(make); copy.model = text(model)
+        copy.transmission = text(transmission); copy.drivetrain = text(drivetrain)
+        copy.bodyStyle = text(bodyStyle); copy.region = text(region); copy.sellerType = text(sellerType)
+        copy.inspected = inspected == true ? true : nil
+        copy.sort = sort == "newest" ? nil : text(sort)
+        return copy
+    }
+
+    /// Whether anything narrows the results (sort alone does not).
+    var narrowsResults: Bool {
+        let c = cleaned
+        return c.q != nil || c.make != nil || c.model != nil || c.minYear != nil || c.maxYear != nil
+            || c.maxPrice != nil || c.maxMileage != nil || c.transmission != nil || c.drivetrain != nil
+            || c.bodyStyle != nil || c.region != nil || c.inspected == true || c.sellerType != nil
+    }
+
+    /// Count shown on the filter button; the search box's own text is excluded.
+    var activeCount: Int {
+        let c = cleaned
+        return [c.make, c.model, c.transmission, c.drivetrain, c.bodyStyle, c.region, c.sellerType, c.sort]
+            .filter { $0 != nil }.count
+            + [c.minYear, c.maxYear, c.maxPrice, c.maxMileage].filter { $0 != nil }.count
+            + (c.inspected == true ? 1 : 0)
+    }
+
+    var queryItems: [URLQueryItem] {
+        let c = cleaned
         var items: [URLQueryItem] = []
-        if let query, !query.isEmpty { items.append(.init(name: "q", value: query)) }
-        if let make, !make.isEmpty { items.append(.init(name: "make", value: make)) }
-        if let model, !model.isEmpty { items.append(.init(name: "model", value: model)) }
-        if let minYear { items.append(.init(name: "minYear", value: "\(minYear)")) }
-        if let maxYear { items.append(.init(name: "maxYear", value: "\(maxYear)")) }
-        if let maxPrice { items.append(.init(name: "maxPrice", value: "\(maxPrice)")) }
-        if let sort { items.append(.init(name: "sort", value: sort)) }
-        return try await APIClient.shared.get("/api/marketplace/listings", query: items)
+        func add(_ name: String, _ value: String?) { if let value { items.append(.init(name: name, value: value)) } }
+        add("q", c.q); add("make", c.make); add("model", c.model)
+        add("minYear", c.minYear.map(String.init)); add("maxYear", c.maxYear.map(String.init))
+        add("maxPrice", c.maxPrice.map(String.init)); add("maxMileage", c.maxMileage.map(String.init))
+        add("transmission", c.transmission); add("drivetrain", c.drivetrain); add("bodyStyle", c.bodyStyle)
+        add("region", c.region); add("inspected", c.inspected == true ? "true" : nil)
+        add("sellerType", c.sellerType); add("sort", c.sort)
+        return items
+    }
+
+    /// Short summary for chips and the default saved-search name.
+    var summary: String {
+        let c = cleaned
+        var bits: [String] = []
+        if let q = c.q { bits.append("“\(q)”") }
+        let vehicle = [c.make, c.model].compactMap { $0 }.joined(separator: " ")
+        if !vehicle.isEmpty { bits.append(vehicle) }
+        if c.minYear != nil || c.maxYear != nil { bits.append("\(c.minYear.map(String.init) ?? "…")–\(c.maxYear.map(String.init) ?? "…")") }
+        if let price = c.maxPrice { bits.append("≤ $\(price.formatted())") }
+        if let miles = c.maxMileage { bits.append("≤ \(miles.formatted()) mi") }
+        bits.append(contentsOf: [c.transmission, c.drivetrain, c.bodyStyle, c.region].compactMap { $0 })
+        if c.inspected == true { bits.append("Inspected") }
+        if let seller = Self.sellerTypeLabel(c.sellerType) { bits.append(seller) }
+        return bits.isEmpty ? "All listings" : bits.joined(separator: " · ")
+    }
+}
+
+/// A member's saved search (plan 25.1): up to ten, with an optional daily
+/// notice when new listings match.
+struct MarketplaceSavedSearch: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let filters: MarketplaceFilters
+    let notify: Bool
+}
+
+/// One page of browse results (plan 25.1).
+struct MarketplaceListingPage: Decodable {
+    let items: [MarketplaceListing]
+    let page: Int
+    let total: Int
+    let hasMore: Bool
+}
+
+enum MarketplaceAPI {
+    static func list(filters: MarketplaceFilters = MarketplaceFilters()) async throws -> [MarketplaceListing] {
+        try await APIClient.shared.get("/api/marketplace/listings", query: filters.queryItems)
+    }
+
+    static func listPage(filters: MarketplaceFilters, page: Int) async throws -> MarketplaceListingPage {
+        try await APIClient.shared.get(
+            "/api/marketplace/listings",
+            query: filters.queryItems + [URLQueryItem(name: "page", value: String(max(page, 1)))]
+        )
+    }
+
+    static func list(query: String?) async throws -> [MarketplaceListing] {
+        try await list(filters: MarketplaceFilters(q: query))
+    }
+
+    private struct SavedSearchesResponse: Decodable { let searches: [MarketplaceSavedSearch] }
+
+    static func savedSearches() async throws -> [MarketplaceSavedSearch] {
+        let response: SavedSearchesResponse = try await APIClient.shared.get("/api/marketplace/saved-searches")
+        return response.searches
+    }
+
+    private struct SaveSearchPayload: Encodable {
+        let id: String?
+        let name: String
+        let filters: MarketplaceFilters
+        let notify: Bool
+    }
+
+    /// Create (`id` nil) or replace a saved search. Filter keys are camelCase
+    /// on the wire, hence `postCamel`.
+    static func saveSearch(id: String? = nil, name: String, filters: MarketplaceFilters, notify: Bool) async throws -> MarketplaceSavedSearch {
+        try await APIClient.shared.postCamel(
+            "/api/marketplace/saved-searches",
+            body: SaveSearchPayload(id: id, name: name, filters: filters.cleaned, notify: notify)
+        )
+    }
+
+    static func deleteSavedSearch(id: String) async throws {
+        let _: Empty = try await APIClient.shared.delete("/api/marketplace/saved-searches/\(id)")
     }
 
     static func mine() async throws -> [MarketplaceListing] {

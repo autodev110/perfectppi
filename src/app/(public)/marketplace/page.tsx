@@ -1,24 +1,30 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getMarketplaceListings } from "@/features/marketplace/queries";
+import { getMarketplaceListingsPage } from "@/features/marketplace/queries";
+import { getSavedSearch, listSavedSearches } from "@/features/marketplace/saved-searches";
 import { getCurrentSocialProfileId } from "@/features/social/relationships";
 import { ListingSaveButton } from "@/components/shared/listing-save-button";
+import { SavedSearchControls } from "@/components/shared/saved-search-controls";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { formatCurrency, formatMileage } from "@/lib/utils/formatting";
-import { ArrowRight, Car, ClipboardCheck, Gauge, MapPin, Search, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
+import { formatCurrency, formatDate, formatMileage } from "@/lib/utils/formatting";
+import {
+  BODY_STYLE_OPTIONS,
+  DRIVETRAIN_OPTIONS,
+  MARKETPLACE_SORT_LABELS,
+  MARKETPLACE_SORTS,
+  SELLER_TYPE_LABELS,
+  SELLER_TYPES,
+  TRANSMISSION_OPTIONS,
+  filtersToSearchParams,
+  hasActiveFilters,
+  parseMarketplaceFilters,
+} from "@/lib/marketplace/filters";
+import { ArrowRight, Car, ClipboardCheck, Gauge, MapPin, Search, ShieldCheck, SlidersHorizontal, Wrench, X } from "lucide-react";
 
 type PageProps = {
-  searchParams: Promise<{
-    q?: string;
-    make?: string;
-    model?: string;
-    minYear?: string;
-    maxYear?: string;
-    maxPrice?: string;
-    sort?: string;
-  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export const metadata: Metadata = {
@@ -28,21 +34,28 @@ export const metadata: Metadata = {
 
 export default async function MarketplacePage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const { q, make, model, minYear, maxYear, maxPrice, sort } = params;
-
   const viewerId = await getCurrentSocialProfileId();
-  const listings = await getMarketplaceListings({
-    q,
-    make,
-    model,
-    minYear: minYear ? parseInt(minYear) : undefined,
-    maxYear: maxYear ? parseInt(maxYear) : undefined,
-    maxPrice: maxPrice ? parseInt(maxPrice) : undefined,
-    sort: sort as "newest" | "oldest" | "price_asc" | "price_desc" | "mileage_asc" | undefined,
-  });
+  // ?saved=<id> applies one of the member's saved searches (plan 25.1).
+  const savedParam = typeof params.saved === "string" ? params.saved : null;
+  const savedSearch = viewerId && savedParam ? await getSavedSearch(savedParam) : null;
+  const filters = savedSearch ? savedSearch.filters : parseMarketplaceFilters(params);
+  const requestedPage = Number(typeof params.page === "string" ? params.page : "1");
+  const [results, savedSearches] = await Promise.all([
+    getMarketplaceListingsPage(filters, Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1),
+    viewerId ? listSavedSearches() : Promise.resolve([]),
+  ]);
+  const listings = results.items;
+  const pageHref = (page: number) => {
+    const search = savedSearch ? new URLSearchParams({ saved: savedSearch.id }) : filtersToSearchParams(filters);
+    if (page > 1) search.set("page", String(page));
+    const qs = search.toString();
+    return qs ? `/marketplace?${qs}` : "/marketplace";
+  };
+  const { q, make, model, minYear, maxYear, maxPrice, sort, maxMileage, transmission, drivetrain, bodyStyle, region, inspected, sellerType } = filters;
 
-  const hasFilters = !!(q || make || model || minYear || maxYear || maxPrice || sort);
-  const activeFilterCount = [q, make, model, minYear, maxYear, maxPrice, sort].filter(Boolean).length;
+  const hasFilters = hasActiveFilters(filters) || Boolean(sort);
+  const activeFilterCount = Array.from(filtersToSearchParams(filters).keys()).length;
+  const selectClass = "h-9 rounded-lg px-3 text-sm bg-surface-container-lowest ghost-border text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40";
 
   return (
     <div className="bg-surface min-h-screen">
@@ -78,11 +91,7 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                 defaultValue={sort ?? "newest"}
                 className="h-12 rounded-xl px-4 text-sm font-bold bg-surface-container-lowest ghost-border text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 min-w-[180px]"
               >
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="price_asc">Price: Low to High</option>
-                <option value="price_desc">Price: High to Low</option>
-                <option value="mileage_asc">Lowest mileage</option>
+                {MARKETPLACE_SORTS.map((entry) => <option key={entry} value={entry}>{MARKETPLACE_SORT_LABELS[entry]}</option>)}
               </select>
               <Button type="submit" className="h-12 rounded-xl px-7">
                 Search
@@ -133,6 +142,41 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                 type="number"
                 className="h-9 w-32 text-sm rounded-lg bg-surface-container-lowest ghost-border"
               />
+              <Input
+                aria-label="Maximum mileage"
+                name="maxMileage"
+                defaultValue={maxMileage ?? ""}
+                placeholder="Max miles"
+                type="number"
+                className="h-9 w-28 text-sm rounded-lg bg-surface-container-lowest ghost-border"
+              />
+              <Input
+                aria-label="City or region"
+                name="region"
+                defaultValue={region ?? ""}
+                placeholder="City / region"
+                className="h-9 w-32 text-sm rounded-lg bg-surface-container-lowest ghost-border"
+              />
+              <select aria-label="Transmission" name="transmission" defaultValue={transmission ?? ""} className={selectClass}>
+                <option value="">Any transmission</option>
+                {TRANSMISSION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <select aria-label="Drivetrain" name="drivetrain" defaultValue={drivetrain ?? ""} className={selectClass}>
+                <option value="">Any drivetrain</option>
+                {DRIVETRAIN_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <select aria-label="Body style" name="bodyStyle" defaultValue={bodyStyle ?? ""} className={selectClass}>
+                <option value="">Any body</option>
+                {BODY_STYLE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <select aria-label="Seller type" name="sellerType" defaultValue={sellerType ?? ""} className={selectClass}>
+                <option value="">Any seller</option>
+                {SELLER_TYPES.map((option) => <option key={option} value={option}>{SELLER_TYPE_LABELS[option]}</option>)}
+              </select>
+              <label className="flex h-9 items-center gap-1.5 rounded-lg bg-surface-container-lowest px-3 text-xs font-bold text-on-surface ghost-border">
+                <input type="checkbox" name="inspected" value="true" defaultChecked={Boolean(inspected)} className="rounded" />
+                Inspected only
+              </label>
               {hasFilters && (
                 <Link
                   href="/marketplace"
@@ -144,6 +188,7 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
               )}
             </div>
           </form>
+          {viewerId ? <SavedSearchControls searches={savedSearches} current={filters} activeId={savedSearch?.id ?? null} /> : null}
         </div>
       </section>
 
@@ -153,9 +198,10 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
           {/* Results count */}
           <div className="flex items-center justify-between mb-6">
             <p className="text-sm text-on-surface-variant font-semibold">
-              {listings.length === 0
+              {results.total === 0
                 ? "No listings found"
-                : `${listings.length} listing${listings.length !== 1 ? "s" : ""} found`}
+                : `${results.total} listing${results.total !== 1 ? "s" : ""} found`}
+              {results.total > results.per_page ? ` · Page ${results.page}` : ""}
               {hasFilters && " · Filtered"}
             </p>
             {hasFilters && (
@@ -219,9 +265,10 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-primary-container/70 via-transparent to-transparent opacity-80" />
                       {listing.inspection_summary && (
+                        // Scope and date, never an unexplained "verified" (plan 25.1).
                         <Badge className="absolute left-4 top-4 gap-1.5 bg-white/95 text-primary hover:bg-white/95">
                           <ClipboardCheck className="h-3.5 w-3.5" />
-                          {listing.inspection_summary.scope === "dents_tires" ? "Dents & Tires" : "Complete"} inspection
+                          {listing.inspection_summary.scope === "dents_tires" ? "Dents & Tires" : "Complete"} inspection · {formatDate(listing.inspection_summary.inspected_at)}
                         </Badge>
                       )}
                       <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
@@ -258,6 +305,12 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                             {formatMileage(vehicle.mileage)} mi
                           </span>
                         )}
+                        {listing.seller_type === "technician" && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-[11px] font-bold text-on-surface-variant ghost-border">
+                            <Wrench className="h-3 w-3" />
+                            Technician / shop
+                          </span>
+                        )}
                         {listing.location && (
                           <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-[11px] font-bold text-on-surface-variant ghost-border">
                             <MapPin className="h-3 w-3 shrink-0" />
@@ -286,6 +339,16 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
               })}
             </div>
           )}
+          {results.total > 0 && (results.page > 1 || results.has_more) ? (
+            <nav className="mt-8 flex items-center justify-between" aria-label="Listing pages">
+              {results.page > 1 ? <Button asChild variant="outline"><Link href={pageHref(results.page - 1)}>Previous</Link></Button> : <span />}
+              {results.has_more ? (
+                <Button asChild variant="outline"><Link href={pageHref(results.page + 1)}>Next</Link></Button>
+              ) : (
+                <p className="text-xs font-semibold text-on-surface-variant">That&rsquo;s every listing{hasFilters ? " matching these filters" : ""}.</p>
+              )}
+            </nav>
+          ) : null}
         </div>
       </section>
     </div>

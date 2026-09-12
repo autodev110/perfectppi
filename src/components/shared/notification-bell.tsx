@@ -49,6 +49,7 @@ const typeStyle: Record<
   group_join_request: { icon: Warehouse, color: "text-sky-600", bg: "bg-sky-50" },
   group_join_decision: { icon: Warehouse, color: "text-teal", bg: "bg-teal/10" },
   saved_listing_updated: { icon: Tag, color: "text-teal", bg: "bg-teal/10" },
+  saved_search_match: { icon: Tag, color: "text-sky-600", bg: "bg-sky-50" },
 };
 
 // Destinations resolve server-side in /notifications/<id>, which knows the

@@ -2,70 +2,112 @@ import SwiftUI
 
 struct MarketplaceView: View {
     let currentProfileId: String?
+    /// Opens with one of the member's saved searches applied (notification
+    /// deep link, plan 25.1).
+    let initialSavedSearchId: String?
 
     @State private var searchText = ""
+    @State private var filters = MarketplaceFilters()
+    @State private var savedSearches: [MarketplaceSavedSearch] = []
+    @State private var activeSavedSearchId: String?
     @State private var reloadToken = UUID()
     @State private var showingMine = false
+    @State private var showingFilters = false
+    @State private var notice: String?
+    /// Pages after the first, appended by "Load more" (plan 25.1).
+    @State private var morePages: [MarketplaceListing] = []
+    @State private var lastPage: Int = 1
+    @State private var moreAvailable: Bool?
+    @State private var loadingMore = false
+    @State private var loadMoreError: String?
 
-    init(currentProfileId: String? = nil) {
+    init(currentProfileId: String? = nil, savedSearchId: String? = nil) {
         self.currentProfileId = currentProfileId
+        self.initialSavedSearchId = savedSearchId
     }
 
     var body: some View {
         AsyncContent(
-            load: { try await MarketplaceAPI.list(query: searchText.isEmpty ? nil : searchText) },
-            loaded: { listings in
-                Group {
+            load: { try await MarketplaceAPI.listPage(filters: filters, page: 1) },
+            loaded: { firstPage in
+                let listings = firstPage.items + morePages
+                let hasMore = moreAvailable ?? firstPage.hasMore
+                VStack(spacing: 0) {
+                    if !savedSearches.isEmpty || filters.narrowsResults {
+                        filterSummaryBar
+                    }
                     if listings.isEmpty {
                         EmptyStateCard(
-                            title: "No active listings",
-                            message: "Public vehicles listed for sale will appear here.",
+                            title: filters.narrowsResults ? "No listings match" : "No active listings",
+                            message: filters.narrowsResults
+                                ? "Loosen a filter or save this search to hear about new matches."
+                                : "Public vehicles listed for sale will appear here.",
                             systemImage: "tag"
                         )
                         .padding()
+                        Spacer(minLength: 0)
                     } else {
-                        List(listings) { listing in
-                            NavigationLink {
-                                MarketplaceListingDetailView(
-                                    listing: listing,
-                                    currentProfileId: currentProfileId
-                                ) { reloadToken = UUID() }
-                            } label: {
-                                MarketplaceListingRow(listing: listing)
-                            }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                if listing.sellerId != currentProfileId {
-                                    Button {
-                                        Task {
-                                            _ = try? await MarketplaceAPI.setSaved(listingId: listing.id, saved: listing.savedByViewer != true)
-                                            reloadToken = UUID()
+                        List {
+                            ForEach(listings) { listing in
+                                NavigationLink {
+                                    MarketplaceListingDetailView(
+                                        listing: listing,
+                                        currentProfileId: currentProfileId
+                                    ) { refresh() }
+                                } label: {
+                                    MarketplaceListingRow(listing: listing)
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    if listing.sellerId != currentProfileId {
+                                        Button {
+                                            Task {
+                                                _ = try? await MarketplaceAPI.setSaved(listingId: listing.id, saved: listing.savedByViewer != true)
+                                                refresh()
+                                            }
+                                        } label: {
+                                            Label(listing.savedByViewer == true ? "Unsave" : "Save",
+                                                  systemImage: listing.savedByViewer == true ? "bookmark.slash" : "bookmark")
                                         }
-                                    } label: {
-                                        Label(listing.savedByViewer == true ? "Unsave" : "Save",
-                                              systemImage: listing.savedByViewer == true ? "bookmark.slash" : "bookmark")
+                                        .tint(Theme.Palette.primary)
                                     }
-                                    .tint(Theme.Palette.primary)
                                 }
                             }
+                            Section {
+                                if hasMore {
+                                    Button {
+                                        Task { await loadMore() }
+                                    } label: {
+                                        HStack {
+                                            Spacer()
+                                            if loadingMore {
+                                                ProgressView().controlSize(.small)
+                                            } else {
+                                                Text(loadMoreError == nil ? "Load more" : "Retry")
+                                                    .font(.subheadline.weight(.semibold))
+                                            }
+                                            Spacer()
+                                        }
+                                    }
+                                    .disabled(loadingMore)
+                                    .onAppear { Task { await loadMore() } }
+                                    if let loadMoreError {
+                                        Text(loadMoreError)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                } else {
+                                    Text(firstPage.total == listings.count
+                                         ? "That's every listing\(filters.narrowsResults ? " matching these filters" : "")."
+                                         : "End of results.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
+                            .listRowBackground(Color.clear)
                         }
                         .listStyle(.insetGrouped)
-                    }
-                }
-                .navigationTitle("Marketplace")
-                .searchable(text: $searchText, prompt: "Search vehicles")
-                .onSubmit(of: .search) {
-                    reloadToken = UUID()
-                }
-                .toolbar {
-                    Button {
-                        showingMine = true
-                    } label: {
-                        Image(systemName: "person.crop.rectangle.stack")
-                    }
-                }
-                .sheet(isPresented: $showingMine) {
-                    NavigationStack {
-                        MyListingsView()
+                        .refreshable { refresh() }
                     }
                 }
             },
@@ -74,6 +116,367 @@ struct MarketplaceView: View {
             }
         )
         .id(reloadToken)
+        .navigationTitle("Marketplace")
+        .searchable(text: $searchText, prompt: "Search vehicles")
+        .onSubmit(of: .search) { applySearchText() }
+        .onChange(of: searchText) { _, value in
+            if value.isEmpty, filters.q != nil { applySearchText() }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    showingFilters = true
+                } label: {
+                    Image(systemName: filters.activeCount > 0 ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel(filters.activeCount > 0 ? "Filters, \(filters.activeCount) applied" : "Filters")
+                Button {
+                    showingMine = true
+                } label: {
+                    Image(systemName: "person.crop.rectangle.stack")
+                }
+                .accessibilityLabel("My listings")
+            }
+        }
+        .sheet(isPresented: $showingMine) {
+            NavigationStack {
+                MyListingsView()
+            }
+        }
+        .sheet(isPresented: $showingFilters) {
+            NavigationStack {
+                MarketplaceFilterSheet(
+                    filters: filters,
+                    canSave: currentProfileId != nil && savedSearches.count < 10,
+                    onApply: { updated in
+                        filters = updated
+                        searchText = updated.q ?? ""
+                        activeSavedSearchId = nil
+                        refresh()
+                    },
+                    onSave: { name, updated, notify in
+                        try await save(name: name, filters: updated, notify: notify)
+                    }
+                )
+            }
+        }
+        .task { await loadSavedSearches() }
+        .alert("Saved searches",
+               isPresented: .constant(notice != nil),
+               actions: { Button("OK") { notice = nil } },
+               message: { Text(notice ?? "") })
+    }
+
+    /// Saved-search chips plus the current filter summary. Chips re-run a
+    /// saved search; a long press removes one.
+    private var filterSummaryBar: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !savedSearches.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(savedSearches) { search in
+                            Button {
+                                apply(search)
+                            } label: {
+                                Label(search.name, systemImage: search.notify ? "bell" : "bookmark")
+                                    .font(.caption.weight(.semibold))
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(activeSavedSearchId == search.id ? Theme.Palette.primary : Theme.Palette.subtle)
+                                    .foregroundStyle(activeSavedSearchId == search.id ? Color.white : Color.primary)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint(search.filters.summary)
+                            .contextMenu {
+                                Button("Remove saved search", systemImage: "trash", role: .destructive) {
+                                    Task { await remove(search) }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+            if filters.narrowsResults {
+                HStack {
+                    Text(filters.summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Spacer()
+                    Button("Clear") {
+                        filters = MarketplaceFilters()
+                        searchText = ""
+                        activeSavedSearchId = nil
+                        refresh()
+                    }
+                    .font(.caption.weight(.semibold))
+                }
+                .padding(.horizontal)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    /// Restart from page one; the appended pages belong to the old query.
+    private func refresh() {
+        morePages = []
+        lastPage = 1
+        moreAvailable = nil
+        loadMoreError = nil
+        reloadToken = UUID()
+    }
+
+    @MainActor
+    private func loadMore() async {
+        guard !loadingMore, moreAvailable != false else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        do {
+            let next = try await MarketplaceAPI.listPage(filters: filters, page: lastPage + 1)
+            let known = Set(morePages.map(\.id))
+            morePages.append(contentsOf: next.items.filter { !known.contains($0.id) })
+            lastPage = next.page
+            moreAvailable = next.hasMore
+            loadMoreError = nil
+        } catch {
+            loadMoreError = error.localizedDescription
+        }
+    }
+
+    private func applySearchText() {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        filters.q = trimmed.isEmpty ? nil : trimmed
+        activeSavedSearchId = nil
+        refresh()
+    }
+
+    private func apply(_ search: MarketplaceSavedSearch) {
+        filters = search.filters
+        searchText = search.filters.q ?? ""
+        activeSavedSearchId = search.id
+        refresh()
+    }
+
+    @MainActor
+    private func loadSavedSearches() async {
+        guard currentProfileId != nil else { return }
+        do {
+            savedSearches = try await MarketplaceAPI.savedSearches()
+        } catch {
+            // Browsing works without the chips; the next open retries.
+            return
+        }
+        if let initialSavedSearchId, activeSavedSearchId == nil,
+           let search = savedSearches.first(where: { $0.id == initialSavedSearchId }) {
+            apply(search)
+        } else if initialSavedSearchId != nil, activeSavedSearchId == nil {
+            notice = "That saved search is no longer available."
+        }
+    }
+
+    @MainActor
+    private func save(name: String, filters updated: MarketplaceFilters, notify: Bool) async throws {
+        let search = try await MarketplaceAPI.saveSearch(name: name, filters: updated, notify: notify)
+        savedSearches.insert(search, at: 0)
+        filters = search.filters
+        searchText = search.filters.q ?? ""
+        activeSavedSearchId = search.id
+        refresh()
+    }
+
+    @MainActor
+    private func remove(_ search: MarketplaceSavedSearch) async {
+        do {
+            try await MarketplaceAPI.deleteSavedSearch(id: search.id)
+            savedSearches.removeAll { $0.id == search.id }
+            if activeSavedSearchId == search.id { activeSavedSearchId = nil }
+        } catch {
+            notice = error.localizedDescription
+        }
+    }
+}
+
+/// Structured filters (plan 25.1). Edits a draft; nothing applies until
+/// "Show results", and "Save search" keeps the draft as a named search.
+private struct MarketplaceFilterSheet: View {
+    @State private var draft: MarketplaceFilters
+    let canSave: Bool
+    let onApply: (MarketplaceFilters) -> Void
+    let onSave: (String, MarketplaceFilters, Bool) async throws -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var minYearText: String
+    @State private var maxYearText: String
+    @State private var maxPriceText: String
+    @State private var maxMileageText: String
+    @State private var savingName = ""
+    @State private var notify = true
+    @State private var showingSave = false
+    @State private var saving = false
+    @State private var error: String?
+
+    init(
+        filters: MarketplaceFilters,
+        canSave: Bool,
+        onApply: @escaping (MarketplaceFilters) -> Void,
+        onSave: @escaping (String, MarketplaceFilters, Bool) async throws -> Void
+    ) {
+        _draft = State(initialValue: filters)
+        self.canSave = canSave
+        self.onApply = onApply
+        self.onSave = onSave
+        _minYearText = State(initialValue: filters.minYear.map(String.init) ?? "")
+        _maxYearText = State(initialValue: filters.maxYear.map(String.init) ?? "")
+        _maxPriceText = State(initialValue: filters.maxPrice.map(String.init) ?? "")
+        _maxMileageText = State(initialValue: filters.maxMileage.map(String.init) ?? "")
+    }
+
+    private var composed: MarketplaceFilters {
+        var copy = draft
+        copy.minYear = Int(minYearText.trimmingCharacters(in: .whitespaces))
+        copy.maxYear = Int(maxYearText.trimmingCharacters(in: .whitespaces))
+        copy.maxPrice = Int(maxPriceText.filter(\.isNumber))
+        copy.maxMileage = Int(maxMileageText.filter(\.isNumber))
+        return copy.cleaned
+    }
+
+    var body: some View {
+        Form {
+            Section("Vehicle") {
+                TextField("Make", text: binding(\.make))
+                    .textInputAutocapitalization(.words)
+                TextField("Model", text: binding(\.model))
+                    .textInputAutocapitalization(.words)
+                HStack {
+                    TextField("Min year", text: $minYearText).keyboardType(.numberPad)
+                    Divider()
+                    TextField("Max year", text: $maxYearText).keyboardType(.numberPad)
+                }
+                optionPicker("Transmission", selection: binding(\.transmission), options: MarketplaceFilters.transmissions.map { ($0, $0) })
+                optionPicker("Drivetrain", selection: binding(\.drivetrain), options: MarketplaceFilters.drivetrains.map { ($0, $0) })
+                optionPicker("Body style", selection: binding(\.bodyStyle), options: MarketplaceFilters.bodyStyles.map { ($0, $0) })
+            }
+            Section("Price & mileage") {
+                TextField("Max price ($)", text: $maxPriceText).keyboardType(.numberPad)
+                TextField("Max mileage", text: $maxMileageText).keyboardType(.numberPad)
+            }
+            Section {
+                TextField("City or region", text: binding(\.region))
+                optionPicker("Seller", selection: binding(\.sellerType), options: MarketplaceFilters.sellerTypes)
+                Toggle("Inspected vehicles only", isOn: Binding(
+                    get: { draft.inspected == true },
+                    set: { draft.inspected = $0 ? true : nil }
+                ))
+            } header: {
+                Text("Seller & inspection")
+            } footer: {
+                Text("Inspection badges show the scope and date of a PerfectPPI inspection recorded for the vehicle. They describe the vehicle at that time, not a guarantee.")
+            }
+            Section("Sort") {
+                Picker("Sort by", selection: Binding(
+                    get: { draft.sort ?? "newest" },
+                    set: { draft.sort = $0 }
+                )) {
+                    ForEach(MarketplaceFilters.sorts, id: \.value) { option in
+                        Text(option.label).tag(option.value)
+                    }
+                }
+            }
+            if canSave, composed.narrowsResults {
+                Section {
+                    Button {
+                        savingName = composed.summary
+                        showingSave = true
+                    } label: {
+                        Label("Save this search", systemImage: "bookmark.badge.plus")
+                    }
+                    .disabled(saving)
+                } footer: {
+                    Text("Keep up to 10 saved searches. With notices on, you get one daily notification when new listings match.")
+                }
+            }
+        }
+        .navigationTitle("Filters")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Reset") {
+                    draft = MarketplaceFilters()
+                    minYearText = ""; maxYearText = ""; maxPriceText = ""; maxMileageText = ""
+                }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Show results") {
+                    onApply(composed)
+                    dismiss()
+                }
+            }
+        }
+        .sheet(isPresented: $showingSave) {
+            NavigationStack {
+                Form {
+                    Section("Name") {
+                        TextField("Name", text: $savingName)
+                    }
+                    Section {
+                        Toggle("Notify me daily about new matches", isOn: $notify)
+                    }
+                    Section {
+                        Text(composed.summary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .navigationTitle("Save search")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showingSave = false } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(saving ? "Saving…" : "Save") { Task { await save() } }
+                            .disabled(saving || savingName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
+        .alert("Could not save", isPresented: .constant(error != nil)) {
+            Button("OK") { error = nil }
+        } message: {
+            Text(error ?? "")
+        }
+    }
+
+    @MainActor
+    private func save() async {
+        guard !saving else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            try await onSave(String(savingName.trimmingCharacters(in: .whitespaces).prefix(60)), composed, notify)
+            showingSave = false
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func binding(_ keyPath: WritableKeyPath<MarketplaceFilters, String?>) -> Binding<String> {
+        Binding(
+            get: { draft[keyPath: keyPath] ?? "" },
+            set: { draft[keyPath: keyPath] = $0.isEmpty ? nil : $0 }
+        )
+    }
+
+    private func optionPicker(_ title: String, selection: Binding<String>, options: [(value: String, label: String)]) -> some View {
+        Picker(title, selection: selection) {
+            Text("Any").tag("")
+            ForEach(options, id: \.value) { option in
+                Text(option.label).tag(option.value)
+            }
+        }
     }
 }
 
@@ -114,13 +517,23 @@ private struct MarketplaceListingRow: View {
                             .truncationMode(.tail)
                     }
                 }
-                if let inspection = listing.inspectionSummary {
-                    Label(
-                        inspection.scope == .dentsTires ? "Dents & Tires inspected" : "Complete inspection",
-                        systemImage: "checkmark.seal"
-                    )
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Theme.Palette.success)
+                HStack(spacing: 8) {
+                    if let inspection = listing.inspectionSummary {
+                        // Scope and date, never an unexplained "verified" (plan 25.1).
+                        Label(
+                            "\(inspection.scope == .dentsTires ? "Dents & Tires" : "Complete") · \(inspection.inspectedAt.formatted(date: .abbreviated, time: .omitted))",
+                            systemImage: "checkmark.seal"
+                        )
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Theme.Palette.success)
+                        .lineLimit(1)
+                    }
+                    if listing.sellerType == "technician" {
+                        Label("Technician / shop", systemImage: "wrench.and.screwdriver")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -203,6 +616,18 @@ private struct MarketplaceListingDetailView: View {
                             row("Vehicle", vehicleLabel(vehicle))
                             if let mileage = vehicle.mileage {
                                 row("Mileage", "\(mileage.formatted()) mi")
+                            }
+                            if let transmission = vehicle.transmission, !transmission.isEmpty {
+                                row("Transmission", transmission)
+                            }
+                            if let drivetrain = vehicle.drivetrain, !drivetrain.isEmpty {
+                                row("Drivetrain", drivetrain)
+                            }
+                            if let bodyStyle = vehicle.bodyStyle, !bodyStyle.isEmpty {
+                                row("Body style", bodyStyle)
+                            }
+                            if let seller = MarketplaceFilters.sellerTypeLabel(listing.sellerType) {
+                                row("Seller", seller)
                             }
                         }
                     }

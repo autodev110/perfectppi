@@ -3439,6 +3439,47 @@ export type Database = {
         }
         Relationships: []
       }
+      marketplace_saved_searches: {
+        Row: {
+          created_at: string
+          filters: Json
+          id: string
+          last_matched_at: string
+          name: string
+          notify: boolean
+          profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          filters?: Json
+          id?: string
+          last_matched_at?: string
+          name: string
+          notify?: boolean
+          profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          filters?: Json
+          id?: string
+          last_matched_at?: string
+          name?: string
+          notify?: boolean
+          profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_saved_searches_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketplace_listing_saves: {
         Row: {
           created_at: string
@@ -5397,6 +5438,26 @@ export type Database = {
         Args: { p_query: string }
         Returns: { suggestion: string }[]
       }
+      list_marketplace_saved_searches: {
+        Args: { p_actor_profile_id: string }
+        Returns: Database["public"]["Tables"]["marketplace_saved_searches"]["Row"][]
+      }
+      upsert_marketplace_saved_search: {
+        Args: { p_actor_profile_id: string; p_search_id: string | null; p_name: string; p_filters: Json; p_notify?: boolean }
+        Returns: Database["public"]["Tables"]["marketplace_saved_searches"]["Row"]
+      }
+      delete_marketplace_saved_search: {
+        Args: { p_actor_profile_id: string; p_search_id: string }
+        Returns: boolean
+      }
+      notify_marketplace_saved_search_matches: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
+      marketplace_listing_matches_filters: {
+        Args: { p_listing_id: string; p_filters: Json }
+        Returns: boolean
+      }
       community_group_owner_available: {
         Args: { p_group_id: string }
         Returns: boolean
@@ -5729,6 +5790,7 @@ export type Database = {
         | "group_join_request"
         | "group_join_decision"
         | "saved_listing_updated"
+        | "saved_search_match"
         | "moderation_decision"
         | "moderation_case"
         | "report_received"

@@ -11,6 +11,7 @@ export type NotificationDestinationKind =
   | "conversation"
   | "inspection_request"
   | "listing_vehicle"
+  | "marketplace_search"
   | "my_posts"
   | "moderation_case"
   | "organization"
@@ -31,7 +32,7 @@ export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, { label:
   social: { label: "Community", description: "Friend requests, comments, mentions, likes, and accepted answers.", locked: false },
   groups: { label: "Groups", description: "Invitations, join requests and decisions, moderator actions on your group posts, and role changes.", locked: false },
   messages: { label: "Messages", description: "New direct messages.", locked: false },
-  marketplace: { label: "Marketplace", description: "Inquiries and inspection requests on your listings, and changes to listings you saved.", locked: false },
+  marketplace: { label: "Marketplace", description: "Inquiries and inspection requests on your listings, changes to listings you saved, and new matches for saved searches.", locked: false },
   inspections: { label: "Inspections", description: "Technician assignments and report updates.", locked: false },
   safety: { label: "Safety & moderation", description: "Report receipts, decisions, warnings, and restrictions. Always delivered.", locked: true },
   account: { label: "Account", description: "Payments, security, and privacy requests. Always delivered.", locked: true },
@@ -63,6 +64,8 @@ export function notificationDestinationIntent(
     case "message_received":
       return { kind: "conversation", id: str(d.conversation_id), secondaryId: str(d.message_id) };
     case "listing_inspection_requested":
+    case "saved_search_match":
+      return { kind: "marketplace_search", id: str(d.saved_search_id), secondaryId: str(d.listing_id) };
     case "saved_listing_updated":
       return { kind: "listing_vehicle", id: str(d.vehicle_id), secondaryId: str(d.listing_id) };
     case "moderation_decision":
@@ -110,6 +113,8 @@ export function notificationWebPath(intent: NotificationDestinationIntent, messa
       return intent.id ? `/dashboard/ppi/${intent.id}` : "/dashboard/ppi";
     case "listing_vehicle":
       return intent.id ? `/vehicle/${intent.id}?tab=marketplace` : "/dashboard/listings";
+    case "marketplace_search":
+      return intent.id ? `/marketplace?saved=${encodeURIComponent(intent.id)}` : "/marketplace";
     case "my_posts":
       return "/dashboard/posts?tab=review";
     case "moderation_case":

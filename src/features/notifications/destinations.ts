@@ -101,6 +101,16 @@ async function intentAvailable(intent: NotificationDestinationIntent, viewerId: 
         .maybeSingle();
       return Boolean(data && (data.owner_id === viewerId || data.visibility === "public"));
     }
+    case "marketplace_search": {
+      if (!intent.id) return true;
+      const { data } = await admin
+        .from("marketplace_saved_searches")
+        .select("id")
+        .eq("id", intent.id)
+        .eq("profile_id", viewerId)
+        .maybeSingle();
+      return Boolean(data);
+    }
     case "moderation_case": {
       const { data } = await admin.rpc("moderation_has_capability", {
         p_profile_id: viewerId,

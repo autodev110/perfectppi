@@ -1,34 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import {
-  getMarketplaceListings,
-  type MarketplaceFilters,
-} from "@/features/marketplace/queries";
+import { getMarketplaceListings, getMarketplaceListingsPage } from "@/features/marketplace/queries";
 import { createMarketplaceListingFromInput } from "@/features/marketplace/actions";
 import { requireApiRole } from "@/features/auth/api";
+import { parseMarketplaceFilters } from "@/lib/marketplace/filters";
 
-const sortSchema = z.enum(["newest", "oldest", "price_asc", "price_desc", "mileage_asc"]);
-
-function numberParam(value: string | null) {
-  if (!value) return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
+// GET /api/marketplace/listings?…filters — see src/lib/marketplace/filters.ts
+// for the accepted keys (plan 25.1). With `page` the response is a page
+// envelope `{ items, page, per_page, total, has_more }`; without it the
+// full array is returned for older clients.
 export async function GET(req: NextRequest) {
-  const params = req.nextUrl.searchParams;
-  const sort = sortSchema.safeParse(params.get("sort"));
-
-  const filters: MarketplaceFilters = {
-    q: params.get("q") ?? undefined,
-    make: params.get("make") ?? undefined,
-    model: params.get("model") ?? undefined,
-    minYear: numberParam(params.get("minYear")),
-    maxYear: numberParam(params.get("maxYear")),
-    maxPrice: numberParam(params.get("maxPrice")),
-    sort: sort.success ? sort.data : undefined,
-  };
-
+  const filters = parseMarketplaceFilters(req.nextUrl.searchParams);
+  const pageParam = req.nextUrl.searchParams.get("page");
+  if (pageParam !== null) {
+    const perPage = Number(req.nextUrl.searchParams.get("perPage") ?? "");
+    const data = await getMarketplaceListingsPage(filters, Number(pageParam), Number.isInteger(perPage) && perPage > 0 ? perPage : undefined);
+    return NextResponse.json({ data });
+  }
   const data = await getMarketplaceListings(filters);
   return NextResponse.json({ data });
 }

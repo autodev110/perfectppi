@@ -256,6 +256,7 @@ enum NotificationType: String, Codable {
     case groupJoinRequest = "group_join_request"
     case groupJoinDecision = "group_join_decision"
     case savedListingUpdated = "saved_listing_updated"
+    case savedSearchMatch = "saved_search_match"
     /// Server-side categories grow over time (plan 22.1); an unrecognized
     /// value must not fail decoding of the whole inbox on an older build.
     case unknown
