@@ -41,6 +41,10 @@ const association = {
             "/": "/profile/*",
             comment: "Open a shared member profile in PerfectPPI.",
           },
+          {
+            "/": "/marketplace/listings/*",
+            comment: "Open a shared marketplace listing in PerfectPPI.",
+          },
         ],
       },
     ],

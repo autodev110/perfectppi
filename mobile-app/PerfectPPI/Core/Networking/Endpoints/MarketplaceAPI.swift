@@ -192,6 +192,17 @@ enum MarketplaceAPI {
         )
     }
 
+    struct RemoveResult: Decodable {
+        let id: String
+        /// "soft" keeps the row for savers / inspection requests; "hard" deleted it.
+        let mode: String
+    }
+
+    /// Owner remove (plan 25.2). Soft while anything references the listing.
+    static func remove(id: String) async throws -> RemoveResult {
+        try await APIClient.shared.delete("/api/marketplace/listings/\(id)")
+    }
+
     struct UpdatePayload: Encodable {
         /// Required: the server refuses an update that would blank the title.
         let title: String

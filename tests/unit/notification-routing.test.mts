@@ -33,6 +33,14 @@ describe("notification deep links (plan 22.1)", () => {
     assert.equal(notificationWebPath(notificationDestinationIntent("report_received", { caseId: "k" })), null);
   });
 
+  test("listing notices open the listing screen; inspection requests are not saved-search routes (plan 25.2)", () => {
+    const requested = notificationDestinationIntent("listing_inspection_requested", { listing_id: "l1", vehicle_id: "v1", request_id: "r1" });
+    assert.deepEqual(requested, { kind: "listing_vehicle", id: "v1", secondaryId: "l1" });
+    assert.equal(notificationWebPath(requested), "/marketplace/listings/l1");
+    assert.equal(notificationWebPath(notificationDestinationIntent("saved_listing_updated", { vehicle_id: "v1" })), "/vehicle/v1?tab=marketplace");
+    assert.equal(notificationWebPath(notificationDestinationIntent("saved_listing_updated", {})), "/dashboard/listings");
+  });
+
   test("saved-search matches open the marketplace with the saved search applied (plan 25.1)", () => {
     const intent = notificationDestinationIntent("saved_search_match", { saved_search_id: "s1", listing_id: "l1", count: 3 });
     assert.deepEqual(intent, { kind: "marketplace_search", id: "s1", secondaryId: "l1" });

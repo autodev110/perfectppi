@@ -82,6 +82,7 @@ private struct SignedInContainer: View {
                 case .profile(let username): MemberProfileView(username: username)
                 case .communityPost(let id): SharedLinkView(route: .post(id: id))
                 case .communityGroup(let slug): SharedLinkView(route: .group(slug: slug))
+                case .marketplaceListing(let id): SharedLinkView(route: .listing(id: id))
                 }
             }
         }
@@ -126,6 +127,7 @@ private struct SignedInContainer: View {
         case .profile(let username): linkedDestination = .profile(username: username)
         case .communityPost(let id): linkedDestination = .communityPost(id: id)
         case .communityGroup(let slug): linkedDestination = .communityGroup(slug: slug)
+        case .marketplaceListing(let id): linkedDestination = .marketplaceListing(id: id)
         default: return
         }
         router.selectedRoute = nil
@@ -346,6 +348,7 @@ private enum LinkedDestination: Identifiable {
     case profile(username: String)
     case communityPost(id: String)
     case communityGroup(slug: String)
+    case marketplaceListing(id: String)
 
     var id: String {
         switch self {
@@ -353,6 +356,7 @@ private enum LinkedDestination: Identifiable {
         case .profile(let username): "profile:\(username.lowercased())"
         case .communityPost(let id): "post:\(id)"
         case .communityGroup(let slug): "group:\(slug.lowercased())"
+        case .marketplaceListing(let id): "listing:\(id)"
         }
     }
 }

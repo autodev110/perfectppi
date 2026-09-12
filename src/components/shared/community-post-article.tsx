@@ -104,7 +104,7 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
 
       {post.vehicle && (
         <Link
-          href={`/vehicle/${post.vehicle.id}${post.marketplace_listing_id ? "?tab=marketplace" : ""}`}
+          href={post.marketplace_listing_id ? `/marketplace/listings/${post.marketplace_listing_id}` : `/vehicle/${post.vehicle.id}`}
           className="mx-6 mb-6 grid overflow-hidden rounded-2xl bg-surface-container transition-colors ghost-border hover:bg-surface-container-high sm:grid-cols-[180px_1fr]"
         >
           <div className="relative h-40 overflow-hidden bg-surface-container-low sm:h-full sm:min-h-40">

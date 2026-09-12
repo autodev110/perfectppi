@@ -67,7 +67,7 @@ export default async function AdminListingsPage({ searchParams }: PageProps) {
                       </p>
                     </div>
                     <Link
-                      href={`/vehicle/${listing.vehicle_id}?tab=marketplace`}
+                      href={`/marketplace/listings/${listing.id}`}
                       className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
                     >
                       Public page

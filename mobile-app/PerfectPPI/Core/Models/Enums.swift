@@ -268,7 +268,67 @@ enum NotificationType: String, Codable {
 }
 
 enum ListingStatus: String, Codable {
-    case active, sold, archived
+    case active, pending, paused, sold, archived, removed
+    /// Lifecycle states grow server-side (plan 25.2); an unknown value must
+    /// not fail decoding of a whole listing on an older build.
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ListingStatus(rawValue: raw) ?? .unknown
+    }
+
+    var label: String {
+        switch self {
+        case .active: "Active"
+        case .pending: "Sale pending"
+        case .paused: "Paused"
+        case .sold: "Sold"
+        case .archived: "Archived"
+        case .removed: "Removed"
+        case .unknown: "Unavailable"
+        }
+    }
+
+    /// Visible to buyers (browse, search, detail).
+    var isPublic: Bool { self == .active || self == .pending }
+    /// Holds the vehicle: one live listing per vehicle.
+    var isLive: Bool { isPublic || self == .paused }
+
+    enum ManageAction: String, CaseIterable, Identifiable {
+        case resume, markPending, pause, markSold, remove
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .resume: "Resume listing"
+            case .markPending: "Mark sale pending"
+            case .pause: "Pause"
+            case .markSold: "Mark sold"
+            case .remove: "Remove listing"
+            }
+        }
+        var target: ListingStatus? {
+            switch self {
+            case .resume: .active
+            case .markPending: .pending
+            case .pause: .paused
+            case .markSold: .sold
+            case .remove: nil
+            }
+        }
+    }
+
+    /// Owner actions from this state, in menu order (mirrors
+    /// `src/lib/marketplace/listing-status.ts`).
+    var manageActions: [ManageAction] {
+        switch self {
+        case .active: [.markPending, .pause, .markSold, .remove]
+        case .pending: [.resume, .pause, .markSold, .remove]
+        case .paused, .archived: [.resume, .markSold, .remove]
+        case .sold: [.resume, .remove]
+        case .removed, .unknown: []
+        }
+    }
 }
 
 enum CommunityContentStatus: String, Codable {

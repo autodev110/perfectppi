@@ -274,7 +274,7 @@ export default async function DashboardPage() {
                 return (
                   <li key={listing.id}>
                     <Link
-                      href={`/vehicle/${listing.vehicle_id}?tab=marketplace`}
+                      href={`/marketplace/listings/${listing.id}`}
                       className="block rounded-lg p-2 hover:bg-surface-container transition-colors"
                     >
                       <p className="text-sm font-semibold truncate">{vehicleName}</p>

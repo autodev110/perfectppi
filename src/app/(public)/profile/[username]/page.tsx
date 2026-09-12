@@ -284,7 +284,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
                 return (
                   <Link
                     key={l.id}
-                    href={`/vehicle/${l.vehicle_id}?tab=marketplace`}
+                    href={`/marketplace/listings/${l.id}`}
                     className="group bg-surface-container-lowest rounded-[1.25rem] overflow-hidden ghost-border shadow-sm hover:shadow-md transition-all"
                   >
                     <div className="h-44 bg-surface-container-low overflow-hidden relative">

@@ -413,7 +413,7 @@ export default async function HomePage() {
                 return (
                   <Link
                     key={listing.id}
-                    href={`/vehicle/${listing.vehicle_id}?tab=marketplace`}
+                    href={`/marketplace/listings/${listing.id}`}
                     className="group bg-surface-container-lowest rounded-[1.5rem] overflow-hidden ghost-border shadow-sm hover:shadow-xl transition-all"
                   >
                     <div className="relative h-48 bg-surface-container-low overflow-hidden">

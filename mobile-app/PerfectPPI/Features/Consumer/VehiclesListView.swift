@@ -105,7 +105,7 @@ struct GarageList: View {
         case .previouslyOwned: vehicle.ownershipState == .previouslyOwned
         case .considering: vehicle.ownershipState == .considering
         case .project: vehicle.ownershipState == .project
-        case .listed: vehicle.marketplaceListings?.contains { $0.status == .active } == true
+        case .listed: vehicle.marketplaceListings?.contains { $0.status.isLive } == true
         }
     }
 }
@@ -165,7 +165,7 @@ struct GarageVehicleRow: View {
                     if let inspection = latestInspection {
                         GarageChip(text: inspectionLabel(inspection.status), systemImage: "checkmark.seal.fill", tint: Theme.Palette.success)
                     }
-                    if vehicle.marketplaceListings?.contains(where: { $0.status == .active }) == true {
+                    if vehicle.marketplaceListings?.contains(where: { $0.status.isLive }) == true {
                         GarageChip(text: "Listed", systemImage: "tag.fill", tint: Theme.Palette.warning)
                     }
                 }
@@ -368,7 +368,7 @@ struct VehicleDetailView: View {
                                     systemImage: (vehicle.visibility ?? .private).systemImage,
                                     tint: .secondary
                                 )
-                                if vehicle.marketplaceListings?.contains(where: { $0.status == .active }) == true {
+                                if vehicle.marketplaceListings?.contains(where: { $0.status.isLive }) == true {
                                     GarageChip(text: "Listed", systemImage: "tag.fill", tint: Theme.Palette.warning)
                                 }
                             }
@@ -477,7 +477,7 @@ struct VehicleDetailView: View {
                                 Label("Community Posts About This Vehicle", systemImage: "text.bubble")
                             }
                         }
-                        if let listing = vehicle.marketplaceListings?.first(where: { $0.status == .active }) {
+                        if let listing = vehicle.marketplaceListings?.first(where: { $0.status.isLive }) {
                             NavigationLink {
                                 MarketplaceListingLoaderView(listingId: listing.id)
                             } label: {

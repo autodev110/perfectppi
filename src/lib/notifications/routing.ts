@@ -63,9 +63,9 @@ export function notificationDestinationIntent(
         : { kind: "friends", id: null, secondaryId: null };
     case "message_received":
       return { kind: "conversation", id: str(d.conversation_id), secondaryId: str(d.message_id) };
-    case "listing_inspection_requested":
     case "saved_search_match":
       return { kind: "marketplace_search", id: str(d.saved_search_id), secondaryId: str(d.listing_id) };
+    case "listing_inspection_requested":
     case "saved_listing_updated":
       return { kind: "listing_vehicle", id: str(d.vehicle_id), secondaryId: str(d.listing_id) };
     case "moderation_decision":
@@ -112,7 +112,11 @@ export function notificationWebPath(intent: NotificationDestinationIntent, messa
     case "inspection_request":
       return intent.id ? `/dashboard/ppi/${intent.id}` : "/dashboard/ppi";
     case "listing_vehicle":
-      return intent.id ? `/vehicle/${intent.id}?tab=marketplace` : "/dashboard/listings";
+      // The listing screen when the notice names the listing (plan 25.2);
+      // the vehicle passport is the fallback for older payloads.
+      return intent.secondaryId
+        ? `/marketplace/listings/${intent.secondaryId}`
+        : intent.id ? `/vehicle/${intent.id}?tab=marketplace` : "/dashboard/listings";
     case "marketplace_search":
       return intent.id ? `/marketplace?saved=${encodeURIComponent(intent.id)}` : "/marketplace";
     case "my_posts":

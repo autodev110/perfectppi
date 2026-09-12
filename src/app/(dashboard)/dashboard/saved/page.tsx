@@ -66,7 +66,7 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
               return (
                 <Card key={listing.id}>
                   <CardContent className="flex items-center justify-between gap-4 p-4">
-                    <Link href={`/vehicle/${listing.vehicle_id}?tab=marketplace`} className="flex min-w-0 items-center gap-3">
+                    <Link href={`/marketplace/listings/${listing.id}`} className="flex min-w-0 items-center gap-3">
                       <span className="flex h-12 w-16 shrink-0 items-center justify-center rounded-xl bg-surface-container">
                         <Car className="h-5 w-5 text-muted-foreground" />
                       </span>

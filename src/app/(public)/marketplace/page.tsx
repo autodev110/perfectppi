@@ -247,7 +247,7 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
                     </div>
                   ) : null}
                   <Link
-                    href={`/vehicle/${listing.vehicle_id}?tab=marketplace`}
+                    href={`/marketplace/listings/${listing.id}`}
                     className="group block min-w-0 bg-surface-container-lowest rounded-[1.5rem] overflow-hidden ghost-border shadow-sm hover:shadow-xl transition-all"
                   >
                     <div className="relative h-56 bg-surface-container-low overflow-hidden">

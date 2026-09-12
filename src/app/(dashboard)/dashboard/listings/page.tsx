@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { getMyMarketplaceListings } from "@/features/marketplace/queries";
 import {
-  archiveMarketplaceListing,
+  markMarketplaceListingPending,
   markMarketplaceListingSold,
+  pauseMarketplaceListing,
   reactivateMarketplaceListing,
+  removeMarketplaceListingFromForm,
 } from "@/features/marketplace/actions";
+import { ConfirmSubmitButton } from "@/components/shared/confirm-submit-button";
+import { LISTING_STATUS_LABELS, isListingPublic, listingManageActions } from "@/lib/marketplace/listing-status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,12 +17,15 @@ import { Car, ExternalLink, Gauge, Pencil, Plus, Tag } from "lucide-react";
 
 const STATUS_BADGE: Record<string, string> = {
   active: "bg-teal/10 text-teal border-teal/20",
+  pending: "bg-warning/15 text-on-surface border-warning/30",
+  paused: "bg-surface-container text-on-surface-variant border-outline-variant",
   sold: "bg-primary/10 text-primary border-primary/20",
   archived: "bg-surface-container text-on-surface-variant border-outline-variant",
+  removed: "bg-destructive/10 text-destructive border-destructive/20",
 };
 
-export default async function DashboardListingsPage() {
-  const listings = await getMyMarketplaceListings();
+export default async function DashboardListingsPage({ searchParams }: { searchParams: Promise<{ error?: string; removed?: string }> }) {
+  const [listings, query] = await Promise.all([getMyMarketplaceListings(), searchParams]);
 
   return (
     <div className="space-y-6">
@@ -37,6 +44,8 @@ export default async function DashboardListingsPage() {
         </Button>
       </div>
 
+      {query.removed ? <p className="rounded-xl bg-surface-container px-4 py-3 text-sm ghost-border">The listing was removed.</p> : null}
+      {query.error ? <p role="alert" className="rounded-xl bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive">{query.error}</p> : null}
       {listings.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
@@ -56,14 +65,12 @@ export default async function DashboardListingsPage() {
             const vehicle = listing.vehicle;
             const primaryMedia = vehicle?.vehicle_media?.find((media) => media.is_primary) ?? vehicle?.vehicle_media?.[0];
             const vehicleName = [vehicle?.year, vehicle?.make, vehicle?.model].filter(Boolean).join(" ") || listing.title;
-            // The public vehicle page 404s on private vehicles and only renders
-            // the marketplace tab for the active listing — send the row to the
-            // editor instead of a dead end when neither holds.
-            const publicHref =
-              listing.status === "active" && vehicle?.visibility === "public"
-                ? `/vehicle/${listing.vehicle_id}?tab=marketplace`
-                : null;
-            const editHref = `/dashboard/listings/${listing.id}/edit`;
+            // Owners can open their own listing screen in any state (plan
+            // 25.2); "Public Page" is only offered while buyers can see it.
+            const listingHref = `/marketplace/listings/${listing.id}`;
+            const publicHref = isListingPublic(listing.status) && vehicle?.visibility === "public" ? listingHref : null;
+            const editHref = listing.status === "removed" ? listingHref : `/dashboard/listings/${listing.id}/edit`;
+            const actions = listingManageActions(listing.status);
 
             return (
               <Card key={listing.id} className="overflow-hidden">
@@ -107,8 +114,8 @@ export default async function DashboardListingsPage() {
                           </h2>
                           <p className="text-sm text-muted-foreground break-words">{vehicleName}</p>
                         </div>
-                        <Badge variant="outline" className={`${STATUS_BADGE[listing.status]} shrink-0`}>
-                          {listing.status}
+                        <Badge variant="outline" className={`${STATUS_BADGE[listing.status] ?? ""} shrink-0`}>
+                          {LISTING_STATUS_LABELS[listing.status]}
                         </Badge>
                       </div>
 
@@ -126,37 +133,55 @@ export default async function DashboardListingsPage() {
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" asChild>
-                          <Link href={editHref}>
-                            <Pencil className="mr-2 h-3.5 w-3.5" />
-                            Edit
-                          </Link>
-                        </Button>
-                        {publicHref && (
-                          <Button size="sm" variant="outline" asChild>
-                            <Link href={publicHref}>
-                              <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                              Public Page
+                        {listing.status !== "removed" ? (
+                          <Button size="sm" asChild>
+                            <Link href={editHref}>
+                              <Pencil className="mr-2 h-3.5 w-3.5" />
+                              Edit
                             </Link>
                           </Button>
-                        )}
-                        {listing.status === "active" ? (
-                          <>
-                            <form action={markMarketplaceListingSold}>
-                              <input type="hidden" name="listing_id" value={listing.id} />
-                              <Button size="sm" variant="secondary" type="submit">Mark Sold</Button>
-                            </form>
-                            <form action={archiveMarketplaceListing}>
-                              <input type="hidden" name="listing_id" value={listing.id} />
-                              <Button size="sm" variant="ghost" type="submit">Archive</Button>
-                            </form>
-                          </>
-                        ) : (
+                        ) : null}
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href={listingHref}>
+                            <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                            {publicHref ? "Public Page" : "Listing"}
+                          </Link>
+                        </Button>
+                        {actions.includes("resume") ? (
                           <form action={reactivateMarketplaceListing}>
                             <input type="hidden" name="listing_id" value={listing.id} />
-                            <Button size="sm" variant="secondary" type="submit">Reactivate</Button>
+                            <Button size="sm" variant="secondary" type="submit">{listing.status === "sold" ? "Relist" : "Resume"}</Button>
                           </form>
-                        )}
+                        ) : null}
+                        {actions.includes("mark_pending") ? (
+                          <form action={markMarketplaceListingPending}>
+                            <input type="hidden" name="listing_id" value={listing.id} />
+                            <Button size="sm" variant="secondary" type="submit">Mark Pending</Button>
+                          </form>
+                        ) : null}
+                        {actions.includes("mark_sold") ? (
+                          <form action={markMarketplaceListingSold}>
+                            <input type="hidden" name="listing_id" value={listing.id} />
+                            <Button size="sm" variant="secondary" type="submit">Mark Sold</Button>
+                          </form>
+                        ) : null}
+                        {actions.includes("pause") ? (
+                          <form action={pauseMarketplaceListing}>
+                            <input type="hidden" name="listing_id" value={listing.id} />
+                            <Button size="sm" variant="ghost" type="submit">Pause</Button>
+                          </form>
+                        ) : null}
+                        {actions.includes("remove") ? (
+                          <form action={removeMarketplaceListingFromForm}>
+                            <input type="hidden" name="listing_id" value={listing.id} />
+                            <ConfirmSubmitButton
+                              message="Remove this listing? Members who saved it or requested an inspection will see it as no longer available. This cannot be undone."
+                              className="inline-flex h-9 items-center rounded-md px-3 text-sm font-medium text-destructive hover:bg-destructive/10"
+                            >
+                              Remove
+                            </ConfirmSubmitButton>
+                          </form>
+                        ) : null}
                       </div>
                     </div>
                   </div>

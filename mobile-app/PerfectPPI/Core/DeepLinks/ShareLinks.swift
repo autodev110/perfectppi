@@ -19,4 +19,8 @@ enum ShareLinks {
     static func vehicle(id: String) -> URL {
         AppConfig.apiBaseURL.appendingPathComponent("vehicle/\(id)")
     }
+
+    static func listing(id: String) -> URL {
+        AppConfig.apiBaseURL.appendingPathComponent("marketplace/listings/\(id)")
+    }
 }

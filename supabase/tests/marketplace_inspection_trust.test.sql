@@ -207,11 +207,26 @@ BEGIN
 END
 $$;
 
+-- Plan 25.2: an owner cannot hard-delete a listing an inspection request
+-- still references (the app soft-removes it instead) …
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000001', true);
+DO $$
+DECLARE hit boolean := false;
+BEGIN
+  BEGIN
+    DELETE FROM public.marketplace_listings WHERE id = '73000000-0000-0000-0000-000000000001';
+  EXCEPTION WHEN check_violation THEN hit := SQLERRM = 'listing_remove_soft';
+  END;
+  IF NOT hit THEN RAISE EXCEPTION 'owner delete of a referenced listing must be refused'; END IF;
+END
+$$;
+RESET ROLE;
+
+-- … and when the platform does delete it, inspection history is preserved
+-- and detached.
 DELETE FROM public.marketplace_listings
 WHERE id = '73000000-0000-0000-0000-000000000001';
-RESET ROLE;
 
 DO $$
 BEGIN

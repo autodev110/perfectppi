@@ -2145,6 +2145,7 @@ export type Database = {
           description: string | null
           id: string
           location: string | null
+          removed_at: string | null
           seller_id: string
           status: Database["public"]["Enums"]["listing_status"]
           title: string
@@ -2157,6 +2158,7 @@ export type Database = {
           description?: string | null
           id?: string
           location?: string | null
+          removed_at?: string | null
           seller_id: string
           status?: Database["public"]["Enums"]["listing_status"]
           title: string
@@ -2169,6 +2171,7 @@ export type Database = {
           description?: string | null
           id?: string
           location?: string | null
+          removed_at?: string | null
           seller_id?: string
           status?: Database["public"]["Enums"]["listing_status"]
           title?: string
@@ -4649,6 +4652,26 @@ export type Database = {
         Args: { p_listing_ids: string[]; p_viewer_id: string | null }
         Returns: { listing_id: string }[]
       }
+      marketplace_listing_is_public: {
+        Args: { p_status: Database["public"]["Enums"]["listing_status"] }
+        Returns: boolean
+      }
+      marketplace_listing_has_obligations: {
+        Args: { p_listing_id: string }
+        Returns: boolean
+      }
+      marketplace_seller_history: {
+        Args: { p_seller_id: string }
+        Returns: { active_count: number; sold_count: number; first_listed_at: string | null }[]
+      }
+      set_marketplace_listing_status: {
+        Args: { p_actor_profile_id: string; p_listing_id: string; p_status: Database["public"]["Enums"]["listing_status"] }
+        Returns: Database["public"]["Tables"]["marketplace_listings"]["Row"]
+      }
+      remove_marketplace_listing: {
+        Args: { p_actor_profile_id: string; p_listing_id: string }
+        Returns: string
+      }
       mark_vehicle_previously_owned: {
         Args: {
           p_keep_public_history: boolean
@@ -5774,7 +5797,7 @@ export type Database = {
       completion_state: "not_started" | "in_progress" | "completed"
       device_env: "prod" | "sandbox"
       device_platform: "ios" | "android"
-      listing_status: "active" | "sold" | "archived"
+      listing_status: "active" | "sold" | "archived" | "pending" | "paused" | "removed"
       media_type: "image" | "video"
       message_status: "unread" | "read" | "archived"
       notification_type:

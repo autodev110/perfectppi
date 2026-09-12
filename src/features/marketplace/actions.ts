@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { createConversation, sendMessage } from "@/features/messages/actions";
 import { getMessagesBasePath } from "@/features/auth/routing";
+import { listingLifecycleMessage } from "@/lib/marketplace/listing-status";
 
 const createListingSchema = z.object({
   vehicle_id: z.string().uuid("Choose a vehicle to list"),
@@ -25,7 +26,7 @@ const updateListingSchema = createListingSchema.omit({ vehicle_id: true }).exten
   title: z.string().trim().min(1, "Listing title is required").max(120),
 });
 
-const listingStatusSchema = z.enum(["active", "sold", "archived"]);
+const listingStatusSchema = z.enum(["active", "pending", "paused", "sold", "archived"]);
 const contactSellerSchema = z.object({
   listingId: z.string().uuid(),
   vehicleId: z.string().uuid().optional(),
@@ -90,11 +91,11 @@ export async function createMarketplaceListingFromInput(input: unknown) {
     .from("marketplace_listings")
     .select("id")
     .eq("vehicle_id", vehicle.id)
-    .eq("status", "active")
+    .in("status", ["active", "pending", "paused"])
     .maybeSingle();
 
   if (existing) {
-    return { error: "This vehicle already has an active marketplace listing" };
+    return { error: "This vehicle already has a live marketplace listing. Resume, sell, or remove it first." };
   }
 
   const generatedTitle = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim]
@@ -124,32 +125,66 @@ export async function createMarketplaceListingFromInput(input: unknown) {
   return { data };
 }
 
+function revalidateListing(listingId: string, vehicleId?: string | null) {
+  revalidatePath("/marketplace");
+  revalidatePath(`/marketplace/listings/${listingId}`);
+  revalidatePath("/dashboard/listings");
+  revalidatePath(`/dashboard/listings/${listingId}/edit`);
+  if (vehicleId) revalidatePath(`/vehicle/${vehicleId}`);
+}
+
+/** Owner status change through the lifecycle RPC (plan 25.2). */
 export async function updateMarketplaceListingStatus(
   listingId: string,
-  status: "active" | "sold" | "archived"
+  status: "active" | "pending" | "paused" | "sold" | "archived"
 ) {
   const parsedStatus = listingStatusSchema.safeParse(status);
   if (!parsedStatus.success) return { error: "Invalid listing status" };
+  if (!z.string().uuid().safeParse(listingId).success) return { error: "Invalid listing" };
 
   const profile = await getCurrentProfileId();
   if ("error" in profile) return { error: profile.error };
 
+  const { data, error } = await createAdminClient().rpc("set_marketplace_listing_status", {
+    p_actor_profile_id: profile.profileId,
+    p_listing_id: listingId,
+    p_status: parsedStatus.data,
+  });
+  if (error || !data) return { error: listingLifecycleMessage(error?.message) };
+
+  revalidateListing(listingId, data.vehicle_id);
+  return { success: true, status: data.status };
+}
+
+/**
+ * Remove: soft while inspection requests, conversations, saves, posts, or
+ * reports still reference the listing; hard otherwise. Returns the mode.
+ */
+export async function removeMarketplaceListing(listingId: string) {
+  if (!z.string().uuid().safeParse(listingId).success) return { error: "Invalid listing" };
+  const profile = await getCurrentProfileId();
+  if ("error" in profile) return { error: profile.error };
+
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("marketplace_listings")
-    .update({ status: parsedStatus.data })
-    .eq("id", listingId)
-    .eq("seller_id", profile.profileId)
-    .select("id, vehicle_id")
-    .single();
+  const { data: before } = await admin.from("marketplace_listings").select("vehicle_id").eq("id", listingId).maybeSingle();
+  const { data, error } = await admin.rpc("remove_marketplace_listing", {
+    p_actor_profile_id: profile.profileId,
+    p_listing_id: listingId,
+  });
+  if (error || !data) return { error: listingLifecycleMessage(error?.message) };
 
-  if (error) return { error: error.message };
+  revalidateListing(listingId, before?.vehicle_id);
+  return { success: true, mode: data as "soft" | "hard" };
+}
 
-  revalidatePath("/marketplace");
-  revalidatePath("/dashboard/listings");
-  if (data?.vehicle_id) revalidatePath(`/vehicle/${data.vehicle_id}`);
-
-  return { success: true };
+export async function removeMarketplaceListingFromForm(formData: FormData) {
+  const listingId = String(formData.get("listing_id") ?? "");
+  if (!listingId) return;
+  const result = await removeMarketplaceListing(listingId);
+  if ("error" in result) {
+    redirect(`/dashboard/listings?error=${encodeURIComponent(result.error ?? "")}`);
+  }
+  redirect("/dashboard/listings?removed=1");
 }
 
 export async function updateMarketplaceListing(formData: FormData) {
@@ -192,20 +227,35 @@ export async function updateMarketplaceListingFromInput(listingId: string, input
 
 async function updateListingStatusFromForm(
   formData: FormData,
-  status: "active" | "sold" | "archived"
+  status: "active" | "pending" | "paused" | "sold" | "archived"
 ) {
   const listingId = String(formData.get("listing_id") ?? "");
   if (!listingId) return;
 
-  await updateMarketplaceListingStatus(listingId, status);
+  const result = await updateMarketplaceListingStatus(listingId, status);
+  const back = String(formData.get("return_to") ?? "") || null;
+  if ("error" in result) {
+    const target = back && back.startsWith("/") ? back : `/marketplace/listings/${listingId}`;
+    redirect(`${target}${target.includes("?") ? "&" : "?"}manage_error=${encodeURIComponent(result.error ?? "")}`);
+  }
+  if (back && back.startsWith("/")) redirect(back);
 }
 
 export async function markMarketplaceListingSold(formData: FormData) {
   await updateListingStatusFromForm(formData, "sold");
 }
 
+export async function markMarketplaceListingPending(formData: FormData) {
+  await updateListingStatusFromForm(formData, "pending");
+}
+
+export async function pauseMarketplaceListing(formData: FormData) {
+  await updateListingStatusFromForm(formData, "paused");
+}
+
+/** Legacy dashboard action; archived behaves like paused (plan 25.2). */
 export async function archiveMarketplaceListing(formData: FormData) {
-  await updateListingStatusFromForm(formData, "archived");
+  await updateListingStatusFromForm(formData, "paused");
 }
 
 export async function reactivateMarketplaceListing(formData: FormData) {
@@ -230,8 +280,7 @@ export async function contactSellerFromListing(formData: FormData) {
     // Bounce back to the listing carrying the reason, so the button doesn't
     // just silently reload the page it was clicked from.
     const reason = result.error ?? "Could not contact this seller";
-    const back = parsed.data.vehicleId ? `/vehicle/${parsed.data.vehicleId}` : "/marketplace";
-    redirect(`${back}?tab=marketplace&contact_error=${encodeURIComponent(reason)}`);
+    redirect(`/marketplace/listings/${parsed.data.listingId}?contact_error=${encodeURIComponent(reason)}`);
   }
 
   redirect(`${result.data.messagesPath}/${result.data.conversationId}`);
@@ -374,17 +423,10 @@ export async function requestMarketplaceInspectionFromListing(formData: FormData
     if (result.error === "Not authenticated" || result.error === "Profile not found") {
       redirect("/login");
     }
-    const back = parsed.data.vehicleId
-      ? `/vehicle/${parsed.data.vehicleId}?tab=marketplace`
-      : "/marketplace";
-    const separator = back.includes("?") ? "&" : "?";
-    redirect(`${back}${separator}inspection_error=${encodeURIComponent(result.error)}`);
+    redirect(`/marketplace/listings/${parsed.data.listingId}?inspection_error=${encodeURIComponent(result.error)}`);
   }
 
-  const back = parsed.data.vehicleId
-    ? `/vehicle/${parsed.data.vehicleId}?tab=marketplace`
-    : "/marketplace?tab=marketplace";
-  redirect(`${back}&inspection_requested=1`);
+  redirect(`/marketplace/listings/${parsed.data.listingId}?inspection_requested=1`);
 }
 
 const saveListingSchema = z.object({

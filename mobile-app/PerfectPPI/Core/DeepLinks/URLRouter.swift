@@ -20,6 +20,8 @@ final class URLRouter: ObservableObject {
         /// (plan 15.4), re-checked by the API for this member.
         case communityPost(id: String)
         case communityGroup(slug: String)
+        /// /marketplace/listings/{id}: listing share links (plan 25.2).
+        case marketplaceListing(id: String)
         case unknown
     }
 
@@ -63,6 +65,10 @@ final class URLRouter: ObservableObject {
         }
         if parts.count >= 3, parts[0] == "community", parts[1] == "groups", !parts[2].isEmpty {
             selectedRoute = .communityGroup(slug: parts[2])
+            return true
+        }
+        if parts.count >= 3, parts[0] == "marketplace", parts[1] == "listings", UUID(uuidString: parts[2]) != nil {
+            selectedRoute = .marketplaceListing(id: parts[2])
             return true
         }
 

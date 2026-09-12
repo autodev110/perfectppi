@@ -7,7 +7,8 @@ export type ShareTarget =
   | { kind: "post"; id: string }
   | { kind: "profile"; username: string }
   | { kind: "group"; slug: string }
-  | { kind: "vehicle"; id: string };
+  | { kind: "vehicle"; id: string }
+  | { kind: "listing"; id: string };
 
 export function sharePath(target: ShareTarget): string {
   switch (target.kind) {
@@ -19,6 +20,8 @@ export function sharePath(target: ShareTarget): string {
       return `/community/groups/${encodeURIComponent(target.slug)}`;
     case "vehicle":
       return `/vehicle/${encodeURIComponent(target.id)}`;
+    case "listing":
+      return `/marketplace/listings/${encodeURIComponent(target.id)}`;
   }
 }
 
@@ -40,6 +43,8 @@ export function shareCardTitle(target: ShareTarget, label: string): string {
       return `${label} · PerfectPPI Groups`;
     case "vehicle":
       return `${label} · PerfectPPI`;
+    case "listing":
+      return `${label} · PerfectPPI Marketplace`;
   }
 }
 

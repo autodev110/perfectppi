@@ -549,11 +549,15 @@ private struct MarketplaceListingRow: View {
     }
 }
 
+/// The listing screen (plan 25.2), top to bottom: gallery → price & vehicle
+/// → Save/Share → inspection → description & specs → highlights → seller →
+/// safety → sticky actions. Owners get Manage Listing instead of contact.
 private struct MarketplaceListingDetailView: View {
-    let listing: MarketplaceListing
+    let initial: MarketplaceListing
     let currentProfileId: String?
     var onChanged: () -> Void = {}
 
+    @State private var listing: MarketplaceListing
     @State private var contacting = false
     @State private var requestingInspection = false
     @State private var notice: String?
@@ -561,13 +565,31 @@ private struct MarketplaceListingDetailView: View {
     @State private var inspectionRequest: MarketplaceInspectionRequestSummary?
     @State private var saved: Bool
     @State private var saving = false
+    @State private var galleryIndex = 0
+    @State private var editing = false
+    @State private var confirmingRemove = false
+    @State private var managing = false
+    @State private var removed = false
+    @Environment(\.dismiss) private var dismiss
 
     init(listing: MarketplaceListing, currentProfileId: String?, onChanged: @escaping () -> Void = {}) {
-        self.listing = listing
+        self.initial = listing
         self.currentProfileId = currentProfileId
         self.onChanged = onChanged
+        _listing = State(initialValue: listing)
         _inspectionRequest = State(initialValue: listing.inspectionRequest)
         _saved = State(initialValue: listing.savedByViewer ?? false)
+    }
+
+    private var isOwner: Bool { listing.sellerId == currentProfileId }
+    private var canContact: Bool { !isOwner && listing.status.isPublic }
+
+    private var photos: [MarketplaceListingPhoto] {
+        if let photos = listing.photos { return photos }
+        let media = listing.vehicle?.vehicleMedia ?? []
+        return media
+            .sorted { ($0.isPrimary == true ? 0 : 1, $0.sortOrder ?? 0) < ($1.isPrimary == true ? 0 : 1, $1.sortOrder ?? 0) }
+            .map { MarketplaceListingPhoto(id: $0.id, url: $0.url) }
     }
 
     /// Optimistic private save (plan 25.2); reconciled to the server answer.
@@ -591,71 +613,169 @@ private struct MarketplaceListingDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.spacing) {
-                // Aspect ratio first, then fill the width: the reverse order
-                // lets the hero size itself from the photo and overflow.
-                ListingThumbnail(listing: listing)
-                    .aspectRatio(4 / 3, contentMode: .fit)
-                    .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                if !listing.status.isPublic {
+                    Label("This listing is \(listing.status.label.lowercased()) and only you can see it.", systemImage: "eye.slash")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                gallery
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(listing.title)
-                        .font(.title2.bold())
+                    HStack(spacing: 6) {
+                        if listing.status == .pending {
+                            StatusBadge(text: "Sale pending", color: Theme.Palette.warning)
+                        }
+                        if let inspection = listing.inspectionSummary {
+                            Label(
+                                "\(inspection.scope == .dentsTires ? "Dents & Tires" : "Complete") · \(inspection.inspectedAt.formatted(date: .abbreviated, time: .omitted))",
+                                systemImage: "checkmark.seal"
+                            )
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Theme.Palette.success)
+                        }
+                    }
                     Text("$\((listing.askingPriceCents / 100).formatted())")
-                        .font(.title3.weight(.semibold))
-                    if let location = listing.location, !location.isEmpty {
-                        Label(location, systemImage: "mappin.and.ellipse")
+                        .font(.title.weight(.bold))
+                        .foregroundStyle(Theme.Palette.primary)
+                    Text(listing.title)
+                        .font(.title3.bold())
+                    if let vehicle = listing.vehicle {
+                        Text(vehicleLabel(vehicle))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: 10) {
+                        if let mileage = listing.vehicle?.mileage {
+                            Label("\(mileage.formatted()) mi", systemImage: "gauge.with.dots.needle.33percent")
+                        }
+                        if let location = listing.location, !location.isEmpty {
+                            Label(location, systemImage: "mappin.and.ellipse")
+                        }
+                        Label(
+                            MarketplaceFilters.sellerTypeLabel(listing.sellerType) ?? "Private seller",
+                            systemImage: listing.sellerType == "technician" ? "wrench.and.screwdriver" : "person"
+                        )
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                }
+
+                // Save and Share.
+                HStack(spacing: 10) {
+                    if !isOwner {
+                        Button {
+                            Task { await toggleSaved() }
+                        } label: {
+                            Label(saved ? "Saved" : "Save", systemImage: saved ? "bookmark.fill" : "bookmark")
+                        }
+                        .buttonStyle(OutlineButtonStyle())
+                        .disabled(saving)
+                        .accessibilityLabel(saved ? "Remove listing from saved" : "Save listing")
+                    }
+                    if listing.status.isPublic {
+                        ShareLink(item: ShareLinks.listing(id: listing.id), subject: Text(listing.title)) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                        .buttonStyle(OutlineButtonStyle())
+                    }
+                }
+
+                section("Inspection") {
+                    if let inspection = listing.inspectionSummary {
+                        VStack(alignment: .leading, spacing: 6) {
+                            row("Scope", inspection.scope == .dentsTires ? "Dents & Tires" : "Complete inspection")
+                            row("Inspected", inspection.inspectedAt.formatted(date: .abbreviated, time: .omitted))
+                            row("Performed by", inspection.performedBy)
+                            Text(isOwner
+                                 ? "Findings describe the vehicle on that date. Open the request from your Inspections list for the full report."
+                                 : "Findings describe the vehicle on that date and are not a guarantee of its condition today. The full report, technician notes, VIN, and private media are not shared publicly.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            if isOwner {
+                                NavigationLink {
+                                    ConsumerPpiDetailView(requestId: inspection.requestId)
+                                } label: {
+                                    Label("Open your full report", systemImage: "doc.text")
+                                        .font(.caption.weight(.semibold))
+                                }
+                            }
+                        }
+                    } else {
+                        Text("No PerfectPPI inspection is on record for this vehicle.\(canContact ? " You can request an independent one below." : "")")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                 }
 
-                if let vehicle = listing.vehicle {
-                    section("Vehicle") {
-                        VStack(alignment: .leading, spacing: 6) {
-                            row("Vehicle", vehicleLabel(vehicle))
-                            if let mileage = vehicle.mileage {
-                                row("Mileage", "\(mileage.formatted()) mi")
-                            }
-                            if let transmission = vehicle.transmission, !transmission.isEmpty {
-                                row("Transmission", transmission)
-                            }
-                            if let drivetrain = vehicle.drivetrain, !drivetrain.isEmpty {
-                                row("Drivetrain", drivetrain)
-                            }
-                            if let bodyStyle = vehicle.bodyStyle, !bodyStyle.isEmpty {
-                                row("Body style", bodyStyle)
-                            }
-                            if let seller = MarketplaceFilters.sellerTypeLabel(listing.sellerType) {
-                                row("Seller", seller)
-                            }
-                        }
-                    }
-                }
-
-                if let inspection = listing.inspectionSummary {
-                    section("Inspection") {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label(
-                                inspection.scope == .dentsTires ? "Dents & Tires inspection" : "Complete inspection",
-                                systemImage: "checkmark.seal.fill"
-                            )
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.Palette.success)
-                            Text("Inspected \(inspection.inspectedAt.formatted(date: .abbreviated, time: .omitted)) by \(inspection.performedBy).")
-                                .font(.caption)
-                            Text("This reflects the vehicle at that time and is not a guarantee of its current condition. Private notes, media, VIN, and the full report are not publicly shared.")
-                                .font(.caption2)
+                section("Condition & description") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if let description = listing.description, !description.isEmpty {
+                            Text(description).font(.subheadline)
+                        } else {
+                            Text("The seller has not added a description yet.")
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
+                        if let vehicle = listing.vehicle {
+                            Divider()
+                            VStack(alignment: .leading, spacing: 6) {
+                                if let year = vehicle.year { row("Year", String(year)) }
+                                if let make = vehicle.make, !make.isEmpty { row("Make", make) }
+                                if let model = vehicle.model, !model.isEmpty { row("Model", model) }
+                                if let trim = vehicle.trim, !trim.isEmpty { row("Trim", trim) }
+                                if let mileage = vehicle.mileage { row("Mileage", "\(mileage.formatted()) mi") }
+                                if let transmission = vehicle.transmission, !transmission.isEmpty { row("Transmission", transmission) }
+                                if let drivetrain = vehicle.drivetrain, !drivetrain.isEmpty { row("Drivetrain", drivetrain) }
+                                if let bodyStyle = vehicle.bodyStyle, !bodyStyle.isEmpty { row("Body style", bodyStyle) }
+                            }
+                        }
                     }
                 }
 
-                if let description = listing.description, !description.isEmpty {
-                    section("Description") {
-                        Text(description)
-                            .font(.subheadline)
+                if let highlights = listing.highlights, !highlights.isEmpty {
+                    section("Modifications & maintenance") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Published by the owner from this vehicle's passport. Not verified by PerfectPPI.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            ForEach(highlights) { item in
+                                HStack(alignment: .top) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.title).font(.subheadline.weight(.semibold))
+                                        if let detail = item.detail, !detail.isEmpty {
+                                            Text(detail).font(.caption).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(item.sourceLabel)
+                                            .font(.caption2.weight(.semibold))
+                                            .padding(.horizontal, 8).padding(.vertical, 3)
+                                            .background(Theme.Palette.card)
+                                            .clipShape(Capsule())
+                                        if let date = item.date {
+                                            Text(date).font(.caption2).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
+                }
+
+                sellerCard
+
+                section("Buy safely") {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("• Keep conversations in PerfectPPI Messages; never send deposits, gift cards, or wire transfers to hold a car.")
+                        Text("• See the vehicle and the title in person, and match the VIN on the car to the title before paying.")
+                        Text("• An inspection describes a date in the past. Request a new independent one if the last is old or limited in scope.")
+                        Text("• PerfectPPI never asks for payment through messages. Report anything that feels off from the seller's profile.")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
 
                 // Garage ↔ Community cross-navigation (plan Phase 1B).
@@ -668,67 +788,220 @@ private struct MarketplaceListingDetailView: View {
                     }
                     .buttonStyle(OutlineButtonStyle())
                 }
-
-                if listing.sellerId == currentProfileId {
-                    Text("This is your listing.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Button {
-                        Task { await toggleSaved() }
-                    } label: {
-                        Label(saved ? "Saved" : "Save Listing", systemImage: saved ? "bookmark.fill" : "bookmark")
-                    }
-                    .buttonStyle(OutlineButtonStyle())
-                    .disabled(saving)
-                    .accessibilityLabel(saved ? "Remove listing from saved" : "Save listing")
-
-                    Button {
-                        Task { await contactSeller() }
-                    } label: {
-                        Label(contacting ? "Opening..." : "Contact Seller", systemImage: "message")
-                    }
-                    .buttonStyle(PrimaryButtonStyle(isLoading: contacting))
-                    .disabled(contacting)
-
-                    if let inspectionRequest {
-                        NavigationLink {
-                            ConsumerPpiDetailView(requestId: inspectionRequest.requestId)
-                        } label: {
-                            Label(
-                                "Inspection requested · \(inspectionRequest.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)",
-                                systemImage: "checkmark.circle"
-                            )
-                        }
-                        .buttonStyle(OutlineButtonStyle())
-                    } else {
-                        Button {
-                            Task { await requestInspection() }
-                        } label: {
-                            Label(
-                                requestingInspection ? "Requesting..." : "Request Inspection",
-                                systemImage: "checklist"
-                            )
-                        }
-                        .buttonStyle(OutlineButtonStyle())
-                        .disabled(requestingInspection)
-                    }
-                }
             }
             .padding()
         }
+        .safeAreaInset(edge: .bottom) { stickyActions }
         .navigationTitle("Listing")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await refresh() }
         .navigationDestination(item: $openConversationId) { conversationId in
             MessageThreadView(
                 conversationId: conversationId,
                 currentProfileId: currentProfileId
             )
         }
+        .sheet(isPresented: $editing) {
+            EditListingView(listing: listing) {
+                onChanged()
+                Task { await refresh() }
+            }
+        }
+        .confirmationDialog(
+            "Remove this listing?",
+            isPresented: $confirmingRemove,
+            titleVisibility: .visible
+        ) {
+            Button("Remove listing", role: .destructive) { Task { await remove() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Members who saved it or requested an inspection will see it as no longer available. This cannot be undone.")
+        }
         .alert("Marketplace",
                isPresented: .constant(notice != nil),
                actions: { Button("OK") { notice = nil } },
                message: { Text(notice ?? "") })
+    }
+
+    // MARK: Sections
+
+    /// Swipeable full-width gallery with a count (plan 25.2 §1).
+    @ViewBuilder
+    private var gallery: some View {
+        let items = photos
+        ZStack(alignment: .bottomTrailing) {
+            if items.isEmpty {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Theme.Palette.subtle)
+                    .aspectRatio(4 / 3, contentMode: .fit)
+                    .overlay {
+                        VStack(spacing: 6) {
+                            Image(systemName: "car.fill").font(.largeTitle)
+                            Text("No photos yet").font(.caption.weight(.semibold))
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+            } else {
+                TabView(selection: $galleryIndex) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, photo in
+                        Color.clear
+                            .overlay {
+                                AsyncImage(url: URL(string: photo.url)) { phase in
+                                    switch phase {
+                                    case .success(let image): image.resizable().scaledToFill()
+                                    case .failure: Image(systemName: "photo").foregroundStyle(.secondary)
+                                    default: ProgressView()
+                                    }
+                                }
+                            }
+                            .clipped()
+                            .tag(index)
+                            .accessibilityLabel("Photo \(index + 1) of \(items.count)")
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .aspectRatio(4 / 3, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                Text("\(min(galleryIndex + 1, items.count)) / \(items.count)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Color.black.opacity(0.6))
+                    .clipShape(Capsule())
+                    .padding(10)
+            }
+        }
+    }
+
+    /// Seller card (plan 25.2 §7): permitted public profile + aggregate history.
+    private var sellerCard: some View {
+        section("Seller") {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    if let avatar = listing.seller?.avatarUrl, let url = URL(string: avatar) {
+                        AsyncImage(url: url) { phase in
+                            if case .success(let image) = phase {
+                                image.resizable().scaledToFill()
+                            } else {
+                                Avatar(name: listing.seller?.displayName ?? listing.seller?.username ?? "S", size: 40)
+                            }
+                        }
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+                    } else {
+                        Avatar(name: listing.seller?.displayName ?? listing.seller?.username ?? "S", size: 40)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(listing.seller?.displayName ?? listing.seller?.username ?? "PerfectPPI member")
+                            .font(.subheadline.weight(.semibold))
+                        Text(MarketplaceFilters.sellerTypeLabel(listing.sellerType) ?? "Private seller")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if let history = listing.sellerHistory {
+                    Text("\(history.activeCount) active listing\(history.activeCount == 1 ? "" : "s") · \(history.soldCount) sold on PerfectPPI\(history.firstListedAt.map { " · selling since \($0.formatted(date: .abbreviated, time: .omitted))" } ?? "")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if listing.seller?.isPublic == true, let username = listing.seller?.username, !username.isEmpty {
+                    NavigationLink {
+                        MemberProfileView(username: username)
+                    } label: {
+                        Label("View profile", systemImage: "person.crop.circle")
+                            .font(.caption.weight(.semibold))
+                    }
+                } else {
+                    Text("This member's profile is private.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    /// Sticky Message Seller / Request Inspection (plan 25.2 §9); owners see
+    /// Manage Listing, never a button to contact themselves.
+    @ViewBuilder
+    private var stickyActions: some View {
+        if isOwner {
+            if !removed {
+                HStack(spacing: 10) {
+                    Button {
+                        editing = true
+                    } label: {
+                        Label("Edit details", systemImage: "pencil")
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(listing.status == .removed)
+                    if !listing.status.manageActions.isEmpty {
+                        manageMenu
+                            .buttonStyle(OutlineButtonStyle())
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .background(.bar)
+            }
+        } else if canContact {
+            HStack(spacing: 10) {
+                Button {
+                    Task { await contactSeller() }
+                } label: {
+                    Label(contacting ? "Opening..." : "Message Seller", systemImage: "message")
+                }
+                .buttonStyle(PrimaryButtonStyle(isLoading: contacting))
+                .disabled(contacting)
+
+                if let inspectionRequest {
+                    NavigationLink {
+                        ConsumerPpiDetailView(requestId: inspectionRequest.requestId)
+                    } label: {
+                        Label(
+                            inspectionRequest.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized,
+                            systemImage: "checkmark.circle"
+                        )
+                        .lineLimit(1)
+                    }
+                    .buttonStyle(OutlineButtonStyle())
+                } else if listing.status == .active {
+                    Button {
+                        Task { await requestInspection() }
+                    } label: {
+                        Label(requestingInspection ? "Requesting..." : "Request Inspection", systemImage: "checklist")
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(OutlineButtonStyle())
+                    .disabled(requestingInspection)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            .background(.bar)
+        } else if !listing.status.isPublic {
+            Text("This listing is no longer accepting inquiries.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(.bar)
+        }
+    }
+
+    private var manageMenu: some View {
+        Menu {
+            ForEach(listing.status.manageActions) { action in
+                if action == .remove {
+                    Button(action.label, systemImage: "trash", role: .destructive) { confirmingRemove = true }
+                } else if let target = action.target {
+                    Button(action.label) { Task { await setStatus(target) } }
+                }
+            }
+        } label: {
+            Label(managing ? "Updating…" : "Manage", systemImage: "slider.horizontal.3")
+        }
+        .disabled(managing)
     }
 
     @ViewBuilder
@@ -747,7 +1020,7 @@ private struct MarketplaceListingDetailView: View {
         HStack {
             Text(label).foregroundStyle(.secondary)
             Spacer()
-            Text(value).fontWeight(.medium)
+            Text(value).fontWeight(.medium).multilineTextAlignment(.trailing)
         }
         .font(.subheadline)
     }
@@ -756,6 +1029,52 @@ private struct MarketplaceListingDetailView: View {
         let parts = [vehicle.year.map(String.init), vehicle.make, vehicle.model, vehicle.trim]
             .compactMap { $0 }
         return parts.isEmpty ? "Vehicle" : parts.joined(separator: " ")
+    }
+
+    // MARK: Actions
+
+    /// Fills in the listing-screen extras (gallery order, highlights, seller
+    /// history) that the browse rows do not carry.
+    @MainActor
+    private func refresh() async {
+        guard !removed else { return }
+        if let fresh = try? await MarketplaceAPI.get(id: listing.id) {
+            listing = fresh
+            inspectionRequest = fresh.inspectionRequest
+            saved = fresh.savedByViewer ?? saved
+        }
+    }
+
+    @MainActor
+    private func setStatus(_ status: ListingStatus) async {
+        guard !managing else { return }
+        managing = true
+        defer { managing = false }
+        do {
+            _ = try await MarketplaceAPI.updateStatus(id: listing.id, status: status)
+            onChanged()
+            await refresh()
+        } catch {
+            notice = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func remove() async {
+        guard !managing else { return }
+        managing = true
+        defer { managing = false }
+        do {
+            let result = try await MarketplaceAPI.remove(id: listing.id)
+            removed = true
+            onChanged()
+            notice = result.mode == "hard"
+                ? "The listing was removed."
+                : "The listing was removed. It stays on record for members who saved it or requested an inspection."
+            dismiss()
+        } catch {
+            notice = error.localizedDescription
+        }
     }
 
     /// The API creates the thread when there isn't one and returns the existing
@@ -794,6 +1113,8 @@ private struct MyListingsView: View {
     @State private var reloadToken = UUID()
     @State private var showingCreate = false
     @State private var editingListing: MarketplaceListing?
+    @State private var removing: MarketplaceListing?
+    @State private var error: String?
 
     var body: some View {
         AsyncContent(
@@ -820,22 +1141,26 @@ private struct MyListingsView: View {
                                 }
                                 HStack {
                                     StatusBadge(
-                                        text: listing.status.rawValue.capitalized,
+                                        text: listing.status.label,
                                         color: statusColor(listing.status)
                                     )
                                     Spacer()
                                     Menu {
-                                        Button("Edit", systemImage: "pencil") {
-                                            editingListing = listing
+                                        if listing.status != .removed {
+                                            Button("Edit", systemImage: "pencil") {
+                                                editingListing = listing
+                                            }
                                         }
-                                        Button("Mark Active") {
-                                            Task { await update(listing, status: .active) }
-                                        }
-                                        Button("Mark Sold") {
-                                            Task { await update(listing, status: .sold) }
-                                        }
-                                        Button("Archive") {
-                                            Task { await update(listing, status: .archived) }
+                                        ForEach(listing.status.manageActions) { action in
+                                            if action == .remove {
+                                                Button(action.label, systemImage: "trash", role: .destructive) {
+                                                    removing = listing
+                                                }
+                                            } else if let target = action.target {
+                                                Button(action.label) {
+                                                    Task { await update(listing, status: target) }
+                                                }
+                                            }
                                         }
                                     } label: {
                                         Image(systemName: "ellipsis.circle")
@@ -868,6 +1193,23 @@ private struct MyListingsView: View {
                         reloadToken = UUID()
                     }
                 }
+                .confirmationDialog(
+                    "Remove this listing?",
+                    isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                    titleVisibility: .visible
+                ) {
+                    Button("Remove listing", role: .destructive) {
+                        if let listing = removing { Task { await remove(listing) } }
+                    }
+                    Button("Cancel", role: .cancel) { removing = nil }
+                } message: {
+                    Text("Members who saved it or requested an inspection will see it as no longer available. This cannot be undone.")
+                }
+                .alert("Could not update", isPresented: .constant(error != nil)) {
+                    Button("OK") { error = nil }
+                } message: {
+                    Text(error ?? "")
+                }
             },
             failure: { error, retry in
                 ErrorView(message: error.localizedDescription, retry: retry)
@@ -876,21 +1218,34 @@ private struct MyListingsView: View {
         .id(reloadToken)
     }
 
+    @MainActor
     private func update(_ listing: MarketplaceListing, status: ListingStatus) async {
         do {
             _ = try await MarketplaceAPI.updateStatus(id: listing.id, status: status)
             reloadToken = UUID()
         } catch {
-            // Keep the list visible; refreshing on the next user action will
-            // retry. Full alert plumbing here would make the manager heavier.
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func remove(_ listing: MarketplaceListing) async {
+        defer { removing = nil }
+        do {
+            _ = try await MarketplaceAPI.remove(id: listing.id)
+            reloadToken = UUID()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 
     private func statusColor(_ status: ListingStatus) -> Color {
         switch status {
         case .active: return Theme.Palette.success
+        case .pending: return Theme.Palette.warning
         case .sold: return Theme.Palette.primary
-        case .archived: return .secondary
+        case .removed: return Theme.Palette.danger
+        case .paused, .archived, .unknown: return .secondary
         }
     }
 }

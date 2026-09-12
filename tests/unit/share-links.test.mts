@@ -9,6 +9,7 @@ describe("permission-aware share links (plan 15.4)", () => {
     assert.equal(sharePath({ kind: "profile", username: "Bea Cole" }), "/profile/Bea%20Cole");
     assert.equal(sharePath({ kind: "group", slug: "e30-owners" }), "/community/groups/e30-owners");
     assert.equal(sharePath({ kind: "vehicle", id: "v1" }), "/vehicle/v1");
+    assert.equal(sharePath({ kind: "listing", id: "l1" }), "/marketplace/listings/l1");
     assert.equal(shareUrl({ kind: "post", id: "abc" }, "https://www.perfectppi.com"), "https://www.perfectppi.com/community/posts/abc");
   });
 

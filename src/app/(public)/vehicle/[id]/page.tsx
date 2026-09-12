@@ -375,7 +375,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                 <div className="flex items-center gap-2 mb-3">
                   <Tag className="h-4 w-4 text-on-tertiary-container" />
                   <Badge className="bg-teal/10 text-teal hover:bg-teal/10">
-                    Active Listing
+                    {activeListing.status === "pending" ? "Sale pending" : "Active Listing"}
                   </Badge>
                 </div>
                 <h2 className="font-heading text-2xl font-extrabold tracking-tight text-on-surface mb-2 break-words">
@@ -429,23 +429,22 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                   </div>
                 </div>
 
-                {activeListing.viewer_is_seller ? (
-                  <Link
-                    href={`/dashboard/listings/${activeListing.id}/edit`}
-                    className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90 transition-opacity"
-                  >
-                    Manage Listing
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                ) : (
+                <Link
+                  href={`/marketplace/listings/${activeListing.id}`}
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-primary px-5 py-3 text-sm font-bold text-primary hover:bg-primary/5 transition-colors"
+                >
+                  {activeListing.viewer_is_seller ? "Manage Listing" : "View full listing"}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                {activeListing.viewer_is_seller ? null : (
                   <form action={contactSellerFromListing}>
                     <input type="hidden" name="listing_id" value={activeListing.id} />
                     <input type="hidden" name="vehicle_id" value={id} />
                     <button
                       type="submit"
-                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90 transition-opacity"
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90 transition-opacity"
                     >
-                      Contact Seller
+                      Message Seller
                       <ArrowRight className="h-4 w-4" />
                     </button>
                   </form>

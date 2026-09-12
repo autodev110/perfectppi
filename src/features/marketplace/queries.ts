@@ -48,6 +48,9 @@ export type MarketplaceListing = Listing & {
   seller_type: "member" | "technician";
 };
 
+/** Browseable states (plan 25.2); mirrors marketplace_listing_is_public. */
+const PUBLIC_LISTING_STATUSES = ["active", "pending"] as const;
+
 const LISTING_SELECT = `
   id, vehicle_id, seller_id, title, description, asking_price_cents, location, status, created_at, updated_at,
   vehicle:vehicles!marketplace_listings_vehicle_id_fkey(
@@ -330,7 +333,7 @@ export async function getMarketplaceListings(filters?: MarketplaceFilters) {
   const { data } = await supabase
     .from("marketplace_listings")
     .select(LISTING_SELECT)
-    .eq("status", "active")
+    .in("status", PUBLIC_LISTING_STATUSES)
     .order("created_at", { ascending: false });
 
   const rows = (data ?? []) as unknown as ListingRow[];
@@ -377,7 +380,9 @@ export async function getVehicleActiveListing(vehicleId: string) {
     .from("marketplace_listings")
     .select(LISTING_SELECT)
     .eq("vehicle_id", vehicleId)
-    .eq("status", "active")
+    .in("status", PUBLIC_LISTING_STATUSES)
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   const listing = (data as unknown as ListingRow | null) ?? null;
@@ -400,10 +405,95 @@ export async function getMarketplaceListing(listingId: string) {
 
   const listing = (data as unknown as ListingRow | null) ?? null;
   if (!listing) return null;
-  const [visible] = await filterVisibleListings([listing], viewerId);
-  if (!visible) return null;
-  const [trusted] = await addInspectionTrust([await cleanListingMedia(visible)], viewerId);
+  // Owners see their own listing in any state (paused, sold, removed) so
+  // Manage Listing has somewhere to live; everyone else needs it public.
+  const ownerView = viewerId !== null && listing.seller_id === viewerId;
+  if (!ownerView) {
+    const [visible] = await filterVisibleListings([listing], viewerId);
+    if (!visible) return null;
+  }
+  const [trusted] = await addInspectionTrust([await cleanListingMedia(listing, !ownerView)], viewerId);
   return trusted ?? null;
+}
+
+export type ListingHighlight = {
+  id: string;
+  title: string;
+  detail: string | null;
+  date: string | null;
+  source: "build_journal" | "maintenance_log";
+};
+
+export type MarketplaceSellerHistory = {
+  active_count: number;
+  sold_count: number;
+  first_listed_at: string | null;
+};
+
+export type MarketplaceListingDetail = MarketplaceListing & {
+  /** Public vehicle photos in gallery order (primary first). */
+  photos: Array<{ id: string; url: string }>;
+  /** Owner-published build/maintenance entries, labeled by source (plan 25.2 §6). */
+  highlights: ListingHighlight[];
+  seller_history: MarketplaceSellerHistory;
+};
+
+/**
+ * The listing screen (plan 25.2): the listing plus gallery, owner-published
+ * modification / maintenance highlights, and the seller's aggregate history.
+ */
+export async function getMarketplaceListingDetail(listingId: string): Promise<MarketplaceListingDetail | null> {
+  const listing = await getMarketplaceListing(listingId);
+  if (!listing) return null;
+  const admin = createAdminClient();
+  const [{ data: history }, { data: build }, { data: maintenance }] = await Promise.all([
+    admin.rpc("marketplace_seller_history", { p_seller_id: listing.seller_id }),
+    admin
+      .from("vehicle_build_entries")
+      .select("id, title, category, manufacturer, installed_on, installation_kind, shop_name")
+      .eq("vehicle_id", listing.vehicle_id)
+      .eq("is_public", true)
+      .order("installed_on", { ascending: false, nullsFirst: false })
+      .limit(4),
+    admin
+      .from("vehicle_maintenance_events")
+      .select("id, service_type, serviced_on, mileage, provider")
+      .eq("vehicle_id", listing.vehicle_id)
+      .eq("is_public", true)
+      .order("serviced_on", { ascending: false })
+      .limit(4),
+  ]);
+  const photos = (listing.vehicle?.vehicle_media ?? [])
+    .filter((item) => item.media_type === "image")
+    .sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || a.sort_order - b.sort_order)
+    .map((item) => ({ id: item.id, url: item.url }));
+  const highlights: ListingHighlight[] = [
+    ...(build ?? []).map((entry) => ({
+      id: entry.id,
+      title: entry.title,
+      detail: [entry.manufacturer, entry.installation_kind === "shop_installed" ? (entry.shop_name ?? "Shop installed") : entry.installation_kind === "self_installed" ? "Self installed" : null].filter(Boolean).join(" · ") || null,
+      date: entry.installed_on,
+      source: "build_journal" as const,
+    })),
+    ...(maintenance ?? []).map((event) => ({
+      id: event.id,
+      title: event.service_type,
+      detail: [event.mileage != null ? `${event.mileage.toLocaleString()} mi` : null, event.provider].filter(Boolean).join(" · ") || null,
+      date: event.serviced_on,
+      source: "maintenance_log" as const,
+    })),
+  ];
+  const historyRow = history?.[0];
+  return {
+    ...listing,
+    photos,
+    highlights,
+    seller_history: {
+      active_count: historyRow?.active_count ?? 0,
+      sold_count: historyRow?.sold_count ?? 0,
+      first_listed_at: historyRow?.first_listed_at ?? null,
+    },
+  };
 }
 
 export async function getMyMarketplaceListings() {

@@ -119,7 +119,7 @@ export default async function CommunitySearchPage({ searchParams }: { searchPara
             ))
           ) : results.tab === "listings" ? (
             results.items.map((listing) => (
-              <Link key={listing.id} href={`/vehicle/${listing.vehicle_id}?tab=marketplace`} className="flex items-center gap-4 rounded-2xl bg-surface-container-lowest p-4 shadow-sm ghost-border hover:bg-surface-container">
+              <Link key={listing.id} href={`/marketplace/listings/${listing.id}`} className="flex items-center gap-4 rounded-2xl bg-surface-container-lowest p-4 shadow-sm ghost-border hover:bg-surface-container">
                 <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-container">
                   {listing.photo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element

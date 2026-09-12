@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiRole } from "@/features/auth/api";
-import { getMarketplaceListing } from "@/features/marketplace/queries";
+import { getMarketplaceListingDetail } from "@/features/marketplace/queries";
 import {
+  removeMarketplaceListing,
   updateMarketplaceListingFromInput,
   updateMarketplaceListingStatus,
 } from "@/features/marketplace/actions";
 
 const statusSchema = z.object({
-  status: z.enum(["active", "sold", "archived"]),
+  status: z.enum(["active", "pending", "paused", "sold", "archived"]),
 });
 
 const detailsSchema = z.object({
@@ -23,13 +24,29 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const data = await getMarketplaceListing(id);
+  // The listing screen payload (plan 25.2): gallery, highlights, seller history.
+  const data = await getMarketplaceListingDetail(id);
 
   if (!data) {
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ data });
+  return NextResponse.json({ data }, { headers: { "Cache-Control": "private, no-store" } });
+}
+
+// DELETE /api/marketplace/listings/<id> — owner remove (soft while referenced).
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireApiRole(["consumer", "technician", "org_manager", "admin"]);
+  if ("response" in auth) return auth.response;
+  const { id } = await params;
+  const result = await removeMarketplaceListing(id);
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error }, { status: 400 });
+  }
+  return NextResponse.json({ data: { id, mode: result.mode } });
 }
 
 export async function PATCH(

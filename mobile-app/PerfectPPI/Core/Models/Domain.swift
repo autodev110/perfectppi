@@ -183,6 +183,33 @@ struct MarketplaceListing: Codable, Identifiable, Hashable {
     let savedByViewer: Bool?
     /// "member" or "technician" (plan 25.1 seller-type filter).
     let sellerType: String?
+    let removedAt: Date?
+    /// Listing-screen extras (plan 25.2), present on the detail endpoint only.
+    let photos: [MarketplaceListingPhoto]?
+    let highlights: [MarketplaceListingHighlight]?
+    let sellerHistory: MarketplaceSellerHistory?
+}
+
+struct MarketplaceListingPhoto: Codable, Identifiable, Hashable {
+    let id: String
+    let url: String
+}
+
+/// Owner-published build / maintenance entry, labeled by source.
+struct MarketplaceListingHighlight: Codable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let detail: String?
+    let date: String?
+    let source: String
+
+    var sourceLabel: String { source == "build_journal" ? "Build journal" : "Maintenance log" }
+}
+
+struct MarketplaceSellerHistory: Codable, Hashable {
+    let activeCount: Int
+    let soldCount: Int
+    let firstListedAt: Date?
 }
 
 struct MarketplaceInspectionSummary: Codable, Hashable {
