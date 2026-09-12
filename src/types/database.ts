@@ -3564,6 +3564,103 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_collections: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_collections_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_collection_items: {
+        Row: {
+          collection_id: string
+          created_at: string
+          entity_id: string
+          entity_type: Database["public"]["Enums"]["saved_collection_entity_type"]
+          id: string
+        }
+        Insert: {
+          collection_id: string
+          created_at?: string
+          entity_id: string
+          entity_type: Database["public"]["Enums"]["saved_collection_entity_type"]
+          id?: string
+        }
+        Update: {
+          collection_id?: string
+          created_at?: string
+          entity_id?: string
+          entity_type?: Database["public"]["Enums"]["saved_collection_entity_type"]
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_collection_items_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "saved_collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_build_subscriptions: {
+        Row: {
+          created_at: string
+          profile_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          profile_id: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          profile_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_build_subscriptions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_build_subscriptions_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       friend_request_events: {
         Row: {
           actor_id: string
@@ -5383,6 +5480,28 @@ export type Database = {
         Args: { p_viewer_id: string; p_limit?: number; p_offset?: number }
         Returns: { post_id: string; saved_at: string }[]
       }
+      upsert_saved_collection: {
+        Args: { p_actor_profile_id: string; p_collection_id: string | null; p_name: string }
+        Returns: Database["public"]["Tables"]["saved_collections"]["Row"]
+      }
+      delete_saved_collection: {
+        Args: { p_actor_profile_id: string; p_collection_id: string }
+        Returns: boolean
+      }
+      set_saved_collection_item: {
+        Args: {
+          p_actor_profile_id: string
+          p_collection_id: string
+          p_entity_type: Database["public"]["Enums"]["saved_collection_entity_type"]
+          p_entity_id: string
+          p_saved: boolean
+        }
+        Returns: boolean
+      }
+      set_vehicle_build_subscription: {
+        Args: { p_actor_profile_id: string; p_vehicle_id: string; p_subscribed: boolean }
+        Returns: boolean
+      }
       member_activity_badges: {
         Args: { p_profile_id: string }
         Returns: Json
@@ -6071,6 +6190,8 @@ export type Database = {
         | "warranty_available"
         | "payment_completed"
         | "message_received"
+        | "build_update"
+      saved_collection_entity_type: "post" | "listing" | "vehicle" | "build"
       org_member_role: "technician" | "manager"
       payment_method: "card" | "bank_transfer" | "financing"
       payment_status: "pending" | "completed" | "failed" | "refunded"
@@ -6306,7 +6427,9 @@ export const Constants = {
         "group_join_request",
         "group_join_decision",
         "saved_listing_updated",
+        "build_update",
       ],
+      saved_collection_entity_type: ["post", "listing", "vehicle", "build"],
       org_member_role: ["technician", "manager"],
       payment_method: ["card", "bank_transfer", "financing"],
       payment_status: ["pending", "completed", "failed", "refunded"],

@@ -48,6 +48,12 @@ describe("notification deep links (plan 22.1)", () => {
     assert.equal(notificationWebPath(notificationDestinationIntent("saved_search_match", {})), "/marketplace");
   });
 
+  test("private build subscriptions open the currently visible build entry", () => {
+    const intent = notificationDestinationIntent("build_update", { vehicle_id: "v1", build_entry_id: "b1" });
+    assert.deepEqual(intent, { kind: "vehicle_build", id: "v1", secondaryId: "b1" });
+    assert.equal(notificationWebPath(intent), "/vehicle/v1?tab=build#build-b1");
+  });
+
   test("group invitations, requests, and decisions open the group (plan 13.3)", () => {
     for (const type of ["group_invitation", "group_join_request", "group_join_decision", "group_role_changed"]) {
       assert.deepEqual(notificationDestinationIntent(type, { group_slug: "e30-owners", group_id: "g1" }), {

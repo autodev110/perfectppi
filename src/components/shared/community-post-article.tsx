@@ -22,6 +22,7 @@ import { PostDetailsCard } from "@/components/shared/post-details-card";
 import { POST_TYPE_LABELS, type PostType } from "@/lib/community/post-types";
 import { CommunityHelpfulButton } from "@/components/shared/community-helpful-button";
 import { QuestionOutcomeControl } from "@/components/shared/question-outcome-control";
+import { SavedCollectionButton } from "@/components/shared/saved-collection-button";
 
 function getVehicleName(vehicle: { year: number | null; make: string | null; model: string | null; trim: string | null } | null) {
   return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ");
@@ -154,6 +155,7 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
             disabled={!post.can_like}
           />
           <CommunitySaveButton postId={post.id} initialSaved={post.saved_by_viewer} />
+          <SavedCollectionButton entityType="post" entityId={post.id} compact />
           <ShareButton path={sharePath({ kind: "post", id: post.id })} title={`${post.author?.display_name ?? post.author?.username ?? "A member"} on PerfectPPI Community`} />
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-on-surface-variant" />

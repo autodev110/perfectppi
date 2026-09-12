@@ -565,6 +565,9 @@ private struct MarketplaceListingDetailView: View {
     @State private var inspectionRequest: MarketplaceInspectionRequestSummary?
     @State private var saved: Bool
     @State private var saving = false
+    @State private var collectionTarget: MarketplaceCollectionTarget?
+    @State private var buildSubscribed = false
+    @State private var updatingBuildSubscription = false
     @State private var galleryIndex = 0
     @State private var editing = false
     @State private var sharingInspection = false
@@ -675,6 +678,19 @@ private struct MarketplaceListingDetailView: View {
                         .disabled(saving)
                         .accessibilityLabel(saved ? "Remove listing from saved" : "Save listing")
                     }
+                    if currentProfileId != nil {
+                        Button { collectionTarget = MarketplaceCollectionTarget(entityType: "listing", entityId: listing.id) } label: {
+                            Label("Collection", systemImage: "folder.badge.plus")
+                        }
+                        .buttonStyle(OutlineButtonStyle())
+                    }
+                    if !isOwner, currentProfileId != nil {
+                        Button { Task { await toggleBuildSubscription() } } label: {
+                            Label(buildSubscribed ? "Build updates on" : "Build updates", systemImage: buildSubscribed ? "bell.fill" : "bell")
+                        }
+                        .buttonStyle(OutlineButtonStyle())
+                        .disabled(updatingBuildSubscription)
+                    }
                     if listing.status.isPublic {
                         ShareLink(item: ShareLinks.listing(id: listing.id), subject: Text(listing.title)) {
                             Label("Share", systemImage: "square.and.arrow.up")
@@ -775,6 +791,15 @@ private struct MarketplaceListingDetailView: View {
                                         if let date = item.date {
                                             Text(date).font(.caption2).foregroundStyle(.secondary)
                                         }
+                                        if item.source == "build_journal", currentProfileId != nil {
+                                            Button {
+                                                collectionTarget = MarketplaceCollectionTarget(entityType: "build", entityId: item.id)
+                                            } label: {
+                                                Image(systemName: "folder.badge.plus")
+                                            }
+                                            .buttonStyle(.borderless)
+                                            .accessibilityLabel("Add build entry to collection")
+                                        }
                                     }
                                 }
                             }
@@ -831,6 +856,9 @@ private struct MarketplaceListingDetailView: View {
                     Task { await refresh() }
                 }
             }
+        }
+        .sheet(item: $collectionTarget) { target in
+            NavigationStack { SavedCollectionPickerView(entityType: target.entityType, entityId: target.entityId) }
         }
         .confirmationDialog(
             "Remove this listing?",
@@ -1068,6 +1096,26 @@ private struct MarketplaceListingDetailView: View {
             inspectionRequest = fresh.inspectionRequest
             saved = fresh.savedByViewer ?? saved
         }
+        if !isOwner, currentProfileId != nil,
+           let subscription = try? await VehiclesAPI.buildSubscription(id: listing.vehicleId) {
+            buildSubscribed = subscription.subscribed
+        }
+    }
+
+    @MainActor
+    private func toggleBuildSubscription() async {
+        guard !updatingBuildSubscription else { return }
+        let previous = buildSubscribed
+        buildSubscribed.toggle()
+        updatingBuildSubscription = true
+        defer { updatingBuildSubscription = false }
+        do {
+            let result = try await VehiclesAPI.setBuildSubscription(id: listing.vehicleId, subscribed: buildSubscribed)
+            buildSubscribed = result.subscribed
+        } catch {
+            buildSubscribed = previous
+            notice = error.localizedDescription
+        }
     }
 
     @MainActor
@@ -1131,6 +1179,12 @@ private struct MarketplaceListingDetailView: View {
             notice = error.localizedDescription
         }
     }
+}
+
+private struct MarketplaceCollectionTarget: Identifiable {
+    let entityType: String
+    let entityId: String
+    var id: String { "\(entityType):\(entityId)" }
 }
 
 /// Seller-facing redaction preview and attach/detach controls (plan 25.3).

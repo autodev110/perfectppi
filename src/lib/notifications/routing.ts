@@ -12,6 +12,7 @@ export type NotificationDestinationKind =
   | "inspection_request"
   | "listing_vehicle"
   | "marketplace_search"
+  | "vehicle_build"
   | "my_posts"
   | "moderation_case"
   | "organization"
@@ -29,7 +30,7 @@ export const NOTIFICATION_CATEGORIES = ["social", "groups", "messages", "marketp
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
 export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, { label: string; description: string; locked: boolean }> = {
-  social: { label: "Community", description: "Friend requests, comments, mentions, likes, and accepted answers.", locked: false },
+  social: { label: "Community", description: "Friend requests, comments, mentions, likes, accepted answers, and saved vehicle build updates.", locked: false },
   groups: { label: "Groups", description: "Invitations, join requests and decisions, moderator actions on your group posts, and role changes.", locked: false },
   messages: { label: "Messages", description: "New direct messages.", locked: false },
   marketplace: { label: "Marketplace", description: "Inquiries and inspection requests on your listings, changes to listings you saved, and new matches for saved searches.", locked: false },
@@ -65,6 +66,8 @@ export function notificationDestinationIntent(
       return { kind: "conversation", id: str(d.conversation_id), secondaryId: str(d.message_id) };
     case "saved_search_match":
       return { kind: "marketplace_search", id: str(d.saved_search_id), secondaryId: str(d.listing_id) };
+    case "build_update":
+      return { kind: "vehicle_build", id: str(d.vehicle_id), secondaryId: str(d.build_entry_id) };
     case "listing_inspection_requested":
     case "saved_listing_updated":
       return { kind: "listing_vehicle", id: str(d.vehicle_id), secondaryId: str(d.listing_id) };
@@ -119,6 +122,10 @@ export function notificationWebPath(intent: NotificationDestinationIntent, messa
         : intent.id ? `/vehicle/${intent.id}?tab=marketplace` : "/dashboard/listings";
     case "marketplace_search":
       return intent.id ? `/marketplace?saved=${encodeURIComponent(intent.id)}` : "/marketplace";
+    case "vehicle_build":
+      return intent.id
+        ? `/vehicle/${encodeURIComponent(intent.id)}?tab=build${intent.secondaryId ? `#build-${encodeURIComponent(intent.secondaryId)}` : ""}`
+        : "/dashboard/saved?tab=collections";
     case "my_posts":
       return "/dashboard/posts?tab=review";
     case "moderation_case":

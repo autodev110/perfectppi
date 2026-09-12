@@ -7,6 +7,7 @@ import { getCurrentSocialProfileId } from "@/features/social/relationships";
 import { ListingGallery } from "@/components/shared/listing-gallery";
 import { ListingManagePanel } from "@/components/shared/listing-manage-panel";
 import { ListingSaveButton } from "@/components/shared/listing-save-button";
+import { SavedCollectionButton } from "@/components/shared/saved-collection-button";
 import { InspectionReportCard } from "@/components/shared/inspection-report-card";
 import { ShareButton } from "@/components/shared/share-button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -122,6 +123,7 @@ export default async function MarketplaceListingPage({ params, searchParams }: P
             {/* 3. Save and Share */}
             <div className="mt-5 flex flex-wrap items-center gap-2">
               {!isOwner && viewerId ? <ListingSaveButton listingId={listing.id} initialSaved={listing.saved_by_viewer} variant="inline" /> : null}
+              {viewerId ? <SavedCollectionButton entityType="listing" entityId={listing.id} /> : null}
               {isPublic ? <ShareButton path={path} title={`${listing.title} · PerfectPPI Marketplace`} /> : null}
             </div>
           </section>

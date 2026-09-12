@@ -207,6 +207,7 @@ private struct NotificationRow: View {
         case .listingInspectionRequested, .inspectionSubmitted, .inspectionUpdated, .techRequestNew, .techRequestAccepted: "checkmark.seal"
         case .savedListingUpdated: "tag"
         case .savedSearchMatch: "magnifyingglass"
+        case .buildUpdate: "wrench.adjustable"
         case .moderationDecision, .moderationCase, .reportReceived: "shield"
         case .warrantyAvailable, .paymentCompleted: "creditcard"
         case .unknown: "bell"
@@ -225,6 +226,7 @@ enum NotificationRoute: Hashable, Identifiable {
     case group(slug: String)
     case listing(id: String)
     case marketplaceSearch(savedSearchId: String)
+    case vehicleBuild(id: String, entryId: String?)
 
     var id: String {
         switch self {
@@ -237,6 +239,7 @@ enum NotificationRoute: Hashable, Identifiable {
         case .group(let slug): "group:\(slug)"
         case .listing(let id): "listing:\(id)"
         case .marketplaceSearch(let id): "marketplace_search:\(id)"
+        case .vehicleBuild(let id, let entryId): "vehicle_build:\(id):\(entryId ?? "")"
         }
     }
 
@@ -256,6 +259,7 @@ enum NotificationRoute: Hashable, Identifiable {
             guard let listingId = destination.secondaryId else { return nil }
             self = .listing(id: listingId)
         case ("marketplace_search", let id?): self = .marketplaceSearch(savedSearchId: id)
+        case ("vehicle_build", let id?): self = .vehicleBuild(id: id, entryId: destination.secondaryId)
         default: return nil
         }
     }
@@ -297,6 +301,9 @@ struct NotificationRouteView: View {
             MarketplaceListingLoaderView(listingId: id)
         case .marketplaceSearch(let savedSearchId):
             MarketplaceView(currentProfileId: currentProfileId, savedSearchId: savedSearchId)
+        case .vehicleBuild(let id, let entryId):
+            SafariWebView(url: ShareLinks.vehicleBuild(id: id, entryId: entryId))
+                .ignoresSafeArea()
         }
     }
 }

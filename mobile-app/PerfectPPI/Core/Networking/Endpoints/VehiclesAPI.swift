@@ -211,6 +211,20 @@ enum VehiclesAPI {
         try await APIClient.shared.delete("/api/vehicles/\(vehicleId)/build/\(entryId)")
     }
 
+    struct BuildSubscriptionResult: Codable { let subscribed: Bool }
+    private struct BuildSubscriptionPayload: Encodable { let subscribed: Bool }
+
+    static func buildSubscription(id: String) async throws -> BuildSubscriptionResult {
+        try await APIClient.shared.get("/api/vehicles/\(id)/build-subscription")
+    }
+
+    static func setBuildSubscription(id: String, subscribed: Bool) async throws -> BuildSubscriptionResult {
+        try await APIClient.shared.post(
+            "/api/vehicles/\(id)/build-subscription",
+            body: BuildSubscriptionPayload(subscribed: subscribed)
+        )
+    }
+
     struct MaintenanceEventPayload: Encodable {
         let serviceType: String
         let servicedOn: String

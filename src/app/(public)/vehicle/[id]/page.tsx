@@ -22,6 +22,10 @@ import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-contr
 import { CommunityLikeButton } from "@/components/shared/community-like-button";
 import { CommunityHelpfulButton } from "@/components/shared/community-helpful-button";
 import { QuestionOutcomeControl } from "@/components/shared/question-outcome-control";
+import { SavedCollectionButton } from "@/components/shared/saved-collection-button";
+import { BuildSubscriptionButton } from "@/components/shared/build-subscription-button";
+import { getVehicleBuildSubscription } from "@/features/saved/collections";
+import { getCurrentSocialProfileId } from "@/features/social/relationships";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -111,13 +115,14 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
         ? "inspections"
         : "overview";
 
-  const [vehicle, ppiHistory, activeListing, warrantySnapshot, discussionPosts, timelines] = await Promise.all([
+  const [vehicle, ppiHistory, activeListing, warrantySnapshot, discussionPosts, timelines, viewerId] = await Promise.all([
     getPublicVehicle(id),
     getVehiclePpiHistory(id),
     getVehicleActiveListing(id),
     getPublicVehicleWarrantySnapshot(id),
     getVehicleDiscussionPosts(id),
     getPublicVehicleTimelines(id),
+    getCurrentSocialProfileId(),
   ]);
 
   if (!vehicle) notFound();
@@ -139,6 +144,9 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
 
   const latestPpi = ppiHistory[0];
   const listingInspection = activeListing?.inspection_summary ?? null;
+  const buildSubscribed = viewerId && !vehicle.viewer_is_owner
+    ? await getVehicleBuildSubscription(viewerId, id)
+    : false;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
@@ -210,6 +218,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
           {vehicle.visibility === "public" ? (
             <ShareButton path={sharePath({ kind: "vehicle", id: vehicle.id })} title={`${vehicleName} · PerfectPPI`} />
           ) : null}
+          {viewerId ? <SavedCollectionButton entityType="vehicle" entityId={vehicle.id} /> : null}
           {owner && owner.is_public && (
             <Link
               href={`/profile/${owner.username ?? owner.id}`}
@@ -776,7 +785,15 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
 
       {/* ── Build tab ─────────────────────────────────────────────── */}
       {activeTab === "build" && (
-        <PublicBuildTimeline entries={timelines.build} />
+        <div className="space-y-4">
+          {viewerId && !vehicle.viewer_is_owner ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] bg-surface-container-lowest p-4 ghost-border">
+              <div><p className="text-sm font-bold">Build updates</p><p className="text-xs text-on-surface-variant">Private subscription. It is never shown as a follower count.</p></div>
+              <BuildSubscriptionButton vehicleId={vehicle.id} initialSubscribed={buildSubscribed} />
+            </div>
+          ) : null}
+          <PublicBuildTimeline entries={timelines.build} canSave={!!viewerId} />
+        </div>
       )}
 
       {/* ── Maintenance tab ───────────────────────────────────────── */}
@@ -875,14 +892,14 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
 
 type PublicTimelines = Awaited<ReturnType<typeof getPublicVehicleTimelines>>;
 
-function PublicBuildTimeline({ entries }: { entries: PublicTimelines["build"] }) {
+function PublicBuildTimeline({ entries, canSave }: { entries: PublicTimelines["build"]; canSave: boolean }) {
   if (entries.length === 0) {
     return <TimelineEmpty icon={<Wrench className="h-10 w-10" />} title="No shared build entries" message="The owner has not shared any modifications for this vehicle." />;
   }
   return (
     <div className="space-y-4">
       {entries.map((entry) => (
-        <article key={entry.id} className="rounded-[1.25rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
+        <article id={`build-${entry.id}`} key={entry.id} className="scroll-mt-24 rounded-[1.25rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">{entry.category}</p><h2 className="mt-1 font-heading text-lg font-extrabold text-on-surface">{entry.title}</h2></div>
             <Badge variant="outline">{entry.status.replaceAll("_", " ")}</Badge>
@@ -897,6 +914,7 @@ function PublicBuildTimeline({ entries }: { entries: PublicTimelines["build"] })
             <p className="mt-4 text-sm text-on-surface-variant">{[entry.vehicle_configuration, entry.wheel_size && `Wheels: ${entry.wheel_size}`, entry.wheel_width != null && `Width: ${entry.wheel_width} in`, entry.wheel_offset_mm != null && `Offset: ${entry.wheel_offset_mm} mm`, entry.tire_size && `Tires: ${entry.tire_size}`, entry.suspension_drop && `Drop: ${entry.suspension_drop}`].filter(Boolean).join(" · ")}</p>
           )}
           {entry.public_notes && <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-on-surface">{entry.public_notes}</p>}
+          {canSave ? <div className="mt-4"><SavedCollectionButton entityType="build" entityId={entry.id} /></div> : null}
           <p className="mt-4 text-[11px] text-on-surface-variant">Owner-reported unless a stronger source is shown. Fitment is not guaranteed.</p>
         </article>
       ))}

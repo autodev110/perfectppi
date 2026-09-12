@@ -1382,6 +1382,26 @@ struct NotificationPreference: Codable, Identifiable, Hashable {
     var id: String { category }
 }
 
+// MARK: - Private Saved Collections
+
+struct SavedCollection: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let itemCount: Int
+    let createdAt: Date
+    let updatedAt: Date
+}
+
+struct SavedCollectionItem: Codable, Identifiable, Hashable {
+    let id: String
+    let entityType: String
+    let available: Bool
+    let title: String
+    let subtitle: String?
+    let href: String?
+    let createdAt: Date
+}
+
 // MARK: - Media Packages & Sharing
 
 struct MediaPackageItem: Codable, Identifiable, Hashable {

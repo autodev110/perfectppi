@@ -61,6 +61,11 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     performedSubmissions,
     communityPosts,
     communityComments,
+    communityPostSaves,
+    marketplaceListingSaves,
+    marketplaceSavedSearches,
+    savedCollections,
+    vehicleBuildSubscriptions,
     authoredMentions,
     receivedMentions,
     sentMessages,
@@ -69,6 +74,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     technicianProfile,
     writtenReviews,
     notifications,
+    notificationPreferences,
     deviceTokens,
     legalAcceptances,
     privacyRequests,
@@ -94,6 +100,11 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     rows("performed submissions", admin.from("ppi_submissions").select("*").eq("performer_id", profileId)),
     rows("community posts", admin.from("community_posts").select("*").eq("author_id", profileId)),
     rows("community comments", admin.from("community_comments").select("*").eq("author_id", profileId)),
+    rows("saved community posts", admin.from("community_post_saves").select("*").eq("profile_id", profileId)),
+    rows("saved marketplace listings", admin.from("marketplace_listing_saves").select("*").eq("profile_id", profileId)),
+    rows("marketplace saved searches", admin.from("marketplace_saved_searches").select("*").eq("profile_id", profileId)),
+    rows("saved collections", admin.from("saved_collections").select("*").eq("owner_id", profileId)),
+    rows("vehicle build subscriptions", admin.from("vehicle_build_subscriptions").select("*").eq("profile_id", profileId)),
     rows("authored mentions", admin.from("community_mentions").select("*").eq("author_id", profileId)),
     rows("received mentions", admin.from("community_mentions").select("*").eq("mentioned_profile_id", profileId)),
     rows("sent messages", admin.from("messages").select("*").eq("sender_id", profileId)),
@@ -105,6 +116,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     row("technician profile", admin.from("technician_profiles").select("*").eq("profile_id", profileId).maybeSingle()),
     rows("written technician reviews", admin.from("technician_reviews").select("*").eq("reviewer_id", profileId)),
     rows("notifications", admin.from("notifications").select("*").eq("user_id", profileId)),
+    rows("notification preferences", admin.from("notification_preferences").select("*").eq("profile_id", profileId)),
     rows(
       "device registrations",
       admin.from("device_tokens")
@@ -157,12 +169,14 @@ export async function buildAccountDataExport(profileId: string, user: User) {
   );
   const submissions = mergeById(performedSubmissions, submissionsForRequests);
   const submissionIds = ids(submissions);
+  const savedCollectionIds = ids(savedCollections);
 
-  const [vehicleMedia, vehicleBuildEntries, vehicleMaintenanceEvents, marketplaceListings, sections, obdSnapshots, standardizedOutputs, vscOutputs] = await Promise.all([
+  const [vehicleMedia, vehicleBuildEntries, vehicleMaintenanceEvents, marketplaceListings, savedCollectionItems, sections, obdSnapshots, standardizedOutputs, vscOutputs] = await Promise.all([
     rowsForIds("vehicle media", "vehicle_media", "vehicle_id", vehicleIds),
     rowsForIds("vehicle build entries", "vehicle_build_entries", "vehicle_id", vehicleIds),
     rowsForIds("vehicle maintenance events", "vehicle_maintenance_events", "vehicle_id", vehicleIds),
     rowsForIds("marketplace listings", "marketplace_listings", "vehicle_id", vehicleIds),
+    rowsForIds("saved collection items", "saved_collection_items", "collection_id", savedCollectionIds),
     rowsForIds("inspection sections", "ppi_sections", "ppi_submission_id", submissionIds),
     rowsForIds("OBD snapshots", "obd_snapshots", "ppi_submission_id", submissionIds),
     rowsForIds("standardized outputs", "standardized_outputs", "ppi_submission_id", submissionIds),
@@ -295,6 +309,14 @@ export async function buildAccountDataExport(profileId: string, user: User) {
       appeals: moderationAppeals,
       enforcementActions,
     },
+    savedItems: {
+      communityPosts: communityPostSaves,
+      marketplaceListings: marketplaceListingSaves,
+      marketplaceSearches: marketplaceSavedSearches,
+      collections: savedCollections,
+      collectionItems: savedCollectionItems,
+      vehicleBuildSubscriptions,
+    },
     communications: {
       conversations,
       participation: conversationParticipants,
@@ -310,6 +332,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     transactions: { warrantyOptions, warrantyOrders, contracts, payments },
     accountOperations: {
       notifications,
+      notificationPreferences,
       deviceTokens,
       legalAcceptances,
       privacyRequests,

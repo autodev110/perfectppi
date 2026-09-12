@@ -344,6 +344,7 @@ struct VehicleDetailView: View {
     @State private var loadingTimeline = false
     @State private var showingBuildForm = false
     @State private var showingMaintenanceForm = false
+    @State private var collectionTarget: VehicleCollectionTarget?
 
     var body: some View {
         Group {
@@ -469,6 +470,9 @@ struct VehicleDetailView: View {
                         Button("Share", systemImage: "square.and.arrow.up") {
                             openPublicAction(.post)
                         }
+                        Button("Add Vehicle to Collection", systemImage: "folder.badge.plus") {
+                            collectionTarget = VehicleCollectionTarget(entityType: "vehicle", entityId: vehicle.id)
+                        }
                         // Garage → Community / Marketplace hops (plan Phase 1B).
                         if vehicle.visibility == .public {
                             NavigationLink {
@@ -569,6 +573,11 @@ struct VehicleDetailView: View {
                             Section("Build Journal") {
                                 ForEach(buildEntries) { entry in
                                     VehicleBuildEntryRow(entry: entry)
+                                        .contextMenu {
+                                            Button("Add to Collection", systemImage: "folder.badge.plus") {
+                                                collectionTarget = VehicleCollectionTarget(entityType: "build", entityId: entry.id)
+                                            }
+                                        }
                                         .swipeActions {
                                             Button("Delete", role: .destructive) {
                                                 Task { await deleteBuildEntry(entry) }
@@ -679,6 +688,11 @@ struct VehicleDetailView: View {
             VehicleMaintenanceEventForm(vehicleId: vehicleId) {
                 showingMaintenanceForm = false
                 Task { await loadTimelines() }
+            }
+        }
+        .sheet(item: $collectionTarget) { target in
+            NavigationStack {
+                SavedCollectionPickerView(entityType: target.entityType, entityId: target.entityId)
             }
         }
         .alert("Vehicle",
@@ -930,6 +944,12 @@ struct VehicleDetailView: View {
         guard let updatedAt else { return "\(mileage.formatted()) mi" }
         return "\(mileage.formatted()) mi · Updated \(updatedAt.formatted(date: .abbreviated, time: .omitted))"
     }
+}
+
+private struct VehicleCollectionTarget: Identifiable {
+    let entityType: String
+    let entityId: String
+    var id: String { "\(entityType):\(entityId)" }
 }
 
 struct VehicleDetailRow: View {

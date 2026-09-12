@@ -111,6 +111,22 @@ async function intentAvailable(intent: NotificationDestinationIntent, viewerId: 
         .maybeSingle();
       return Boolean(data);
     }
+    case "vehicle_build": {
+      if (!intent.id) return false;
+      const { data: canView } = await admin.rpc("social_can_view_vehicle", {
+        p_viewer_id: viewerId,
+        p_vehicle_id: intent.id,
+      });
+      if (!canView) return false;
+      if (!intent.secondaryId) return true;
+      const { data } = await admin.from("vehicle_build_entries")
+        .select("id")
+        .eq("id", intent.secondaryId)
+        .eq("vehicle_id", intent.id)
+        .eq("is_public", true)
+        .maybeSingle();
+      return !!data;
+    }
     case "moderation_case": {
       const { data } = await admin.rpc("moderation_has_capability", {
         p_profile_id: viewerId,

@@ -225,6 +225,48 @@ enum CommunityAPI {
         )
     }
 
+    private struct CollectionNamePayload: Encodable { let name: String }
+    private struct CollectionItemPayload: Encodable {
+        let entityType: String
+        let entityId: String
+        let saved: Bool
+    }
+    private struct RemoveCollectionItemPayload: Encodable { let itemId: String }
+
+    static func savedCollections() async throws -> [SavedCollection] {
+        try await APIClient.shared.get("/api/saved/collections")
+    }
+
+    static func createSavedCollection(name: String) async throws -> SavedCollection {
+        try await APIClient.shared.postCamel("/api/saved/collections", body: CollectionNamePayload(name: name))
+    }
+
+    static func renameSavedCollection(id: String, name: String) async throws -> Empty {
+        try await APIClient.shared.patchCamel("/api/saved/collections/\(id)", body: CollectionNamePayload(name: name))
+    }
+
+    static func deleteSavedCollection(id: String) async throws -> Empty {
+        try await APIClient.shared.delete("/api/saved/collections/\(id)")
+    }
+
+    static func savedCollectionItems(id: String) async throws -> [SavedCollectionItem] {
+        try await APIClient.shared.get("/api/saved/collections/\(id)/items")
+    }
+
+    static func addToSavedCollection(collectionId: String, entityType: String, entityId: String) async throws -> Empty {
+        try await APIClient.shared.postCamel(
+            "/api/saved/collections/\(collectionId)/items",
+            body: CollectionItemPayload(entityType: entityType, entityId: entityId, saved: true)
+        )
+    }
+
+    static func removeFromSavedCollection(collectionId: String, itemId: String) async throws -> Empty {
+        try await APIClient.shared.delete(
+            "/api/saved/collections/\(collectionId)/items",
+            body: RemoveCollectionItemPayload(itemId: itemId)
+        )
+    }
+
     struct ReportPayload: Encodable {
         let entityType: String
         let entityId: String

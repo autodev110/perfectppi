@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CommunitySaveButton } from "@/components/shared/community-save-button";
 import { SafetyNotice } from "@/components/shared/safety-notice";
+import { SavedCollectionsManager } from "@/components/shared/saved-collections-manager";
+import { listSavedCollections } from "@/features/saved/collections";
 import { formatDate, getInitials } from "@/lib/utils/formatting";
 import { Bookmark, Car, MessageSquare, Tag } from "lucide-react";
 
@@ -18,14 +20,15 @@ export const dynamic = "force-dynamic";
 // hidden, removed, or moved out of the viewer's audience simply do not
 // appear; the save itself is kept so a restored post comes back.
 export default async function SavedPostsPage({ searchParams }: { searchParams: Promise<{ page?: string; tab?: string }> }) {
-  await requireRole(["consumer", "technician", "org_manager", "admin"]);
+  const profile = await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const params = await searchParams;
   const requestedPage = Number(params.page ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const tab = params.tab === "listings" ? "listings" : "posts";
-  const [posts, listings] = await Promise.all([
+  const tab = params.tab === "listings" || params.tab === "collections" ? params.tab : "posts";
+  const [posts, listings, collections] = await Promise.all([
     tab === "posts" ? getSavedCommunityPosts(page, 20) : Promise.resolve([]),
     tab === "listings" ? getSavedMarketplaceListings(page, 20) : Promise.resolve([]),
+    tab === "collections" ? listSavedCollections(profile.id) : Promise.resolve([]),
   ]);
 
   return (
@@ -34,7 +37,7 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
         <div>
           <h1 className="font-heading text-2xl font-extrabold tracking-tight">Saved</h1>
           <p className="text-sm text-muted-foreground">
-            Posts and listings you bookmarked. Only you can see this list; authors and sellers are never told.
+            Bookmarks and named collections. Only you can see them; authors, sellers, and vehicle owners are never told.
           </p>
         </div>
         <Button asChild variant="outline">
@@ -45,9 +48,12 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
       <nav className="flex w-fit gap-1 rounded-2xl bg-surface-container-low p-1.5 ghost-border" aria-label="Saved items">
         <Link href="/dashboard/saved" className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === "posts" ? "bg-surface-container-lowest shadow-sm" : "text-muted-foreground"}`}>Posts</Link>
         <Link href="/dashboard/saved?tab=listings" className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === "listings" ? "bg-surface-container-lowest shadow-sm" : "text-muted-foreground"}`}>Listings</Link>
+        <Link href="/dashboard/saved?tab=collections" className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === "collections" ? "bg-surface-container-lowest shadow-sm" : "text-muted-foreground"}`}>Collections</Link>
       </nav>
 
-      {tab === "listings" ? (
+      {tab === "collections" ? (
+        <SavedCollectionsManager initialCollections={collections} />
+      ) : tab === "listings" ? (
         listings.length === 0 ? (
           <Card>
             <CardContent className="p-10 text-center">

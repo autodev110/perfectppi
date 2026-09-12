@@ -20,6 +20,16 @@ enum ShareLinks {
         AppConfig.apiBaseURL.appendingPathComponent("vehicle/\(id)")
     }
 
+    static func vehicleBuild(id: String, entryId: String?) -> URL {
+        var components = URLComponents(
+            url: AppConfig.apiBaseURL.appendingPathComponent("vehicle/\(id)"),
+            resolvingAgainstBaseURL: false
+        )!
+        components.queryItems = [URLQueryItem(name: "tab", value: "build")]
+        if let entryId { components.fragment = "build-\(entryId)" }
+        return components.url!
+    }
+
     static func listing(id: String) -> URL {
         AppConfig.apiBaseURL.appendingPathComponent("marketplace/listings/\(id)")
     }

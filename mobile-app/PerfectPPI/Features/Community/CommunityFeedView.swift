@@ -318,6 +318,7 @@ struct CommunityPostRow: View {
     @State private var liking = false
     @State private var saved: Bool
     @State private var saving = false
+    @State private var showingCollectionPicker = false
     @State private var reportTarget: ReportTarget?
     @State private var reportAccepted = false
     @State private var reportConfirmed = false
@@ -434,6 +435,13 @@ struct CommunityPostRow: View {
                 .disabled(saving)
                 .accessibilityLabel(saved ? "Remove from saved" : "Save post")
 
+                Button { showingCollectionPicker = true } label: {
+                    Image(systemName: "folder.badge.plus")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Add post to collection")
+
                 if let count = post.comments?.count, count > 0 {
                     Label("\(count) comment\(count == 1 ? "" : "s")", systemImage: "bubble.left")
                         .foregroundStyle(.secondary)
@@ -460,6 +468,9 @@ struct CommunityPostRow: View {
             CommunityReportSheet { reasonCode, details in
                 await submitReport(target: target, reasonCode: reasonCode, details: details)
             }
+        }
+        .sheet(isPresented: $showingCollectionPicker) {
+            NavigationStack { SavedCollectionPickerView(entityType: "post", entityId: post.id) }
         }
         .alert("Report not submitted", isPresented: .constant(error != nil)) {
             Button("OK") { error = nil }
