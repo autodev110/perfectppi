@@ -4929,6 +4929,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      member_contribution_summary: {
+        Args: { p_target_profile_id: string; p_viewer_profile_id: string }
+        Returns: Json
+      }
       marketplace_visible_listing_ids: {
         Args: { p_listing_ids: string[]; p_viewer_id: string | null }
         Returns: { listing_id: string }[]

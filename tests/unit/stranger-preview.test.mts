@@ -16,6 +16,7 @@ function dto(overrides: Partial<{ is_public: boolean }> = {}) {
     },
     vehicles: [{ id: "v1" }],
     listings: [{ id: "l1" }],
+    contributions: { accepted_answers: 3 },
     posts: [
       { id: "p1", audience: "public", group_id: null, report_context: null, can_like: false },
       { id: "p2", audience: "friends", group_id: null, report_context: null, can_like: false },
@@ -34,6 +35,7 @@ describe("view as stranger (plan 9.3)", () => {
     assert.equal(preview.relationship.state, "none");
     assert.equal(preview.relationship.mutual_friend_count, 0);
     assert.equal(preview.relationship.can_view_restricted, false);
+    assert.equal(preview.contributions, null);
   });
 
   test("private profile: strangers see identity only", () => {

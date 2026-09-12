@@ -331,6 +331,20 @@ private struct MemberProfileContent: View {
                 LabeledContent("Member since", value: joined.formatted(date: .abbreviated, time: .omitted))
             }
             LabeledContent("Profile", value: identity.isPublic ? "Public inside PerfectPPI" : "Private")
+            if let contributions = profile.contributions, contributions.hasContributions {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Community contributions").font(.subheadline.weight(.semibold))
+                    Text("Current facts from active contributions visible to you, not a popularity score.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    contributionRow("Accepted answers", value: contributions.acceptedAnswers)
+                    contributionRow("Helpful marks", value: contributions.helpfulMarks)
+                    contributionRow("Issues fixed", value: contributions.fixedIssues)
+                    contributionRow("Issues helped", value: contributions.helpedIssues)
+                    contributionRow("Inspections completed", value: contributions.completedInspections)
+                }
+                .padding(.vertical, 4)
+            }
             ForEach(identity.badges, id: \.code) { badge in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(badge.label).font(.subheadline.weight(.semibold))
@@ -342,6 +356,14 @@ private struct MemberProfileContent: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func contributionRow(_ label: String, value: Int) -> some View {
+        if value > 0 {
+            LabeledContent(label, value: value.formatted())
+                .font(.caption)
         }
     }
 

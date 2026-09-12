@@ -27,6 +27,8 @@ import { getProfileSharePreview, profileShareCard } from "@/features/share/previ
 import { ShareButton } from "@/components/shared/share-button";
 import { sharePath } from "@/lib/share/links";
 import { TechnicianCredentialFacts } from "@/components/shared/technician-credential-facts";
+import { MemberContributionSummaryCard } from "@/components/shared/member-contribution-summary";
+import { getMemberContributionSummary } from "@/features/profiles/reputation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -103,12 +105,13 @@ export default async function PublicProfilePage({ params }: PageProps) {
   const profile = await getPublicProfile(username);
   if (!profile) notFound();
 
-  const [content, allTechEntries, relationship, friendship, friendsEnabled] = await Promise.all([
+  const [content, allTechEntries, relationship, friendship, friendsEnabled, contributions] = await Promise.all([
     getProfilePublicContent(profile.id),
     profile.role === "technician" ? getDirectory() : Promise.resolve([]),
     getSocialRelationshipState(profile.id),
     getFriendRelationshipState(profile.id),
     friendsDiscoveryEnabled(),
+    getMemberContributionSummary(profile.id),
   ]);
 
   const tech = profile.role === "technician"
@@ -210,6 +213,8 @@ export default async function PublicProfilePage({ params }: PageProps) {
       </section>
 
       <div className="max-w-4xl mx-auto px-8 py-10 space-y-14">
+
+        <MemberContributionSummaryCard summary={contributions} />
 
         {/* ── Vehicles ────────────────────────────────────────────── */}
         {vehicles.length > 0 && (

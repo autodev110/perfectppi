@@ -494,6 +494,19 @@ struct MemberProfileListing: Codable, Identifiable, Hashable {
     let vehicleId: String
 }
 
+struct MemberContributionSummary: Codable, Hashable {
+    let acceptedAnswers: Int
+    let helpfulMarks: Int
+    let fixedIssues: Int
+    let helpedIssues: Int
+    let completedInspections: Int
+
+    var hasContributions: Bool {
+        acceptedAnswers > 0 || helpfulMarks > 0 || fixedIssues > 0 ||
+            helpedIssues > 0 || completedInspections > 0
+    }
+}
+
 /// The social profile as another member sees it (plan 9.1).
 struct MemberProfile: Codable {
     let profile: MemberProfileIdentity
@@ -501,6 +514,7 @@ struct MemberProfile: Codable {
     let vehicles: [MemberProfileVehicle]
     let listings: [MemberProfileListing]
     let posts: [CommunityPost]
+    let contributions: MemberContributionSummary?
 }
 
 // MARK: - Community

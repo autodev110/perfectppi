@@ -22,6 +22,7 @@ export type StrangerPreviewInput<P extends StrangerPost> = {
   vehicles: unknown[];
   listings: unknown[];
   posts: P[];
+  contributions: unknown | null;
 };
 
 export function applyStrangerPreview<T extends StrangerPreviewInput<P>, P extends StrangerPost>(dto: T): T {
@@ -39,6 +40,9 @@ export function applyStrangerPreview<T extends StrangerPreviewInput<P>, P extend
     },
     vehicles: isPublic ? dto.vehicles : [],
     listings: isPublic ? dto.listings : [],
+    // The owner-view contains counts from content visible to the owner,
+    // including friends/groups. Do not reuse those totals for a stranger.
+    contributions: null,
     posts: isPublic
       ? dto.posts
           .filter((post) => post.audience === "public" && !post.group_id)

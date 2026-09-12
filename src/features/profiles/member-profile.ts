@@ -14,6 +14,7 @@ import {
 } from "@/features/social/friends";
 import { getMemberCommunityPosts, type CommunityFeedPost } from "@/features/community/queries";
 import { applyStrangerPreview } from "@/lib/social/stranger-preview";
+import { getMemberContributionSummary, type MemberContributionSummary } from "@/features/profiles/reputation";
 
 export type MemberProfileVehicle = {
   id: string;
@@ -66,6 +67,7 @@ export type MemberProfile = {
   vehicles: MemberProfileVehicle[];
   listings: MemberProfileListing[];
   posts: CommunityFeedPost[];
+  contributions: MemberContributionSummary | null;
 };
 
 export async function getMemberProfile(
@@ -75,7 +77,7 @@ export async function getMemberProfile(
   const profile = await getPublicProfile(username);
   if (!profile) return null;
 
-  const [content, relationship, friendship, friendsEnabled, posts, technician] = await Promise.all([
+  const [content, relationship, friendship, friendsEnabled, posts, technician, contributions] = await Promise.all([
     getProfilePublicContent(profile.id),
     getSocialRelationshipState(profile.id),
     getFriendRelationshipState(profile.id),
@@ -88,6 +90,7 @@ export async function getMemberProfile(
           .eq("profile_id", profile.id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    getMemberContributionSummary(profile.id),
   ]);
 
   const state = friendship?.state ?? "none";
@@ -142,6 +145,7 @@ export async function getMemberProfile(
       created_at: listing.created_at,
     })),
     posts,
+    contributions,
   };
 
   // Plan 9.3 "View as Stranger": only the owner may preview themselves.
