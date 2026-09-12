@@ -7,7 +7,6 @@ interface TechCardProps {
   id: string;
   displayName: string | null;
   avatarUrl: string | null;
-  certificationLevel: string;
   totalInspections: number;
   orgName?: string | null;
   specialties?: string[];
@@ -17,7 +16,6 @@ interface TechCardProps {
 export function TechCard({
   displayName,
   avatarUrl,
-  certificationLevel,
   totalInspections,
   orgName,
   specialties,
@@ -33,9 +31,6 @@ export function TechCard({
             <p className="text-sm text-muted-foreground">{orgName}</p>
           )}
           <div className="mt-2 flex flex-wrap gap-1">
-            <Badge variant="secondary" className="text-xs">
-              {certificationLevel}
-            </Badge>
             <Badge variant="outline" className="text-xs">
               {totalInspections} inspections
             </Badge>

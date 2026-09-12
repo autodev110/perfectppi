@@ -12,6 +12,7 @@ import { resolveLinkedTechnician } from "@/features/partner/user-links";
 import { enqueuePartnerEvent } from "@/features/partner/events";
 import { isValidVin } from "@/lib/utils/vin";
 import type { Json } from "@/types/database";
+import { hasActiveCertifiedCredential } from "@/features/technicians/credentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -142,11 +143,9 @@ export async function POST(request: Request) {
     vehicle: { ...body.vehicle, vin },
   });
 
-  const ppiType =
-    technician.data.certificationLevel === "master" ||
-    technician.data.certificationLevel === "oem_qualified"
-      ? "certified_tech"
-      : "general_tech";
+  const ppiType = (await hasActiveCertifiedCredential(technician.data.technicianProfileId))
+    ? "certified_tech"
+    : "general_tech";
 
   const admin = createAdminClient();
 

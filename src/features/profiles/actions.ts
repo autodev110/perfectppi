@@ -20,22 +20,13 @@ const updateProfileSchema = z.object({
   mention_policy: z.enum(["everyone", "friends_and_groups", "friends", "nobody"]).optional(),
 });
 
-const certificationLevelSchema = z.enum([
-  "none",
-  "ase",
-  "master",
-  "oem_qualified",
-]);
-
 const technicianAccessSchema = z.object({
-  certification_level: certificationLevelSchema.default("none"),
   specialties: z.string().max(500).optional(),
 });
 
 const organizationAccessSchema = z.object({
   organization_name: z.string().min(2).max(200),
   organization_description: z.string().max(1000).optional(),
-  certification_level: certificationLevelSchema.default("none"),
   specialties: z.string().max(500).optional(),
 });
 
@@ -151,8 +142,6 @@ export async function updateProfile(formData: FormData) {
 
 export async function enableTechnicianAccess(formData: FormData) {
   const parsed = technicianAccessSchema.safeParse({
-    certification_level:
-      (formData.get("certification_level") as string) || "none",
     specialties: (formData.get("specialties") as string) || undefined,
   });
 
@@ -186,7 +175,6 @@ export async function enableTechnicianAccess(formData: FormData) {
     .upsert(
       {
         profile_id: profile.id,
-        certification_level: parsed.data.certification_level,
         specialties,
         is_independent: true,
       },
@@ -250,8 +238,6 @@ export async function createOrganizationWorkspace(formData: FormData) {
     organization_name: (formData.get("organization_name") as string) || "",
     organization_description:
       (formData.get("organization_description") as string) || undefined,
-    certification_level:
-      (formData.get("certification_level") as string) || "none",
     specialties: (formData.get("specialties") as string) || undefined,
   });
 
@@ -311,7 +297,6 @@ export async function createOrganizationWorkspace(formData: FormData) {
       {
         profile_id: profile.id,
         organization_id: organization.id,
-        certification_level: parsed.data.certification_level,
         specialties,
         is_independent: false,
       },

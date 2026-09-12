@@ -1,19 +1,11 @@
 import { getMyOrg, getOrgTechnicians } from "@/features/organizations/queries";
 import { removeTechnicianFromOrg } from "@/features/organizations/invite-actions";
 import { requireRole } from "@/features/auth/guards";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils/formatting";
 import { redirect } from "next/navigation";
 import { InviteTechnicianForm } from "./invite-technician-form";
-
-const CERT_LABELS: Record<string, string> = {
-  none: "Uncertified",
-  ase: "ASE",
-  master: "ASE Master",
-  oem_qualified: "OEM Qualified",
-};
 
 export default async function ManageTechniciansPage() {
   const currentProfile = await requireRole(["org_manager"]);
@@ -39,7 +31,7 @@ export default async function ManageTechniciansPage() {
             <thead className="border-b bg-muted/50">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Technician</th>
-                <th className="px-4 py-3 text-left font-medium">Certification</th>
+                <th className="px-4 py-3 text-left font-medium">Availability</th>
                 <th className="px-4 py-3 text-left font-medium">Inspections</th>
                 <th className="px-4 py-3 text-left font-medium">Actions</th>
               </tr>
@@ -66,10 +58,8 @@ export default async function ManageTechniciansPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="secondary">
-                        {CERT_LABELS[tech.certification_level] ?? tech.certification_level}
-                      </Badge>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {tech.is_available ? "Accepting requests" : "Not accepting requests"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {tech.total_inspections}

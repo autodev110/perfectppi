@@ -6,11 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { cn } from "@/lib/utils";
+import { credentialTypeLabel, type PublicTechnicianCredential } from "@/features/technicians/credential-types";
 
 interface TechOption {
   id: string; // technician_profiles.id
   profile_id: string;
-  certification_level: string;
+  credentials: PublicTechnicianCredential[];
   specialties: string[];
   total_inspections: number;
   is_independent: boolean;
@@ -32,18 +33,10 @@ interface TechSelectorProps {
   onSelect: (techProfileId: string, name: string) => void;
 }
 
-const CERT_LABELS: Record<string, string> = {
-  none: "Uncertified",
-  ase: "ASE Certified",
-  master: "ASE Master",
-  oem_qualified: "OEM Qualified",
-};
-
-const CERT_COLORS: Record<string, string> = {
-  none: "bg-orange-100 text-orange-700",
-  ase: "bg-slate-100 text-slate-700",
-  master: "bg-amber-100 text-amber-700",
-  oem_qualified: "bg-amber-100 text-amber-700",
+const CREDENTIAL_FILTER_LABELS: Record<string, string> = {
+  ase: "Reviewed ASE",
+  master: "Reviewed ASE Master",
+  oem_qualified: "Reviewed OEM training",
 };
 
 export function TechSelector({ selectedId, onSelect }: TechSelectorProps) {
@@ -88,7 +81,7 @@ export function TechSelector({ selectedId, onSelect }: TechSelectorProps) {
         />
       </div>
 
-      {/* Cert filter */}
+      {/* Reviewed credential filter */}
       <div className="flex flex-wrap gap-2">
         {["", "ase", "master", "oem_qualified"].map((cert) => (
           <button
@@ -101,7 +94,7 @@ export function TechSelector({ selectedId, onSelect }: TechSelectorProps) {
                 : "border-border text-muted-foreground hover:border-primary/50"
             )}
           >
-            {cert === "" ? "All" : CERT_LABELS[cert]}
+            {cert === "" ? "All" : CREDENTIAL_FILTER_LABELS[cert]}
           </button>
         ))}
       </div>
@@ -136,13 +129,10 @@ export function TechSelector({ selectedId, onSelect }: TechSelectorProps) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-sm truncate">{name}</span>
-                  <span
-                    className={cn(
-                      "text-xs px-2 py-0.5 rounded-full font-medium",
-                      CERT_COLORS[tech.certification_level] ?? CERT_COLORS.none
-                    )}
-                  >
-                    {CERT_LABELS[tech.certification_level] ?? "Uncertified"}
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                    {tech.credentials.length > 0
+                      ? credentialTypeLabel(tech.credentials[0].credential_type)
+                      : "No reviewed credential"}
                   </span>
                 </div>
                 {tech.organization && (

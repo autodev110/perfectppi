@@ -1,23 +1,9 @@
 import { getAdminTechnicians } from "@/features/admin/queries";
 import { requireRole } from "@/features/auth/guards";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials, formatDate } from "@/lib/utils/formatting";
 import { TechToggles } from "./tech-toggles";
-
-const CERT_LABELS: Record<string, string> = {
-  none: "Uncertified",
-  ase: "ASE Certified",
-  master: "ASE Master",
-  oem_qualified: "OEM Qualified",
-};
-
-const CERT_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
-  none: "outline",
-  ase: "secondary",
-  master: "secondary",
-  oem_qualified: "default",
-};
+import { CredentialReview } from "./credential-review";
 
 export default async function TechnicianManagementPage() {
   await requireRole(["admin"]);
@@ -35,7 +21,7 @@ export default async function TechnicianManagementPage() {
           <thead className="border-b bg-muted/50">
             <tr>
               <th className="px-4 py-3 text-left font-medium">Technician</th>
-              <th className="px-4 py-3 text-left font-medium">Certification</th>
+              <th className="px-4 py-3 text-left font-medium">Credential review</th>
               <th className="px-4 py-3 text-left font-medium">Organization</th>
               <th className="px-4 py-3 text-left font-medium">Inspections</th>
               <th className="px-4 py-3 text-left font-medium">Joined</th>
@@ -72,9 +58,7 @@ export default async function TechnicianManagementPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <Badge variant={CERT_VARIANT[tech.certification_level] ?? "outline"}>
-                        {CERT_LABELS[tech.certification_level] ?? tech.certification_level}
-                      </Badge>
+                      <CredentialReview credentials={tech.credentials} />
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {org?.name ?? <span className="italic">Independent</span>}
@@ -89,7 +73,6 @@ export default async function TechnicianManagementPage() {
                       <TechToggles
                         techId={tech.id}
                         isFeatured={tech.is_featured}
-                        isVerified={tech.is_verified}
                       />
                     </td>
                   </tr>

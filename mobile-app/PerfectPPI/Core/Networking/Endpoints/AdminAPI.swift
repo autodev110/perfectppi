@@ -94,7 +94,6 @@ enum AdminAPI {
         let profileId: String
         let organizationId: String?
         let bio: String?
-        let certificationLevel: CertificationLevel?
         let yearsOfExperience: Int?
         let specialties: [String]?
         let location: String?
@@ -102,6 +101,7 @@ enum AdminAPI {
         let isFeatured: Bool?
         let isIndependent: Bool?
         let totalInspections: Int?
+        let credentials: [PublicTechnicianCredential]?
         let profile: Profile?
         let organization: Organization?
     }

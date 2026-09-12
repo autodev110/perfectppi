@@ -12,7 +12,7 @@ struct TechnicianDirectoryView: View {
                     if technicians.isEmpty {
                         EmptyStateCard(
                             title: "No technicians found",
-                            message: "Verified and public technician profiles will appear here.",
+                            message: "Public technician profiles will appear here with service details and any reviewed credentials.",
                             systemImage: "wrench.and.screwdriver"
                         )
                         .padding()
@@ -75,9 +75,9 @@ private struct TechnicianDirectoryRow: View {
     }
 
     private var subtitle: String {
-        let level = technician.certificationLevel?.rawValue.replacingOccurrences(of: "_", with: " ").capitalized
+        let credential = technician.credentials?.first?.typeLabel ?? "No reviewed credential"
         let area = technician.serviceArea ?? technician.location
-        return [level, area].compactMap { $0 }.joined(separator: " - ")
+        return [credential, area].compactMap { $0 }.joined(separator: " - ")
     }
 }
 
@@ -115,11 +115,44 @@ private struct TechnicianDirectoryDetailView: View {
                 .padding(.vertical, 4)
             }
 
-            Section("Details") {
-                LabeledContent("Certification", value: technician.certificationLevel?.rawValue.replacingOccurrences(of: "_", with: " ").capitalized ?? "-")
+            Section("Service Details") {
                 LabeledContent("Service Area", value: technician.serviceArea ?? technician.location ?? "-")
                 LabeledContent("Available", value: (technician.isAvailable ?? technician.availableForWork ?? false) ? "Yes" : "No")
+                LabeledContent("Service Mode", value: serviceMode)
                 LabeledContent("Reviews", value: "\(technician.totalReviews ?? reviews?.summary?.totalReviews ?? 0)")
+            }
+
+            Section("Reviewed Credentials") {
+                if let credentials = technician.credentials, !credentials.isEmpty {
+                    ForEach(credentials) { credential in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(credential.credentialName, systemImage: "checkmark.shield")
+                                .font(.subheadline.weight(.semibold))
+                            Text("\(credential.typeLabel) · issued by \(credential.issuer)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if let scope = credential.scope, !scope.isEmpty {
+                                Text("Scope: \(scope)").font(.caption2).foregroundStyle(.secondary)
+                            }
+                            Text(credential.expiresOn.map { "Expires \($0)" } ?? "No expiry supplied")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(reviewDescription(credential))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 3)
+                    }
+                    Text("PerfectPPI reviewed the stated record and scope only. This is not an endorsement or a guarantee of work.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Link("Request a correction", destination: PolicyPage.support.url)
+                        .font(.caption.weight(.semibold))
+                } else {
+                    Text("No active professional credential has been reviewed by PerfectPPI.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section {
@@ -161,6 +194,18 @@ private struct TechnicianDirectoryDetailView: View {
         .padding(10)
         .background(Theme.Palette.subtle)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var serviceMode: String {
+        var modes: [String] = []
+        if technician.offersMobileService == true { modes.append("Mobile") }
+        if technician.offersShopService == true { modes.append("Shop") }
+        return modes.isEmpty ? "Not provided" : modes.joined(separator: ", ")
+    }
+
+    private func reviewDescription(_ credential: PublicTechnicianCredential) -> String {
+        guard let reviewedAt = credential.reviewedAt else { return credential.verificationLabel }
+        return "\(credential.verificationLabel) by PerfectPPI Trust & Safety on \(String(reviewedAt.prefix(10)))"
     }
 
     private func loadReviews() async {

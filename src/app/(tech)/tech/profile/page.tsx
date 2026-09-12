@@ -14,13 +14,11 @@ import type { Database } from "@/types/database";
 import { PrivacyCenter } from "@/components/legal/privacy-center";
 import { SocialPrivacyFields } from "@/components/shared/social-privacy-fields";
 import { SafetyRelationships } from "@/components/shared/safety-relationships";
+import { TechnicianCredentialManager } from "@/components/shared/technician-credential-manager";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type TechProfile = Database["public"]["Tables"]["technician_profiles"]["Row"];
 type Organization = Database["public"]["Tables"]["organizations"]["Row"];
-
-const selectClassName =
-  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm";
 
 export default function TechProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -194,20 +192,6 @@ export default function TechProfilePage() {
           {techProfile ? (
             <form action={handleTechSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="certification_level">Certification Level</Label>
-                <select
-                  id="certification_level"
-                  name="certification_level"
-                  className={selectClassName}
-                  defaultValue={techProfile.certification_level}
-                >
-                  <option value="none">None</option>
-                  <option value="ase">ASE</option>
-                  <option value="master">Master</option>
-                  <option value="oem_qualified">OEM Qualified</option>
-                </select>
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="specialties">Specialties</Label>
                 <Input
                   id="specialties"
@@ -218,6 +202,16 @@ export default function TechProfilePage() {
                 <p className="text-xs text-muted-foreground">
                   Separate specialties with commas.
                 </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="supported_makes">Supported Makes</Label>
+                <Input
+                  id="supported_makes"
+                  name="supported_makes"
+                  defaultValue={techProfile.supported_makes.join(", ")}
+                  placeholder="Honda, Toyota, Ford"
+                />
+                <p className="text-xs text-muted-foreground">Separate makes with commas.</p>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -232,6 +226,30 @@ export default function TechProfilePage() {
                 <Label htmlFor="is_independent">
                   Independent technician
                 </Label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="offers_mobile_service"
+                    name="offers_mobile_service"
+                    value="true"
+                    defaultChecked={techProfile.offers_mobile_service}
+                    className="rounded"
+                  />
+                  <Label htmlFor="offers_mobile_service">Offers mobile service</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="offers_shop_service"
+                    name="offers_shop_service"
+                    value="true"
+                    defaultChecked={techProfile.offers_shop_service}
+                    className="rounded"
+                  />
+                  <Label htmlFor="offers_shop_service">Offers shop service</Label>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="service_area">Service Area</Label>
@@ -280,6 +298,16 @@ export default function TechProfilePage() {
           )}
         </CardContent>
       </Card>
+      {techProfile && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Professional Credentials</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TechnicianCredentialManager />
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Switch Back to Consumer</CardTitle>

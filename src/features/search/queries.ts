@@ -9,6 +9,8 @@ import { getCommunityViewerId, getCommunityPostsForViewer, type CommunityFeedPos
 import { getCommunityGroups, type CommunityGroupSummary } from "@/features/social/groups";
 import { searchPeople, type PeopleSearchResult } from "@/features/social/friends";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import { getPublicCredentialMap } from "@/features/technicians/credentials";
+import type { PublicTechnicianCredential } from "@/features/technicians/credential-types";
 
 export const SEARCH_TABS = ["posts", "people", "groups", "vehicles", "listings", "technicians"] as const;
 export type SearchTab = (typeof SEARCH_TABS)[number];
@@ -50,7 +52,7 @@ export type SearchTechnicianResult = {
   avatar_url: string | null;
   specialties: string[];
   service_area: string | null;
-  certification_level: string;
+  credentials: PublicTechnicianCredential[];
   total_inspections: number;
   avg_rating: number;
 };
@@ -211,10 +213,11 @@ export async function unifiedSearch(rawQuery: string, tab: SearchTab, page = 1):
       const { data: technicians } = pageRows.length
         ? await admin
           .from("technician_profiles")
-          .select("id, profile_id, specialties, service_area, certification_level, total_inspections, avg_rating, profile:profiles!technician_profiles_profile_id_fkey(username, display_name, avatar_url)")
+          .select("id, profile_id, specialties, service_area, total_inspections, avg_rating, profile:profiles!technician_profiles_profile_id_fkey(username, display_name, avatar_url)")
           .in("id", pageRows.map((row) => row.technician_id))
         : { data: [] };
       const byId = new Map((technicians ?? []).map((technician) => [technician.id, technician]));
+      const credentialMap = await getPublicCredentialMap((technicians ?? []).map((technician) => technician.id));
       result = {
         tab,
         items: pageRows.flatMap((row) => {
@@ -229,7 +232,7 @@ export async function unifiedSearch(rawQuery: string, tab: SearchTab, page = 1):
             avatar_url: profile?.avatar_url ?? null,
             specialties: technician.specialties ?? [],
             service_area: technician.service_area,
-            certification_level: technician.certification_level,
+            credentials: credentialMap.get(technician.id) ?? [],
             total_inspections: technician.total_inspections,
             avg_rating: Number(technician.avg_rating ?? 0),
           }];

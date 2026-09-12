@@ -16,6 +16,7 @@ import type { Database, Json } from "@/types/database";
 import { syncPartnerLifecycle } from "@/features/partner/events";
 import { uploadedUrlSchema } from "@/features/uploads/url";
 import { inspectionAnswerValidationError } from "./answer-validation";
+import { hasActiveCertifiedCredential } from "@/features/technicians/credentials";
 
 // ============================================================================
 // Helpers
@@ -110,18 +111,16 @@ export async function createPpiRequest(formData: FormData) {
     // Look up the tech's profile id from technician_profiles
     const { data: techProfile } = await supabase
       .from("technician_profiles")
-      .select("id, certification_level, profile_id")
+      .select("id, profile_id")
       .eq("id", assigned_tech_profile_id)
       .single();
 
     if (!techProfile) return { error: "Technician not found" };
 
     assignedTechId = techProfile.profile_id;
-    ppiType =
-      techProfile.certification_level === "master" ||
-      techProfile.certification_level === "oem_qualified"
-        ? "certified_tech"
-        : "general_tech";
+    ppiType = (await hasActiveCertifiedCredential(techProfile.id))
+      ? "certified_tech"
+      : "general_tech";
     initialStatus = "assigned";
   } else if (performer_type === "technician") {
     initialStatus = "pending_assignment";
@@ -293,17 +292,15 @@ export async function assignTech(requestId: string, techProfileId: string) {
   // Get the tech's profiles.id from technician_profiles.id
   const { data: techProfile } = await supabase
     .from("technician_profiles")
-    .select("profile_id, certification_level")
+    .select("id, profile_id")
     .eq("id", techProfileId)
     .single();
 
   if (!techProfile) return { error: "Technician not found" };
 
-  const ppiType =
-    techProfile.certification_level === "master" ||
-    techProfile.certification_level === "oem_qualified"
-      ? "certified_tech"
-      : "general_tech";
+  const ppiType = (await hasActiveCertifiedCredential(techProfile.id))
+    ? "certified_tech"
+    : "general_tech";
 
   const { error } = await supabase
     .from("ppi_requests")

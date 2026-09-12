@@ -24,7 +24,7 @@ struct OrgTechniciansView: View {
                                      ?? t.location
                                      ?? "Technician").font(.headline)
                                 HStack {
-                                    Text(t.certificationLevel?.rawValue.capitalized ?? "—")
+                                    Text(t.credentials?.first?.typeLabel ?? "No reviewed credential")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                     if t.availableForWork ?? false {
@@ -129,7 +129,7 @@ private struct InviteTechnicianSheet: View {
                     } else if filteredTechs.isEmpty {
                         EmptyStateCard(
                             title: "No matching technicians",
-                            message: "Try a different name, username, certification, or location.",
+                            message: "Try a different name, username, specialty, make, or location.",
                             systemImage: "magnifyingglass"
                         )
                         .listRowBackground(Color.clear)
@@ -153,7 +153,7 @@ private struct InviteTechnicianSheet: View {
                      ?? tech.location
                      ?? "Technician")
                     .font(.headline)
-                Text(tech.certificationLevel?.rawValue.capitalized ?? "—")
+                Text(tech.credentials?.first?.typeLabel ?? "No reviewed credential")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -180,7 +180,9 @@ private struct InviteTechnicianSheet: View {
                 tech.profile?.displayName,
                 tech.profile?.username,
                 tech.location,
-                tech.certificationLevel?.rawValue,
+                tech.serviceArea,
+                tech.credentials?.map(\.credentialName).joined(separator: " "),
+                tech.supportedMakes?.joined(separator: " "),
             ]
             .compactMap { $0?.lowercased() }
             .contains { $0.contains(query) }

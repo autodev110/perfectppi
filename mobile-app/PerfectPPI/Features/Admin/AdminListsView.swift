@@ -69,7 +69,7 @@ struct AdminListDetailView: View {
                             VStack(alignment: .leading) {
                                 Text(t.profile?.displayName ?? t.location ?? "Technician")
                                     .font(.headline)
-                                Text(t.certificationLevel?.rawValue ?? "—")
+                                Text(t.credentials?.first?.typeLabel ?? "No reviewed credential")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         }

@@ -5,7 +5,6 @@
 import type {
   UserRole,
   VehicleVisibility,
-  CertificationLevel,
   WhoseCar,
   RequesterRole,
   PerformerType,
@@ -105,17 +104,25 @@ export interface VehicleResponse {
 // --- Technicians ---
 export interface UpdateTechProfileRequest {
   specialties?: string[];
-  certification_level?: CertificationLevel;
+  supported_makes?: string[];
   is_independent?: boolean;
+  service_area?: string | null;
+  is_available?: boolean;
+  offers_mobile_service?: boolean;
+  offers_shop_service?: boolean;
 }
 
 export interface TechProfileResponse {
   id: string;
   profile_id: string;
   organization_id: string | null;
-  certification_level: CertificationLevel;
   specialties: string[];
+  supported_makes: string[];
   is_independent: boolean;
+  service_area: string | null;
+  is_available: boolean;
+  offers_mobile_service: boolean;
+  offers_shop_service: boolean;
   total_inspections: number;
   created_at: string;
   profile: ProfileResponse;

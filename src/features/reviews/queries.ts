@@ -101,7 +101,6 @@ export async function getMyTechnicianReviews() {
     .select(`
       id,
       profile_id,
-      certification_level,
       avg_rating,
       total_reviews,
       reputation_score,

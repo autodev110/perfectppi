@@ -386,9 +386,9 @@ export async function exchangeUserLinkCode(
 // ============================================================================
 
 export interface ResolvedTechnician {
+  technicianProfileId: string;
   profileId: string;
   displayName: string | null;
-  certificationLevel: string;
 }
 
 export type ResolveFailure = "user_link_required" | "invalid_user_link";
@@ -417,7 +417,7 @@ export async function resolveLinkedTechnician(
 
   const { data: techProfile } = await admin
     .from("technician_profiles")
-    .select("organization_id, certification_level, profile:profiles!technician_profiles_profile_id_fkey(id, display_name, role)")
+    .select("id, organization_id, profile:profiles!technician_profiles_profile_id_fkey(id, display_name, role)")
     .eq("profile_id", link.profile_id)
     .maybeSingle();
 
@@ -446,9 +446,9 @@ export async function resolveLinkedTechnician(
 
   return {
     data: {
+      technicianProfileId: techProfile.id,
       profileId: profile.id,
       displayName: profile.display_name,
-      certificationLevel: techProfile.certification_level,
     },
   };
 }

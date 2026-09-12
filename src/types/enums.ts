@@ -159,13 +159,13 @@ export type AuditAction =
   | "payment_state_changed"
   | "submission_resubmitted";
 
-// PPI Trust Tier display
+// Factual inspection-source labels. Avoid ranking or endorsement language.
 export const PPI_TRUST_TIERS = {
-  personal: { label: "Personal PPI", badge: "Bronze", color: "amber" },
-  general_tech: { label: "Technician PPI", badge: "Silver", color: "slate" },
+  personal: { label: "Personal inspection", badge: "Owner entered", color: "amber" },
+  general_tech: { label: "Technician inspection", badge: "Technician", color: "slate" },
   certified_tech: {
-    label: "Certified PPI",
-    badge: "Gold",
+    label: "Technician inspection",
+    badge: "Reviewed credential",
     color: "yellow",
   },
 } as const;

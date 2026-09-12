@@ -1,33 +1,24 @@
 import { getMyTechProfile } from "@/features/technicians/queries";
-import { getMyPpiRequestCount, getMyTechQueueCount } from "@/features/ppi/queries";
-import { ClipboardCheck, Star, TrendingUp, Award } from "lucide-react";
+import { getMyTechQueueCount } from "@/features/ppi/queries";
+import { ClipboardCheck, ShieldCheck, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-
-const CERT_LABELS: Record<string, string> = {
-  none: "Uncertified",
-  ase: "ASE Certified",
-  master: "ASE Master",
-  oem_qualified: "OEM Qualified",
-};
-
-const CERT_TIER: Record<string, { label: string; bg: string; text: string; ring: string }> = {
-  none: { label: "BRONZE", bg: "bg-orange-500/15", text: "text-orange-700", ring: "border-orange-500/20" },
-  ase: { label: "SILVER", bg: "bg-slate-300/40", text: "text-slate-700", ring: "border-slate-400/20" },
-  master: { label: "GOLD", bg: "bg-amber-500/15", text: "text-amber-700", ring: "border-amber-500/20" },
-  oem_qualified: { label: "GOLD", bg: "bg-amber-500/15", text: "text-amber-700", ring: "border-amber-500/20" },
-};
+import { getMyTechnicianCredentials } from "@/features/technicians/credentials";
 
 export default async function TechDashboardPage() {
   const techProfile = await getMyTechProfile();
   if (!techProfile) redirect("/login");
 
-  const [queueCount] = await Promise.all([
+  const [queueCount, credentials] = await Promise.all([
     getMyTechQueueCount(),
-    getMyPpiRequestCount(),
+    getMyTechnicianCredentials(),
   ]);
-
-  const tier = CERT_TIER[techProfile.certification_level] ?? CERT_TIER.none;
+  const today = new Date().toISOString().slice(0, 10);
+  const activeCredentialCount = credentials.filter(
+    (credential) =>
+      credential.status === "approved" &&
+      (!credential.expires_on || credential.expires_on >= today),
+  ).length;
 
   return (
     <div className="space-y-12">
@@ -44,12 +35,14 @@ export default async function TechDashboardPage() {
         <div className="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex items-center gap-6 border border-outline-variant/10">
           <div className="text-right">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-              Tier Status
+              Credential status
             </p>
-            <div className={`inline-flex items-center gap-2 px-3 py-1 ${tier.bg} border ${tier.ring} rounded-full`}>
-              <Award className={`h-4 w-4 ${tier.text}`} />
-              <span className={`text-xs font-black ${tier.text} uppercase`}>
-                {tier.label} — {CERT_LABELS[techProfile.certification_level] ?? techProfile.certification_level}
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-700/20 bg-emerald-700/10 px-3 py-1">
+              <ShieldCheck className="h-4 w-4 text-emerald-700" />
+              <span className="text-xs font-black uppercase text-emerald-800">
+                {activeCredentialCount > 0
+                  ? `${activeCredentialCount} active reviewed credential${activeCredentialCount === 1 ? "" : "s"}`
+                  : "No active reviewed credential"}
               </span>
             </div>
           </div>
@@ -93,27 +86,18 @@ export default async function TechDashboardPage() {
           </div>
         </div>
 
-        {/* Reputation */}
+        {/* Credential review */}
         <div className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-outline-variant/10">
           <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mb-4">
-            Certification Level
+            Credential review
           </p>
-          <div className="flex items-center gap-4 mb-4">
-            <div className={`px-3 py-1.5 ${tier.bg} border ${tier.ring} rounded-full flex items-center gap-1.5`}>
-              <Star className={`h-4 w-4 ${tier.text}`} />
-              <span className={`text-xs font-black ${tier.text} uppercase`}>
-                {tier.label}
-              </span>
-            </div>
-          </div>
-          <p className="text-sm text-on-surface-variant">
-            {CERT_LABELS[techProfile.certification_level] ?? techProfile.certification_level}
-          </p>
+          <p className="text-5xl font-black font-heading text-slate-900 mb-2">{activeCredentialCount}</p>
+          <p className="text-sm text-on-surface-variant">Active credentials reviewed by PerfectPPI Trust &amp; Safety</p>
           <Link
             href="/tech/profile"
             className="mt-4 inline-block text-xs font-bold text-on-tertiary-container hover:underline"
           >
-            Update profile &rarr;
+            Manage credentials &rarr;
           </Link>
         </div>
       </section>

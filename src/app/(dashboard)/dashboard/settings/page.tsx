@@ -21,9 +21,6 @@ import { PrivacyCenter } from "@/components/legal/privacy-center";
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type TechProfile = Database["public"]["Tables"]["technician_profiles"]["Row"];
 
-const selectClassName =
-  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm";
-
 export default function AccountSettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [techProfile, setTechProfile] = useState<TechProfile | null>(null);
@@ -183,11 +180,8 @@ export default function AccountSettingsPage() {
           )}
           {techProfile && (
             <p className="text-sm text-muted-foreground">
-              Technician profile ready with{" "}
-              <span className="font-medium text-foreground">
-                {techProfile.certification_level}
-              </span>{" "}
-              certification.
+              Your technician profile is ready. Professional credentials are
+              submitted and reviewed from the technician profile screen.
             </p>
           )}
         </CardContent>
@@ -201,22 +195,6 @@ export default function AccountSettingsPage() {
             </CardHeader>
             <CardContent>
               <form action={handleTechnicianSetup} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="tech-certification-level">
-                    Certification Level
-                  </Label>
-                  <select
-                    id="tech-certification-level"
-                    name="certification_level"
-                    className={selectClassName}
-                    defaultValue={techProfile?.certification_level ?? "none"}
-                  >
-                    <option value="none">None</option>
-                    <option value="ase">ASE</option>
-                    <option value="master">Master</option>
-                    <option value="oem_qualified">OEM Qualified</option>
-                  </select>
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="tech-specialties">
                     Specialties
@@ -266,22 +244,6 @@ export default function AccountSettingsPage() {
                     rows={3}
                     placeholder="Tell customers about your shop."
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="org-certification-level">
-                    Your Certification Level
-                  </Label>
-                  <select
-                    id="org-certification-level"
-                    name="certification_level"
-                    className={selectClassName}
-                    defaultValue={techProfile?.certification_level ?? "none"}
-                  >
-                    <option value="none">None</option>
-                    <option value="ase">ASE</option>
-                    <option value="master">Master</option>
-                    <option value="oem_qualified">OEM Qualified</option>
-                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="org-specialties">
@@ -340,11 +302,6 @@ export default function AccountSettingsPage() {
                   defaultValue={techProfile?.specialties?.join(", ") ?? ""}
                 />
               </div>
-              <input
-                type="hidden"
-                name="certification_level"
-                value={techProfile?.certification_level ?? "none"}
-              />
               {orgMessage && (
                 <p className="text-sm text-destructive">{orgMessage}</p>
               )}

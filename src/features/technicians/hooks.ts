@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 export function useTechDirectory(filters?: {
   certification?: string;
@@ -13,32 +12,29 @@ export function useTechDirectory(filters?: {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
     const fetch = async () => {
-      const supabase = createClient();
-
-      let query = supabase
-        .from("technician_profiles")
-        .select(
-          `
-          *,
-          profile:profiles!technician_profiles_profile_id_fkey(
-            id, username, display_name, avatar_url, bio, is_public
-          ),
-          organization:organizations(id, name, slug, logo_url)
-        `
-        )
-        .order("total_inspections", { ascending: false });
-
-      if (filters?.certification) {
-        query = query.eq("certification_level", filters.certification as "none" | "ase" | "master" | "oem_qualified");
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (filters?.certification) {
+          params.set("certification", filters.certification);
+        }
+        if (filters?.specialty) {
+          params.set("specialty", filters.specialty);
+        }
+        const response = await window.fetch(`/api/technicians?${params}`);
+        const body = await response.json();
+        if (active) setTechnicians(response.ok ? body.data ?? [] : []);
+      } catch {
+        if (active) setTechnicians([]);
+      } finally {
+        if (active) setLoading(false);
       }
-
-      const { data } = await query;
-      setTechnicians(data ?? []);
-      setLoading(false);
     };
 
-    fetch();
+    void fetch();
+    return () => { active = false; };
   }, [filters?.certification, filters?.specialty]);
 
   return { technicians, loading };

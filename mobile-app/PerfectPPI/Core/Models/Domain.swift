@@ -138,6 +138,71 @@ struct VehicleMaintenanceEvent: Codable, Identifiable, Hashable {
 
 // MARK: - Technician
 
+struct PublicTechnicianCredential: Codable, Identifiable, Hashable {
+    let id: String
+    let credentialType: String
+    let credentialName: String
+    let issuer: String
+    let scope: String?
+    let issuedOn: String?
+    let expiresOn: String?
+    let reviewedAt: String?
+    let verificationMethod: String?
+
+    var typeLabel: String {
+        switch credentialType {
+        case "ase": return "ASE credential"
+        case "ase_master": return "ASE Master credential"
+        case "oem_training": return "OEM training credential"
+        case "state_license": return "State license"
+        case "business_registration": return "Business registration"
+        default: return "Professional credential"
+        }
+    }
+
+    var verificationLabel: String {
+        switch verificationMethod {
+        case "issuer_registry": return "Issuer registry checked"
+        case "document_review": return "Credential document reviewed"
+        case "issuer_confirmation": return "Issuer confirmation received"
+        case "government_registry": return "Government registry checked"
+        default: return "Reviewed evidence"
+        }
+    }
+}
+
+struct TechnicianCredentialRecord: Codable, Identifiable, Hashable {
+    let id: String
+    let technicianProfileId: String
+    let credentialType: String
+    let credentialName: String
+    let issuer: String
+    let scope: String?
+    let credentialIdentifierLast4: String?
+    let issuedOn: String?
+    let expiresOn: String?
+    let evidenceReference: String
+    let status: String
+    let submittedAt: Date?
+    let reviewedAt: Date?
+    let reviewReason: String?
+    let supersedesCredentialId: String?
+
+    var typeLabel: String {
+        PublicTechnicianCredential(
+            id: id,
+            credentialType: credentialType,
+            credentialName: credentialName,
+            issuer: issuer,
+            scope: scope,
+            issuedOn: issuedOn,
+            expiresOn: expiresOn,
+            reviewedAt: nil,
+            verificationMethod: nil
+        ).typeLabel
+    }
+}
+
 struct TechnicianProfile: Codable, Identifiable, Hashable {
     let id: String
     let profileId: String
@@ -146,6 +211,7 @@ struct TechnicianProfile: Codable, Identifiable, Hashable {
     let certificationLevel: CertificationLevel?
     let yearsOfExperience: Int?
     let specialties: [String]?
+    let supportedMakes: [String]?
     let location: String?
     let availableForWork: Bool?
     let isFeatured: Bool?
@@ -156,7 +222,9 @@ struct TechnicianProfile: Codable, Identifiable, Hashable {
     let reputationScore: Double?
     let serviceArea: String?
     let isAvailable: Bool?
-    let isVerified: Bool?
+    let offersMobileService: Bool?
+    let offersShopService: Bool?
+    let credentials: [PublicTechnicianCredential]?
     let profile: Profile?
     let organization: Organization?
 }
@@ -1490,7 +1558,7 @@ struct SearchTechnicianResult: Codable, Identifiable, Hashable {
     let avatarUrl: String?
     let specialties: [String]
     let serviceArea: String?
-    let certificationLevel: String
+    let credentials: [PublicTechnicianCredential]
     let totalInspections: Int
     let avgRating: Double
 

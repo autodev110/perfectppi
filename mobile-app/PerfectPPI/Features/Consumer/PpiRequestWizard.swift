@@ -298,9 +298,9 @@ struct PpiRequestWizard: View {
                             } label: {
                                 HStack {
                                     VStack(alignment: .leading) {
-                                        Text(tech.location ?? "Technician")
+                                        Text(tech.profile?.displayName ?? tech.profile?.username ?? tech.location ?? "Technician")
                                             .font(.headline)
-                                        Text(tech.certificationLevel?.rawValue.capitalized ?? "—")
+                                        Text(tech.credentials?.first?.typeLabel ?? "No reviewed credential")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }

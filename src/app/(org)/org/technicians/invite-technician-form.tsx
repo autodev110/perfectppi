@@ -5,14 +5,12 @@ import { inviteTechnicianToOrg } from "@/features/organizations/invite-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { getInitials } from "@/lib/utils/formatting";
 import { Search, UserPlus } from "lucide-react";
 
 type TechResult = {
   id: string;
-  certification_level: string;
   total_inspections: number;
   profile: {
     id: string;
@@ -20,13 +18,6 @@ type TechResult = {
     username: string | null;
     avatar_url: string | null;
   } | null;
-};
-
-const CERT_LABELS: Record<string, string> = {
-  none: "Uncertified",
-  ase: "ASE",
-  master: "ASE Master",
-  oem_qualified: "OEM Qualified",
 };
 
 export function InviteTechnicianForm() {
@@ -49,7 +40,7 @@ export function InviteTechnicianForm() {
     let query = supabase
       .from("technician_profiles")
       .select(
-        `id, certification_level, total_inspections,
+        `id, total_inspections,
          profile:profiles!technician_profiles_profile_id_fkey!inner(id, display_name, username, avatar_url)`
       )
       .eq("is_independent", true)
@@ -137,9 +128,6 @@ export function InviteTechnicianForm() {
                       {profile?.username && (
                         <span className="text-xs text-muted-foreground">@{profile.username}</span>
                       )}
-                      <Badge variant="secondary" className="text-xs">
-                        {CERT_LABELS[tech.certification_level] ?? tech.certification_level}
-                      </Badge>
                       <span className="text-xs text-muted-foreground">
                         {tech.total_inspections} inspections
                       </span>

@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { getInitials } from "@/lib/utils/formatting";
 import Link from "next/link";
 import { MapPin, Search, Star, X } from "lucide-react";
+import { TechnicianCredentialFacts } from "@/components/shared/technician-credential-facts";
+import { credentialTypeLabel } from "@/features/technicians/credential-types";
 
 export const metadata: Metadata = {
   title: "Find a Technician",
@@ -35,9 +37,15 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
         const haystack = [
           profile?.display_name,
           profile?.username,
-          tech.certification_level,
           ...(tech.specialties ?? []),
-          (tech as { service_area?: string | null }).service_area,
+          ...(tech.supported_makes ?? []),
+          ...tech.credentials.flatMap((credential) => [
+            credentialTypeLabel(credential.credential_type),
+            credential.credential_name,
+            credential.issuer,
+            credential.scope,
+          ]),
+          tech.service_area,
         ]
           .filter(Boolean)
           .join(" ")
@@ -55,7 +63,7 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
           Technician Directory
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Browse certified technicians available for vehicle inspections.
+          Browse technician profiles, service details, and factual credentials reviewed by PerfectPPI.
         </p>
       </div>
 
@@ -72,16 +80,16 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
           />
         </div>
         <select
-          aria-label="Filter by certification"
+          aria-label="Filter by reviewed credential"
           name="cert"
           defaultValue={cert ?? "all"}
           className="h-10 rounded-md border border-input bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/40 min-w-[180px]"
         >
-          <option value="all">All certifications</option>
-          <option value="ase">ASE Certified</option>
-          <option value="master">ASE Master</option>
-          <option value="oem_qualified">OEM Qualified</option>
-          <option value="none">Uncertified</option>
+          <option value="all">All credential statuses</option>
+          <option value="ase">Reviewed ASE credential</option>
+          <option value="master">Reviewed ASE Master credential</option>
+          <option value="oem_qualified">Reviewed OEM training credential</option>
+          <option value="none">No reviewed credential</option>
         </select>
         <Button type="submit">Search</Button>
         {hasFilters && (
@@ -137,9 +145,7 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
                         </p>
                       )}
                       <div className="mt-2 flex flex-wrap gap-1">
-                        <Badge variant="secondary" className="text-xs">
-                          {tech.certification_level}
-                        </Badge>
+                        <TechnicianCredentialFacts credentials={tech.credentials} compact />
                         <Badge variant="outline" className="text-xs">
                           {tech.total_inspections} inspections
                         </Badge>
@@ -147,10 +153,10 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
                           <Star className="mr-1 h-3 w-3 text-amber-500" />
                           {Number(tech.avg_rating ?? 0).toFixed(1)} ({tech.total_reviews ?? 0})
                         </Badge>
-                        {(tech as { service_area?: string | null }).service_area && (
+                        {tech.service_area && (
                           <Badge variant="outline" className="text-xs">
                             <MapPin className="mr-1 h-3 w-3" />
-                            {(tech as { service_area?: string | null }).service_area}
+                            {tech.service_area}
                           </Badge>
                         )}
                       </div>

@@ -84,7 +84,7 @@ export async function getMemberProfile(
     profile.role === "technician"
       ? createAdminClient()
           .from("technician_profiles")
-          .select("certification_level")
+          .select("id")
           .eq("profile_id", profile.id)
           .maybeSingle()
       : Promise.resolve({ data: null }),

@@ -55,7 +55,28 @@ export async function getAdminTechnicians(page = 1, perPage = 50) {
     .order("created_at", { ascending: false })
     .range(from, to);
 
-  return { technicians: data ?? [], total: count ?? 0 };
+  const technicians = data ?? [];
+  if (technicians.length === 0) return { technicians: [], total: count ?? 0 };
+
+  const { data: credentials } = await supabase
+    .from("technician_credentials")
+    .select("id, technician_profile_id, credential_type, credential_name, issuer, scope, credential_identifier_last4, issued_on, expires_on, status, submitted_at, reviewed_at, verification_method, review_reason, revoked_at, revoke_reason, supersedes_credential_id")
+    .in("technician_profile_id", technicians.map((technician) => technician.id))
+    .order("submitted_at", { ascending: false });
+  const byTechnician = new Map<string, NonNullable<typeof credentials>>();
+  for (const credential of credentials ?? []) {
+    const current = byTechnician.get(credential.technician_profile_id) ?? [];
+    current.push(credential);
+    byTechnician.set(credential.technician_profile_id, current);
+  }
+
+  return {
+    technicians: technicians.map((technician) => ({
+      ...technician,
+      credentials: byTechnician.get(technician.id) ?? [],
+    })),
+    total: count ?? 0,
+  };
 }
 
 export async function getAdminOrganizations(page = 1, perPage = 50) {

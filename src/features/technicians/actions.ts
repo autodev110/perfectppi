@@ -5,13 +5,13 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
 const updateTechProfileSchema = z.object({
-  specialties: z.array(z.string()).optional(),
-  certification_level: z
-    .enum(["none", "ase", "master", "oem_qualified"])
-    .optional(),
+  specialties: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
+  supported_makes: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
   is_independent: z.boolean().optional(),
   service_area: z.string().max(200).optional().nullable(),
   is_available: z.boolean().optional(),
+  offers_mobile_service: z.boolean().optional(),
+  offers_shop_service: z.boolean().optional(),
 });
 
 function normalizeSpecialties(values: string[]) {
@@ -29,11 +29,13 @@ export async function updateTechProfile(formData: FormData) {
   const specialties = normalizeSpecialties(
     formData.getAll("specialties") as string[]
   );
+  const supportedMakes = normalizeSpecialties(
+    formData.getAll("supported_makes") as string[]
+  );
   const serviceAreaRaw = formData.get("service_area") as string | null;
   const raw = {
-    specialties: specialties.length > 0 ? specialties : undefined,
-    certification_level:
-      (formData.get("certification_level") as string) || undefined,
+    specialties,
+    supported_makes: supportedMakes,
     is_independent:
       formData.get("is_independent") === "true" ||
       formData.get("is_independent") === "on",
@@ -41,6 +43,12 @@ export async function updateTechProfile(formData: FormData) {
     is_available:
       formData.get("is_available") === "true" ||
       formData.get("is_available") === "on",
+    offers_mobile_service:
+      formData.get("offers_mobile_service") === "true" ||
+      formData.get("offers_mobile_service") === "on",
+    offers_shop_service:
+      formData.get("offers_shop_service") === "true" ||
+      formData.get("offers_shop_service") === "on",
   };
 
   const parsed = updateTechProfileSchema.safeParse(raw);

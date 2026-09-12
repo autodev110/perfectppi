@@ -11,7 +11,6 @@ import {
   Car,
   MapPin,
   Gauge,
-  Award,
   ClipboardCheck,
   Tag,
   MessageSquare,
@@ -27,6 +26,7 @@ import { getOptionalProfile } from "@/features/auth/guards";
 import { getProfileSharePreview, profileShareCard } from "@/features/share/previews";
 import { ShareButton } from "@/components/shared/share-button";
 import { sharePath } from "@/lib/share/links";
+import { TechnicianCredentialFacts } from "@/components/shared/technician-credential-facts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,9 +50,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const PPI_BADGE = {
-  personal:       { label: "Bronze", color: "text-amber-700",  bg: "bg-amber-50 border-amber-200" },
-  general_tech:   { label: "Silver", color: "text-slate-600",  bg: "bg-slate-50 border-slate-200" },
-  certified_tech: { label: "Gold",   color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-200" },
+  personal:       { label: "Owner entered", color: "text-amber-700",  bg: "bg-amber-50 border-amber-200" },
+  general_tech:   { label: "Technician inspection", color: "text-slate-600",  bg: "bg-slate-50 border-slate-200" },
+  certified_tech: { label: "Reviewed credential", color: "text-teal-700", bg: "bg-teal-50 border-teal-200" },
 } as const;
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -141,9 +141,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
                 </Badge>
               )}
               {tech && (
-                <Badge variant="outline" className="text-xs font-bold capitalize">
-                  {tech.certification_level}
-                </Badge>
+                <TechnicianCredentialFacts credentials={tech.credentials} compact />
               )}
             </div>
             {profile.username && (
@@ -343,7 +341,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
                     className="group flex items-center gap-4 bg-surface-container-lowest rounded-[1.25rem] p-4 ghost-border shadow-sm hover:shadow-md transition-all"
                   >
                     <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold flex-shrink-0 ${badge?.color} ${badge?.bg}`}>
-                      <Award className="h-3.5 w-3.5" />
+                      <ClipboardCheck className="h-3.5 w-3.5" />
                       {badge?.label}
                     </div>
                     <div className="flex-1 min-w-0">

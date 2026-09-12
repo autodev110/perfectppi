@@ -3920,21 +3920,191 @@ export type Database = {
           },
         ]
       }
+      technician_credential_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          credential_id: string | null
+          id: string
+          reason: string
+          technician_profile_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          credential_id?: string | null
+          id?: string
+          reason: string
+          technician_profile_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          credential_id?: string | null
+          id?: string
+          reason?: string
+          technician_profile_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technician_credential_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technician_credential_events_credential_id_fkey"
+            columns: ["credential_id"]
+            isOneToOne: false
+            referencedRelation: "technician_credentials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technician_credential_events_technician_profile_id_fkey"
+            columns: ["technician_profile_id"]
+            isOneToOne: false
+            referencedRelation: "technician_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technician_credentials: {
+        Row: {
+          created_at: string
+          credential_identifier_last4: string | null
+          credential_name: string
+          credential_type: string
+          evidence_reference: string
+          expires_on: string | null
+          id: string
+          issued_on: string | null
+          issuer: string
+          review_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          scope: string | null
+          status: string
+          submitted_at: string
+          submitted_by: string | null
+          supersedes_credential_id: string | null
+          technician_profile_id: string
+          updated_at: string
+          verification_method: string | null
+        }
+        Insert: {
+          created_at?: string
+          credential_identifier_last4?: string | null
+          credential_name: string
+          credential_type: string
+          evidence_reference: string
+          expires_on?: string | null
+          id?: string
+          issued_on?: string | null
+          issuer: string
+          review_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          scope?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by?: string | null
+          supersedes_credential_id?: string | null
+          technician_profile_id: string
+          updated_at?: string
+          verification_method?: string | null
+        }
+        Update: {
+          created_at?: string
+          credential_identifier_last4?: string | null
+          credential_name?: string
+          credential_type?: string
+          evidence_reference?: string
+          expires_on?: string | null
+          id?: string
+          issued_on?: string | null
+          issuer?: string
+          review_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          scope?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by?: string | null
+          supersedes_credential_id?: string | null
+          technician_profile_id?: string
+          updated_at?: string
+          verification_method?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technician_credentials_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technician_credentials_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technician_credentials_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technician_credentials_supersedes_credential_id_fkey"
+            columns: ["supersedes_credential_id"]
+            isOneToOne: false
+            referencedRelation: "technician_credentials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technician_credentials_technician_profile_id_fkey"
+            columns: ["technician_profile_id"]
+            isOneToOne: false
+            referencedRelation: "technician_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       technician_profiles: {
         Row: {
           avg_rating: number
           certification_level: Database["public"]["Enums"]["certification_level"]
+          claimed_certification_level: Database["public"]["Enums"]["certification_level"]
           created_at: string
           id: string
           is_available: boolean
           is_featured: boolean
           is_independent: boolean
           is_verified: boolean
+          offers_mobile_service: boolean
+          offers_shop_service: boolean
           organization_id: string | null
           profile_id: string
           reputation_score: number
           service_area: string | null
           specialties: string[] | null
+          supported_makes: string[]
           total_inspections: number
           total_reviews: number
           updated_at: string
@@ -3942,17 +4112,21 @@ export type Database = {
         Insert: {
           avg_rating?: number
           certification_level?: Database["public"]["Enums"]["certification_level"]
+          claimed_certification_level?: Database["public"]["Enums"]["certification_level"]
           created_at?: string
           id?: string
           is_available?: boolean
           is_featured?: boolean
           is_independent?: boolean
           is_verified?: boolean
+          offers_mobile_service?: boolean
+          offers_shop_service?: boolean
           organization_id?: string | null
           profile_id: string
           reputation_score?: number
           service_area?: string | null
           specialties?: string[] | null
+          supported_makes?: string[]
           total_inspections?: number
           total_reviews?: number
           updated_at?: string
@@ -3960,17 +4134,21 @@ export type Database = {
         Update: {
           avg_rating?: number
           certification_level?: Database["public"]["Enums"]["certification_level"]
+          claimed_certification_level?: Database["public"]["Enums"]["certification_level"]
           created_at?: string
           id?: string
           is_available?: boolean
           is_featured?: boolean
           is_independent?: boolean
           is_verified?: boolean
+          offers_mobile_service?: boolean
+          offers_shop_service?: boolean
           organization_id?: string | null
           profile_id?: string
           reputation_score?: number
           service_area?: string | null
           specialties?: string[] | null
+          supported_makes?: string[]
           total_inspections?: number
           total_reviews?: number
           updated_at?: string
@@ -5624,6 +5802,46 @@ export type Database = {
         Returns: {
           profile_id: string
         }[]
+      }
+      read_technician_credential_evidence: {
+        Args: {
+          p_actor_profile_id: string
+          p_credential_id: string
+        }
+        Returns: string
+      }
+      submit_technician_credential: {
+        Args: {
+          p_actor_profile_id: string
+          p_credential_type: string
+          p_credential_name: string
+          p_issuer: string
+          p_scope: string
+          p_identifier_last4: string
+          p_issued_on: string | null
+          p_expires_on: string | null
+          p_evidence_reference: string
+          p_supersedes_id?: string | null
+        }
+        Returns: Database["public"]["Tables"]["technician_credentials"]["Row"]
+      }
+      review_technician_credential: {
+        Args: {
+          p_actor_profile_id: string
+          p_credential_id: string
+          p_decision: string
+          p_verification_method: string
+          p_reason: string
+        }
+        Returns: Database["public"]["Tables"]["technician_credentials"]["Row"]
+      }
+      revoke_technician_credential: {
+        Args: {
+          p_actor_profile_id: string
+          p_credential_id: string
+          p_reason: string
+        }
+        Returns: Database["public"]["Tables"]["technician_credentials"]["Row"]
       }
       partner_create_inspection: {
         Args: {

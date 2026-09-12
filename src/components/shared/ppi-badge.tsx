@@ -11,7 +11,7 @@ interface PpiBadgeProps {
 const colorMap: Record<PpiType, string> = {
   personal: "bg-amber-100 text-amber-800 border-amber-300",
   general_tech: "bg-slate-100 text-slate-800 border-slate-300",
-  certified_tech: "bg-yellow-100 text-yellow-800 border-yellow-300",
+  certified_tech: "bg-teal-100 text-teal-800 border-teal-300",
 };
 
 export function PpiBadge({ type, className }: PpiBadgeProps) {

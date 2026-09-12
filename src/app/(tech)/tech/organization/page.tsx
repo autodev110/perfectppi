@@ -73,7 +73,9 @@ export default async function TechOrganizationPage() {
                   </Avatar>
                   <div>
                     <p className="text-sm font-medium">{t.profile?.display_name ?? "—"}</p>
-                    <Badge variant="outline" className="text-xs">{t.certification_level}</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {t.is_available ? "Accepting requests" : "Not accepting requests"}
+                    </Badge>
                   </div>
                 </div>
               ))}

@@ -8,13 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getInitials } from "@/lib/utils/formatting";
 import Link from "next/link";
-
-const CERT_LABELS: Record<string, string> = {
-  none: "Uncertified",
-  ase: "ASE Certified",
-  master: "ASE Master",
-  oem_qualified: "OEM Qualified",
-};
+import { TechnicianCredentialFacts } from "@/components/shared/technician-credential-facts";
 
 export async function generateMetadata({
   params,
@@ -77,9 +71,6 @@ export default async function TechnicianProfilePage({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            <Badge>
-              {CERT_LABELS[tech.certification_level] ?? tech.certification_level}
-            </Badge>
             <Badge variant="outline">
               {tech.total_inspections} inspections completed
             </Badge>
@@ -89,6 +80,11 @@ export default async function TechnicianProfilePage({
             {tech.is_independent && (
               <Badge variant="secondary">Independent</Badge>
             )}
+          </div>
+
+          <div>
+            <h3 className="mb-2 font-semibold">Reviewed credentials</h3>
+            <TechnicianCredentialFacts credentials={tech.credentials} />
           </div>
 
           <div>
@@ -118,6 +114,27 @@ export default async function TechnicianProfilePage({
               </div>
             </div>
           )}
+
+          {tech.supported_makes.length > 0 && (
+            <div>
+              <h3 className="mb-2 font-semibold">Supported makes</h3>
+              <div className="flex flex-wrap gap-1">
+                {tech.supported_makes.map((make) => (
+                  <Badge key={make} variant="outline" className="text-xs">{make}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <h3 className="mb-2 font-semibold">Service details</h3>
+            <p className="text-sm text-muted-foreground">
+              {tech.service_area ?? "Service area not provided"}
+              {tech.offers_mobile_service ? " · Mobile service" : ""}
+              {tech.offers_shop_service ? " · Shop service" : ""}
+              {tech.is_available ? " · Accepting inspection requests" : " · Availability not confirmed"}
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
