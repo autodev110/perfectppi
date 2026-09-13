@@ -5655,6 +5655,10 @@ export type Database = {
         Args: { p_days?: number }
         Returns: Json
       }
+      get_product_safety_analytics_summary: {
+        Args: { p_days?: number }
+        Returns: Json
+      }
       get_operational_query_metrics: {
         Args: Record<PropertyKey, never>
         Returns: Json

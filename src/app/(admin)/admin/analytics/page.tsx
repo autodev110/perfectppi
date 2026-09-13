@@ -1,7 +1,11 @@
-import { Activity, Gauge, Target, UserCheck, Users } from "lucide-react";
+import { Activity, Clock, Gauge, ShieldCheck, Target, UserCheck, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/guards";
-import { getOperationalQueryMetrics, getProductAnalyticsSummary } from "@/features/analytics/queries";
+import {
+  getOperationalQueryMetrics,
+  getProductAnalyticsSummary,
+  getProductSafetyAnalyticsSummary,
+} from "@/features/analytics/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -35,10 +39,23 @@ const operationLabels: Record<string, string> = {
   unified_search: "Unified search",
 };
 
+const funnelLabels: Record<string, string> = {
+  listing_viewed: "Listing views",
+  report_viewed: "Report opens",
+  seller_message_started: "Seller conversations",
+  inspection_requested: "Inspection requests",
+  inspection_completed: "Completed inspections",
+};
+
+function hours(value: number | null) {
+  return value === null ? "No data" : `${value.toLocaleString()} hr`;
+}
+
 export default async function ProductAnalyticsPage() {
   await requireRole(["admin"]);
-  const [summary, queryMetrics] = await Promise.all([
+  const [summary, quality, queryMetrics] = await Promise.all([
     getProductAnalyticsSummary(30),
+    getProductSafetyAnalyticsSummary(30),
     getOperationalQueryMetrics(),
   ]);
   const activationRate = summary.eligibleNewProfiles > 0
@@ -101,6 +118,82 @@ export default async function ProductAnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <section className="space-y-4" aria-labelledby="product-outcomes-heading">
+        <div>
+          <h2 id="product-outcomes-heading" className="font-heading text-2xl font-extrabold">Product outcomes</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Server-confirmed actions from members who have product analytics enabled.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Friend acceptance</p><p className="mt-2 text-3xl font-black">{quality.product.friendAcceptanceRatePercent}%</p><p className="mt-1 text-xs text-muted-foreground">{quality.product.friendRequestsAccepted} accepted of {quality.product.friendRequestsSent} sent</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Questions answered in 24h</p><p className="mt-2 text-3xl font-black">{quality.product.answeredWithin24HoursRatePercent}%</p><p className="mt-1 text-xs text-muted-foreground">{quality.product.questionsAnsweredWithin24Hours} of {quality.product.questionsPublished} questions</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Accepted answers</p><p className="mt-2 text-3xl font-black">{quality.product.acceptedAnswerRatePercent}%</p><p className="mt-1 text-xs text-muted-foreground">{quality.product.questionsWithAcceptedAnswer} questions resolved</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Technical saves</p><p className="mt-2 text-3xl font-black">{quality.product.technicalPostSaves}</p><p className="mt-1 text-xs text-muted-foreground">From {quality.product.technicalPostSavers} members</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">D7 meaningful return</p><p className="mt-2 text-3xl font-black">{quality.product.d7Retention.ratePercent}%</p><p className="mt-1 text-xs text-muted-foreground">{quality.product.d7Retention.retainedUsers} of {quality.product.d7Retention.eligibleUsers} eligible members</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">D30 meaningful return</p><p className="mt-2 text-3xl font-black">{quality.product.d30Retention.ratePercent}%</p><p className="mt-1 text-xs text-muted-foreground">{quality.product.d30Retention.retainedUsers} of {quality.product.d30Retention.eligibleUsers} eligible members</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Retained group participants</p><p className="mt-2 text-3xl font-black">{quality.product.retainedGroupParticipants}</p><p className="mt-1 text-xs text-muted-foreground">Returned to contribute after seven days</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Notification opt-out</p><p className="mt-2 text-3xl font-black">{quality.safety.notificationOptOut.ratePercent}%</p><p className="mt-1 text-xs text-muted-foreground">{quality.safety.notificationOptOut.optedOutProfiles} of {quality.safety.notificationOptOut.eligibleProfiles} profiles</p></CardContent></Card>
+        </div>
+
+        <Card>
+          <CardHeader><CardTitle>Marketplace-related action stages</CardTitle></CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead><tr className="border-b text-xs uppercase tracking-wide text-muted-foreground"><th className="pb-3">Stage</th><th className="pb-3 text-right">Events</th><th className="pb-3 text-right">People</th></tr></thead>
+                <tbody>{quality.product.marketplaceFunnel.map((stage) => <tr key={stage.stage} className="border-b last:border-0"><td className="py-3 font-medium">{funnelLabels[stage.stage]}</td><td className="py-3 text-right tabular-nums">{stage.eventCount.toLocaleString()}</td><td className="py-3 text-right tabular-nums">{stage.userCount.toLocaleString()}</td></tr>)}</tbody>
+              </table>
+            </div>
+            <p className="pt-4 text-xs text-muted-foreground">Each row is an independent aggregate action count, not person-level journey tracking. Report opens and inspection completions may begin outside Marketplace.</p>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="space-y-4" aria-labelledby="safety-quality-heading">
+        <div>
+          <h2 id="safety-quality-heading" className="font-heading text-2xl font-extrabold">Safety quality</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Operational moderation measures. Report details and reporter identities are excluded.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card><CardContent className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Reports per 1,000 items</p><p className="mt-2 text-3xl font-black">{quality.safety.reportsPerThousandItems}</p><p className="mt-1 text-xs text-muted-foreground">{quality.safety.reportCount} reports across {quality.safety.publishedItems} posts and comments</p></div><ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" /></CardContent></Card>
+          <Card><CardContent className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Median review time</p><p className="mt-2 text-3xl font-black">{hours(quality.safety.review.medianHours)}</p><p className="mt-1 text-xs text-muted-foreground">P95 {hours(quality.safety.review.p95Hours)} across {quality.safety.review.closedCases} cases</p></div><Clock className="h-5 w-5 text-primary" aria-hidden="true" /></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Confirmed violations</p><p className="mt-2 text-3xl font-black">{quality.safety.decisions.confirmedViolationRatePercent}%</p><p className="mt-1 text-xs text-muted-foreground">Restore rate {quality.safety.decisions.restoreRatePercent}%</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Appeal overturns</p><p className="mt-2 text-3xl font-black">{quality.safety.appeals.overturnRatePercent}%</p><p className="mt-1 text-xs text-muted-foreground">{quality.safety.appeals.overturned} of {quality.safety.appeals.decided} decided appeals</p></CardContent></Card>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Card>
+            <CardHeader><CardTitle>Queue and safeguards</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+              <div><p className="text-muted-foreground">Open cases</p><p className="text-2xl font-black">{quality.safety.queue.openCases}</p></div>
+              <div><p className="text-muted-foreground">Overdue</p><p className="text-2xl font-black">{quality.safety.queue.overdueCases}</p></div>
+              <div><p className="text-muted-foreground">Due within 2h</p><p className="text-2xl font-black">{quality.safety.queue.dueWithin2Hours}</p></div>
+              <div><p className="text-muted-foreground">Urgent unacknowledged</p><p className="text-2xl font-black">{quality.safety.queue.urgentUnacknowledged}</p></div>
+              <div><p className="text-muted-foreground">Visibility violations</p><p className="text-2xl font-black">{quality.safety.visibilityIntegrityViolations}</p></div>
+              <div><p className="text-muted-foreground">Hidden public media refs</p><p className="text-2xl font-black">{quality.safety.hiddenMediaPublicReferences}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Member safety actions</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+              <div><p className="text-muted-foreground">Blocks</p><p className="text-2xl font-black">{quality.safety.blocksCreated}</p><p className="text-xs text-muted-foreground">{quality.safety.blockActors} members</p></div>
+              <div><p className="text-muted-foreground">Mutes</p><p className="text-2xl font-black">{quality.safety.mutesCreated}</p><p className="text-xs text-muted-foreground">{quality.safety.muteActors} members</p></div>
+              <div><p className="text-muted-foreground">Repeat violations</p><p className="text-2xl font-black">{quality.safety.repeatViolationAuthors}</p><p className="text-xs text-muted-foreground">Authors with 2+</p></div>
+              <div><p className="text-muted-foreground">Repeated non-violations</p><p className="text-2xl font-black">{quality.safety.repeatedNonviolatingReporters}</p><p className="text-xs text-muted-foreground">Reporter patterns for review</p></div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader><CardTitle>Report mix</CardTitle></CardHeader>
+          <CardContent>
+            {quality.safety.reportBreakdown.length === 0 ? <p className="text-sm text-muted-foreground">No reason and surface cohort reached the five-report privacy threshold.</p> : (
+              <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-xs uppercase tracking-wide text-muted-foreground"><th className="pb-3">Surface</th><th className="pb-3">Reason</th><th className="pb-3 text-right">Reports</th></tr></thead><tbody>{quality.safety.reportBreakdown.map((group) => <tr key={`${group.surface}:${group.reasonCode}`} className="border-b last:border-0"><td className="py-3 font-medium">{group.surface === "community_post" ? "Posts" : "Comments"}</td><td className="py-3 capitalize">{group.reasonCode.replaceAll("_", " ")}</td><td className="py-3 text-right tabular-nums">{group.reportCount}</td></tr>)}</tbody></table></div>
+            )}
+            {quality.safety.reportBreakdownSuppressed ? <p className="pt-4 text-xs text-muted-foreground">Low-volume reason/surface cohorts are suppressed.</p> : null}
+          </CardContent>
+        </Card>
+      </section>
 
       <Card>
         <CardHeader>

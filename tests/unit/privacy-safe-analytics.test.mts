@@ -40,7 +40,16 @@ describe("privacy-safe product analytics", () => {
     const page = read("src/app/(admin)/admin/analytics/page.tsx");
     const query = read("src/features/analytics/queries.ts");
     assert.match(query, /get_product_analytics_summary/);
+    assert.match(query, /get_product_safety_analytics_summary/);
     assert.doesNotMatch(page, /profileId|profile_id|dedupeHash|dedupe_hash/);
     assert.match(page, /Aggregate first-party measures/);
+  });
+
+  test("safety analytics suppress small report cohorts and remain service-only", () => {
+    const migration = read("supabase/migrations/20260913215140_product_safety_analytics.sql");
+    assert.match(migration, /FROM report_groups WHERE report_count >= 5/);
+    assert.match(migration, /reportBreakdownSuppressed/);
+    assert.match(migration, /REVOKE ALL ON FUNCTION public\.get_product_safety_analytics_summary\(integer\)[\s\S]*FROM PUBLIC, anon, authenticated/);
+    assert.doesNotMatch(migration, /report\.details|content_snapshot|statement/);
   });
 });
