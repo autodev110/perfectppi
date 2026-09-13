@@ -119,6 +119,8 @@ SELECT public.request_group_membership(author_id, group_id, 'Please add me for r
 FROM journey_ids;
 SELECT public.decide_group_join_request(owner_id, group_id, author_id, true)
 FROM journey_ids;
+SELECT public.acknowledge_community_group_rules(author_id, group_id)
+FROM journey_ids;
 
 DO $$
 BEGIN

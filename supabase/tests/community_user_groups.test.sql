@@ -88,6 +88,7 @@ $$;
 --    member list — without staff curation.
 -- ---------------------------------------------------------------------------
 SELECT public.join_curated_community_group(member, group_id) FROM ug;
+SELECT public.acknowledge_community_group_rules(member, group_id) FROM ug;
 INSERT INTO public.community_posts (id, author_id, group_id, content, audience, status, moderation_status)
 SELECT '73000000-0000-0000-0000-000000000001', member, group_id, 'First drive this Sunday', 'public', 'active', 'active' FROM ug;
 INSERT INTO public.community_comments (post_id, author_id, content, status, moderation_status)
@@ -127,6 +128,7 @@ BEGIN
   IF (SELECT count(*) FROM public.community_group_moderation_events WHERE group_id = g.id AND action = 'settings_changed') <> 1 THEN
     RAISE EXCEPTION 'settings changes must be audited';
   END IF;
+  PERFORM public.acknowledge_community_group_rules((SELECT founder FROM ug), (SELECT group_id FROM ug));
 
   hit := false;
   BEGIN

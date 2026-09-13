@@ -74,6 +74,9 @@ BEGIN
 END
 $$;
 
+SELECT public.acknowledge_community_group_rules(member_id, group_id)
+FROM group_ids;
+
 -- Group posts require active membership and are readable by eligible signed-in
 -- members even when the author keeps their personal profile private.
 DO $$

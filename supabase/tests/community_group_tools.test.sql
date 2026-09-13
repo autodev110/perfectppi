@@ -42,6 +42,8 @@ $$;
 SELECT public.join_curated_community_group(mod_id, group_id) FROM gt;
 SELECT public.join_curated_community_group(author_id, group_id) FROM gt;
 SELECT public.join_curated_community_group(reader_id, group_id) FROM gt;
+SELECT public.acknowledge_community_group_rules(author_id, group_id) FROM gt;
+SELECT public.acknowledge_community_group_rules(reader_id, group_id) FROM gt;
 
 INSERT INTO public.community_posts (id, author_id, group_id, content, audience, status, moderation_status)
 SELECT '6d000000-0000-0000-0000-000000000001', author_id, group_id, 'Brake bleeding sequence for ABS cars', 'public', 'active', 'active' FROM gt;
