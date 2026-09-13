@@ -371,7 +371,7 @@ export async function createCommunityPostFromInput(
   if (groupId) {
     const { data: membership } = await admin
       .from("community_group_memberships")
-      .select("role, group:community_groups!community_group_memberships_group_id_fkey(id, status, posting_policy)")
+      .select("role, rules_acknowledged_version, posting_restricted_until, group:community_groups!community_group_memberships_group_id_fkey(id, status, posting_policy, rules, rules_version)")
       .eq("group_id", groupId)
       .eq("profile_id", profile.profileId)
       .eq("status", "active")
@@ -380,6 +380,8 @@ export async function createCommunityPostFromInput(
       id: string;
       status: string;
       posting_policy: string;
+      rules: string[];
+      rules_version: number;
     } | null;
     // Active membership in a live group is all that matters here; private
     // and unlisted groups (plan 13.3) post the same way. The DB trigger
@@ -389,6 +391,12 @@ export async function createCommunityPostFromInput(
     }
     if (group.posting_policy === "moderators" && membership?.role === "member") {
       return { error: "Only this group's moderators can post here. You can still comment." };
+    }
+    if (membership?.posting_restricted_until && new Date(membership.posting_restricted_until).getTime() > Date.now()) {
+      return { error: "A group moderator has temporarily paused your ability to post in this group." };
+    }
+    if (group.rules.length > 0 && (membership?.rules_acknowledged_version ?? 0) < group.rules_version) {
+      return { error: "Review and accept this group's latest rules before posting." };
     }
   }
 

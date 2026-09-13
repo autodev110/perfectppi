@@ -828,6 +828,67 @@ export type Database = {
           },
         ]
       }
+      community_group_faq_entries: {
+        Row: {
+          answer: string
+          created_at: string
+          created_by: string | null
+          group_id: string
+          id: string
+          question: string
+          source_comment_id: string | null
+          source_post_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          answer: string
+          created_at?: string
+          created_by?: string | null
+          group_id: string
+          id?: string
+          question: string
+          source_comment_id?: string | null
+          source_post_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          answer?: string
+          created_at?: string
+          created_by?: string | null
+          group_id?: string
+          id?: string
+          question?: string
+          source_comment_id?: string | null
+          source_post_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_group_faq_entries_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "community_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_group_faq_entries_source_comment_id_fkey"
+            columns: ["source_comment_id"]
+            isOneToOne: false
+            referencedRelation: "community_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_group_faq_entries_source_post_id_fkey"
+            columns: ["source_post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_group_memberships: {
         Row: {
           decided_at: string | null
@@ -836,9 +897,13 @@ export type Database = {
           invited_by: string | null
           joined_at: string
           profile_id: string
+          posting_restricted_until: string | null
+          posting_restriction_reason: string | null
           request_message: string | null
           requested_at: string | null
           role: Database["public"]["Enums"]["community_group_role"]
+          rules_acknowledged_at: string | null
+          rules_acknowledged_version: number
           status: Database["public"]["Enums"]["community_group_membership_status"]
           updated_at: string
         }
@@ -849,9 +914,13 @@ export type Database = {
           invited_by?: string | null
           joined_at?: string
           profile_id: string
+          posting_restricted_until?: string | null
+          posting_restriction_reason?: string | null
           request_message?: string | null
           requested_at?: string | null
           role?: Database["public"]["Enums"]["community_group_role"]
+          rules_acknowledged_at?: string | null
+          rules_acknowledged_version?: number
           status?: Database["public"]["Enums"]["community_group_membership_status"]
           updated_at?: string
         }
@@ -862,9 +931,13 @@ export type Database = {
           invited_by?: string | null
           joined_at?: string
           profile_id?: string
+          posting_restricted_until?: string | null
+          posting_restriction_reason?: string | null
           request_message?: string | null
           requested_at?: string | null
           role?: Database["public"]["Enums"]["community_group_role"]
+          rules_acknowledged_at?: string | null
+          rules_acknowledged_version?: number
           status?: Database["public"]["Enums"]["community_group_membership_status"]
           updated_at?: string
         }
@@ -898,6 +971,8 @@ export type Database = {
           join_policy: Database["public"]["Enums"]["community_group_join_policy"]
           location_region: string | null
           posting_policy: string
+          rules_version: number
+          slow_mode_seconds: number
           name: string
           rules: string[]
           slug: string
@@ -921,6 +996,8 @@ export type Database = {
           join_policy?: Database["public"]["Enums"]["community_group_join_policy"]
           location_region?: string | null
           posting_policy?: string
+          rules_version?: number
+          slow_mode_seconds?: number
           name: string
           rules?: string[]
           slug: string
@@ -944,6 +1021,8 @@ export type Database = {
           join_policy?: Database["public"]["Enums"]["community_group_join_policy"]
           location_region?: string | null
           posting_policy?: string
+          rules_version?: number
+          slow_mode_seconds?: number
           name?: string
           rules?: string[]
           slug?: string
@@ -6192,7 +6271,45 @@ export type Database = {
           avatar_url: string | null
           role: Database["public"]["Enums"]["community_group_role"]
           joined_at: string
+          posting_restricted_until: string | null
         }[]
+      }
+      acknowledge_community_group_rules: {
+        Args: { p_actor_profile_id: string; p_group_id: string }
+        Returns: Json
+      }
+      set_community_group_slow_mode: {
+        Args: { p_actor_profile_id: string; p_group_id: string; p_seconds: number }
+        Returns: Json
+      }
+      set_group_member_posting_restriction: {
+        Args: {
+          p_actor_profile_id: string
+          p_group_id: string
+          p_target_profile_id: string
+          p_restricted_until: string | null
+          p_reason?: string | null
+        }
+        Returns: Json
+      }
+      list_community_group_faq: {
+        Args: { p_viewer_id: string; p_group_id: string; p_query?: string | null; p_limit?: number; p_offset?: number }
+        Returns: Database["public"]["Tables"]["community_group_faq_entries"]["Row"][]
+      }
+      upsert_community_group_faq: {
+        Args: {
+          p_actor_profile_id: string
+          p_group_id: string
+          p_entry_id?: string | null
+          p_question?: string | null
+          p_answer?: string | null
+          p_source_post_id?: string | null
+        }
+        Returns: Database["public"]["Tables"]["community_group_faq_entries"]["Row"]
+      }
+      delete_community_group_faq: {
+        Args: { p_actor_profile_id: string; p_group_id: string; p_entry_id: string }
+        Returns: boolean
       }
       community_group_is_live: {
         Args: { p_group_id: string }

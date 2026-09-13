@@ -6,6 +6,7 @@ import { getViewerGroupRole } from "@/features/social/group-tools";
 import { Button } from "@/components/ui/button";
 import { GroupSettingsForm } from "@/components/shared/group-settings-form";
 import { GroupImageManager } from "@/components/shared/group-image-manager";
+import { GroupSlowModeControl } from "@/components/shared/group-quality-controls";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +50,10 @@ export default async function GroupSettingsPage({ params }: { params: Promise<{ 
               joinPolicy: group.join_policy,
             }}
           />
+        </div>
+        <div className="mt-6 rounded-[2rem] bg-surface-container-lowest p-6 shadow-sm ghost-border sm:p-8">
+          <h2 className="mb-4 font-heading text-lg font-extrabold">Posting pace</h2>
+          <GroupSlowModeControl slug={group.slug} initialSeconds={group.slow_mode_seconds} />
         </div>
       </div>
     </main>

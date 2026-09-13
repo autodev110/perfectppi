@@ -34,6 +34,10 @@ export type CommunityGroupSummary = {
   location_region: string | null;
   /** "members" (anyone posts) or "moderators" (announcement group). */
   posting_policy: string;
+  slow_mode_seconds: number;
+  rules_version: number;
+  rules_acknowledged: boolean;
+  posting_restricted_until: string | null;
   created_by: string | null;
   visibility: GroupVisibility;
   join_policy: GroupJoinPolicy;
@@ -104,7 +108,7 @@ export async function getCommunityGroups(): Promise<CommunityGroupSummary[]> {
 
   const { data: groups, error } = await admin
     .from("community_groups")
-    .select("id, slug, name, description, category, rules, avatar_url, cover_url, vehicle_make, vehicle_model, year_start, year_end, is_staff_curated, location_region, posting_policy, created_by, visibility, join_policy")
+    .select("id, slug, name, description, category, rules, avatar_url, cover_url, vehicle_make, vehicle_model, year_start, year_end, is_staff_curated, location_region, posting_policy, slow_mode_seconds, rules_version, created_by, visibility, join_policy")
     .in("id", visibleIds)
     .eq("status", "active")
     .order("is_staff_curated", { ascending: false })
@@ -118,7 +122,7 @@ export async function getCommunityGroups(): Promise<CommunityGroupSummary[]> {
   const [{ data: memberships }, { data: vehicles }] = await Promise.all([
     admin
       .from("community_group_memberships")
-      .select("group_id, profile_id, role, status")
+      .select("group_id, profile_id, role, status, rules_acknowledged_version, posting_restricted_until")
       .in("group_id", groupIds)
       .in("status", ["active", "requested", "invited"]),
     admin
@@ -129,7 +133,12 @@ export async function getCommunityGroups(): Promise<CommunityGroupSummary[]> {
 
   const memberCounts = new Map<string, number>();
   const pendingCounts = new Map<string, number>();
-  const mine = new Map<string, { role: "owner" | "admin" | "moderator" | "member"; status: Exclude<GroupMembershipStatus, null> }>();
+  const mine = new Map<string, {
+    role: "owner" | "admin" | "moderator" | "member";
+    status: Exclude<GroupMembershipStatus, null>;
+    rulesAcknowledgedVersion: number;
+    postingRestrictedUntil: string | null;
+  }>();
   for (const membership of memberships ?? []) {
     if (membership.status === "active") {
       memberCounts.set(membership.group_id, (memberCounts.get(membership.group_id) ?? 0) + 1);
@@ -137,7 +146,12 @@ export async function getCommunityGroups(): Promise<CommunityGroupSummary[]> {
       pendingCounts.set(membership.group_id, (pendingCounts.get(membership.group_id) ?? 0) + 1);
     }
     if (membership.profile_id === profileId && (membership.status === "active" || membership.status === "requested" || membership.status === "invited")) {
-      mine.set(membership.group_id, { role: membership.role, status: membership.status });
+      mine.set(membership.group_id, {
+        role: membership.role,
+        status: membership.status,
+        rulesAcknowledgedVersion: membership.rules_acknowledged_version,
+        postingRestrictedUntil: membership.posting_restricted_until,
+      });
     }
   }
   const garageTags = (vehicles ?? []).map((vehicle) => ({
@@ -156,6 +170,8 @@ export async function getCommunityGroups(): Promise<CommunityGroupSummary[]> {
       is_member: isMember,
       membership_role: isMember ? own.role : null,
       membership_status: own?.status ?? null,
+      rules_acknowledged: group.rules.length === 0 || (own?.rulesAcknowledgedVersion ?? 0) >= group.rules_version,
+      posting_restricted_until: own?.postingRestrictedUntil ?? null,
       can_view_content: group.visibility === "public" || isMember,
       pending_request_count: moderates ? (pendingCounts.get(group.id) ?? 0) : 0,
       is_suggested: Boolean(group.vehicle_make) && garageTags.some((vehicle) =>
@@ -180,7 +196,7 @@ export async function getCommunityGroup(slug: string) {
   const admin = createAdminClient();
   const { data: group, error } = await admin
     .from("community_groups")
-    .select("id, slug, name, description, category, rules, avatar_url, cover_url, vehicle_make, vehicle_model, year_start, year_end, is_staff_curated, location_region, posting_policy, created_by, visibility, join_policy")
+    .select("id, slug, name, description, category, rules, avatar_url, cover_url, vehicle_make, vehicle_model, year_start, year_end, is_staff_curated, location_region, posting_policy, slow_mode_seconds, rules_version, created_by, visibility, join_policy")
     .eq("slug", safeSlug)
     .eq("visibility", "unlisted")
     .eq("status", "active")
@@ -196,14 +212,14 @@ export async function getCommunityGroup(slug: string) {
   const [{ data: memberships }, { data: vehicles }] = await Promise.all([
     admin
       .from("community_group_memberships")
-      .select("profile_id, role, status")
+      .select("profile_id, role, status, rules_acknowledged_version, posting_restricted_until")
       .eq("group_id", group.id)
       .in("status", ["active", "requested", "invited"]),
     admin.from("vehicles").select("make, model").eq("owner_id", profileId),
   ]);
   const own = (memberships ?? []).find((membership) => membership.profile_id === profileId);
   const isMember = own?.status === "active";
-  const moderates = isMember && (own.role === "owner" || own.role === "moderator");
+  const moderates = isMember && (own.role === "owner" || own.role === "admin" || own.role === "moderator");
   const garageTags = (vehicles ?? []).map((vehicle) => ({
     make: vehicle.make?.trim().toLowerCase() ?? "",
     model: vehicle.model?.trim().toLowerCase() ?? "",
@@ -218,6 +234,8 @@ export async function getCommunityGroup(slug: string) {
     membership_status: own?.status === "active" || own?.status === "requested" || own?.status === "invited"
       ? own.status
       : null,
+    rules_acknowledged: group.rules.length === 0 || (own?.rules_acknowledged_version ?? 0) >= group.rules_version,
+    posting_restricted_until: own?.posting_restricted_until ?? null,
     can_view_content: isMember,
     pending_request_count: moderates
       ? (memberships ?? []).filter((membership) => membership.status === "requested").length

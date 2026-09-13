@@ -209,6 +209,241 @@ struct CommunityGroupsView: View {
     }
 }
 
+private struct CommunityGroupSlowModeView: View {
+    let group: CommunityGroupSummary
+    var onSaved: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var seconds: Int
+    @State private var saving = false
+    @State private var error: String?
+
+    private let options = [
+        (0, "Off"), (30, "30 seconds"), (60, "1 minute"), (300, "5 minutes"),
+        (900, "15 minutes"), (3600, "1 hour"), (21600, "6 hours"), (86400, "24 hours"),
+    ]
+
+    init(group: CommunityGroupSummary, onSaved: @escaping () -> Void) {
+        self.group = group
+        self.onSaved = onSaved
+        _seconds = State(initialValue: group.slowModeSeconds ?? 0)
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Time between posts", selection: $seconds) {
+                    ForEach(options, id: \.0) { value, label in Text(label).tag(value) }
+                }
+            } footer: {
+                Text("The interval applies separately to each member. Existing posts are not affected.")
+            }
+            if let error { Text(error).foregroundStyle(Theme.Palette.danger) }
+        }
+        .navigationTitle("Slow Mode")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(saving ? "Saving…" : "Save") { Task { await save() } }.disabled(saving)
+            }
+        }
+    }
+
+    @MainActor
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        do {
+            try await CommunityAPI.moderateGroup(slug: group.slug, action: .setSlowMode, seconds: seconds)
+            onSaved()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+private struct CommunityMemberPostingRestrictionView: View {
+    let group: CommunityGroupSummary
+    let member: CommunityGroupMember
+    var onSaved: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var reason = ""
+    @State private var durationSeconds = 86_400
+    @State private var saving = false
+    @State private var error: String?
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Duration", selection: $durationSeconds) {
+                    Text("1 hour").tag(3_600)
+                    Text("1 day").tag(86_400)
+                    Text("7 days").tag(604_800)
+                    Text("30 days").tag(2_592_000)
+                }
+                TextField("Reason", text: $reason, axis: .vertical).lineLimit(2...5)
+            } footer: {
+                Text("This pauses new group posts only. Existing content remains, and the action is recorded in the group moderation log.")
+            }
+            if let error { Text(error).foregroundStyle(Theme.Palette.danger) }
+        }
+        .navigationTitle("Pause \(member.person.label)")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(saving ? "Saving…" : "Pause posting") { Task { await save() } }
+                    .disabled(saving || reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+    }
+
+    @MainActor
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        do {
+            try await CommunityAPI.moderateGroup(
+                slug: group.slug,
+                action: .restrictPosting,
+                profileId: member.id,
+                reason: reason.trimmingCharacters(in: .whitespacesAndNewlines),
+                durationSeconds: durationSeconds
+            )
+            onSaved()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+private struct CommunityGroupFAQView: View {
+    let group: CommunityGroupSummary
+    @State private var entries: [CommunityGroupFAQEntry] = []
+    @State private var query = ""
+    @State private var loading = true
+    @State private var reloadToken = UUID()
+    @State private var showingAdd = false
+    @State private var error: String?
+
+    var body: some View {
+        List {
+            if loading && entries.isEmpty {
+                HStack { Spacer(); ProgressView(); Spacer() }
+            } else if entries.isEmpty {
+                ContentUnavailableView(
+                    query.isEmpty ? "No FAQ Resources" : "No Matches",
+                    systemImage: "books.vertical",
+                    description: Text(query.isEmpty ? "Moderators can add answers to recurring questions." : "Try a different search.")
+                )
+            } else {
+                ForEach(entries) { entry in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(entry.question).font(.headline)
+                        Text(entry.answer).font(.subheadline).foregroundStyle(.secondary)
+                        if entry.sourcePostId != nil {
+                            Label("From an accepted answer", systemImage: "checkmark.bubble")
+                                .font(.caption).foregroundStyle(Theme.Palette.primary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .swipeActions {
+                        if group.moderates {
+                            Button("Delete", systemImage: "trash", role: .destructive) { Task { await remove(entry) } }
+                        }
+                    }
+                }
+            }
+            if let error { Text(error).foregroundStyle(Theme.Palette.danger) }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Group FAQ")
+        .searchable(text: $query, prompt: "Search questions and answers")
+        .onSubmit(of: .search) { reloadToken = UUID() }
+        .onChange(of: query) { _, value in if value.isEmpty { reloadToken = UUID() } }
+        .toolbar {
+            if group.moderates {
+                Button("Add", systemImage: "plus") { showingAdd = true }
+            }
+        }
+        .sheet(isPresented: $showingAdd) {
+            NavigationStack {
+                CommunityGroupFAQForm(group: group) { reloadToken = UUID() }
+            }
+        }
+        .task(id: reloadToken) { await load() }
+        .refreshable { reloadToken = UUID() }
+    }
+
+    @MainActor
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        do {
+            entries = try await CommunityAPI.groupFAQ(slug: group.slug, query: query).entries
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func remove(_ entry: CommunityGroupFAQEntry) async {
+        do {
+            try await CommunityAPI.deleteGroupFAQ(slug: group.slug, entryId: entry.id)
+            entries.removeAll { $0.id == entry.id }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+private struct CommunityGroupFAQForm: View {
+    let group: CommunityGroupSummary
+    var onSaved: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var question = ""
+    @State private var answer = ""
+    @State private var saving = false
+    @State private var error: String?
+
+    var body: some View {
+        Form {
+            Section("Question") { TextField("Question", text: $question, axis: .vertical).lineLimit(2...4) }
+            Section("Answer") { TextField("Answer", text: $answer, axis: .vertical).lineLimit(3...10) }
+            if let error { Text(error).foregroundStyle(Theme.Palette.danger) }
+        }
+        .navigationTitle("Add FAQ Resource")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(saving ? "Adding…" : "Add") { Task { await save() } }
+                    .disabled(saving || question.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || answer.trimmingCharacters(in: .whitespacesAndNewlines).count < 3)
+            }
+        }
+    }
+
+    @MainActor
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        do {
+            _ = try await CommunityAPI.addGroupFAQ(
+                slug: group.slug,
+                question: question.trimmingCharacters(in: .whitespacesAndNewlines),
+                answer: answer.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            onSaved()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
 struct CommunityGroupDetailView: View {
     let slug: String
     var onMembershipChanged: () -> Void = {}
@@ -218,6 +453,7 @@ struct CommunityGroupDetailView: View {
     @State private var membershipBusy = false
     @State private var showingArchive = false
     @State private var showingSettings = false
+    @State private var showingSlowMode = false
     @State private var searchQuery = ""
     @State private var searchResults: [CommunityPost]?
     @State private var searching = false
@@ -291,6 +527,11 @@ struct CommunityGroupDetailView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    if (detail.group.slowModeSeconds ?? 0) > 0 {
+                        Label("Slow mode is on", systemImage: "timer")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     if detail.group.isStaffCurated == true {
                         Label("PerfectPPI curated", systemImage: "checkmark.shield")
                             .font(.caption)
@@ -330,6 +571,19 @@ struct CommunityGroupDetailView: View {
                         ForEach(Array(detail.group.rules.enumerated()), id: \.offset) { index, rule in
                             Text("\(index + 1). \(rule)").font(.subheadline)
                         }
+                        if detail.group.isMember && !detail.group.hasAcknowledgedRules {
+                            Button("I agree to the rules") {
+                                Task { await acknowledgeRules(slug: detail.group.slug) }
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                }
+                if detail.group.contentVisible {
+                    NavigationLink {
+                        CommunityGroupFAQView(group: detail.group)
+                    } label: {
+                        Label("FAQ and accepted answers", systemImage: "books.vertical")
                     }
                 }
             }
@@ -407,21 +661,25 @@ struct CommunityGroupDetailView: View {
                         Label("Share group", systemImage: "square.and.arrow.up")
                     }
                 }
-                if detail.group.isMember && (detail.group.postingPolicy != "moderators" || canModerate) {
+                if detail.group.isMember && detail.group.hasAcknowledgedRules && !detail.group.postingIsRestricted
+                    && (detail.group.postingPolicy != "moderators" || canModerate) {
                     Button { showingComposer = true } label: {
                         Label("Post to group", systemImage: "plus.bubble")
                     }
                 }
-                if detail.group.administers {
+                if canModerate {
                     Menu {
-                        Button("Group settings", systemImage: "gearshape") { showingSettings = true }
+                        Button("Slow mode", systemImage: "timer") { showingSlowMode = true }
+                        if detail.group.administers {
+                            Button("Group settings", systemImage: "gearshape") { showingSettings = true }
+                        }
                         if detail.group.membershipRole == "owner" {
                             Button("Archive group", systemImage: "archivebox", role: .destructive) { showingArchive = true }
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                    .accessibilityLabel(detail.group.membershipRole == "owner" ? "Owner tools" : "Admin tools")
+                    .accessibilityLabel("Group moderator tools")
                 }
             }
         }
@@ -436,6 +694,11 @@ struct CommunityGroupDetailView: View {
                     reloadToken = UUID()
                     onMembershipChanged()
                 }
+            }
+        }
+        .sheet(isPresented: $showingSlowMode) {
+            NavigationStack {
+                CommunityGroupSlowModeView(group: detail.group) { reloadToken = UUID() }
             }
         }
         .confirmationDialog("Archive this group?", isPresented: $showingArchive, titleVisibility: .visible) {
@@ -468,6 +731,11 @@ struct CommunityGroupDetailView: View {
                 }
                 Button("Remove from group", systemImage: "minus.circle", role: .destructive) {
                     Task { await moderate(slug: slug, action: .removePost, postId: post.id) }
+                }
+                if post.postType == .question && post.acceptedAnswerCommentId != nil {
+                    Button("Add accepted answer to FAQ", systemImage: "books.vertical") {
+                        Task { await addAcceptedAnswerToFAQ(slug: slug, postId: post.id) }
+                    }
                 }
             }
         }
@@ -599,6 +867,26 @@ struct CommunityGroupDetailView: View {
             self.error = error.localizedDescription
         }
     }
+
+    @MainActor
+    private func acknowledgeRules(slug: String) async {
+        do {
+            try await CommunityAPI.acknowledgeGroupRules(slug: slug)
+            reloadToken = UUID()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func addAcceptedAnswerToFAQ(slug: String, postId: String) async {
+        do {
+            _ = try await CommunityAPI.addAcceptedAnswerToGroupFAQ(slug: slug, postId: postId)
+            reloadToken = UUID()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
 }
 
 /// Pending join requests for owners/moderators (plan 13.3).
@@ -698,6 +986,7 @@ private struct CommunityGroupMembersView: View {
     @State private var reloadToken = UUID()
     @State private var pendingTransfer: CommunityGroupMember?
     @State private var pendingBan: CommunityGroupMember?
+    @State private var restrictionTarget: CommunityGroupMember?
     @State private var error: String?
     @State private var composingInvite = false
     @State private var inviteUsername = ""
@@ -780,6 +1069,13 @@ private struct CommunityGroupMembersView: View {
         } message: {
             Text(error ?? "")
         }
+        .sheet(item: $restrictionTarget) { member in
+            NavigationStack {
+                CommunityMemberPostingRestrictionView(group: group, member: member) {
+                    reloadToken = UUID()
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -789,6 +1085,11 @@ private struct CommunityGroupMembersView: View {
             if let username = member.username { MemberProfileView(username: username) }
         } label: {
             PersonRow(person: member.person, subtitle: roleLabel(member.role)) {
+                if (member.postingRestrictedUntil ?? .distantPast) > Date() {
+                    Image(systemName: "pause.circle.fill")
+                        .foregroundStyle(Theme.Palette.warning)
+                        .accessibilityLabel("Posting temporarily paused")
+                }
                 if member.role != "member" {
                     Image(systemName: member.role == "owner" ? "crown.fill" : member.role == "admin" ? "shield.fill" : "shield.lefthalf.filled")
                         .foregroundStyle(Theme.Palette.primary)
@@ -814,6 +1115,15 @@ private struct CommunityGroupMembersView: View {
                 }
                 Button("Remove from group", systemImage: "person.badge.minus") {
                     Task { await act(.removeMember, member) }
+                }
+                if (member.postingRestrictedUntil ?? .distantPast) > Date() {
+                    Button("Restore posting", systemImage: "play.circle") {
+                        Task { await act(.restorePosting, member) }
+                    }
+                } else {
+                    Button("Pause posting", systemImage: "pause.circle") {
+                        restrictionTarget = member
+                    }
                 }
                 if isOwner || isAdmin {
                     Button("Ban", systemImage: "hand.raised", role: .destructive) { pendingBan = member }

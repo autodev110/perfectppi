@@ -622,6 +622,9 @@ enum CommunityAPI {
         case approveRequest = "approve_request"
         case declineRequest = "decline_request"
         case invite
+        case setSlowMode = "set_slow_mode"
+        case restrictPosting = "restrict_posting"
+        case restorePosting = "restore_posting"
     }
 
     private struct GroupModerationPayload: Encodable {
@@ -630,6 +633,8 @@ enum CommunityAPI {
         let profileId: String?
         let username: String?
         let reason: String?
+        let seconds: Int?
+        let durationSeconds: Int?
     }
 
     struct GroupInviteResult: Decodable {
@@ -643,7 +648,7 @@ enum CommunityAPI {
     static func inviteToGroup(slug: String, username: String) async throws -> GroupInviteResult {
         try await APIClient.shared.postCamel(
             "/api/community/groups/\(slug)/moderation",
-            body: GroupModerationPayload(action: .invite, postId: nil, profileId: nil, username: username, reason: nil)
+            body: GroupModerationPayload(action: .invite, postId: nil, profileId: nil, username: username, reason: nil, seconds: nil, durationSeconds: nil)
         )
     }
 
@@ -654,11 +659,54 @@ enum CommunityAPI {
         action: GroupModerationAction,
         postId: String? = nil,
         profileId: String? = nil,
-        reason: String? = nil
+        reason: String? = nil,
+        seconds: Int? = nil,
+        durationSeconds: Int? = nil
     ) async throws {
         let _: Empty = try await APIClient.shared.postCamel(
             "/api/community/groups/\(slug)/moderation",
-            body: GroupModerationPayload(action: action, postId: postId, profileId: profileId, username: nil, reason: reason)
+            body: GroupModerationPayload(action: action, postId: postId, profileId: profileId, username: nil, reason: reason, seconds: seconds, durationSeconds: durationSeconds)
+        )
+    }
+
+    static func acknowledgeGroupRules(slug: String) async throws {
+        let _: Empty = try await APIClient.shared.post(
+            "/api/community/groups/\(slug)/rules",
+            body: Empty()
+        )
+    }
+
+    static func groupFAQ(slug: String, query: String = "", page: Int = 1) async throws -> CommunityGroupFAQPage {
+        try await APIClient.shared.get(
+            "/api/community/groups/\(slug)/faq",
+            query: [URLQueryItem(name: "q", value: query), URLQueryItem(name: "page", value: String(max(page, 1)))]
+        )
+    }
+
+    private struct GroupFAQPayload: Encodable {
+        let question: String?
+        let answer: String?
+        let sourcePostId: String?
+    }
+
+    static func addGroupFAQ(slug: String, question: String, answer: String) async throws -> CommunityGroupFAQEntry {
+        try await APIClient.shared.postCamel(
+            "/api/community/groups/\(slug)/faq",
+            body: GroupFAQPayload(question: question, answer: answer, sourcePostId: nil)
+        )
+    }
+
+    static func addAcceptedAnswerToGroupFAQ(slug: String, postId: String) async throws -> CommunityGroupFAQEntry {
+        try await APIClient.shared.postCamel(
+            "/api/community/groups/\(slug)/faq",
+            body: GroupFAQPayload(question: nil, answer: nil, sourcePostId: postId)
+        )
+    }
+
+    static func deleteGroupFAQ(slug: String, entryId: String) async throws {
+        let _: Empty = try await APIClient.shared.delete(
+            "/api/community/groups/\(slug)/faq",
+            query: [URLQueryItem(name: "entry", value: entryId)]
         )
     }
 }

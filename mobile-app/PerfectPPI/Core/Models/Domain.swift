@@ -790,6 +790,11 @@ struct CommunityGroupSummary: Codable, Identifiable, Hashable {
     let canViewContent: Bool?
     /// Pending join requests; only populated for owners/moderators.
     let pendingRequestCount: Int?
+    /// Per-member post pacing and current rules state (plan 26.2).
+    let slowModeSeconds: Int?
+    let rulesVersion: Int?
+    let rulesAcknowledged: Bool?
+    let postingRestrictedUntil: Date?
 
     var isPrivate: Bool { visibility == "private" }
     var isUnlisted: Bool { visibility == "unlisted" }
@@ -801,6 +806,8 @@ struct CommunityGroupSummary: Codable, Identifiable, Hashable {
     var moderates: Bool { membershipRole == "owner" || membershipRole == "admin" || membershipRole == "moderator" }
     /// Owner or admin: group settings, roles, bans (plan 13.4).
     var administers: Bool { membershipRole == "owner" || membershipRole == "admin" }
+    var hasAcknowledgedRules: Bool { rulesAcknowledged ?? true }
+    var postingIsRestricted: Bool { (postingRestrictedUntil ?? .distantPast) > Date() }
 }
 
 struct CommunityGroupInvitation: Codable, Identifiable, Hashable {
@@ -875,10 +882,29 @@ struct CommunityGroupMember: Codable, Identifiable, Hashable {
     let avatarUrl: String?
     let role: String
     let joinedAt: Date?
+    let postingRestrictedUntil: Date?
 
     var person: PersonSummary {
         PersonSummary(id: id, username: username, displayName: displayName, avatarUrl: avatarUrl)
     }
+}
+
+struct CommunityGroupFAQEntry: Codable, Identifiable, Hashable {
+    let id: String
+    let groupId: String
+    let question: String
+    let answer: String
+    let sourcePostId: String?
+    let sourceCommentId: String?
+    let createdAt: Date?
+    let updatedAt: Date?
+}
+
+struct CommunityGroupFAQPage: Codable {
+    let entries: [CommunityGroupFAQEntry]
+    let query: String
+    let page: Int
+    let hasMore: Bool
 }
 
 struct CommunityGroupMembersPage: Codable {

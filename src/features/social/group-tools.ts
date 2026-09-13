@@ -19,7 +19,10 @@ export type GroupMember = {
   avatar_url: string | null;
   role: GroupRole;
   joined_at: string;
+  posting_restricted_until: string | null;
 };
+
+export type GroupFaqEntry = Database["public"]["Tables"]["community_group_faq_entries"]["Row"];
 
 export type GroupJoinRequest = {
   id: string;
@@ -46,6 +49,9 @@ export const GROUP_MODERATION_ACTIONS = [
   "approve_request",
   "decline_request",
   "invite",
+  "set_slow_mode",
+  "restrict_posting",
+  "restore_posting",
 ] as const;
 export type GroupModerationAction = (typeof GROUP_MODERATION_ACTIONS)[number];
 
@@ -57,6 +63,30 @@ const moderationSchema = z.object({
   /** `invite` may name the member by username instead of id. */
   username: z.string().trim().min(1).max(64).optional(),
   reason: z.string().trim().max(300).optional(),
+  seconds: z.number().int().refine((value) => [0, 30, 60, 300, 900, 3600, 21600, 86400].includes(value)).optional(),
+  durationSeconds: z.number().int().refine((value) => [3600, 86400, 604800, 2592000].includes(value)).optional(),
+}).superRefine((value, context) => {
+  if (value.action === "set_slow_mode" && value.seconds === undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Choose a slow-mode interval.", path: ["seconds"] });
+  }
+  if (value.action === "restrict_posting") {
+    if (value.durationSeconds === undefined) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Choose how long posting should be paused.", path: ["durationSeconds"] });
+    }
+    if (!value.reason) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Add a reason for the temporary restriction.", path: ["reason"] });
+    }
+  }
+});
+
+const faqSchema = z.object({
+  groupId: z.string().uuid(),
+  entryId: z.string().uuid().optional().nullable(),
+  question: z.string().trim().min(3).max(200).optional().nullable(),
+  answer: z.string().trim().min(3).max(2000).optional().nullable(),
+  sourcePostId: z.string().uuid().optional().nullable(),
+}).refine((value) => value.sourcePostId || (value.question && value.answer), {
+  message: "Add a question and answer, or choose an accepted answer.",
 });
 
 export type GroupModerationResult =
@@ -96,6 +126,7 @@ export async function getGroupMembers(groupId: string, page = 1, perPage = 50): 
     avatar_url: row.avatar_url,
     role: row.role,
     joined_at: row.joined_at,
+    posting_restricted_until: row.posting_restricted_until,
   }));
 }
 
@@ -143,6 +174,12 @@ function classify(error: { code?: string; message?: string }): Exclude<GroupMode
   if (message.includes("group_invite_rate_limited")) {
     return { ok: false, outcome: "conflict", message: "You have sent a lot of invitations today. Try again tomorrow." };
   }
+  if (message.includes("accepted answer already in faq")) {
+    return { ok: false, outcome: "conflict", message: "That accepted answer is already in this group's FAQ." };
+  }
+  if (message.includes("accepted answer unavailable") || message.includes("faq unavailable")) {
+    return { ok: false, outcome: "not_found", message: "That FAQ resource is no longer available." };
+  }
   if (error.code === "23514") return { ok: false, outcome: "conflict", message: message.replace(/^.*?:\s*/, "") || "That change is not allowed." };
   console.warn("group moderation failed", { code: error.code, message });
   return { ok: false, outcome: "conflict", message: "The change could not be applied." };
@@ -169,12 +206,13 @@ export async function moderateGroup(input: unknown): Promise<GroupModerationResu
   const actorId = await currentProfileId();
   if (!actorId) return { ok: false, outcome: "forbidden", message: "Sign in to manage groups." };
 
-  const { groupId, action, postId, reason, username } = parsed.data;
+  const { groupId, action, postId, reason, username, seconds, durationSeconds } = parsed.data;
   const admin = createAdminClient();
   const needsPost = ["pin", "unpin", "remove_post", "restore_post"].includes(action);
   const needsProfile = [
     "remove_member", "ban_member", "unban_member", "make_admin", "make_moderator", "make_member", "transfer_ownership",
     "approve_request", "decline_request", "invite",
+    "restrict_posting", "restore_posting",
   ].includes(action);
   const profileId = action === "invite"
     // Invitations are username-only so callers cannot bypass the member's
@@ -238,6 +276,23 @@ export async function moderateGroup(input: unknown): Promise<GroupModerationResu
         });
       case "invite":
         return admin.rpc("invite_to_group", { p_actor_profile_id: actorId, p_group_id: groupId, p_target_profile_id: profileId! });
+      case "set_slow_mode":
+        return admin.rpc("set_community_group_slow_mode", {
+          p_actor_profile_id: actorId,
+          p_group_id: groupId,
+          p_seconds: seconds ?? -1,
+        });
+      case "restrict_posting":
+      case "restore_posting":
+        return admin.rpc("set_group_member_posting_restriction", {
+          p_actor_profile_id: actorId,
+          p_group_id: groupId,
+          p_target_profile_id: profileId!,
+          p_restricted_until: action === "restore_posting"
+            ? null
+            : new Date(Date.now() + (durationSeconds ?? 0) * 1000).toISOString(),
+          p_reason: action === "restore_posting" ? null : reason ?? null,
+        });
     }
   })();
   const { data, error } = await call;
@@ -247,4 +302,74 @@ export async function moderateGroup(input: unknown): Promise<GroupModerationResu
   revalidatePath("/community/groups");
   revalidatePath("/dashboard/posts");
   return { ok: true, action, result: (data ?? {}) as Record<string, unknown> };
+}
+
+export async function acknowledgeGroupRules(groupId: string) {
+  const actorId = await currentProfileId();
+  if (!actorId || !(await isFeatureEnabled("groups"))) {
+    return { ok: false as const, message: "Sign in to accept group rules." };
+  }
+  const { data, error } = await createAdminClient().rpc("acknowledge_community_group_rules", {
+    p_actor_profile_id: actorId,
+    p_group_id: groupId,
+  });
+  if (error) return { ok: false as const, message: classify(error).message };
+  revalidatePath("/community/groups");
+  return { ok: true as const, data: (data ?? {}) as Record<string, unknown> };
+}
+
+export async function getGroupFaqEntries(groupId: string, query = "", page = 1, perPage = 50): Promise<GroupFaqEntry[]> {
+  const viewerId = await currentProfileId();
+  if (!viewerId || !(await isFeatureEnabled("groups"))) return [];
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const { data, error } = await createAdminClient().rpc("list_community_group_faq", {
+    p_viewer_id: viewerId,
+    p_group_id: groupId,
+    p_query: query.trim() || null,
+    p_limit: Math.min(Math.max(perPage, 1), 100),
+    p_offset: (safePage - 1) * perPage,
+  });
+  if (error) {
+    console.error("list_community_group_faq failed", error.message);
+    return [];
+  }
+  return data ?? [];
+}
+
+export async function saveGroupFaq(input: unknown) {
+  const parsed = faqSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, outcome: "invalid" as const, message: parsed.error.issues[0]?.message ?? "Invalid FAQ resource." };
+  const actorId = await currentProfileId();
+  if (!actorId || !(await isFeatureEnabled("groups"))) {
+    return { ok: false as const, outcome: "forbidden" as const, message: "Sign in to manage group resources." };
+  }
+  const value = parsed.data;
+  const { data, error } = await createAdminClient().rpc("upsert_community_group_faq", {
+    p_actor_profile_id: actorId,
+    p_group_id: value.groupId,
+    p_entry_id: value.entryId ?? null,
+    p_question: value.question ?? null,
+    p_answer: value.answer ?? null,
+    p_source_post_id: value.sourcePostId ?? null,
+  });
+  if (error) return classify(error);
+  revalidatePath("/community/groups");
+  return { ok: true as const, data };
+}
+
+export async function deleteGroupFaq(groupId: string, entryId: string) {
+  const parsed = z.object({ groupId: z.string().uuid(), entryId: z.string().uuid() }).safeParse({ groupId, entryId });
+  if (!parsed.success) return { ok: false as const, outcome: "invalid" as const, message: "Invalid FAQ resource." };
+  const actorId = await currentProfileId();
+  if (!actorId || !(await isFeatureEnabled("groups"))) {
+    return { ok: false as const, outcome: "forbidden" as const, message: "Sign in to manage group resources." };
+  }
+  const { error } = await createAdminClient().rpc("delete_community_group_faq", {
+    p_actor_profile_id: actorId,
+    p_group_id: groupId,
+    p_entry_id: entryId,
+  });
+  if (error) return classify(error);
+  revalidatePath("/community/groups");
+  return { ok: true as const };
 }

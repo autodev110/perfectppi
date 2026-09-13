@@ -24,8 +24,9 @@ import { getCommunityGroup } from "@/features/social/groups";
 import { getGroupSharePreview, groupShareCard } from "@/features/share/previews";
 import { ShareButton } from "@/components/shared/share-button";
 import { sharePath } from "@/lib/share/links";
-import { getGroupJoinRequests, getGroupMembers, getViewerGroupRole } from "@/features/social/group-tools";
+import { getGroupFaqEntries, getGroupJoinRequests, getGroupMembers, getViewerGroupRole } from "@/features/social/group-tools";
 import { GroupArchiveButton, GroupInviteForm, GroupJoinRequestControls, GroupMemberModerationMenu, GroupPostModerationMenu } from "@/components/shared/group-moderation-controls";
+import { GroupFaqDeleteButton, GroupFaqForm, GroupRulesAcknowledgement, GroupSlowModeControl, SaveAcceptedAnswerToFaqButton } from "@/components/shared/group-quality-controls";
 import { GROUP_JOIN_POLICY_LABELS, GROUP_VISIBILITY_LABELS } from "@/lib/social/group-options";
 import { CommunityPoll } from "@/components/shared/community-poll";
 import { PostDetailsCard } from "@/components/shared/post-details-card";
@@ -35,7 +36,7 @@ import { QuestionOutcomeControl } from "@/components/shared/question-outcome-con
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDate, getInitials } from "@/lib/utils/formatting";
-import { ArrowLeft, Lock, MessageSquare, Pin, Plus, Search, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, BookOpen, Clock3, Lock, MessageSquare, Pin, Plus, Search, ShieldCheck, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -103,17 +104,21 @@ export default async function CommunityGroupPage({
   const locked = !group.can_view_content;
   const showMembers = !locked && query.tab === "members";
   const viewerRole = await getViewerGroupRole(group.id);
-  const canModerate = viewerRole === "owner" || viewerRole === "moderator";
+  const canModerate = viewerRole === "owner" || viewerRole === "admin" || viewerRole === "moderator";
   const showRequests = canModerate && query.tab === "requests";
-  const showPosts = !locked && !showMembers && !showRequests;
-  const [posts, pinned, members, requests] = await Promise.all([
+  const showFaq = !locked && query.tab === "faq";
+  const showPosts = !locked && !showMembers && !showRequests && !showFaq;
+  const [posts, pinned, members, requests, faqEntries] = await Promise.all([
     !showPosts ? Promise.resolve([] as CommunityFeedPost[]) : search ? searchCommunityGroupPosts(group.id, search, page, 20) : getCommunityGroupPosts(group.id, page, 20),
     !showPosts || search || page > 1 ? Promise.resolve([] as CommunityFeedPost[]) : getCommunityGroupPinnedPosts(group.id),
     showMembers ? getGroupMembers(group.id, 1, 100) : Promise.resolve([]),
     showRequests ? getGroupJoinRequests(group.id) : Promise.resolve([]),
+    showFaq ? getGroupFaqEntries(group.id, search, page, 50) : Promise.resolve([]),
   ]);
   const baseHref = `/community/groups/${group.slug}`;
-  const pageHref = (nextPage: number) => `${baseHref}?${new URLSearchParams({ ...(search ? { q: search } : {}), page: String(nextPage) })}`;
+  const pageHref = (nextPage: number) => `${baseHref}?${new URLSearchParams({ ...(showFaq ? { tab: "faq" } : {}), ...(search ? { q: search } : {}), page: String(nextPage) })}`;
+  const postingRestricted = Boolean(group.posting_restricted_until && new Date(group.posting_restricted_until).getTime() > Date.now());
+  const canPostByRole = group.posting_policy !== "moderators" || canModerate;
 
   return (
     <main className="min-h-screen bg-surface px-6 pb-20 pt-24 sm:px-8">
@@ -138,6 +143,7 @@ export default async function CommunityGroupPage({
                   <Badge variant="outline">{group.join_policy === "open" ? "Open to join" : GROUP_JOIN_POLICY_LABELS[group.join_policy].label}</Badge>
                   {group.is_staff_curated ? <Badge variant="secondary">PerfectPPI curated</Badge> : null}
                   {group.posting_policy === "moderators" ? <Badge variant="outline">Announcements only</Badge> : null}
+                  {group.slow_mode_seconds > 0 ? <Badge variant="outline"><Clock3 className="mr-1 h-3 w-3" />Slow mode</Badge> : null}
                   {group.location_region ? <Badge variant="outline">{group.location_region}</Badge> : null}
                 </div>
                 <h1 className="font-heading text-3xl font-extrabold tracking-tight sm:text-4xl">{group.name}</h1>
@@ -159,10 +165,18 @@ export default async function CommunityGroupPage({
               <div className="mt-7 rounded-2xl bg-surface-container p-5">
                 <h2 className="flex items-center gap-2 text-sm font-bold"><ShieldCheck className="h-4 w-4" />Group rules</h2>
                 <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-on-surface-variant">{group.rules.map((rule) => <li key={rule}>{rule}</li>)}</ol>
+                {group.is_member && !group.rules_acknowledged ? <GroupRulesAcknowledgement slug={group.slug} /> : null}
               </div>
             ) : null}
           </div>
         </section>
+
+        {viewerRole === "moderator" ? (
+          <details className="mt-5 rounded-2xl bg-surface-container-lowest p-5 shadow-sm ghost-border">
+            <summary className="cursor-pointer text-sm font-bold">Moderator posting controls</summary>
+            <div className="mt-4"><GroupSlowModeControl slug={group.slug} initialSeconds={group.slow_mode_seconds} /></div>
+          </details>
+        ) : null}
 
         {locked ? (
           <section className="mt-8 rounded-3xl bg-surface-container-lowest p-10 text-center ghost-border" aria-label="Members-only content">
@@ -184,14 +198,19 @@ export default async function CommunityGroupPage({
           <nav className="flex gap-1 rounded-2xl bg-surface-container-low p-1.5 ghost-border" aria-label="Group sections">
             <Link href={baseHref} className={`rounded-xl px-4 py-2 text-sm font-bold ${showPosts ? "bg-surface-container-lowest shadow-sm" : "text-on-surface-variant"}`}>Posts</Link>
             <Link href={`${baseHref}?tab=members`} className={`rounded-xl px-4 py-2 text-sm font-bold ${showMembers ? "bg-surface-container-lowest shadow-sm" : "text-on-surface-variant"}`}>Members</Link>
+            <Link href={`${baseHref}?tab=faq`} className={`rounded-xl px-4 py-2 text-sm font-bold ${showFaq ? "bg-surface-container-lowest shadow-sm" : "text-on-surface-variant"}`}>FAQ</Link>
             {canModerate && group.join_policy === "request_approval" ? (
               <Link href={`${baseHref}?tab=requests`} className={`rounded-xl px-4 py-2 text-sm font-bold ${showRequests ? "bg-surface-container-lowest shadow-sm" : "text-on-surface-variant"}`}>
                 Requests{group.pending_request_count > 0 ? <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">{group.pending_request_count}</span> : null}
               </Link>
             ) : null}
           </nav>
-          {group.is_member && (group.posting_policy !== "moderators" || canModerate)
+          {group.is_member && canPostByRole && group.rules_acknowledged && !postingRestricted
             ? <Button asChild><Link href={`/dashboard/posts/new?group=${group.slug}`}><Plus className="mr-2 h-4 w-4" />Post to group</Link></Button>
+            : postingRestricted
+              ? <p className="text-sm text-on-surface-variant">A moderator has temporarily paused your posts</p>
+              : group.is_member && !group.rules_acknowledged
+                ? <p className="text-sm text-on-surface-variant">Accept the latest rules before posting</p>
             : group.is_member
               ? <p className="text-sm text-on-surface-variant">Only moderators post here; members can comment</p>
               : <p className="text-sm text-on-surface-variant">Join to post or comment</p>}
@@ -238,19 +257,35 @@ export default async function CommunityGroupPage({
                   </span>
                 </Link>
                 {canModerate && member.id !== viewer.id ? (
-                  <GroupMemberModerationMenu slug={group.slug} profileId={member.id} role={member.role} viewerRole={viewerRole as "owner" | "admin" | "moderator"} />
+                  <GroupMemberModerationMenu slug={group.slug} profileId={member.id} role={member.role} viewerRole={viewerRole as "owner" | "admin" | "moderator"} postingRestrictedUntil={member.posting_restricted_until} />
                 ) : null}
               </div>
             ))}
           </section>
         ) : null}
 
-        {showPosts ? (
+        {showPosts || showFaq ? (
           <form action={baseHref} method="get" role="search" className="mt-5 flex gap-2">
-            <Input name="q" defaultValue={search} placeholder="Search this group" maxLength={100} aria-label="Search this group" />
+            {showFaq ? <input type="hidden" name="tab" value="faq" /> : null}
+            <Input name="q" defaultValue={search} placeholder={showFaq ? "Search group FAQ" : "Search this group"} maxLength={100} aria-label={showFaq ? "Search group FAQ" : "Search this group"} />
             <Button type="submit" variant="outline"><Search className="mr-2 h-4 w-4" />Search</Button>
-            {search ? <Button asChild variant="ghost"><Link href={baseHref}>Clear</Link></Button> : null}
+            {search ? <Button asChild variant="ghost"><Link href={showFaq ? `${baseHref}?tab=faq` : baseHref}>Clear</Link></Button> : null}
           </form>
+        ) : null}
+
+        {showFaq ? (
+          <div className="mt-5 space-y-4">
+            {canModerate ? <GroupFaqForm slug={group.slug} /> : null}
+            {faqEntries.length === 0 ? (
+              <div className="rounded-3xl bg-surface-container-lowest p-10 text-center ghost-border"><BookOpen className="mx-auto mb-3 h-9 w-9 text-on-surface-variant/40" /><p className="font-semibold">{search ? "No FAQ resources match your search." : "No FAQ resources yet."}</p></div>
+            ) : faqEntries.map((entry) => (
+              <article key={entry.id} className="rounded-2xl bg-surface-container-lowest p-5 shadow-sm ghost-border">
+                <div className="flex items-start justify-between gap-3"><h2 className="font-bold">{entry.question}</h2>{canModerate ? <GroupFaqDeleteButton slug={group.slug} entryId={entry.id} /> : null}</div>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">{entry.answer}</p>
+                {entry.source_post_id ? <Link href={sharePath({ kind: "post", id: entry.source_post_id })} className="mt-3 inline-block text-xs font-semibold text-primary hover:underline">View original question</Link> : null}
+              </article>
+            ))}
+          </div>
         ) : null}
 
         {showPosts && pinned.length > 0 ? (
@@ -283,6 +318,7 @@ export default async function CommunityGroupPage({
               <CommunityMentionText content={post.content} mentions={post.mentions} className="mt-4 block whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant" />
               <PostDetailsCard postType={post.post_type as PostType} details={post.details} inspection={post.inspection} />
               {post.post_type === "question" ? <QuestionOutcomeControl postId={post.id} initialOutcome={post.question_outcome} hasAcceptedAnswer={Boolean(post.accepted_answer_comment_id)} canManage={post.can_manage_accepted_answer} /> : null}
+              {canModerate && post.post_type === "question" && post.accepted_answer_comment_id ? <div className="mt-3"><SaveAcceptedAnswerToFaqButton slug={group.slug} postId={post.id} /></div> : null}
               {post.post_type === "poll" && post.poll ? <CommunityPoll postId={post.id} initial={post.poll} /> : null}
               {post.safety_notice ? <div className="mt-4"><SafetyNotice notice={post.safety_notice} /></div> : null}
               {post.media.length ? <div className="-mx-6 mt-5"><PostMediaCarousel media={post.media} /></div> : null}
@@ -294,7 +330,7 @@ export default async function CommunityGroupPage({
             </article>
           ))}
         </div>
-        {showPosts ? <nav className="mt-6 flex justify-between" aria-label="Group post pages">{page > 1 ? <Button asChild variant="outline"><Link href={pageHref(page - 1)}>Previous</Link></Button> : <span />}{posts.length === 20 ? <Button asChild variant="outline"><Link href={pageHref(page + 1)}>Next</Link></Button> : <span />}</nav> : null}
+        {showPosts || showFaq ? <nav className="mt-6 flex justify-between" aria-label={showFaq ? "Group FAQ pages" : "Group post pages"}>{page > 1 ? <Button asChild variant="outline"><Link href={pageHref(page - 1)}>Previous</Link></Button> : <span />}{(showFaq ? faqEntries.length === 50 : posts.length === 20) ? <Button asChild variant="outline"><Link href={pageHref(page + 1)}>Next</Link></Button> : <span />}</nav> : null}
       </div>
     </main>
   );

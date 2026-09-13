@@ -81,11 +81,13 @@ export function GroupMemberModerationMenu({
   profileId,
   role,
   viewerRole,
+  postingRestrictedUntil,
 }: {
   slug: string;
   profileId: string;
   role: "owner" | "admin" | "moderator" | "member";
   viewerRole: "owner" | "admin" | "moderator";
+  postingRestrictedUntil: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<GroupModerationAction | null>(null);
@@ -96,18 +98,35 @@ export function GroupMemberModerationMenu({
   if (viewerRole === "admin" && role === "admin") return null;
   const canAssignRoles = viewerRole === "owner" || viewerRole === "admin";
 
-  async function run(action: GroupModerationAction, confirmText?: string) {
+  async function run(action: GroupModerationAction, confirmText?: string, extras?: Record<string, unknown>) {
     if (confirmText && !window.confirm(confirmText)) return;
     setBusy(action);
     setError(null);
     try {
-      await moderate(slug, { action, profileId });
+      await moderate(slug, { action, profileId, ...extras });
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The change could not be applied.");
     } finally {
       setBusy(null);
     }
+  }
+
+  async function togglePostingRestriction() {
+    const restricted = Boolean(postingRestrictedUntil && new Date(postingRestrictedUntil).getTime() > Date.now());
+    if (restricted) {
+      await run("restore_posting", "Restore this member's ability to post in the group?");
+      return;
+    }
+    const reason = window.prompt("Why are you temporarily pausing this member's posts? This is recorded in the group moderation log.");
+    if (!reason?.trim()) return;
+    const duration = window.prompt("How long? Enter 1h, 1d, 7d, or 30d.", "1d")?.trim().toLowerCase();
+    const durationSeconds = { "1h": 3600, "1d": 86400, "7d": 604800, "30d": 2592000 }[duration ?? ""];
+    if (!durationSeconds) {
+      setError("Choose 1h, 1d, 7d, or 30d.");
+      return;
+    }
+    await run("restrict_posting", undefined, { reason: reason.trim(), durationSeconds });
   }
 
   return (
@@ -124,6 +143,9 @@ export function GroupMemberModerationMenu({
       ) : null}
       <Button type="button" size="sm" variant="ghost" disabled={busy !== null} onClick={() => run("remove_member", "Remove this member from the group? They can rejoin later.")}>
         Remove
+      </Button>
+      <Button type="button" size="sm" variant="ghost" disabled={busy !== null} onClick={togglePostingRestriction}>
+        {postingRestrictedUntil && new Date(postingRestrictedUntil).getTime() > Date.now() ? "Restore posting" : "Pause posting"}
       </Button>
       {canAssignRoles ? (
         <Button type="button" size="sm" variant="ghost" className="text-destructive hover:text-destructive" disabled={busy !== null} onClick={() => run("ban_member", "Ban this member? They will not be able to rejoin until unbanned.")}>
