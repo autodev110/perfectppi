@@ -7,13 +7,33 @@ enum CapabilitiesAPI {
 }
 
 enum CommunityAPI {
+    struct FeedPage: Decodable {
+        let items: [CommunityPost]
+        let nextCursor: String?
+    }
+
     static func feed(filter: CommunityFeedFilter = .all, page: Int = 1) async throws -> [CommunityPost] {
-        try await APIClient.shared.get(
+        if page > 1 {
+            return try await APIClient.shared.get(
+                "/api/community/posts",
+                query: [
+                    URLQueryItem(name: "filter", value: filter.rawValue),
+                    URLQueryItem(name: "page", value: String(page))
+                ]
+            )
+        }
+        return try await feedPage(filter: filter).items
+    }
+
+    static func feedPage(filter: CommunityFeedFilter = .all, cursor: String? = nil) async throws -> FeedPage {
+        var query = [
+            URLQueryItem(name: "filter", value: filter.rawValue),
+            URLQueryItem(name: "pagination", value: "cursor")
+        ]
+        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await APIClient.shared.get(
             "/api/community/posts",
-            query: [
-                URLQueryItem(name: "filter", value: filter.rawValue),
-                URLQueryItem(name: "page", value: String(max(page, 1)))
-            ]
+            query: query
         )
     }
 
@@ -379,6 +399,9 @@ enum CommunityAPI {
         case posts, people, groups, vehicles, listings, technicians, events
         var id: String { rawValue }
         var label: String { rawValue.capitalized }
+        var usesCursor: Bool {
+            true
+        }
     }
 
     /// Decoded per tab so each result type keeps its own model.
@@ -409,6 +432,7 @@ enum CommunityAPI {
         let query: String
         let page: Int
         let hasMore: Bool
+        let nextCursor: String?
         let suggestions: [String]
         let results: SearchResults
     }
@@ -417,6 +441,7 @@ enum CommunityAPI {
         let query: String
         let page: Int
         let hasMore: Bool
+        let nextCursor: String?
         let suggestions: [String]
         let items: [Item]
     }
@@ -424,16 +449,22 @@ enum CommunityAPI {
     /// Unified search (plan 27.2); the server applies visibility before
     /// returning anything.
     @MainActor
-    static func search(_ query: String, tab: SearchTab, page: Int = 1) async throws -> SearchPage {
-        let params = [
+    static func search(_ query: String, tab: SearchTab, page: Int = 1, cursor: String? = nil) async throws -> SearchPage {
+        var params = [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "tab", value: tab.rawValue),
-            URLQueryItem(name: "page", value: String(max(page, 1))),
         ]
+        if tab.usesCursor {
+            params.append(URLQueryItem(name: "pagination", value: "cursor"))
+            if let cursor { params.append(URLQueryItem(name: "cursor", value: cursor)) }
+        } else {
+            params.append(URLQueryItem(name: "page", value: String(max(page, 1))))
+        }
         @MainActor
         func load<Item: Decodable>(_: Item.Type, wrap: ([Item]) -> SearchResults) async throws -> SearchPage {
             let envelope: SearchEnvelope<Item> = try await APIClient.shared.get("/api/community/search", query: params)
             return SearchPage(tab: tab, query: envelope.query, page: envelope.page, hasMore: envelope.hasMore,
+                              nextCursor: envelope.nextCursor,
                               suggestions: envelope.suggestions, results: wrap(envelope.items))
         }
         switch tab {

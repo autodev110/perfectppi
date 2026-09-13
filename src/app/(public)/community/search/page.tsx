@@ -20,20 +20,22 @@ import { formatCurrency, getInitials } from "@/lib/utils/formatting";
 import { sharePath } from "@/lib/share/links";
 import { ArrowLeft, CalendarDays, Car, Lock, MapPin, Search, Tag, Wrench } from "lucide-react";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import { decodeSearchCursor, usesSearchCursor } from "@/features/search/cursor";
 
 export const metadata = { title: "Search — PerfectPPI Community" };
 export const dynamic = "force-dynamic";
 
-function href(query: string, tab: SearchTab, page = 1) {
+function href(query: string, tab: SearchTab, page = 1, cursor?: string | null) {
   const params = new URLSearchParams({ q: query, tab });
-  if (page > 1) params.set("page", String(page));
+  if (cursor) params.set("cursor", cursor);
+  else if (page > 1) params.set("page", String(page));
   return `/community/search?${params}`;
 }
 
 // Unified search (plan 27.2): one query, one tab per result type. The
 // database applies discoverability, membership, blocks, and moderation state
 // before anything reaches this page.
-export default async function CommunitySearchPage({ searchParams }: { searchParams: Promise<{ q?: string; tab?: string; page?: string }> }) {
+export default async function CommunitySearchPage({ searchParams }: { searchParams: Promise<{ q?: string; tab?: string; page?: string; cursor?: string }> }) {
   const viewer = await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const params = await searchParams;
   const query = normalizeSearchQuery(params.q);
@@ -43,7 +45,11 @@ export default async function CommunitySearchPage({ searchParams }: { searchPara
   const visibleTabs = SEARCH_TABS.filter((entry) => entry !== "events" || flags.flags.events);
   const requestedPage = Number(params.page ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const results = query.length >= SEARCH_MIN_LENGTH ? await unifiedSearch(query, tab, page) : null;
+  const cursorMode = usesSearchCursor(tab);
+  const cursor = cursorMode && params.cursor ? decodeSearchCursor(params.cursor, tab, query) : null;
+  const results = query.length >= SEARCH_MIN_LENGTH
+    ? await unifiedSearch(query, tab, page, cursorMode ? cursor : undefined)
+    : null;
 
   return (
     <main className="min-h-screen bg-surface px-6 pb-20 pt-24 sm:px-8">
@@ -160,10 +166,14 @@ export default async function CommunitySearchPage({ searchParams }: { searchPara
               </Link>
             ))
           )}
-          {results && (page > 1 || results.hasMore) ? (
+          {results && (cursorMode ? Boolean(params.cursor || results.nextCursor) : page > 1 || results.hasMore) ? (
             <nav className="flex items-center justify-between pt-3" aria-label="Search pagination">
-              {page > 1 ? <Button asChild variant="outline"><Link href={href(query, tab, page - 1)}>Previous</Link></Button> : <span />}
-              {results.hasMore ? <Button asChild variant="outline"><Link href={href(query, tab, page + 1)}>Next</Link></Button> : <span />}
+              {cursorMode ? (
+                params.cursor ? <Button asChild variant="outline"><Link href={href(query, tab)}>Back to first results</Link></Button> : <span />
+              ) : page > 1 ? <Button asChild variant="outline"><Link href={href(query, tab, page - 1)}>Previous</Link></Button> : <span />}
+              {cursorMode ? (
+                results.nextCursor ? <Button asChild variant="outline"><Link href={href(query, tab, 1, results.nextCursor)}>More results</Link></Button> : <span />
+              ) : results.hasMore ? <Button asChild variant="outline"><Link href={href(query, tab, page + 1)}>Next</Link></Button> : <span />}
             </nav>
           ) : null}
         </section>

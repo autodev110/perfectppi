@@ -164,10 +164,77 @@ BEGIN
 END
 $$;
 
+-- ---------------------------------------------------------------------------
+-- 4. Cursor functions: stable continuation and complete boundaries
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+  first_post record;
+  first_group record;
+  first_vehicle record;
+  first_person record;
+BEGIN
+  SELECT * INTO first_post
+  FROM public.search_community_posts_cursor((SELECT owner FROM us), 'sti', 1);
+  IF first_post.post_id IS NULL THEN RAISE EXCEPTION 'cursor post search returned no first page'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.search_community_posts_cursor(
+      (SELECT owner FROM us), 'sti', 1, first_post.rank, first_post.sort_at, first_post.post_id
+    ) next_page WHERE next_page.post_id <> first_post.post_id
+  ) THEN RAISE EXCEPTION 'cursor post search did not advance'; END IF;
+
+  SELECT * INTO first_group
+  FROM public.search_community_groups_cursor((SELECT owner FROM us), 'subaru', 1);
+  IF first_group.group_id IS NULL THEN RAISE EXCEPTION 'cursor group search returned no first page'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.search_community_groups_cursor(
+      (SELECT owner FROM us), 'subaru', 1, first_group.rank, first_group.sort_text, first_group.group_id
+    ) next_page WHERE next_page.group_id <> first_group.group_id
+  ) THEN RAISE EXCEPTION 'cursor group search did not advance'; END IF;
+
+  SELECT * INTO first_vehicle
+  FROM public.search_vehicles_cursor((SELECT owner FROM us), 'subaru', 1);
+  IF first_vehicle.vehicle_id IS NULL THEN RAISE EXCEPTION 'cursor vehicle search returned no first page'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.search_vehicles_cursor(
+      (SELECT owner FROM us), 'subaru', 1, first_vehicle.rank, first_vehicle.sort_at, first_vehicle.vehicle_id
+    ) next_page WHERE next_page.vehicle_id <> first_vehicle.vehicle_id
+  ) THEN RAISE EXCEPTION 'cursor vehicle search did not advance'; END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.search_vehicles_cursor((SELECT owner FROM us), 'subaru', 20, 1, NULL, NULL)
+  ) THEN RAISE EXCEPTION 'partial search cursors must be rejected'; END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.search_marketplace_listings_cursor((SELECT viewer FROM us), 'service history', 20)) THEN
+    RAISE EXCEPTION 'cursor listing search returned no results';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.search_technicians_cursor((SELECT viewer FROM us), 'wrench', 20)) THEN
+    RAISE EXCEPTION 'cursor technician search returned no results';
+  END IF;
+
+  SELECT * INTO first_person
+  FROM public.search_profiles_cursor((SELECT owner FROM us), 'us', 1);
+  IF first_person.profile_id IS NULL THEN RAISE EXCEPTION 'cursor people search returned no first page'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.search_profiles_cursor(
+      (SELECT owner FROM us), 'us', 1, first_person.exact_match, first_person.sort_prefix,
+      first_person.sort_text, first_person.profile_id
+    ) next_page WHERE next_page.profile_id <> first_person.profile_id
+  ) THEN RAISE EXCEPTION 'cursor people search did not advance'; END IF;
+END
+$$;
+
 DO $$
 BEGIN
   IF has_function_privilege('authenticated', 'public.search_community_posts(uuid,text,integer,integer)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.search_vehicles(uuid,text,integer,integer)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.search_community_posts_cursor(uuid,text,integer,integer,timestamptz,uuid)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.search_community_groups_cursor(uuid,text,integer,integer,text,uuid)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.search_vehicles_cursor(uuid,text,integer,integer,timestamptz,uuid)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.search_marketplace_listings_cursor(uuid,text,integer,integer,timestamptz,uuid)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.search_technicians_cursor(uuid,text,integer,integer,integer,uuid)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.search_profiles_cursor(uuid,text,integer,boolean,boolean,text,uuid)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.search_community_events_cursor(uuid,text,integer,integer,timestamptz,uuid)', 'EXECUTE')
      OR has_table_privilege('authenticated', 'public.vehicle_make_aliases', 'SELECT') THEN
     RAISE EXCEPTION 'search internals leaked to clients';
   END IF;

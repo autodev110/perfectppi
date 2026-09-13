@@ -15,16 +15,34 @@ struct CommunityFeedView: View {
     @State private var showingSaved = false
     @State private var showingNotifications = false
     @State private var feedFilter: CommunityFeedFilter = .all
+    @State private var firstPage: CommunityAPI.FeedPage?
+    @State private var additionalPosts: [CommunityPost] = []
+    @State private var nextCursor: String?
+    @State private var initialError: String?
+    @State private var loadingMore = false
+    @State private var loadMoreError: String?
 
     var body: some View {
-        AsyncContent(
-            load: { try await CommunityAPI.feed(filter: feedFilter) },
-            loaded: { posts in feedContent(posts) },
-            failure: { error, retry in
-                ErrorView(message: error.localizedDescription, retry: retry)
+        VStack(spacing: 0) {
+            Picker("Community feed", selection: $feedFilter) {
+                ForEach(CommunityFeedFilter.allCases) { filter in
+                    Text(filter.label).tag(filter)
+                }
             }
-        )
-        .id("\(reloadToken.uuidString)-\(feedFilter.rawValue)")
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+
+            if let firstPage {
+                feedContent(firstPage)
+            } else if let initialError {
+                ErrorView(message: initialError, retry: refresh)
+            } else {
+                CommunityFeedSkeleton()
+            }
+        }
+        .task(id: "\(reloadToken.uuidString)-\(feedFilter.rawValue)") { await loadInitialPage() }
+        .onChange(of: feedFilter) { _, _ in refresh() }
         .navigationTitle("Community")
         .toolbar { communityToolbar }
         .sheet(isPresented: $showingGuidelines) {
@@ -41,12 +59,12 @@ struct CommunityFeedView: View {
         }
         .sheet(isPresented: $showingComposer) {
             NewCommunityPostView {
-                reloadToken = UUID()
+                refresh()
             }
         }
         .sheet(isPresented: $showingMyPosts) {
             ModeratedPostsView {
-                reloadToken = UUID()
+                refresh()
             }
         }
         .sheet(isPresented: $showingSaved) {
@@ -58,17 +76,9 @@ struct CommunityFeedView: View {
     }
 
     @ViewBuilder
-    private func feedContent(_ posts: [CommunityPost]) -> some View {
-        VStack(spacing: 0) {
-            Picker("Community feed", selection: $feedFilter) {
-                ForEach(CommunityFeedFilter.allCases) { filter in
-                    Text(filter.label).tag(filter)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-            .padding(.vertical, 10)
-
+    private func feedContent(_ page: CommunityAPI.FeedPage) -> some View {
+        let posts = page.items + additionalPosts
+        Group {
             if posts.isEmpty {
                 EmptyStateCard(
                     title: emptyTitle,
@@ -76,22 +86,107 @@ struct CommunityFeedView: View {
                     systemImage: "text.bubble"
                 )
                 .padding()
+                if let nextCursor {
+                    Button("Load older posts") {
+                        Task { await loadMore(after: nextCursor) }
+                    }
+                    .disabled(loadingMore)
+                }
                 Spacer()
             } else {
-                List(posts) { post in
-                    NavigationLink {
-                        CommunityPostDetailView(post: post) {
-                            reloadToken = UUID()
-                        }
-                    } label: {
-                        CommunityPostRow(post: post) {
-                            reloadToken = UUID()
+                List {
+                    ForEach(posts) { post in
+                        NavigationLink {
+                            CommunityPostDetailView(post: post) {
+                                refresh()
+                            }
+                        } label: {
+                            CommunityPostRow(post: post) {
+                                refresh()
+                            }
                         }
                     }
+                    Section {
+                        if let nextCursor {
+                            Button {
+                                Task { await loadMore(after: nextCursor) }
+                            } label: {
+                                HStack {
+                                    Spacer()
+                                    if loadingMore {
+                                        ProgressView().controlSize(.small)
+                                    } else {
+                                        Text(loadMoreError == nil ? "Load older posts" : "Retry")
+                                            .font(.subheadline.weight(.semibold))
+                                    }
+                                    Spacer()
+                                }
+                            }
+                            .disabled(loadingMore)
+                            .onAppear {
+                                guard loadMoreError == nil else { return }
+                                Task { await loadMore(after: nextCursor) }
+                            }
+                            if let loadMoreError {
+                                Text(loadMoreError)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            Text("You're caught up.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .listRowBackground(Color.clear)
                 }
                 .listStyle(.insetGrouped)
-                .refreshable { reloadToken = UUID() }
+                .refreshable { await loadInitialPage() }
             }
+        }
+    }
+
+    private func refresh() {
+        firstPage = nil
+        additionalPosts = []
+        nextCursor = nil
+        initialError = nil
+        loadMoreError = nil
+        reloadToken = UUID()
+    }
+
+    @MainActor
+    private func loadInitialPage() async {
+        do {
+            let page = try await CommunityAPI.feedPage(filter: feedFilter)
+            guard !Task.isCancelled else { return }
+            firstPage = page
+            additionalPosts = []
+            nextCursor = page.nextCursor
+            initialError = nil
+            loadMoreError = nil
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled else { return }
+            initialError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func loadMore(after cursor: String) async {
+        guard !loadingMore, nextCursor == cursor else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        do {
+            let page = try await CommunityAPI.feedPage(filter: feedFilter, cursor: cursor)
+            let knownIds = Set((firstPage?.items ?? []).map(\.id) + additionalPosts.map(\.id))
+            additionalPosts.append(contentsOf: page.items.filter { !knownIds.contains($0.id) })
+            nextCursor = page.nextCursor
+            loadMoreError = nil
+        } catch {
+            loadMoreError = error.localizedDescription
         }
     }
 
@@ -189,6 +284,39 @@ struct CommunityFeedView: View {
         case .friends: "Posts shared by people you are friends with will appear here."
         case .myCars: "Posts about the makes and models in your Garage will appear here."
         }
+    }
+}
+
+private struct CommunityFeedSkeleton: View {
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 14) {
+                ForEach(0..<3, id: \.self) { _ in
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(spacing: 12) {
+                            Circle()
+                                .fill(Theme.Palette.subtle)
+                                .frame(width: 42, height: 42)
+                            VStack(alignment: .leading, spacing: 7) {
+                                Capsule().fill(Theme.Palette.subtle).frame(width: 132, height: 11)
+                                Capsule().fill(Theme.Palette.subtle).frame(width: 82, height: 9)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 9) {
+                            Capsule().fill(Theme.Palette.subtle).frame(height: 11)
+                            Capsule().fill(Theme.Palette.subtle).frame(maxWidth: 250).frame(height: 11)
+                        }
+                    }
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+                }
+            }
+            .padding()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading Community posts")
     }
 }
 

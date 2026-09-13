@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import type { CommunityFeedCursor } from "@/features/community/feed-cursor";
 
 const relationshipMutationSchema = z.object({
   profileId: z.string().uuid(),
@@ -113,6 +114,38 @@ export async function getFilteredCommunityPostIds({
   return (data ?? []).map((row) => ({
     postId: row.post_id,
     collapsedRepostCount: row.collapsed_repost_count,
+  }));
+}
+
+export async function getCursorCommunityPostIds({
+  viewerId,
+  filter,
+  cursor,
+  limit,
+  includeGroupPosts = true,
+}: {
+  viewerId: string;
+  filter: CommunityFeedFilter;
+  cursor: CommunityFeedCursor | null;
+  limit: number;
+  includeGroupPosts?: boolean;
+}) {
+  const { data, error } = await createAdminClient().rpc("social_cursor_community_post_ids", {
+    p_viewer_id: viewerId,
+    p_filter: filter,
+    p_limit: Math.min(Math.max(limit, 1), 101),
+    p_before_created_at: cursor?.createdAt ?? null,
+    p_before_post_id: cursor?.postId ?? null,
+    p_include_group_posts: includeGroupPosts,
+  });
+  if (error) {
+    console.error("getCursorCommunityPostIds failed", error);
+    throw new Error("Community feed is temporarily unavailable.", { cause: error });
+  }
+  return (data ?? []).map((row) => ({
+    postId: row.post_id,
+    collapsedRepostCount: row.collapsed_repost_count,
+    createdAt: row.created_at,
   }));
 }
 

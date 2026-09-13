@@ -85,7 +85,7 @@ struct CommunitySearchView: View {
                         Section {
                             resultRows(page.results)
                             if page.hasMore {
-                                Button(loading ? "Loading…" : "Load more") { Task { await run(submitted, page: page.page + 1, append: true) } }
+                                Button(loading ? "Loading…" : "Load more") { Task { await loadMore(page) } }
                                     .disabled(loading)
                             }
                         }
@@ -226,7 +226,17 @@ struct CommunitySearchView: View {
     }
 
     @MainActor
-    private func run(_ text: String, page nextPage: Int = 1, append: Bool = false) async {
+    private func loadMore(_ current: CommunityAPI.SearchPage) async {
+        if current.tab.usesCursor {
+            guard let cursor = current.nextCursor else { return }
+            await run(submitted, cursor: cursor, append: true)
+        } else {
+            await run(submitted, page: current.page + 1, append: true)
+        }
+    }
+
+    @MainActor
+    private func run(_ text: String, page nextPage: Int = 1, cursor: String? = nil, append: Bool = false) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 2 else { return }
         searchTask?.cancel()
@@ -240,10 +250,11 @@ struct CommunitySearchView: View {
         error = nil
         defer { loading = false }
         do {
-            let loaded = try await CommunityAPI.search(trimmed, tab: tab, page: nextPage)
+            let loaded = try await CommunityAPI.search(trimmed, tab: tab, page: nextPage, cursor: cursor)
             guard !Task.isCancelled else { return }
             if append, let existing = page {
                 page = CommunityAPI.SearchPage(tab: loaded.tab, query: loaded.query, page: loaded.page, hasMore: loaded.hasMore,
+                                               nextCursor: loaded.nextCursor,
                                                suggestions: loaded.suggestions, results: merge(existing.results, loaded.results))
             } else {
                 page = loaded

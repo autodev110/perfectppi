@@ -1751,6 +1751,8 @@ All user-facing text, reason labels, policies, notifications, and accessibility 
 
 ## 33. Reliability and performance
 
+**Implementation status (September 13, 2026):** the main Community feed and every unified-search result type now use bounded, stable cursor pagination on web and iOS while retaining legacy offset responses for installed app compatibility. Feed pages preserve visibility, mutes, filters, and repost collapsing; search cursors preserve relevance ordering and are bound to the normalized query and result type. iOS supports incremental loading/retry and both clients show immediate skeletons. Cursor conversion for secondary directories outside unified search, production-shaped load testing, query/storage telemetry, image variant tuning, and operational job alerts remain open.
+
 - Load feeds/search with cursor pagination and bounded page sizes.
 - Cache only permission-safe DTOs and key caches by viewer/audience where needed.
 - A status/permission check occurs when opening detail even if the card came from cache.

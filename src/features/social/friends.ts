@@ -15,6 +15,7 @@ import { isFeatureEnabled, FEATURE_UNAVAILABLE_MESSAGE } from "@/lib/feature-fla
 import { pushToProfile } from "@/lib/push/dispatch";
 import { notificationLink, pushAllowed } from "@/features/notifications/preferences";
 import type { Json } from "@/types/database";
+import { encodeSearchCursor, type SearchCursor } from "@/features/search/cursor";
 
 export const FRIEND_RELATIONSHIP_STATES = [
   "self",
@@ -234,14 +235,20 @@ async function pushFriendNotice(recipientId: string, actorId: string, kind: "req
 
 export type PeopleSearchOutcome = "ok" | "rate_limited" | "unavailable";
 
-export async function searchPeople(query: string, page = 1): Promise<{
+export async function searchPeople(
+  query: string,
+  page = 1,
+  cursor?: Extract<SearchCursor, { tab: "people" }> | null,
+): Promise<{
   results: PeopleSearchResult[];
   hasMore: boolean;
+  nextCursor: string | null;
   outcome: PeopleSearchOutcome;
   retryAfter: number | null;
 }> {
+  const cursorQuery = query.trim().replace(/\s+/g, " ").slice(0, 100);
   const trimmed = query.trim().slice(0, SEARCH_MAX_QUERY);
-  const empty = { results: [], hasMore: false, outcome: "ok" as const, retryAfter: null };
+  const empty = { results: [], hasMore: false, nextCursor: null, outcome: "ok" as const, retryAfter: null };
   if (trimmed.replace(/^@/, "").length < 2) return empty;
   if (!(await friendsDiscoveryEnabled())) return empty;
   const auth = await getCurrentProfile();
@@ -269,19 +276,62 @@ export async function searchPeople(query: string, page = 1): Promise<{
   }
 
   const safePage = Number.isInteger(page) && page > 0 ? page : 1;
-  const { data, error } = await admin.rpc("search_profiles", {
-    p_viewer_profile_id: auth.profileId,
-    p_query: trimmed,
-    p_limit: SEARCH_PAGE_SIZE + 1,
-    p_offset: (safePage - 1) * SEARCH_PAGE_SIZE,
-  });
+  let rows: Array<{
+    profile_id: string;
+    username: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+    is_public: boolean;
+    exact_match: boolean;
+    relationship_state: string;
+    mutual_friend_count: number;
+    sort_prefix?: boolean;
+    sort_text?: string;
+  }>;
+  let error: { message: string } | null;
+  if (cursor !== undefined) {
+    const response = await admin.rpc("search_profiles_cursor", {
+      p_viewer_profile_id: auth.profileId,
+      p_query: trimmed,
+      p_limit: SEARCH_PAGE_SIZE + 1,
+      p_before_exact_match: cursor?.sortExact ?? null,
+      p_before_username_prefix: cursor?.sortPrefix ?? null,
+      p_before_sort_text: cursor?.sortText ?? null,
+      p_before_id: cursor?.id ?? null,
+    });
+    rows = response.data ?? [];
+    error = response.error;
+  } else {
+    const response = await admin.rpc("search_profiles", {
+      p_viewer_profile_id: auth.profileId,
+      p_query: trimmed,
+      p_limit: SEARCH_PAGE_SIZE + 1,
+      p_offset: (safePage - 1) * SEARCH_PAGE_SIZE,
+    });
+    rows = response.data ?? [];
+    error = response.error;
+  }
   if (error) {
     console.error("searchPeople failed", error.message);
     return { ...empty, outcome: "unavailable" };
   }
-  const rows = data ?? [];
+  const pageRows = rows.slice(0, SEARCH_PAGE_SIZE);
+  const boundary = pageRows.at(-1);
+  const hasMore = rows.length > SEARCH_PAGE_SIZE;
+  const nextCursor = cursor !== undefined && hasMore && boundary?.sort_prefix != null && boundary.sort_text != null
+    ? encodeSearchCursor({
+      v: 1,
+      tab: "people",
+      q: cursorQuery,
+      rank: 0,
+      id: boundary.profile_id,
+      sortExact: boundary.exact_match,
+      sortPrefix: boundary.sort_prefix,
+      sortText: boundary.sort_text,
+    })
+    : null;
   return {
-    results: rows.slice(0, SEARCH_PAGE_SIZE).map((row) => ({
+    results: pageRows.map((row) => ({
       id: row.profile_id,
       username: row.username,
       display_name: row.display_name,
@@ -291,7 +341,8 @@ export async function searchPeople(query: string, page = 1): Promise<{
       relationship_state: toState(row.relationship_state),
       mutual_friend_count: row.mutual_friend_count,
     })),
-    hasMore: rows.length > SEARCH_PAGE_SIZE,
+    hasMore,
+    nextCursor,
     outcome: "ok",
     retryAfter: null,
   };

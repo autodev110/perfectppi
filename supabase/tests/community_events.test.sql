@@ -82,6 +82,49 @@ BEGIN
 END
 $$;
 
+INSERT INTO public.community_posts (
+  id, author_id, content, audience, status, moderation_status
+)
+SELECT 'e2000000-0000-0000-0000-000000000002', host_id,
+       'Cars and coffee south\n\nA second safe public meet.', 'public', 'active', 'active'
+FROM event_ids;
+
+SELECT public.create_community_event(
+  host_id,
+  'e2000000-0000-0000-0000-000000000002',
+  'e4000000-0000-0000-0000-000000000002',
+  NULL,
+  'car_meet',
+  'Cars and coffee south',
+  now() + interval '4 hours',
+  now() + interval '6 hours',
+  'South Atlanta',
+  '456 Private Test Street',
+  20,
+  'Respect the venue'
+) FROM event_ids;
+
+DO $$
+DECLARE
+  first_event record;
+BEGIN
+  SELECT * INTO first_event
+  FROM public.search_community_events_cursor((SELECT viewer_id FROM event_ids), 'cars and coffee', 1);
+  IF first_event.event_id IS NULL THEN RAISE EXCEPTION 'cursor event search returned no first page'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.search_community_events_cursor(
+      (SELECT viewer_id FROM event_ids), 'cars and coffee', 1,
+      first_event.sort_rank, first_event.sort_at, first_event.event_id
+    ) next_page WHERE next_page.event_id <> first_event.event_id
+  ) THEN RAISE EXCEPTION 'cursor event search did not advance'; END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.search_community_events_cursor(
+      (SELECT viewer_id FROM event_ids), 'cars and coffee', 20, 0, NULL, NULL
+    )
+  ) THEN RAISE EXCEPTION 'partial event cursors must be rejected'; END IF;
+END
+$$;
+
 -- RSVP is idempotent, Going unlocks directions, and capacity excludes Interested.
 SELECT public.set_community_event_rsvp(guest_id, event_id, 'going') FROM event_ids;
 SELECT public.set_community_event_rsvp(guest_id, event_id, 'going') FROM event_ids;

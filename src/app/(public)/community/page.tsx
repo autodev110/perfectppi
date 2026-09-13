@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCommunityPosts } from "@/features/community/queries";
+import { getCommunityPostsPage } from "@/features/community/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Plus, Search, Users, Warehouse, Bookmark, CalendarDays } from "lucide-react";
@@ -7,6 +7,7 @@ import { requireRole } from "@/features/auth/guards";
 import { CommunityPostArticle } from "@/components/shared/community-post-article";
 import { getFeatureFlags, toClientCapabilities } from "@/lib/feature-flags";
 import type { CommunityFeedFilter } from "@/features/social/relationships";
+import { decodeCommunityFeedCursor } from "@/features/community/feed-cursor";
 
 export const metadata = {
   title: "Community — PerfectPPI",
@@ -27,24 +28,24 @@ function parseFeedFilter(value?: string): CommunityFeedFilter {
     : "all";
 }
 
-function feedHref(filter: CommunityFeedFilter, page = 1) {
+function feedHref(filter: CommunityFeedFilter, cursor?: string | null) {
   const params = new URLSearchParams();
   if (filter !== "all") params.set("filter", filter);
-  if (page > 1) params.set("page", String(page));
+  if (cursor) params.set("cursor", cursor);
   const query = params.toString();
   return query ? `/community?${query}` : "/community";
 }
 
-export default async function CommunityPage({ searchParams }: { searchParams: Promise<{ filter?: string; page?: string }> }) {
+export default async function CommunityPage({ searchParams }: { searchParams: Promise<{ filter?: string; cursor?: string }> }) {
   const viewer = await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const params = await searchParams;
   const filter = parseFeedFilter(params.filter);
-  const requestedPage = Number(params.page ?? "1");
-  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const [posts, capabilities] = await Promise.all([
-    getCommunityPosts(page, 20, filter),
+  const cursor = decodeCommunityFeedCursor(params.cursor);
+  const [feedPage, capabilities] = await Promise.all([
+    getCommunityPostsPage(cursor, 20, filter),
     getFeatureFlags().then(toClientCapabilities),
   ]);
+  const posts = feedPage.items;
 
   const emptyCopy = filter === "friends"
     ? {
@@ -165,8 +166,8 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
             posts.map((post) => <CommunityPostArticle key={post.id} post={post} viewerId={viewer.id} />)
           )}
           <nav className="flex items-center justify-between pt-3" aria-label="Community pagination">
-            {page > 1 ? <Button asChild variant="outline"><Link href={feedHref(filter, page - 1)}>Previous</Link></Button> : <span />}
-            {posts.length === 20 ? <Button asChild variant="outline"><Link href={feedHref(filter, page + 1)}>Next</Link></Button> : <span />}
+            {params.cursor ? <Button asChild variant="outline"><Link href={feedHref(filter)}>Back to latest</Link></Button> : <span />}
+            {feedPage.nextCursor ? <Button asChild variant="outline"><Link href={feedHref(filter, feedPage.nextCursor)}>Older posts</Link></Button> : <span />}
           </nav>
         </div>
       </section>

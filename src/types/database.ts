@@ -5813,6 +5813,10 @@ export type Database = {
         Args: { p_limit?: number; p_offset?: number; p_query: string; p_viewer_id: string }
         Returns: { event_id: string }[]
       }
+      search_community_events_cursor: {
+        Args: { p_limit?: number; p_query: string; p_viewer_id: string; p_before_sort_rank?: number | null; p_before_sort_at?: string | null; p_before_id?: string | null }
+        Returns: { event_id: string; sort_rank: number; sort_at: string }[]
+      }
       create_community_event: {
         Args: {
           p_actor_profile_id: string
@@ -6408,6 +6412,21 @@ export type Database = {
           mutual_friend_count: number
         }[]
       }
+      search_profiles_cursor: {
+        Args: { p_viewer_profile_id: string; p_query: string; p_limit?: number; p_before_exact_match?: boolean | null; p_before_username_prefix?: boolean | null; p_before_sort_text?: string | null; p_before_id?: string | null }
+        Returns: {
+          profile_id: string
+          username: string | null
+          display_name: string | null
+          avatar_url: string | null
+          is_public: boolean
+          exact_match: boolean
+          relationship_state: string
+          mutual_friend_count: number
+          sort_prefix: boolean
+          sort_text: string
+        }[]
+      }
       social_can_view_community_post: {
         Args: { p_include_muted?: boolean; p_post_id: string; p_viewer_id: string }
         Returns: boolean
@@ -6485,6 +6504,17 @@ export type Database = {
           p_viewer_id: string
         }
         Returns: { collapsed_repost_count: number; post_id: string }[]
+      }
+      social_cursor_community_post_ids: {
+        Args: {
+          p_before_created_at?: string | null
+          p_before_post_id?: string | null
+          p_filter?: Database["public"]["Enums"]["community_feed_filter"]
+          p_include_group_posts?: boolean
+          p_limit?: number
+          p_viewer_id: string
+        }
+        Returns: { collapsed_repost_count: number; created_at: string; post_id: string }[]
       }
       social_visible_community_group_post_ids: {
         Args: { p_viewer_id: string; p_group_id: string; p_limit?: number; p_offset?: number; p_exclude_pinned?: boolean }
@@ -6655,21 +6685,41 @@ export type Database = {
         Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_offset?: number }
         Returns: { post_id: string; rank: number }[]
       }
+      search_community_posts_cursor: {
+        Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_before_rank?: number | null; p_before_sort_at?: string | null; p_before_id?: string | null }
+        Returns: { post_id: string; rank: number; sort_at: string }[]
+      }
       search_community_groups: {
         Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_offset?: number }
         Returns: { group_id: string; rank: number }[]
+      }
+      search_community_groups_cursor: {
+        Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_before_rank?: number | null; p_before_sort_text?: string | null; p_before_id?: string | null }
+        Returns: { group_id: string; rank: number; sort_text: string }[]
       }
       search_vehicles: {
         Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_offset?: number }
         Returns: { vehicle_id: string; rank: number }[]
       }
+      search_vehicles_cursor: {
+        Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_before_rank?: number | null; p_before_sort_at?: string | null; p_before_id?: string | null }
+        Returns: { vehicle_id: string; rank: number; sort_at: string }[]
+      }
       search_marketplace_listings: {
         Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_offset?: number }
         Returns: { listing_id: string; rank: number }[]
       }
+      search_marketplace_listings_cursor: {
+        Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_before_rank?: number | null; p_before_sort_at?: string | null; p_before_id?: string | null }
+        Returns: { listing_id: string; rank: number; sort_at: string }[]
+      }
       search_technicians: {
         Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_offset?: number }
         Returns: { technician_id: string; profile_id: string; rank: number }[]
+      }
+      search_technicians_cursor: {
+        Args: { p_viewer_id: string; p_query: string; p_limit?: number; p_before_rank?: number | null; p_before_sort_count?: number | null; p_before_id?: string | null }
+        Returns: { technician_id: string; profile_id: string; rank: number; sort_count: number }[]
       }
       search_make_suggestions: {
         Args: { p_query: string }

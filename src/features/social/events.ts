@@ -13,6 +13,7 @@ import {
   type CommunityEventType,
 } from "@/features/social/events-policy";
 import { getCommunityEventWeather, type CommunityEventWeather } from "@/features/social/event-weather";
+import { encodeSearchCursor, type SearchCursor } from "@/features/search/cursor";
 
 export type CommunityEventStatus = "scheduled" | "cancelled" | "completed" | "removed";
 export type CommunityEventRsvpStatus = "going" | "interested" | "not_going";
@@ -175,23 +176,63 @@ export async function getCommunityEvents(options?: { groupId?: string | null; in
   return hydrateEvents(viewerId, (data ?? []).map((row) => row.event_id));
 }
 
-export async function searchCommunityEvents(query: string, page = 1, perPage = 20) {
-  if (!(await eventsEnabled())) return { events: [], hasMore: false };
+export async function searchCommunityEvents(
+  query: string,
+  page = 1,
+  perPage = 20,
+  cursor?: Extract<SearchCursor, { tab: "events" }> | null,
+) {
+  if (!(await eventsEnabled())) return { events: [], hasMore: false, nextCursor: null };
   const viewerId = await getCommunityViewerId();
-  if (!viewerId) return { events: [], hasMore: false };
+  if (!viewerId) return { events: [], hasMore: false, nextCursor: null };
   const safePage = Number.isInteger(page) && page > 0 ? page : 1;
-  const { data, error } = await createAdminClient().rpc("search_community_events", {
-    p_viewer_id: viewerId,
-    p_query: query.trim().slice(0, 100),
-    p_limit: perPage + 1,
-    p_offset: (safePage - 1) * perPage,
-  });
+  const cursorQuery = query.trim().replace(/\s+/g, " ").slice(0, 100);
+  let rows: Array<{ event_id: string; sort_rank?: number; sort_at?: string }>;
+  let error: { message: string } | null;
+  if (cursor !== undefined) {
+    const response = await createAdminClient().rpc("search_community_events_cursor", {
+      p_viewer_id: viewerId,
+      p_query: cursorQuery,
+      p_limit: perPage + 1,
+      p_before_sort_rank: cursor?.sortRank ?? null,
+      p_before_sort_at: cursor?.sortAt ?? null,
+      p_before_id: cursor?.id ?? null,
+    });
+    rows = response.data ?? [];
+    error = response.error;
+  } else {
+    const response = await createAdminClient().rpc("search_community_events", {
+      p_viewer_id: viewerId,
+      p_query: cursorQuery,
+      p_limit: perPage + 1,
+      p_offset: (safePage - 1) * perPage,
+    });
+    rows = response.data ?? [];
+    error = response.error;
+  }
   if (error) {
     console.error("search_community_events failed", error.message);
-    return { events: [], hasMore: false };
+    return { events: [], hasMore: false, nextCursor: null };
   }
-  const ids = (data ?? []).map((row) => row.event_id);
-  return { events: await hydrateEvents(viewerId, ids.slice(0, perPage)), hasMore: ids.length > perPage };
+  const pageRows = rows.slice(0, perPage);
+  const boundary = pageRows.at(-1);
+  const hasMore = rows.length > perPage;
+  const nextCursor = cursor !== undefined && hasMore && boundary?.sort_rank != null && boundary.sort_at
+    ? encodeSearchCursor({
+      v: 1,
+      tab: "events",
+      q: cursorQuery,
+      rank: 0,
+      id: boundary.event_id,
+      sortRank: boundary.sort_rank,
+      sortAt: boundary.sort_at,
+    })
+    : null;
+  return {
+    events: await hydrateEvents(viewerId, pageRows.map((row) => row.event_id)),
+    hasMore,
+    nextCursor,
+  };
 }
 
 export async function getCommunityEvent(id: string): Promise<CommunityEventDetail | null> {

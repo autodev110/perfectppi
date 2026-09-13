@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
 import { isSearchTab, normalizeSearchQuery, SEARCH_TABS, unifiedSearch } from "@/features/search/queries";
+import { decodeSearchCursor, usesSearchCursor } from "@/features/search/cursor";
 
-// GET /api/community/search?q=&tab=posts|people|groups|vehicles|listings|technicians&page=
+// GET /api/community/search?q=&tab=posts|people|groups|vehicles|listings|technicians&page=&pagination=cursor&cursor=
 // Unified search (plan 27.2). Results are visibility-checked in the database
 // for the signed-in member; recent searches stay on the device.
 export async function GET(req: NextRequest) {
@@ -15,6 +16,18 @@ export async function GET(req: NextRequest) {
   }
   const requestedPage = Number(req.nextUrl.searchParams.get("page") ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const results = await unifiedSearch(query, tabParam, page);
+  const cursorMode = req.nextUrl.searchParams.get("pagination") === "cursor";
+  let cursor = undefined;
+  if (cursorMode) {
+    if (!usesSearchCursor(tabParam)) {
+      return NextResponse.json({ error: "Cursor pagination is not available for this result type." }, { status: 400 });
+    }
+    const rawCursor = req.nextUrl.searchParams.get("cursor");
+    cursor = rawCursor ? decodeSearchCursor(rawCursor, tabParam, query) : null;
+    if (rawCursor && !cursor) {
+      return NextResponse.json({ error: "This search page link is invalid or no longer matches the search." }, { status: 400 });
+    }
+  }
+  const results = await unifiedSearch(query, tabParam, page, cursor);
   return NextResponse.json({ data: results }, { headers: { "Cache-Control": "private, no-store" } });
 }

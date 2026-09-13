@@ -223,4 +223,88 @@ BEGIN
 END
 $$;
 
+-- Plan 29.8 / 33: keyset pages are stable, private, and do not let an older
+-- copy of a collapsed repost return after the representative crosses a page.
+SELECT public.set_community_feed_mute(
+  (SELECT viewer_id FROM filter_ids), 'post_type', false, NULL, 'question'
+);
+SELECT public.set_community_feed_mute(
+  (SELECT viewer_id FROM filter_ids), 'vehicle_topic', false, NULL, NULL, 'ACURA', 'TLX'
+);
+
+CREATE TEMP TABLE cursor_page_one AS
+SELECT *
+FROM public.social_cursor_community_post_ids(
+  (SELECT viewer_id FROM filter_ids), 'all', 2, NULL, NULL, true
+);
+
+CREATE TEMP TABLE cursor_page_two AS
+SELECT next_page.*
+FROM (
+  SELECT created_at, post_id
+  FROM cursor_page_one
+  ORDER BY created_at ASC, post_id ASC
+  LIMIT 1
+) boundary
+CROSS JOIN LATERAL public.social_cursor_community_post_ids(
+  (SELECT viewer_id FROM filter_ids), 'all', 2,
+  boundary.created_at, boundary.post_id, true
+) next_page;
+
+DO $$
+DECLARE
+  v_viewer uuid := (SELECT viewer_id FROM filter_ids);
+  v_repost_created_at timestamptz := (
+    SELECT created_at FROM public.community_posts
+    WHERE id = '69000000-0000-0000-0000-000000000005'
+  );
+BEGIN
+  IF (SELECT count(*) FROM cursor_page_one) <> 2
+     OR (SELECT count(*) FROM cursor_page_two) <> 2 THEN
+    RAISE EXCEPTION 'cursor feed did not return bounded full pages';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM cursor_page_one first_page
+    JOIN cursor_page_two second_page USING (post_id)
+  ) THEN
+    RAISE EXCEPTION 'cursor feed repeated a post across adjacent pages';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM public.social_cursor_community_post_ids(
+      v_viewer, 'all', 20, v_repost_created_at,
+      '69000000-0000-0000-0000-000000000005', true
+    )
+    WHERE post_id = '69000000-0000-0000-0000-000000000001'
+  ) THEN
+    RAISE EXCEPTION 'cursor feed resurfaced an older collapsed repost';
+  END IF;
+  IF (
+    SELECT collapsed_repost_count
+    FROM public.social_cursor_community_post_ids(v_viewer, 'all', 20, NULL, NULL, true)
+    WHERE post_id = '69000000-0000-0000-0000-000000000005'
+  ) <> 1 THEN
+    RAISE EXCEPTION 'cursor feed lost the collapsed repost count';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.social_cursor_community_post_ids(
+      v_viewer, 'all', 20, now(), NULL, true
+    )
+  ) THEN
+    RAISE EXCEPTION 'cursor feed accepted a partial cursor boundary';
+  END IF;
+  IF has_function_privilege(
+    'authenticated',
+    'public.social_cursor_community_post_ids(uuid,public.community_feed_filter,integer,timestamptz,uuid,boolean)',
+    'EXECUTE'
+  ) OR has_function_privilege(
+    'authenticated',
+    'private.social_feed_post_is_eligible(uuid,uuid,public.community_feed_filter,boolean)',
+    'EXECUTE'
+  ) THEN
+    RAISE EXCEPTION 'cursor feed implementation leaked to authenticated clients';
+  END IF;
+END
+$$;
+
 ROLLBACK;

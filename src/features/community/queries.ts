@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 import {
   getFilteredCommunityPostIds,
+  getCursorCommunityPostIds,
   getBlockedProfileIds,
   getVisibleCommunityGroupPostIds,
   getVisibleCommunityPostIds,
@@ -12,6 +13,10 @@ import { createReportContext } from "@/features/moderation/report-context";
 import { communityMediaDeliveryPath } from "@/lib/storage/community-media";
 import { buildSafetyNotice, type SafetyNotice } from "@/lib/moderation/safety-notice";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import {
+  encodeCommunityFeedCursor,
+  type CommunityFeedCursor,
+} from "@/features/community/feed-cursor";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -584,6 +589,45 @@ export async function getCommunityPosts(
   return withPostLikeState(visiblePosts, viewerId);
 }
 
+export type CommunityFeedPage = {
+  items: CommunityFeedPost[];
+  nextCursor: string | null;
+};
+
+export async function getCommunityPostsPage(
+  cursor: CommunityFeedCursor | null = null,
+  perPage = 20,
+  filter: CommunityFeedFilter = "all",
+): Promise<CommunityFeedPage> {
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId) return { items: [], nextCursor: null };
+
+  const safeLimit = Math.min(Math.max(Math.trunc(perPage), 1), 100);
+  const feedItems = await getCursorCommunityPostIds({
+    viewerId,
+    filter,
+    cursor,
+    limit: safeLimit + 1,
+    includeGroupPosts: false,
+  });
+  const hasMore = feedItems.length > safeLimit;
+  const pageItems = feedItems.slice(0, safeLimit);
+  const posts = await hydrateGroupPostIds(viewerId, pageItems.map((item) => item.postId));
+  const collapsedById = new Map(pageItems.map((item) => [item.postId, item.collapsedRepostCount]));
+  const items = posts.map((post) => ({
+    ...post,
+    collapsed_repost_count: collapsedById.get(post.id) ?? 0,
+  }));
+  const boundary = hasMore ? pageItems.at(-1) : null;
+
+  return {
+    items,
+    nextCursor: boundary
+      ? encodeCommunityFeedCursor({ createdAt: boundary.createdAt, postId: boundary.postId })
+      : null,
+  };
+}
+
 export async function getCommunityPostById(id: string) {
   const viewerId = await getCommunityViewerId();
   if (!viewerId) return null;
@@ -894,6 +938,8 @@ async function hydrateGroupPostIds(viewerId: string, postIds: string[]) {
     .from("community_posts")
     .select(COMMUNITY_FEED_SELECT)
     .in("id", postIds)
+    .eq("status", "active")
+    .eq("moderation_status", "active")
     .order("created_at", { ascending: true, referencedTable: "community_comments" });
   const posts = (data ?? []) as unknown as CommunityPost[];
   const [blockedAuthors, memberGroupIds] = await Promise.all([
