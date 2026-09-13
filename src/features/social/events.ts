@@ -12,6 +12,7 @@ import {
   eventSafetyRule,
   type CommunityEventType,
 } from "@/features/social/events-policy";
+import { getCommunityEventWeather, type CommunityEventWeather } from "@/features/social/event-weather";
 
 export type CommunityEventStatus = "scheduled" | "cancelled" | "completed" | "removed";
 export type CommunityEventRsvpStatus = "going" | "interested" | "not_going";
@@ -46,6 +47,7 @@ export type CommunityEventDetail = CommunityEventSummary & {
   official_update_comment_ids: string[];
   photo_posts: CommunityFeedPost[];
   can_contribute_photos: boolean;
+  weather: CommunityEventWeather | null;
 };
 
 export const createEventSchema = z.object({
@@ -205,12 +207,19 @@ export async function getCommunityEvent(id: string): Promise<CommunityEventDetai
   const [summary] = await hydrateEvents(viewerId, [id]);
   if (!summary) return null;
   if (!(await eventFlagsAllow(summary.group_id))) return null;
-  const [posts, exactResult, updatesResult, photoIdsResult, contributionResult] = await Promise.all([
+  const [posts, exactResult, updatesResult, photoIdsResult, contributionResult, weather] = await Promise.all([
     getCommunityPostsForViewer(viewerId, [summary.announcement_post_id]),
     createAdminClient().rpc("community_event_exact_location", { p_viewer_id: viewerId, p_event_id: id }),
     createAdminClient().from("community_event_updates").select("comment_id").eq("event_id", id),
     createAdminClient().rpc("list_community_event_photo_post_ids", { p_viewer_id: viewerId, p_event_id: id }),
     createAdminClient().rpc("can_contribute_community_event_photos", { p_viewer_id: viewerId, p_event_id: id }),
+    summary.status === "scheduled"
+      ? getCommunityEventWeather({
+        generalLocation: summary.general_location,
+        startsAt: summary.starts_at,
+        endsAt: summary.ends_at,
+      })
+      : Promise.resolve(null),
   ]);
   const announcement = posts[0];
   if (!announcement) return null;
@@ -225,6 +234,7 @@ export async function getCommunityEvent(id: string): Promise<CommunityEventDetai
     official_update_comment_ids: (updatesResult.data ?? []).map((row) => row.comment_id),
     photo_posts: photoPosts,
     can_contribute_photos: contributionResult.data === true,
+    weather,
   };
 }
 

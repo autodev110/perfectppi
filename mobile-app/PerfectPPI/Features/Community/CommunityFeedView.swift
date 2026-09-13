@@ -2280,6 +2280,26 @@ struct CommunityEventDetailView: View {
                      + (event.capacity.map { " · \($0) capacity" } ?? ""))
                     .foregroundStyle(.secondary)
             }
+            if let weather = event.weather {
+                Section("Weather") {
+                    Label(weather.condition, systemImage: "cloud.sun")
+                    Text("\(weather.temperatureMinC.formatted(.number.precision(.fractionLength(0))))–\(weather.temperatureMaxC.formatted(.number.precision(.fractionLength(0))))°C")
+                        .font(.headline)
+                    if let precipitation = weather.precipitationProbability {
+                        Label("\(precipitation)% chance of precipitation", systemImage: "drop")
+                    }
+                    if let gusts = weather.windGustsKph {
+                        Label("Gusts up to \(gusts.formatted(.number.precision(.fractionLength(0)))) km/h", systemImage: "wind")
+                    }
+                    Text("Approximate forecast for \(weather.locationLabel). Conditions can change.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let providerURL = URL(string: weather.providerUrl) {
+                        Link("Weather data by \(weather.providerName)", destination: providerURL)
+                            .font(.caption)
+                    }
+                }
+            }
             if let requirements = event.requirements {
                 Section("Requirements") { Text(requirements) }
             }

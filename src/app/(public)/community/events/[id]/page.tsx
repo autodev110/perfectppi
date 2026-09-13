@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarDays, Camera, ExternalLink, Images, LockKeyhole, MapPin, ShieldAlert, Users } from "lucide-react";
+import { CalendarDays, Camera, CloudSun, ExternalLink, Images, LockKeyhole, MapPin, ShieldAlert, Users } from "lucide-react";
 import { requireRole } from "@/features/auth/guards";
 import { getCommunityEvent } from "@/features/social/events";
 import { COMMUNITY_EVENT_TYPE_LABELS } from "@/features/social/events-policy";
@@ -14,6 +14,10 @@ export const dynamic = "force-dynamic";
 
 function eventTime(value: string) {
   return new Intl.DateTimeFormat("en", { dateStyle: "full", timeStyle: "short" }).format(new Date(value));
+}
+
+function forecastDate(value: string) {
+  return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${value}T12:00:00Z`));
 }
 
 export default async function CommunityEventPage({ params }: { params: Promise<{ id: string }> }) {
@@ -39,6 +43,14 @@ export default async function CommunityEventPage({ params }: { params: Promise<{
           <div className="grid gap-8 border-t p-7 sm:p-10 md:grid-cols-[1fr_0.8fr]">
             <div className="space-y-6">
               <div className="space-y-3 text-sm"><p className="flex gap-3"><CalendarDays className="mt-0.5 h-5 w-5 text-primary" /><span><strong>Starts:</strong> {eventTime(event.starts_at)}<br /><strong>Ends:</strong> {eventTime(event.ends_at)}</span></p><p className="flex gap-3"><MapPin className="mt-0.5 h-5 w-5 text-primary" /><span><strong>General area:</strong> {event.general_location}</span></p><p className="flex gap-3"><Users className="mt-0.5 h-5 w-5 text-primary" /><span>{event.going_count} going · {event.interested_count} interested{event.capacity ? ` · ${event.capacity} capacity` : ""}</span></p></div>
+              {event.weather ? (
+                <div className="rounded-2xl bg-sky-50 p-5 text-sky-950">
+                  <h2 className="flex items-center gap-2 font-heading text-lg font-extrabold"><CloudSun className="h-5 w-5" />Weather for {forecastDate(event.weather.forecast_date)}</h2>
+                  <p className="mt-2 font-bold">{event.weather.condition} · {Math.round(event.weather.temperature_min_c)}–{Math.round(event.weather.temperature_max_c)}°C</p>
+                  <p className="mt-1 text-sm">{event.weather.precipitation_probability == null ? "Precipitation chance unavailable" : `${event.weather.precipitation_probability}% chance of precipitation`}{event.weather.wind_gusts_kph == null ? "" : ` · Gusts up to ${Math.round(event.weather.wind_gusts_kph)} km/h`}</p>
+                  <p className="mt-2 text-xs text-sky-900/75">Approximate forecast for {event.weather.location_label}. Conditions can change. <a className="underline" href={event.weather.provider_url} target="_blank" rel="noreferrer">Weather data by {event.weather.provider_name}</a>.</p>
+                </div>
+              ) : null}
               {event.requirements ? <div><h2 className="font-heading text-lg font-extrabold">Requirements</h2><p className="mt-2 whitespace-pre-wrap text-sm text-on-surface-variant">{event.requirements}</p></div> : null}
               {event.status === "cancelled" ? <div className="rounded-2xl bg-destructive/10 p-4"><p className="font-bold text-destructive">This event was cancelled.</p><p className="mt-1 text-sm">{event.cancellation_reason}</p></div> : null}
               {event.exact_location ? <div className="rounded-2xl bg-primary/5 p-5"><h2 className="flex items-center gap-2 font-heading text-lg font-extrabold"><LockKeyhole className="h-5 w-5 text-primary" />Attendee instructions</h2><p className="mt-2 whitespace-pre-wrap text-sm">{event.exact_location}</p><p className="mt-2 text-xs text-on-surface-variant">Private to the organizer and Going attendees. Do not repost it publicly.</p></div> : <div className="rounded-2xl bg-surface-container p-5"><p className="flex items-center gap-2 font-bold"><LockKeyhole className="h-4 w-4" />Exact instructions are private</p><p className="mt-1 text-sm text-on-surface-variant">Mark Going to unlock the address and arrival details.</p></div>}

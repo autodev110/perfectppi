@@ -962,6 +962,20 @@ struct CommunityEventDirectory: Codable, Hashable {
     let events: [CommunityEventSummary]
 }
 
+struct CommunityEventWeather: Codable, Hashable {
+    let forecastDate: String
+    let condition: String
+    let weatherCode: Int
+    let temperatureMinC: Double
+    let temperatureMaxC: Double
+    let precipitationProbability: Int?
+    let windGustsKph: Double?
+    let locationLabel: String
+    let providerName: String
+    let providerUrl: String
+    let isApproximate: Bool
+}
+
 struct CommunityEventDetail: Codable, Hashable {
     let id: String
     let announcementPostId: String
@@ -986,6 +1000,7 @@ struct CommunityEventDetail: Codable, Hashable {
     let officialUpdateCommentIds: [String]
     let photoPosts: [CommunityPost]
     let canContributePhotos: Bool
+    let weather: CommunityEventWeather?
 }
 
 struct CommunityEventCreatePayload: Encodable {
