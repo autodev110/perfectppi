@@ -6315,6 +6315,15 @@ export type Database = {
         Args: { p_viewer_id: string; p_limit?: number; p_offset?: number }
         Returns: { listing_id: string; saved_at: string; listing_status: Database["public"]["Enums"]["listing_status"] }[]
       }
+      list_saved_marketplace_listing_ids_cursor: {
+        Args: {
+          p_viewer_id: string
+          p_limit?: number
+          p_before_saved_at?: string | null
+          p_before_listing_id?: string | null
+        }
+        Returns: { listing_id: string; saved_at: string; listing_status: Database["public"]["Enums"]["listing_status"] }[]
+      }
       set_community_post_save: {
         Args: { p_actor_profile_id: string; p_post_id: string; p_saved: boolean }
         Returns: Json
@@ -6325,6 +6334,15 @@ export type Database = {
       }
       list_saved_community_post_ids: {
         Args: { p_viewer_id: string; p_limit?: number; p_offset?: number }
+        Returns: { post_id: string; saved_at: string }[]
+      }
+      list_saved_community_post_ids_cursor: {
+        Args: {
+          p_viewer_id: string
+          p_limit?: number
+          p_before_saved_at?: string | null
+          p_before_post_id?: string | null
+        }
         Returns: { post_id: string; saved_at: string }[]
       }
       upsert_saved_collection: {

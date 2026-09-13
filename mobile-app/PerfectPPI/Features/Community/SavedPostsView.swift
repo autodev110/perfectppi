@@ -12,7 +12,6 @@ struct SavedPostsView: View {
     @EnvironmentObject private var auth: AuthStore
     @Environment(\.dismiss) private var dismiss
     @State private var kind: Kind = .posts
-    @State private var reloadToken = UUID()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,22 +24,11 @@ struct SavedPostsView: View {
 
             switch kind {
             case .posts:
-                AsyncContent(
-                    load: { try await CommunityAPI.saved() },
-                    loaded: { posts in postsContent(posts) },
-                    failure: { error, retry in ErrorView(message: error.localizedDescription, retry: retry) }
-                )
-                .id("posts-\(reloadToken)")
+                SavedCommunityPostsList()
             case .listings:
-                AsyncContent(
-                    load: { try await MarketplaceAPI.saved() },
-                    loaded: { listings in listingsContent(listings) },
-                    failure: { error, retry in ErrorView(message: error.localizedDescription, retry: retry) }
-                )
-                .id("listings-\(reloadToken)")
+                SavedMarketplaceListingsList(currentProfileId: auth.profile?.id)
             case .collections:
                 SavedCollectionsList()
-                    .id("collections-\(reloadToken)")
             }
         }
         .navigationTitle("Saved Items")
@@ -52,76 +40,182 @@ struct SavedPostsView: View {
         }
     }
 
-    @ViewBuilder
-    private func postsContent(_ posts: [CommunityPost]) -> some View {
-        if posts.isEmpty {
-            VStack {
-                EmptyStateCard(
-                    title: "Nothing saved yet",
-                    message: "Tap the bookmark on any post to keep it here. Only you can see this list, and posts that become unavailable drop out on their own.",
-                    systemImage: "bookmark"
-                )
-                .padding()
-                Spacer()
-            }
-        } else {
-            List(posts) { post in
-                NavigationLink {
-                    CommunityPostDetailView(post: post) { reloadToken = UUID() }
-                } label: {
-                    CommunityPostRow(post: post) { reloadToken = UUID() }
+}
+
+private struct SavedCommunityPostsList: View {
+    @State private var posts: [CommunityPost] = []
+    @State private var nextCursor: String?
+    @State private var loading = true
+    @State private var loadingMore = false
+    @State private var error: String?
+
+    var body: some View {
+        Group {
+            if loading {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error, posts.isEmpty {
+                ErrorView(message: error) { Task { await load(reset: true) } }
+            } else if posts.isEmpty {
+                VStack {
+                    EmptyStateCard(
+                        title: "Nothing saved yet",
+                        message: "Tap the bookmark on any post to keep it here. Only you can see this list, and posts that become unavailable drop out on their own.",
+                        systemImage: "bookmark"
+                    )
+                    .padding()
+                    Spacer()
                 }
+            } else {
+                List {
+                    ForEach(posts) { post in
+                        NavigationLink {
+                            CommunityPostDetailView(post: post) { Task { await load(reset: true) } }
+                        } label: {
+                            CommunityPostRow(post: post) { Task { await load(reset: true) } }
+                        }
+                    }
+                    if let nextCursor {
+                        Button {
+                            Task { await load(after: nextCursor) }
+                        } label: {
+                            HStack {
+                                Spacer()
+                                if loadingMore { ProgressView() }
+                                Text(loadingMore ? "Loading…" : "Load More")
+                                Spacer()
+                            }
+                        }
+                        .disabled(loadingMore)
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .refreshable { await load(reset: true) }
             }
-            .listStyle(.insetGrouped)
-            .refreshable { reloadToken = UUID() }
+        }
+        .task { if loading { await load(reset: true) } }
+        .alert("Could not load saved posts", isPresented: .constant(error != nil && !posts.isEmpty)) {
+            Button("OK") { error = nil }
+        } message: { Text(error ?? "Please try again.") }
+    }
+
+    @MainActor private func load(reset: Bool = false, after cursor: String? = nil) async {
+        if reset { loading = posts.isEmpty } else { loadingMore = true }
+        defer { loading = false; loadingMore = false }
+        do {
+            let page = try await CommunityAPI.savedPage(cursor: reset ? nil : cursor)
+            posts = reset ? page.items : appendUnique(posts, page.items)
+            nextCursor = page.nextCursor
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 
-    @ViewBuilder
-    private func listingsContent(_ listings: [MarketplaceListing]) -> some View {
-        if listings.isEmpty {
-            VStack {
-                EmptyStateCard(
-                    title: "No saved listings",
-                    message: "Save a listing from the Marketplace to follow it here. You are told when its price changes or it sells.",
-                    systemImage: "tag"
-                )
-                .padding()
-                Spacer()
-            }
-        } else {
-            List(listings) { listing in
-                NavigationLink {
-                    MarketplaceListingSummaryView(listing: listing, currentProfileId: auth.profile?.id)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "car.fill")
-                            .frame(width: 44, height: 44)
-                            .background(Theme.Palette.subtle)
-                            .foregroundStyle(.secondary)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(listing.title).font(.headline).lineLimit(1)
-                            Text("$\((listing.askingPriceCents / 100).formatted())" + (listing.status == .active ? "" : listing.status == .sold ? " · Sold" : " · No longer available"))
-                                .font(.caption)
-                                .foregroundStyle(listing.status == .active ? .secondary : Theme.Palette.warning)
+    private func appendUnique(_ current: [CommunityPost], _ additional: [CommunityPost]) -> [CommunityPost] {
+        let existing = Set(current.map(\.id))
+        return current + additional.filter { !existing.contains($0.id) }
+    }
+}
+
+private struct SavedMarketplaceListingsList: View {
+    let currentProfileId: String?
+    @State private var listings: [MarketplaceListing] = []
+    @State private var nextCursor: String?
+    @State private var loading = true
+    @State private var loadingMore = false
+    @State private var error: String?
+
+    var body: some View {
+        Group {
+            if loading {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error, listings.isEmpty {
+                ErrorView(message: error) { Task { await load(reset: true) } }
+            } else if listings.isEmpty {
+                VStack {
+                    EmptyStateCard(
+                        title: "No saved listings",
+                        message: "Save a listing from the Marketplace to follow it here. You are told when its price changes or it sells.",
+                        systemImage: "tag"
+                    )
+                    .padding()
+                    Spacer()
+                }
+            } else {
+                List {
+                    ForEach(listings) { listing in
+                        NavigationLink {
+                            MarketplaceListingSummaryView(listing: listing, currentProfileId: currentProfileId)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "car.fill")
+                                    .frame(width: 44, height: 44)
+                                    .background(Theme.Palette.subtle)
+                                    .foregroundStyle(.secondary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(listing.title).font(.headline).lineLimit(1)
+                                    Text("$\((listing.askingPriceCents / 100).formatted())" + (listing.status == .active ? "" : listing.status == .sold ? " · Sold" : " · No longer available"))
+                                        .font(.caption)
+                                        .foregroundStyle(listing.status == .active ? .secondary : Theme.Palette.warning)
+                                }
+                            }
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) { Task { await unsave(listing) } } label: {
+                                Label("Unsave", systemImage: "bookmark.slash")
+                            }
                         }
                     }
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) {
-                        Task {
-                            _ = try? await MarketplaceAPI.setSaved(listingId: listing.id, saved: false)
-                            reloadToken = UUID()
+                    if let nextCursor {
+                        Button {
+                            Task { await load(after: nextCursor) }
+                        } label: {
+                            HStack {
+                                Spacer()
+                                if loadingMore { ProgressView() }
+                                Text(loadingMore ? "Loading…" : "Load More")
+                                Spacer()
+                            }
                         }
-                    } label: {
-                        Label("Unsave", systemImage: "bookmark.slash")
+                        .disabled(loadingMore)
                     }
                 }
+                .listStyle(.insetGrouped)
+                .refreshable { await load(reset: true) }
             }
-            .listStyle(.insetGrouped)
-            .refreshable { reloadToken = UUID() }
         }
+        .task { if loading { await load(reset: true) } }
+        .alert("Could not update saved listings", isPresented: .constant(error != nil && !listings.isEmpty)) {
+            Button("OK") { error = nil }
+        } message: { Text(error ?? "Please try again.") }
+    }
+
+    @MainActor private func load(reset: Bool = false, after cursor: String? = nil) async {
+        if reset { loading = listings.isEmpty } else { loadingMore = true }
+        defer { loading = false; loadingMore = false }
+        do {
+            let page = try await MarketplaceAPI.savedPage(cursor: reset ? nil : cursor)
+            listings = reset ? page.items : appendUnique(listings, page.items)
+            nextCursor = page.nextCursor
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor private func unsave(_ listing: MarketplaceListing) async {
+        do {
+            _ = try await MarketplaceAPI.setSaved(listingId: listing.id, saved: false)
+            listings.removeAll { $0.id == listing.id }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func appendUnique(_ current: [MarketplaceListing], _ additional: [MarketplaceListing]) -> [MarketplaceListing] {
+        let existing = Set(current.map(\.id))
+        return current + additional.filter { !existing.contains($0.id) }
     }
 }
 

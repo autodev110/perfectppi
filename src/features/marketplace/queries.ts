@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 import { getCurrentSocialProfileId } from "@/features/social/relationships";
+import { encodeSavedCursor, type SavedCursor } from "@/features/saved/cursor";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -303,8 +304,52 @@ export async function getSavedMarketplaceListings(page = 1, perPage = 20) {
     return [];
   }
   const ids = (savedRows ?? []).map((row) => row.listing_id);
+  return hydrateSavedMarketplaceListings(viewerId, ids);
+}
+
+export type SavedMarketplaceListingsPage = {
+  items: MarketplaceListing[];
+  nextCursor: string | null;
+};
+
+export async function getSavedMarketplaceListingsPage(
+  cursor: SavedCursor | null,
+  perPage = 20,
+): Promise<SavedMarketplaceListingsPage> {
+  const viewerId = await getCurrentSocialProfileId();
+  if (!viewerId) return { items: [], nextCursor: null };
+  const size = Math.min(Math.max(Number.isInteger(perPage) ? perPage : 20, 1), 99);
+  const admin = createAdminClient();
+  const { data: savedRows, error } = await admin.rpc("list_saved_marketplace_listing_ids_cursor", {
+    p_viewer_id: viewerId,
+    p_limit: Math.min(size + 1, 100),
+    p_before_saved_at: cursor?.savedAt ?? null,
+    p_before_listing_id: cursor?.id ?? null,
+  });
+  if (error) {
+    console.error("[marketplace] saved listing cursor failed", error.message);
+    throw new Error("Could not load saved listings.");
+  }
+
+  const pageRows = (savedRows ?? []).slice(0, size);
+  const hasMore = (savedRows?.length ?? 0) > size;
+  const boundary = hasMore ? pageRows.at(-1) : null;
+  return {
+    items: await hydrateSavedMarketplaceListings(viewerId, pageRows.map((row) => row.listing_id)),
+    nextCursor: boundary
+      ? encodeSavedCursor({ v: 1, kind: "listings", savedAt: boundary.saved_at, id: boundary.listing_id })
+      : null,
+  };
+}
+
+async function hydrateSavedMarketplaceListings(viewerId: string, ids: string[]) {
   if (ids.length === 0) return [];
-  const { data } = await admin.from("marketplace_listings").select(LISTING_SELECT).in("id", ids);
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("marketplace_listings").select(LISTING_SELECT).in("id", ids);
+  if (error) {
+    console.error("[marketplace] saved listing hydration failed", error.message);
+    throw new Error("Could not load saved listings.");
+  }
   const rows = (data ?? []) as unknown as ListingRow[];
   const byId = new Map(rows.map((row) => [row.id, row]));
   const ordered = ids.flatMap((id) => {

@@ -19,6 +19,13 @@ const searchCursorSchema = z.discriminatedUnion("tab", [
 ]);
 
 export type SearchCursor = z.infer<typeof searchCursorSchema>;
+export type SearchCursorFor<T extends CursorSearchTab> = SearchCursor extends infer Cursor
+  ? Cursor extends { tab: infer Tabs }
+    ? T extends Tabs
+      ? Cursor
+      : never
+    : never
+  : never;
 
 export function usesSearchCursor(tab: string): tab is CursorSearchTab {
   return (CURSOR_SEARCH_TABS as readonly string[]).includes(tab);
@@ -28,17 +35,17 @@ export function encodeSearchCursor(cursor: SearchCursor): string {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
 }
 
-export function decodeSearchCursor(
+export function decodeSearchCursor<T extends CursorSearchTab>(
   value: string | null | undefined,
-  expectedTab: CursorSearchTab,
+  expectedTab: T,
   expectedQuery: string,
-): SearchCursor | null {
+): SearchCursorFor<T> | null {
   if (!value || value.length > 512) return null;
 
   try {
     const parsed = searchCursorSchema.safeParse(JSON.parse(Buffer.from(value, "base64url").toString("utf8")));
     if (!parsed.success || parsed.data.tab !== expectedTab || parsed.data.q !== expectedQuery) return null;
-    return parsed.data;
+    return parsed.data as SearchCursorFor<T>;
   } catch {
     return null;
   }

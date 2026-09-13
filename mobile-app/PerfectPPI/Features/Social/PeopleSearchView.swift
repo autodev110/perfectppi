@@ -8,8 +8,8 @@ struct PeopleSearchView: View {
     @State private var query = ""
     @State private var results: [PeopleSearchResult] = []
     @State private var states: [String: FriendRelationshipState] = [:]
-    @State private var page = 1
     @State private var hasMore = false
+    @State private var nextCursor: String?
     @State private var loading = false
     @State private var error: String?
     @State private var searchTask: Task<Void, Never>?
@@ -122,16 +122,15 @@ struct PeopleSearchView: View {
     @MainActor
     private func search(reset: Bool) async {
         guard enabled, trimmed.count >= 2 else { return }
-        let nextPage = reset ? 1 : page + 1
         let term = trimmed
         loading = true
         defer { loading = false }
         do {
-            let response = try await SocialAPI.searchPeople(term, page: nextPage)
+            let response = try await SocialAPI.searchPeople(term, cursor: reset ? nil : nextCursor)
             guard term == trimmed else { return } // a newer query superseded this one
             results = reset ? response.results : results + response.results
-            page = nextPage
             hasMore = response.hasMore
+            nextCursor = response.nextCursor
             error = nil
         } catch {
             if reset { results = [] }

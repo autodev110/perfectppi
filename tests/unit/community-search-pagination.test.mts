@@ -32,16 +32,24 @@ describe("Community search cursor pagination", () => {
   });
 
   test("keeps offset compatibility while updated web and iOS clients opt in", async () => {
-    const [route, web, iosApi, iosView] = await Promise.all([
+    const [route, web, peopleRoute, peopleWeb, iosApi, iosView, iosPeopleApi, iosPeopleView] = await Promise.all([
       source("src/app/api/community/search/route.ts"),
       source("src/app/(public)/community/search/page.tsx"),
+      source("src/app/api/social/people/route.ts"),
+      source("src/app/(public)/community/people/page.tsx"),
       source("mobile-app/PerfectPPI/Core/Networking/Endpoints/CommunityAPI.swift"),
       source("mobile-app/PerfectPPI/Features/Community/CommunitySearchView.swift"),
+      source("mobile-app/PerfectPPI/Core/Networking/Endpoints/SocialAPI.swift"),
+      source("mobile-app/PerfectPPI/Features/Social/PeopleSearchView.swift"),
     ]);
     assert.match(route, /pagination"\) === "cursor"/);
     assert.match(route, /This search page link is invalid/);
     assert.match(web, /results\.nextCursor/);
     assert.match(iosApi, /URLQueryItem\(name: "pagination", value: "cursor"\)/);
     assert.match(iosView, /current\.nextCursor/);
+    assert.match(peopleRoute, /decodeSearchCursor\(rawCursor, "people", query\)/);
+    assert.match(peopleWeb, /searchPeople\(query, page, cursor\)/);
+    assert.match(iosPeopleApi, /URLQueryItem\(name: "pagination", value: "cursor"\)/);
+    assert.match(iosPeopleView, /response\.nextCursor/);
   });
 });

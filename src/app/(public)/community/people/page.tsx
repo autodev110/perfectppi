@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { FriendActionButton } from "@/components/shared/friend-action-button";
 import { getInitials } from "@/lib/utils/formatting";
 import { Search, UserPlus, Users } from "lucide-react";
+import { decodeSearchCursor } from "@/features/search/cursor";
+import { normalizeSearchQuery } from "@/features/search/queries";
 
 export const metadata = {
   title: "Find People — PerfectPPI",
@@ -18,17 +20,18 @@ export const dynamic = "force-dynamic";
 // Plan 12: search by exact or partial username / display name, exact
 // username first; the database applies discoverability, blocks, and account
 // state before anything is returned.
-export default async function PeoplePage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
+export default async function PeoplePage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string; cursor?: string }> }) {
   await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const params = await searchParams;
-  const query = (params.q ?? "").trim();
+  const query = normalizeSearchQuery(params.q);
   const requestedPage = Number(params.page ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const enabled = await friendsDiscoveryEnabled();
+  const cursor = params.cursor ? decodeSearchCursor(params.cursor, "people", query) : null;
   const search = enabled && query
-    ? await searchPeople(query, page)
-    : { results: [], hasMore: false, outcome: "ok" as const, retryAfter: null };
-  const { results, hasMore, outcome } = search;
+    ? await searchPeople(query, page, cursor)
+    : { results: [], hasMore: false, nextCursor: null, outcome: "ok" as const, retryAfter: null };
+  const { results, nextCursor, outcome } = search;
   const tooShort = query.replace(/^@/, "").length > 0 && query.replace(/^@/, "").length < 2;
 
   return (
@@ -102,11 +105,11 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
           )}
           {query && enabled ? (
             <nav className="flex items-center justify-between pt-3" aria-label="Search pagination">
-              {page > 1 ? (
-                <Button asChild variant="outline"><Link href={`/community/people?q=${encodeURIComponent(query)}&page=${page - 1}`}>Previous</Link></Button>
+              {params.cursor ? (
+                <Button asChild variant="outline"><Link href={`/community/people?q=${encodeURIComponent(query)}`}>Back to first results</Link></Button>
               ) : <span />}
-              {hasMore ? (
-                <Button asChild variant="outline"><Link href={`/community/people?q=${encodeURIComponent(query)}&page=${page + 1}`}>Next</Link></Button>
+              {nextCursor ? (
+                <Button asChild variant="outline"><Link href={`/community/people?q=${encodeURIComponent(query)}&cursor=${encodeURIComponent(nextCursor)}`}>More results</Link></Button>
               ) : <span />}
             </nav>
           ) : null}

@@ -17,6 +17,7 @@ import {
   encodeCommunityFeedCursor,
   type CommunityFeedCursor,
 } from "@/features/community/feed-cursor";
+import { encodeSavedCursor, type SavedCursor } from "@/features/saved/cursor";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -496,13 +497,57 @@ export async function getSavedCommunityPosts(page = 1, perPage = 20) {
     return [];
   }
   const postIds = (savedRows ?? []).map((row) => row.post_id);
+  return hydrateSavedCommunityPosts(viewerId, postIds);
+}
+
+export type SavedCommunityPostsPage = {
+  items: CommunityFeedPost[];
+  nextCursor: string | null;
+};
+
+export async function getSavedCommunityPostsPage(
+  cursor: SavedCursor | null,
+  perPage = 20,
+): Promise<SavedCommunityPostsPage> {
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId) return { items: [], nextCursor: null };
+  const size = Math.min(Math.max(Number.isInteger(perPage) ? perPage : 20, 1), 99);
+  const admin = createAdminClient();
+  const { data: savedRows, error } = await admin.rpc("list_saved_community_post_ids_cursor", {
+    p_viewer_id: viewerId,
+    p_limit: Math.min(size + 1, 100),
+    p_before_saved_at: cursor?.savedAt ?? null,
+    p_before_post_id: cursor?.id ?? null,
+  });
+  if (error) {
+    console.error("list_saved_community_post_ids_cursor failed", error);
+    throw new Error("Could not load saved posts.");
+  }
+
+  const pageRows = (savedRows ?? []).slice(0, size);
+  const hasMore = (savedRows?.length ?? 0) > size;
+  const boundary = hasMore ? pageRows.at(-1) : null;
+  return {
+    items: await hydrateSavedCommunityPosts(viewerId, pageRows.map((row) => row.post_id)),
+    nextCursor: boundary
+      ? encodeSavedCursor({ v: 1, kind: "posts", savedAt: boundary.saved_at, id: boundary.post_id })
+      : null,
+  };
+}
+
+async function hydrateSavedCommunityPosts(viewerId: string, postIds: string[]) {
   if (postIds.length === 0) return [];
 
-  const { data } = await admin
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("community_posts")
     .select(COMMUNITY_FEED_SELECT)
     .in("id", postIds)
     .order("created_at", { ascending: true, referencedTable: "community_comments" });
+  if (error) {
+    console.error("saved community post hydration failed", error);
+    throw new Error("Could not load saved posts.");
+  }
   const posts = (data ?? []) as unknown as CommunityPost[];
   const [blockedCommentAuthors, memberGroupIds] = await Promise.all([
     getBlockedProfileIds(viewerId, posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id))),

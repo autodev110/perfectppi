@@ -301,6 +301,17 @@ enum CommunityAPI {
         )
     }
 
+    struct SavedPage: Decodable {
+        let items: [CommunityPost]
+        let nextCursor: String?
+    }
+
+    static func savedPage(cursor: String? = nil) async throws -> SavedPage {
+        var query = [URLQueryItem(name: "pagination", value: "cursor")]
+        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await APIClient.shared.get("/api/community/saved", query: query)
+    }
+
     private struct CollectionNamePayload: Encodable { let name: String }
     private struct CollectionItemPayload: Encodable {
         let entityType: String

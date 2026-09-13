@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
 import { friendsDiscoveryEnabled, searchPeople } from "@/features/social/friends";
+import { decodeSearchCursor } from "@/features/search/cursor";
+import { normalizeSearchQuery } from "@/features/search/queries";
 
 const ROLES = ["consumer", "technician", "org_manager", "admin"] as const;
 
-// GET /api/social/people?q=<text>&page=<n>
+// GET /api/social/people?q=<text>&page=<n>&pagination=cursor&cursor=<token>
 // The database applies discoverability, exact-username lookup, blocks, and
 // account state; nothing is filtered client-side.
 export async function GET(request: NextRequest) {
@@ -17,11 +19,21 @@ export async function GET(request: NextRequest) {
   }
 
   const params = request.nextUrl.searchParams;
-  const query = params.get("q") ?? "";
+  const query = normalizeSearchQuery(params.get("q"));
   const page = Number(params.get("page") ?? "1");
-  const { results, hasMore, outcome, retryAfter } = await searchPeople(
+  const cursorMode = params.get("pagination") === "cursor";
+  const rawCursor = params.get("cursor");
+  const cursor = cursorMode && rawCursor ? decodeSearchCursor(rawCursor, "people", query) : null;
+  if (cursorMode && rawCursor && !cursor) {
+    return NextResponse.json(
+      { error: "This people-search page link is invalid or no longer matches the search." },
+      { status: 400, headers },
+    );
+  }
+  const { results, hasMore, nextCursor, outcome, retryAfter } = await searchPeople(
     query,
     Number.isInteger(page) ? page : 1,
+    cursorMode ? cursor : undefined,
   );
   if (outcome === "rate_limited") {
     return NextResponse.json(
@@ -35,5 +47,5 @@ export async function GET(request: NextRequest) {
       { status: 503, headers },
     );
   }
-  return NextResponse.json({ data: { results, hasMore, enabled: true } }, { headers });
+  return NextResponse.json({ data: { results, hasMore, nextCursor, enabled: true } }, { headers });
 }

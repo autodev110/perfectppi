@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/features/auth/guards";
-import { getSavedCommunityPosts } from "@/features/community/queries";
-import { getSavedMarketplaceListings } from "@/features/marketplace/queries";
+import { getSavedCommunityPostsPage } from "@/features/community/queries";
+import { getSavedMarketplaceListingsPage } from "@/features/marketplace/queries";
 import { ListingSaveButton } from "@/components/shared/listing-save-button";
 import { formatCurrency } from "@/lib/utils/formatting";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -13,23 +13,25 @@ import { SavedCollectionsManager } from "@/components/shared/saved-collections-m
 import { listSavedCollections } from "@/features/saved/collections";
 import { formatDate, getInitials } from "@/lib/utils/formatting";
 import { Bookmark, Car, MessageSquare, Tag } from "lucide-react";
+import { decodeSavedCursor } from "@/features/saved/cursor";
 
 export const dynamic = "force-dynamic";
 
 // Private saved posts (plan Phase 1B / 7.4 "Saved Items"). Posts that were
 // hidden, removed, or moved out of the viewer's audience simply do not
 // appear; the save itself is kept so a restored post comes back.
-export default async function SavedPostsPage({ searchParams }: { searchParams: Promise<{ page?: string; tab?: string }> }) {
+export default async function SavedPostsPage({ searchParams }: { searchParams: Promise<{ tab?: string; cursor?: string }> }) {
   const profile = await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const params = await searchParams;
-  const requestedPage = Number(params.page ?? "1");
-  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const tab = params.tab === "listings" || params.tab === "collections" ? params.tab : "posts";
-  const [posts, listings, collections] = await Promise.all([
-    tab === "posts" ? getSavedCommunityPosts(page, 20) : Promise.resolve([]),
-    tab === "listings" ? getSavedMarketplaceListings(page, 20) : Promise.resolve([]),
+  const cursor = params.cursor && tab !== "collections" ? decodeSavedCursor(params.cursor, tab) : null;
+  const [postPage, listingPage, collections] = await Promise.all([
+    tab === "posts" ? getSavedCommunityPostsPage(cursor, 20) : Promise.resolve({ items: [], nextCursor: null }),
+    tab === "listings" ? getSavedMarketplaceListingsPage(cursor, 20) : Promise.resolve({ items: [], nextCursor: null }),
     tab === "collections" ? listSavedCollections(profile.id) : Promise.resolve([]),
   ]);
+  const posts = postPage.items;
+  const listings = listingPage.items;
 
   return (
     <div className="space-y-6">
@@ -90,8 +92,8 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
               );
             })}
             <nav className="flex items-center justify-between pt-2" aria-label="Saved listings pagination">
-              {page > 1 ? <Button asChild variant="outline"><Link href={`/dashboard/saved?tab=listings&page=${page - 1}`}>Previous</Link></Button> : <span />}
-              {listings.length === 20 ? <Button asChild variant="outline"><Link href={`/dashboard/saved?tab=listings&page=${page + 1}`}>Next</Link></Button> : <span />}
+              {params.cursor ? <Button asChild variant="outline"><Link href="/dashboard/saved?tab=listings">Back to first results</Link></Button> : <span />}
+              {listingPage.nextCursor ? <Button asChild variant="outline"><Link href={`/dashboard/saved?tab=listings&cursor=${encodeURIComponent(listingPage.nextCursor)}`}>More listings</Link></Button> : <span />}
             </nav>
           </div>
         )
@@ -145,8 +147,8 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
             </Card>
           ))}
           <nav className="flex items-center justify-between pt-2" aria-label="Saved pagination">
-            {page > 1 ? <Button asChild variant="outline"><Link href={`/dashboard/saved?page=${page - 1}`}>Previous</Link></Button> : <span />}
-            {posts.length === 20 ? <Button asChild variant="outline"><Link href={`/dashboard/saved?page=${page + 1}`}>Next</Link></Button> : <span />}
+            {params.cursor ? <Button asChild variant="outline"><Link href="/dashboard/saved">Back to first results</Link></Button> : <span />}
+            {postPage.nextCursor ? <Button asChild variant="outline"><Link href={`/dashboard/saved?cursor=${encodeURIComponent(postPage.nextCursor)}`}>More posts</Link></Button> : <span />}
           </nav>
         </div>
       )}

@@ -300,4 +300,15 @@ enum MarketplaceAPI {
             query: [URLQueryItem(name: "page", value: String(max(page, 1)))]
         )
     }
+
+    struct SavedPage: Decodable {
+        let items: [MarketplaceListing]
+        let nextCursor: String?
+    }
+
+    static func savedPage(cursor: String? = nil) async throws -> SavedPage {
+        var query = [URLQueryItem(name: "pagination", value: "cursor")]
+        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await APIClient.shared.get("/api/marketplace/saved", query: query)
+    }
 }

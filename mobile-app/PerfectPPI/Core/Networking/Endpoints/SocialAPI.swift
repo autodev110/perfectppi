@@ -7,16 +7,19 @@ enum SocialAPI {
     struct PeopleSearchPage: Decodable {
         let results: [PeopleSearchResult]
         let hasMore: Bool
+        let nextCursor: String?
         let enabled: Bool
     }
 
-    static func searchPeople(_ query: String, page: Int = 1) async throws -> PeopleSearchPage {
-        try await APIClient.shared.get(
+    static func searchPeople(_ query: String, cursor: String? = nil) async throws -> PeopleSearchPage {
+        var params = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "pagination", value: "cursor")
+        ]
+        if let cursor { params.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await APIClient.shared.get(
             "/api/social/people",
-            query: [
-                URLQueryItem(name: "q", value: query),
-                URLQueryItem(name: "page", value: String(max(page, 1)))
-            ]
+            query: params
         )
     }
 
