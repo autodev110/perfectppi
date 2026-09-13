@@ -48,6 +48,14 @@ import {
   normalizeCommunityCreationToken,
 } from "@/features/community/creation-token";
 import { POST_TYPES, parsePostDetails, postTypeRequiresPhotos, postTypeRequiresVehicle } from "@/lib/community/post-types";
+import { recordProductEvent, type ProductEventName } from "@/features/analytics/product-events";
+
+function publishedPostEvent(postType: string): ProductEventName {
+  if (postType === "question") return "question_published";
+  if (postType === "build_update") return "build_update_published";
+  if (postType === "maintenance") return "maintenance_update_published";
+  return "community_post_published";
+}
 
 const creationTokenSchema = z.string().uuid().transform(normalizeCommunityCreationToken);
 
@@ -551,6 +559,14 @@ export async function createCommunityPostFromInput(
     if (parsed.data.eventId) revalidatePath(`/community/events/${parsed.data.eventId}`);
     revalidatePath("/admin/community");
     revalidatePath("/admin/moderation");
+    if (!hasMediaAssembly) {
+      await recordProductEvent({
+        profileId: profile.profileId,
+        eventName: publishedPostEvent(parsed.data.postType),
+        surface: "community",
+        dedupeId: data.id,
+      });
+    }
     return { data: { ...data, moderationStatus: "active" as const, moderationMessage: null } };
   }
 
@@ -585,6 +601,15 @@ export async function createCommunityPostFromInput(
   revalidatePath("/admin/community");
   revalidatePath("/admin/moderation");
   if (parsed.data.eventId) revalidatePath(`/community/events/${parsed.data.eventId}`);
+
+  if (!hasMediaAssembly && statusForDecision(result.decision) === "active") {
+    await recordProductEvent({
+      profileId: profile.profileId,
+      eventName: publishedPostEvent(parsed.data.postType),
+      surface: "community",
+      dedupeId: data.id,
+    });
+  }
 
   return {
     data: {
@@ -628,6 +653,20 @@ export async function finalizeCommunityPostAssembly(
       .eq("post_id", result.data.postId)
       .maybeSingle();
     if (eventPhoto) revalidatePath(`/community/events/${eventPhoto.event_id}`);
+    const { data: post } = await createAdminClient()
+      .from("community_posts")
+      .select("post_type")
+      .eq("id", result.data.postId)
+      .eq("author_id", profile.profileId)
+      .maybeSingle();
+    if (post) {
+      await recordProductEvent({
+        profileId: profile.profileId,
+        eventName: publishedPostEvent(post.post_type),
+        surface: "community",
+        dedupeId: result.data.postId,
+      });
+    }
   }
   revalidatePath("/admin/community");
   revalidatePath("/admin/moderation");
@@ -1456,6 +1495,14 @@ export async function setAcceptedCommunityAnswerFromInput(input: unknown) {
   revalidatePath("/community");
   revalidatePath("/community/groups");
   revalidatePath("/dashboard/posts");
+  if (result.data.changed && result.data.acceptedAnswerCommentId) {
+    await recordProductEvent({
+      profileId: profile.profileId,
+      eventName: "answer_accepted",
+      surface: "community",
+      dedupeId: result.data.acceptedAnswerCommentId,
+    });
+  }
   return { data: result.data };
 }
 

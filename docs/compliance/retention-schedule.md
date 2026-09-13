@@ -15,6 +15,7 @@ Status: engineering-enforced periods and disposition rules are recorded below. C
 | Share links | Expiry/revocation/account deletion | Revoke immediately; delete artifact later per source record | Product/privacy | Per-package revoke exists |
 | APNs tokens | Logout, invalid token, account deletion | Delete promptly | Security/product | Invalid-token pruning and account cascade implemented |
 | Security/audit logs | Event date | Rotate/delete after approved security period | Security + counsel | Provider dependent |
+| First-party product analytics | Event date, opt-out, or account deletion | Delete after 90 days; delete immediately on account-level opt-out or profile deletion | Product/privacy | Closed event/surface allowlist, service-only rows, daily retention worker, and aggregate-only admin dashboard implemented |
 | Privacy requests | Completion | Keep minimized request evidence for 24 months, then delete | Privacy counsel | `retention_expires_at` plus worker pruning; identifiers/details are minimized after account deletion |
 | Unattached quarantined uploads | Reservation expiry | Expire after 30 minutes and delete through the retry queue | Security/product | Enforced by reservation expiry and storage-cleanup worker |
 | Payments/receipts/refunds | Transaction date | Retain as tax/payment law requires | Tax/payment counsel | Provider dependent |

@@ -28,6 +28,10 @@
     {
       "path": "/api/internal/workers/marketplace-saved-searches",
       "schedule": "40 14 * * *"
+    },
+    {
+      "path": "/api/internal/workers/product-analytics-retention",
+      "schedule": "17 3 * * *"
     }
   ]
 }

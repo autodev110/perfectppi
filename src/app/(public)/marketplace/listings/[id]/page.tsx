@@ -17,6 +17,7 @@ import { NEUTRAL_SHARE_CARD, shareCardTitle, sharePath } from "@/lib/share/links
 import { LISTING_STATUS_LABELS, isListingPublic } from "@/lib/marketplace/listing-status";
 import { SELLER_TYPE_LABELS } from "@/lib/marketplace/filters";
 import { inspectionAge } from "@/lib/marketplace/inspection-report";
+import { recordProductEvent } from "@/features/analytics/product-events";
 import {
   ArrowLeft,
   ArrowRight,
@@ -71,6 +72,14 @@ export default async function MarketplaceListingPage({ params, searchParams }: P
   const label = vehicleLabel(listing);
   const vehicle = listing.vehicle;
   const seller = listing.seller;
+  if (viewerId && !isOwner) {
+    await recordProductEvent({
+      profileId: viewerId,
+      eventName: "listing_viewed",
+      surface: "marketplace",
+      dedupeId: listing.id,
+    });
+  }
   const specs = [
     ["Year", vehicle?.year],
     ["Make", vehicle?.make],

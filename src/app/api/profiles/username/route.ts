@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { usernameSchema } from "@/features/profiles/username";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 // Availability must work before an account exists (email signup), so this GET
 // is anonymous. Enumeration is bounded per source address with the same
@@ -100,6 +101,15 @@ export async function POST(request: Request) {
       { error: "Your username could not be saved. Please try again." },
       { status: 500 },
     );
+  }
+
+  if (data?.id) {
+    await recordProductEvent({
+      profileId: data.id,
+      eventName: "profile_completed",
+      surface: "profile",
+      dedupeId: data.id,
+    });
   }
 
   return NextResponse.json(data);

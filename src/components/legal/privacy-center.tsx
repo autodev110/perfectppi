@@ -30,11 +30,14 @@ export function PrivacyCenter() {
   const [deletionConfirmation, setDeletionConfirmation] = useState("");
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
+  const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
 
   async function load() {
-    const [requestResponse, identityResponse] = await Promise.all([
+    const [requestResponse, identityResponse, analyticsResponse] = await Promise.all([
       fetch("/api/privacy/requests", { cache: "no-store" }),
       fetch("/api/account/identities", { cache: "no-store" }),
+      fetch("/api/privacy/analytics", { cache: "no-store" }),
     ]);
 
     if (requestResponse.ok) {
@@ -44,6 +47,11 @@ export function PrivacyCenter() {
     if (identityResponse.ok) {
       const body = await identityResponse.json();
       setIdentities(body.data ?? []);
+    }
+    if (analyticsResponse.ok) {
+      const body = await analyticsResponse.json();
+      setAnalyticsEnabled(body.enabled === true);
+      setAnalyticsLoaded(true);
     }
   }
 
@@ -86,6 +94,26 @@ export function PrivacyCenter() {
     const body = await response.json().catch(() => ({}));
     setMessage(response.ok ? "Google was disconnected." : body.error ?? "Google could not be disconnected.");
     if (response.ok) await load();
+    setWorking(false);
+  }
+
+  async function setAnalyticsPreference(enabled: boolean) {
+    setWorking(true);
+    setMessage(null);
+    const response = await fetch("/api/privacy/analytics", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok) {
+      setAnalyticsEnabled(body.enabled === true);
+      setMessage(enabled
+        ? "Product analytics is enabled."
+        : "Product analytics is disabled and your existing product events were deleted.");
+    } else {
+      setMessage(body.error ?? "Analytics preference could not be saved.");
+    }
     setWorking(false);
   }
 
@@ -153,6 +181,25 @@ export function PrivacyCenter() {
             <Button variant="outline" disabled={working} onClick={disconnectGoogle}>Disconnect Google</Button>
           </div>
         )}
+
+        <div className="space-y-3 border-t pt-5">
+          <div className="flex items-start gap-3">
+            <input
+              id="usage-analytics-enabled"
+              type="checkbox"
+              checked={analyticsEnabled}
+              disabled={working || !analyticsLoaded}
+              onChange={(event) => void setAnalyticsPreference(event.target.checked)}
+              className="mt-1 h-5 w-5 rounded border-input accent-accent"
+            />
+            <div>
+              <Label htmlFor="usage-analytics-enabled">Share product usage analytics</Label>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Help improve PerfectPPI with coarse action counts. We do not include message text, report details, VINs, exact locations, or advertising identifiers. Turning this off deletes your existing product events.
+              </p>
+            </div>
+          </div>
+        </div>
 
         <div className="space-y-3 border-t pt-5">
           <h3 className="text-sm font-semibold text-destructive">Delete account</h3>

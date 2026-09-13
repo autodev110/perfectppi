@@ -23,6 +23,11 @@ export default function PrivacyChoicesPage() {
         <li>Submit a request as an authorized agent.</li>
       </ul>
 
+      <h2>Product analytics</h2>
+      <p>
+        Signed-in users can turn first-party product analytics on or off immediately from <Link href="/dashboard/settings#privacy">Account Settings</Link>. Turning it off stops new product events and deletes the existing product-event rows associated with the profile; it does not require a formal privacy request.
+      </p>
+
       <h2>Submit securely</h2>
       <p>
         If you have an account, sign in and open <Link href="/dashboard/settings#privacy">Account Settings</Link>. The authenticated request record lets you track status without emailing identity documents. If you cannot sign in, email{" "}

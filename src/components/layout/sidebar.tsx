@@ -29,6 +29,7 @@ import {
   ToggleLeft,
   Bookmark,
   ListChecks,
+  ChartNoAxesColumnIncreasing,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useSignOut } from "@/features/auth/hooks";
@@ -58,6 +59,7 @@ const iconMap: Record<string, ComponentType<{ className?: string }>> = {
   ToggleLeft,
   Bookmark,
   ListChecks,
+  ChartNoAxesColumnIncreasing,
 };
 
 interface SidebarItem {

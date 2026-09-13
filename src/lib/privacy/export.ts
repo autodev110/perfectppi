@@ -94,6 +94,8 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     partnerUserLinks,
     partnerLinkTransactions,
     auditLogs,
+    productAnalyticsEvents,
+    productAnalyticsPreference,
   ] = await Promise.all([
     row("profile", admin.from("profiles").select("*").eq("id", profileId).maybeSingle()),
     rows("vehicles", admin.from("vehicles").select("*").eq("owner_id", profileId)),
@@ -187,6 +189,19 @@ export async function buildAccountDataExport(profileId: string, user: User) {
       admin.from("audit_logs")
         .select("id, action, target_type, target_id, created_at")
         .eq("actor_id", profileId),
+    ),
+    rows(
+      "product analytics events",
+      admin.from("product_analytics_events")
+        .select("event_name, surface, occurred_at, expires_at")
+        .eq("profile_id", profileId),
+    ),
+    row(
+      "product analytics preference",
+      admin.from("product_analytics_preferences")
+        .select("enabled, updated_at")
+        .eq("profile_id", profileId)
+        .maybeSingle(),
     ),
   ]);
 
@@ -391,6 +406,8 @@ export async function buildAccountDataExport(profileId: string, user: User) {
       auditLogs,
       partnerUserLinks,
       partnerLinkTransactions,
+      productAnalyticsPreference: productAnalyticsPreference ?? { enabled: true, updated_at: null },
+      productAnalyticsEvents,
     },
   };
 }

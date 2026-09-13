@@ -4389,6 +4389,70 @@ export type Database = {
         }
         Relationships: []
       }
+      product_analytics_events: {
+        Row: {
+          dedupe_hash: string | null
+          event_name: string
+          expires_at: string
+          id: number
+          occurred_at: string
+          profile_id: string
+          surface: string
+        }
+        Insert: {
+          dedupe_hash?: string | null
+          event_name: string
+          expires_at?: string
+          id?: never
+          occurred_at?: string
+          profile_id: string
+          surface: string
+        }
+        Update: {
+          dedupe_hash?: string | null
+          event_name?: string
+          expires_at?: string
+          id?: never
+          occurred_at?: string
+          profile_id?: string
+          surface?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_analytics_events_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_analytics_preferences: {
+        Row: {
+          enabled: boolean
+          profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          enabled?: boolean
+          profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          enabled?: boolean
+          profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_analytics_preferences_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       username_correction_events: {
         Row: {
           actor_id: string | null
@@ -5587,6 +5651,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_product_analytics_summary: {
+        Args: { p_days?: number }
+        Returns: Json
+      }
+      prune_product_analytics_events: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      record_product_analytics_event: {
+        Args: {
+          p_dedupe_hash?: string | null
+          p_event_name: string
+          p_profile_id: string
+          p_surface: string
+        }
+        Returns: boolean
+      }
+      set_product_analytics_preference: {
+        Args: { p_enabled: boolean; p_profile_id: string }
+        Returns: boolean
+      }
       member_contribution_summary: {
         Args: { p_target_profile_id: string; p_viewer_profile_id: string }
         Returns: Json

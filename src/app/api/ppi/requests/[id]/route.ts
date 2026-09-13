@@ -4,6 +4,7 @@ import { getPpiRequest } from "@/features/ppi/queries";
 import { updateRequestStatus } from "@/features/ppi/actions";
 import type { PpiRequestStatus } from "@/types/enums";
 import { deleteOwnedInspection } from "@/features/ppi/deletion";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 export async function GET(
   _request: Request,
@@ -39,6 +40,15 @@ export async function PATCH(
   const result = await updateRequestStatus(id, body.status as PpiRequestStatus);
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: 400 });
+  }
+
+  if (body.status === "completed") {
+    await recordProductEvent({
+      profileId: auth.profile.id,
+      eventName: "inspection_completed",
+      surface: "inspection",
+      dedupeId: id,
+    });
   }
 
   return NextResponse.json({ success: true });

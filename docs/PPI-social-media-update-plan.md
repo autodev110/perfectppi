@@ -1767,6 +1767,8 @@ Set performance budgets after measuring a production-shaped dataset. At minimum,
 
 ## 34. Analytics and success measures
 
+**Implementation status (September 13, 2026):** the first-party analytics foundation is implemented with server-confirmed meaningful-action events, account-level opt-out and immediate deletion, a 90-day retention worker, and an aggregate product dashboard. It deliberately excludes arbitrary properties and sensitive content. Funnel coverage, safety-quality aggregates, production baselines, and release targets remain to be completed.
+
 Measure whether the product helps car owners, not only whether it creates scrolling:
 
 **North-star measure:** weekly users who complete at least two meaningful vehicle actions. A meaningful action is one of: add/update a Garage vehicle, view an authorized inspection report, save a listing, request an inspection, join or post in a relevant group, publish a vehicle-tagged question/build/maintenance update, or give/receive an accepted useful answer. Passive feed views and raw likes alone do not count.

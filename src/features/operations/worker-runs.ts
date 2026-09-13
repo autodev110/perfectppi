@@ -10,6 +10,7 @@ export const OPERATIONAL_WORKER_CODES = [
   "retention_purge",
   "moderation_outbox",
   "marketplace_saved_searches",
+  "product_analytics_retention",
 ] as const;
 
 export type OperationalWorkerCode = (typeof OPERATIONAL_WORKER_CODES)[number];

@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { FEATURE_UNAVAILABLE_MESSAGE, isFeatureEnabled } from "@/lib/feature-flags";
 import type { Database } from "@/types/database";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 export type GroupVisibility = Database["public"]["Enums"]["community_group_visibility"];
 export type GroupJoinPolicy = Database["public"]["Enums"]["community_group_join_policy"];
@@ -340,6 +341,14 @@ export async function setCommunityGroupMembership(input: unknown): Promise<Group
       if (error.message.includes("group_requires_request")) return membershipFailure("requires_request");
       console.warn("community group join failed", { message: error.message });
       return membershipFailure("group_unavailable");
+    }
+    if (data === true) {
+      await recordProductEvent({
+        profileId,
+        eventName: "group_joined",
+        surface: "community",
+        dedupeId: groupId,
+      });
     }
     return finish({ ok: true, status: "active", joined: true, changed: data === true });
   };

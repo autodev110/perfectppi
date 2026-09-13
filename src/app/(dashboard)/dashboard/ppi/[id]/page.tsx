@@ -19,6 +19,8 @@ import type { InspectionScope, SectionType } from "@/types/enums";
 import type { StandardizedContent, VscCoverageData } from "@/types/api";
 import { inspectionDisplayName } from "@/features/ppi/presentation";
 import { InspectionDeleteButton } from "@/components/shared/inspection-delete-button";
+import { getCurrentSocialProfileId } from "@/features/social/relationships";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -26,11 +28,12 @@ interface PageProps {
 
 export default async function InspectionDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const [request, submission, versions, existingReview] = await Promise.all([
+  const [request, submission, versions, existingReview, viewerId] = await Promise.all([
     getPpiRequest(id),
     getCurrentSubmission(id),
     getPpiSubmissionVersions(id),
     getMyReviewForRequest(id),
+    getCurrentSocialProfileId(),
   ]);
 
   // Fetch outputs if there's a current submission
@@ -44,6 +47,15 @@ export default async function InspectionDetailPage({ params }: PageProps) {
     : null;
 
   if (!request) notFound();
+
+  if (viewerId && outputs?.standardized && ["submitted", "completed"].includes(request.status)) {
+    await recordProductEvent({
+      profileId: viewerId,
+      eventName: "report_viewed",
+      surface: "inspection",
+      dedupeId: request.id,
+    });
+  }
 
   const vehicle = request.vehicle as {
     year: number | null;

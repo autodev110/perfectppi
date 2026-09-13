@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { getMyVehicles } from "@/features/vehicles/queries";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 export async function GET() {
   const supabase = await createClient();
@@ -144,5 +145,11 @@ export async function POST(request: Request) {
     }
   }
 
+  await recordProductEvent({
+    profileId: profile.id,
+    eventName: "garage_vehicle_added",
+    surface: "garage",
+    dedupeId: data.id,
+  });
   return NextResponse.json({ ...data, notes: notes || null }, { status: 201 });
 }

@@ -9,6 +9,7 @@ import { createConversation, sendMessage } from "@/features/messages/actions";
 import { getMessagesBasePath } from "@/features/auth/routing";
 import { listingLifecycleMessage } from "@/lib/marketplace/listing-status";
 import { attachListingInspection } from "@/features/marketplace/inspection-sharing";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 const createListingSchema = z.object({
   vehicle_id: z.string().uuid("Choose a vehicle to list"),
@@ -362,6 +363,13 @@ export async function contactSellerForListing(input: unknown): Promise<ContactSe
     });
   }
 
+  await recordProductEvent({
+    profileId: profile.profileId,
+    eventName: "seller_message_started",
+    surface: "marketplace",
+    dedupeId: listing.id,
+  });
+
   return {
     data: {
       ...conversation.data,
@@ -414,6 +422,12 @@ export async function requestMarketplaceInspection(
 
   revalidatePath("/marketplace");
   if (parsed.data.vehicleId) revalidatePath(`/vehicle/${parsed.data.vehicleId}`);
+  await recordProductEvent({
+    profileId: profile.profileId,
+    eventName: "inspection_requested",
+    surface: "marketplace",
+    dedupeId: row.request_id,
+  });
   return {
     data: {
       requestId: row.request_id,
@@ -471,5 +485,13 @@ export async function setMarketplaceListingSave(input: unknown): Promise<SaveLis
   const result = (data ?? {}) as { listingId?: string; saved?: boolean };
   revalidatePath("/marketplace");
   revalidatePath("/dashboard/saved");
+  if (result.saved ?? parsed.data.saved) {
+    await recordProductEvent({
+      profileId: profile.profileId,
+      eventName: "listing_saved",
+      surface: "marketplace",
+      dedupeId: result.listingId ?? parsed.data.listingId,
+    });
+  }
   return { data: { listingId: result.listingId ?? parsed.data.listingId, saved: result.saved ?? parsed.data.saved } };
 }

@@ -25,6 +25,7 @@ import {
   cleanupInspectionStorage,
   collectInspectionStorageReferences,
 } from "@/features/ppi/deletion";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 const createVehicleSchema = z.object({
   vin: z.string().max(17).optional().or(z.literal("")),
@@ -188,6 +189,12 @@ export async function createVehicle(formData: FormData) {
   }
 
   revalidatePath("/dashboard/vehicles");
+  await recordProductEvent({
+    profileId: profile.id,
+    eventName: "garage_vehicle_added",
+    surface: "garage",
+    dedupeId: data.id,
+  });
   return { data };
 }
 
@@ -261,6 +268,11 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
 
   revalidatePath("/dashboard/vehicles");
   revalidatePath(`/dashboard/vehicles/${vehicleId}`);
+  await recordProductEvent({
+    profileId: profile.profileId,
+    eventName: "garage_vehicle_updated",
+    surface: "garage",
+  });
   return { success: true };
 }
 

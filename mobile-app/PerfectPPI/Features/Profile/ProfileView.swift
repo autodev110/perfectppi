@@ -171,6 +171,8 @@ private struct PrivacyCenterView: View {
     @State private var identities: [ConnectedIdentity] = []
     @State private var safetyRelationships = ProfilesAPI.SafetyRelationships(blocked: [], muted: [])
     @State private var feedMutes: [CommunityAPI.FeedMute] = []
+    @State private var analyticsEnabled = true
+    @State private var analyticsLoaded = false
     @State private var working = false
     @State private var message: String?
     @State private var exportDocument: PrivacyExportDocument?
@@ -237,6 +239,18 @@ private struct PrivacyCenterView: View {
                 } footer: {
                     Text("Another sign-in method is required before Google can be disconnected.")
                 }
+            }
+
+            Section {
+                Toggle("Share product usage analytics", isOn: Binding(
+                    get: { analyticsEnabled },
+                    set: { value in Task { await saveAnalyticsPreference(value) } }
+                ))
+                .disabled(working || !analyticsLoaded)
+            } header: {
+                Text("Product Improvement")
+            } footer: {
+                Text("Shares coarse action counts only. Messages, report details, VINs, exact locations, and advertising identifiers are excluded. Turning this off deletes existing product events.")
             }
 
             Section("Blocked Accounts") {
@@ -327,10 +341,29 @@ private struct PrivacyCenterView: View {
             async let identityLoad: [ConnectedIdentity] = APIClient.shared.get("/api/account/identities")
             async let safetyLoad = ProfilesAPI.safetyRelationships()
             async let feedMuteLoad = CommunityAPI.feedMutes()
+            async let analyticsLoad = ProfilesAPI.analyticsPreference()
             requests = try await requestLoad
             identities = try await identityLoad
             safetyRelationships = try await safetyLoad
             feedMutes = try await feedMuteLoad
+            let analyticsPreference = try await analyticsLoad
+            analyticsEnabled = analyticsPreference.enabled
+            analyticsLoaded = true
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func saveAnalyticsPreference(_ enabled: Bool) async {
+        working = true
+        message = nil
+        defer { working = false }
+        do {
+            let preference = try await ProfilesAPI.setAnalyticsPreference(enabled: enabled)
+            analyticsEnabled = preference.enabled
+            message = preference.enabled
+                ? "Product analytics is enabled."
+                : "Product analytics is disabled and your existing product events were deleted."
         } catch {
             message = error.localizedDescription
         }

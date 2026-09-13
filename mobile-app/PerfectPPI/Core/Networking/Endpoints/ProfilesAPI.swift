@@ -19,6 +19,10 @@ enum AuthAPI {
 }
 
 enum ProfilesAPI {
+    struct AnalyticsPreference: Codable {
+        let enabled: Bool
+    }
+
     static func me() async throws -> Profile {
         try await APIClient.shared.get("/api/profiles/me")
     }
@@ -43,6 +47,17 @@ enum ProfilesAPI {
 
     static func updateMe(_ payload: UpdatePayload) async throws -> Profile {
         try await APIClient.shared.patch("/api/profiles/me", body: payload)
+    }
+
+    static func analyticsPreference() async throws -> AnalyticsPreference {
+        try await APIClient.shared.get("/api/privacy/analytics")
+    }
+
+    static func setAnalyticsPreference(enabled: Bool) async throws -> AnalyticsPreference {
+        try await APIClient.shared.patch(
+            "/api/privacy/analytics",
+            body: AnalyticsPreference(enabled: enabled)
+        )
     }
 
     struct UsernameAvailability: Decodable {
