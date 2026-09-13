@@ -1214,6 +1214,7 @@ export type Database = {
       }
       community_post_media: {
         Row: {
+          alt_text: string | null
           content_sha256: string | null
           display_reference: string | null
           legacy_public_url: string | null
@@ -1232,6 +1233,7 @@ export type Database = {
           url: string
         }
         Insert: {
+          alt_text?: string | null
           content_sha256?: string | null
           display_reference?: string | null
           legacy_public_url?: string | null
@@ -1250,6 +1252,7 @@ export type Database = {
           url: string
         }
         Update: {
+          alt_text?: string | null
           content_sha256?: string | null
           display_reference?: string | null
           legacy_public_url?: string | null
@@ -3655,6 +3658,144 @@ export type Database = {
           },
         ]
       }
+      ppi_service_dispute_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          dispute_id: string | null
+          id: string
+          outcome: string | null
+          ppi_request_id: string | null
+          review_action: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          dispute_id?: string | null
+          id?: string
+          outcome?: string | null
+          ppi_request_id?: string | null
+          review_action?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          dispute_id?: string | null
+          id?: string
+          outcome?: string | null
+          ppi_request_id?: string | null
+          review_action?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppi_service_dispute_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppi_service_dispute_events_dispute_id_fkey"
+            columns: ["dispute_id"]
+            isOneToOne: false
+            referencedRelation: "ppi_service_disputes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppi_service_dispute_events_ppi_request_id_fkey"
+            columns: ["ppi_request_id"]
+            isOneToOne: false
+            referencedRelation: "ppi_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppi_service_disputes: {
+        Row: {
+          created_at: string
+          details: string
+          id: string
+          opened_at: string
+          outcome: string | null
+          ppi_request_id: string
+          reason_code: string
+          requester_id: string | null
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          review_action: string | null
+          status: string
+          technician_profile_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          details: string
+          id?: string
+          opened_at?: string
+          outcome?: string | null
+          ppi_request_id: string
+          reason_code: string
+          requester_id?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          review_action?: string | null
+          status?: string
+          technician_profile_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          details?: string
+          id?: string
+          opened_at?: string
+          outcome?: string | null
+          ppi_request_id?: string
+          reason_code?: string
+          requester_id?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          review_action?: string | null
+          status?: string
+          technician_profile_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppi_service_disputes_ppi_request_id_fkey"
+            columns: ["ppi_request_id"]
+            isOneToOne: true
+            referencedRelation: "ppi_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppi_service_disputes_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppi_service_disputes_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppi_service_disputes_technician_profile_id_fkey"
+            columns: ["technician_profile_id"]
+            isOneToOne: false
+            referencedRelation: "technician_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ppi_submissions: {
         Row: {
           completed_at: string | null
@@ -4669,6 +4810,7 @@ export type Database = {
         Row: {
           content: string | null
           created_at: string
+          dispute_hold_id: string | null
           id: string
           ppi_request_id: string
           rating: number
@@ -4681,6 +4823,7 @@ export type Database = {
         Insert: {
           content?: string | null
           created_at?: string
+          dispute_hold_id?: string | null
           id?: string
           ppi_request_id: string
           rating: number
@@ -4693,6 +4836,7 @@ export type Database = {
         Update: {
           content?: string | null
           created_at?: string
+          dispute_hold_id?: string | null
           id?: string
           ppi_request_id?: string
           rating?: number
@@ -4703,6 +4847,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "technician_reviews_dispute_hold_id_fkey"
+            columns: ["dispute_hold_id"]
+            isOneToOne: false
+            referencedRelation: "ppi_service_disputes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "technician_reviews_ppi_request_id_fkey"
             columns: ["ppi_request_id"]
@@ -6800,6 +6951,30 @@ export type Database = {
       refresh_tech_review_aggregates: {
         Args: { p_tech_profile_id: string }
         Returns: undefined
+      }
+      open_ppi_service_dispute: {
+        Args: {
+          p_actor_profile_id: string
+          p_ppi_request_id: string
+          p_reason_code: string
+          p_details: string
+        }
+        Returns: Database["public"]["Tables"]["ppi_service_disputes"]["Row"]
+      }
+      withdraw_ppi_service_dispute: {
+        Args: { p_actor_profile_id: string; p_dispute_id: string }
+        Returns: Database["public"]["Tables"]["ppi_service_disputes"]["Row"]
+      }
+      resolve_ppi_service_dispute: {
+        Args: {
+          p_actor_profile_id: string
+          p_dispute_id: string
+          p_status: string
+          p_outcome: string
+          p_resolution_note: string
+          p_restore_review: boolean
+        }
+        Returns: Database["public"]["Tables"]["ppi_service_disputes"]["Row"]
       }
       discover_contact_profiles: {
         Args: { p_identifier_digests: string[]; p_viewer_profile_id: string }

@@ -43,6 +43,7 @@ struct ConsumerPpiListView: View {
                     Button { presentWizard = true } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel("New inspection")
                 }
                 .sheet(isPresented: $presentWizard) {
                     PpiRequestWizard {

@@ -171,6 +171,7 @@ struct CommunityFeedView: View {
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
+            .accessibilityLabel("Community options")
         }
     }
 
@@ -861,6 +862,7 @@ struct CommunityPostDetailView: View {
                     } label: {
                         Image(systemName: "trash")
                     }
+                    .accessibilityLabel("Remove media item \(item.sortOrder + 1)")
                     .disabled(removingMediaId != nil || uploadProgress.isUploading)
                 }
             }
@@ -1084,7 +1086,8 @@ struct CommunityPostDetailView: View {
                     url: url,
                     mediaType: picked.kind == .video ? "video" : "image",
                     contentType: picked.contentType,
-                    sortOrder: index
+                    sortOrder: index,
+                    altText: nil
                 ))
             }
             if payload.isEmpty {
@@ -1441,6 +1444,7 @@ struct NewCommunityPostView: View {
     @State private var saving = false
     @State private var error: String?
     @State private var media: [PickedAttachment] = []
+    @State private var mediaDescriptions: [UUID: String] = [:]
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showingPhotoPicker = false
     @State private var showingCamera = false
@@ -1731,15 +1735,28 @@ struct NewCommunityPostView: View {
     }
 
     private func mediaAttachmentRow(_ item: PickedAttachment) -> some View {
-        HStack {
-            Image(systemName: item.kind == .video ? "video.fill" : "photo.fill")
-                .foregroundStyle(Theme.Palette.primary)
-            Text(item.filename).lineLimit(1)
-            Spacer()
-            Button(role: .destructive) {
-                media.removeAll { $0.id == item.id }
-            } label: {
-                Image(systemName: "trash")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: item.kind == .video ? "video.fill" : "photo.fill")
+                    .foregroundStyle(Theme.Palette.primary)
+                    .accessibilityHidden(true)
+                Text(item.filename).lineLimit(1)
+                Spacer()
+                Button(role: .destructive) {
+                    media.removeAll { $0.id == item.id }
+                    mediaDescriptions[item.id] = nil
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .accessibilityLabel("Remove \(item.filename)")
+            }
+            if item.kind == .image {
+                TextField("Describe photo for VoiceOver (optional)", text: Binding(
+                    get: { mediaDescriptions[item.id, default: ""] },
+                    set: { mediaDescriptions[item.id] = String($0.prefix(300)) }
+                ), axis: .vertical)
+                .lineLimit(1...3)
+                .accessibilityHint("Describe important visual details without guessing.")
             }
         }
     }
@@ -1814,7 +1831,10 @@ struct NewCommunityPostView: View {
                             url: url,
                             mediaType: item.kind == .video ? "video" : "image",
                             contentType: item.contentType,
-                            sortOrder: index
+                            sortOrder: index,
+                            altText: item.kind == .image
+                                ? mediaDescriptions[item.id]?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                                : nil
                         ))
                     }
                     uploaded = newUploads
@@ -1878,6 +1898,8 @@ private struct CommunityMediaCarousel: View {
                             SecureImage(path: item.url, contentMode: .fill)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .clipped()
+                                .accessibilityLabel(item.altText ?? "")
+                                .accessibilityHidden(item.altText?.isEmpty != false)
                         }
                     } else if item.mediaType == "video", let url = URL(string: item.url) {
                         RemoteVideoPlayer(url: url)
@@ -1892,6 +1914,8 @@ private struct CommunityMediaCarousel: View {
                             default: ProgressView().tint(.white)
                             }
                         }
+                        .accessibilityLabel(item.altText ?? "")
+                        .accessibilityHidden(item.altText?.isEmpty != false)
                     }
                 }
             }

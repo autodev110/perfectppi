@@ -27,6 +27,26 @@ function redirectWithError(ppiRequestId: string, error: string): never {
   redirect(`/dashboard/ppi/${ppiRequestId}/review?error=${encodeURIComponent(error)}`);
 }
 
+function reviewWriteError(message: string) {
+  if (message.includes("review_blocked_by_active_dispute")) {
+    return "The review is paused while your inspection dispute is open";
+  }
+  if (message.includes("review_edit_window_closed")) {
+    return "The 30-day review editing window has closed";
+  }
+  if (message.includes("review_under_moderation")) {
+    return "This review cannot be edited while it is hidden by content moderation";
+  }
+  if (message.includes("review_not_eligible") || message.includes("review_identity_is_immutable")) {
+    return "This inspection is not eligible for that review update";
+  }
+  if (message.includes("duplicate key")) {
+    return "A review already exists for this inspection";
+  }
+  console.warn("technician review write failed", { message: message.slice(0, 200) });
+  return "The review could not be saved. Please try again";
+}
+
 async function getCurrentProfileId() {
   const supabase = await createClient();
   const {
@@ -100,6 +120,17 @@ export async function upsertTechnicianReview(formData: FormData) {
     .eq("ppi_request_id", parsed.data.ppiRequestId)
     .maybeSingle();
 
+  const { data: activeDispute } = await admin
+    .from("ppi_service_disputes")
+    .select("id")
+    .eq("ppi_request_id", parsed.data.ppiRequestId)
+    .eq("status", "open")
+    .maybeSingle();
+
+  if (activeDispute) {
+    redirectWithError(parsed.data.ppiRequestId, "The review is paused while your inspection dispute is open");
+  }
+
   if (existingReview && existingReview.reviewer_id !== profileId) {
     redirectWithError(parsed.data.ppiRequestId, "A review already exists for this inspection");
   }
@@ -111,13 +142,12 @@ export async function upsertTechnicianReview(formData: FormData) {
         rating: parsed.data.rating,
         title: parsed.data.title,
         content: parsed.data.content,
-        status: "active",
       })
       .eq("id", existingReview.id)
       .eq("reviewer_id", profileId);
 
     if (error) {
-      redirectWithError(parsed.data.ppiRequestId, error.message);
+      redirectWithError(parsed.data.ppiRequestId, reviewWriteError(error.message));
     }
   } else {
     const { error } = await admin.from("technician_reviews").insert({
@@ -131,7 +161,7 @@ export async function upsertTechnicianReview(formData: FormData) {
     });
 
     if (error) {
-      redirectWithError(parsed.data.ppiRequestId, error.message);
+      redirectWithError(parsed.data.ppiRequestId, reviewWriteError(error.message));
     }
   }
 
@@ -191,6 +221,17 @@ export async function upsertTechnicianReviewFromInput(input: unknown) {
     .eq("ppi_request_id", parsed.data.ppiRequestId)
     .maybeSingle();
 
+  const { data: activeDispute } = await admin
+    .from("ppi_service_disputes")
+    .select("id")
+    .eq("ppi_request_id", parsed.data.ppiRequestId)
+    .eq("status", "open")
+    .maybeSingle();
+
+  if (activeDispute) {
+    return { error: "The review is paused while your inspection dispute is open", code: "active_dispute" };
+  }
+
   if (existingReview && existingReview.reviewer_id !== profileId) {
     return { error: "A review already exists for this inspection" };
   }
@@ -202,14 +243,13 @@ export async function upsertTechnicianReviewFromInput(input: unknown) {
         rating: parsed.data.rating,
         title: parsed.data.title,
         content: parsed.data.content,
-        status: "active",
       })
       .eq("id", existingReview.id)
       .eq("reviewer_id", profileId)
       .select("id")
       .single();
 
-    if (error || !data) return { error: error?.message ?? "Failed to update review" };
+    if (error || !data) return { error: error ? reviewWriteError(error.message) : "The review could not be updated. Please try again" };
     revalidatePath(`/dashboard/ppi/${parsed.data.ppiRequestId}`);
     revalidatePath(`/dashboard/ppi/${parsed.data.ppiRequestId}/review`);
     revalidatePath("/tech/reviews");
@@ -232,7 +272,7 @@ export async function upsertTechnicianReviewFromInput(input: unknown) {
     .select("id")
     .single();
 
-  if (error || !data) return { error: error?.message ?? "Failed to create review" };
+  if (error || !data) return { error: error ? reviewWriteError(error.message) : "The review could not be created. Please try again" };
 
   revalidatePath(`/dashboard/ppi/${parsed.data.ppiRequestId}`);
   revalidatePath(`/dashboard/ppi/${parsed.data.ppiRequestId}/review`);

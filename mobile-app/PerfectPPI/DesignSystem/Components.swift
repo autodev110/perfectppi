@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PrimaryButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var isLoading: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
@@ -18,12 +19,14 @@ struct PrimaryButtonStyle: ButtonStyle {
         .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
         .shadow(color: Theme.Palette.primary.opacity(configuration.isPressed ? 0.15 : 0.35),
                 radius: configuration.isPressed ? 4 : 12, y: configuration.isPressed ? 2 : 6)
-        .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+        .scaleEffect(!reduceMotion && configuration.isPressed ? 0.97 : 1.0)
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
 struct OutlineButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
@@ -38,13 +41,14 @@ struct OutlineButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
                     .stroke(Theme.Palette.primary.opacity(0.45), lineWidth: 1.5)
             )
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+            .scaleEffect(!reduceMotion && configuration.isPressed ? 0.97 : 1.0)
+            .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
 /// Soft, tinted fill button for secondary actions that still want presence.
 struct SoftButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var tint: Color = Theme.Palette.primary
 
     func makeBody(configuration: Configuration) -> some View {
@@ -55,8 +59,8 @@ struct SoftButtonStyle: ButtonStyle {
             .foregroundStyle(tint)
             .background(tint.opacity(0.12))
             .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+            .scaleEffect(!reduceMotion && configuration.isPressed ? 0.97 : 1.0)
+            .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
@@ -119,6 +123,7 @@ struct StatusBadge: View {
             Circle()
                 .fill(color)
                 .frame(width: 6, height: 6)
+                .accessibilityHidden(true)
             Text(text)
                 .font(.caption.weight(.semibold))
         }
@@ -127,6 +132,8 @@ struct StatusBadge: View {
         .background(color.opacity(0.14))
         .foregroundStyle(color)
         .clipShape(Capsule())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Status: \(text)")
     }
 }
 
@@ -143,6 +150,7 @@ struct ErrorView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 34))
                     .foregroundStyle(Theme.Palette.warning)
+                    .accessibilityHidden(true)
             }
             Text("Something went wrong")
                 .font(.title3.weight(.semibold))
@@ -177,6 +185,7 @@ struct EmptyStateCard: View {
                 Image(systemName: systemImage)
                     .font(.system(size: 30, weight: .medium))
                     .foregroundStyle(Theme.Palette.primary)
+                    .accessibilityHidden(true)
             }
             Text(title).font(.headline)
             Text(message)
@@ -193,6 +202,7 @@ struct EmptyStateCard: View {
                 .stroke(Theme.Palette.hairline, lineWidth: 1)
         )
         .shadow(color: Theme.Shadow.color, radius: Theme.Shadow.radius, y: Theme.Shadow.y)
+        .accessibilityElement(children: .combine)
     }
 }
 

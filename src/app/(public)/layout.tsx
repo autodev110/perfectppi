@@ -10,7 +10,7 @@ export default function PublicLayout({
   return (
     <div className="flex min-h-screen flex-col bg-surface">
       <PublicNavbar />
-      <main className="flex-1 pt-16">
+      <main id="main-content" tabIndex={-1} className="flex-1 pt-16 outline-none">
         <PageReveal>{children}</PageReveal>
       </main>
       <Footer />

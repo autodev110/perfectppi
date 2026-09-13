@@ -149,6 +149,11 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
+  :focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 3px;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
   }
@@ -214,6 +219,12 @@
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+    }
+  }
+
+  @media (prefers-contrast: more) {
+    .ghost-border {
+      outline-color: hsl(var(--outline));
     }
   }
 }

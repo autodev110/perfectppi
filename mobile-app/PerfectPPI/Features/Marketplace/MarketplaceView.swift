@@ -1597,6 +1597,7 @@ private struct MyListingsView: View {
                                     } label: {
                                         Image(systemName: "ellipsis.circle")
                                     }
+                                    .accessibilityLabel("Options for \(listing.title)")
                                 }
                             }
                             .padding(.vertical, 4)
@@ -1613,6 +1614,7 @@ private struct MyListingsView: View {
                         Button { showingCreate = true } label: {
                             Image(systemName: "plus")
                         }
+                        .accessibilityLabel("New marketplace listing")
                     }
                 }
                 .sheet(isPresented: $showingCreate) {

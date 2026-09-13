@@ -79,6 +79,7 @@ export function NewPostForm({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [media, setMedia] = useState<File[]>([]);
+  const [mediaDescriptions, setMediaDescriptions] = useState<string[]>([]);
   const [progress, setProgress] = useState<number[]>([]);
   const [draftLocked, setDraftLocked] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +93,7 @@ export function NewPostForm({
     mediaType: "image" | "video";
     contentType: string;
     sortOrder: number;
+    altText: string | null;
   }> | null>(null);
 
   async function handleSubmit(formData: FormData) {
@@ -144,6 +146,7 @@ export function NewPostForm({
             mediaType: file.type.startsWith("video/") ? "video" as const : "image" as const,
             contentType: file.type,
             sortOrder,
+            altText: file.type.startsWith("image/") ? mediaDescriptions[sortOrder]?.trim() || null : null,
           })),
         );
         uploadedMedia.current = uploaded;
@@ -194,6 +197,7 @@ export function NewPostForm({
       setError(`Posts can include up to ${MAX_MEDIA} ${videoAllowed ? "photos or videos" : "photos"}`);
     }
     setMedia((current) => [...current, ...selected.slice(0, available)]);
+    setMediaDescriptions((current) => [...current, ...selected.slice(0, available).map(() => "")]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -348,7 +352,12 @@ export function NewPostForm({
                 file={file}
                 index={index}
                 progress={uploading ? progress[index] ?? 0 : null}
-                onRemove={() => setMedia((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                description={mediaDescriptions[index] ?? ""}
+                onDescriptionChange={(description) => setMediaDescriptions((current) => current.map((value, itemIndex) => itemIndex === index ? description : value))}
+                onRemove={() => {
+                  setMedia((current) => current.filter((_, itemIndex) => itemIndex !== index));
+                  setMediaDescriptions((current) => current.filter((_, itemIndex) => itemIndex !== index));
+                }}
               />
             ))}
           </div>
@@ -438,11 +447,15 @@ function MediaPreview({
   file,
   index,
   progress,
+  description,
+  onDescriptionChange,
   onRemove,
 }: {
   file: File;
   index: number;
   progress: number | null;
+  description: string;
+  onDescriptionChange: (description: string) => void;
   onRemove: () => void;
 }) {
   const [url, setUrl] = useState("");
@@ -453,7 +466,8 @@ function MediaPreview({
   }, [file]);
 
   return (
-    <div className="relative aspect-square overflow-hidden rounded-xl border bg-muted">
+    <div className="space-y-2 rounded-xl border bg-muted p-2">
+      <div className="relative aspect-square overflow-hidden rounded-lg">
       {/* The object URL only exists after the effect runs — an empty `src`
           would otherwise make the browser re-request the current page. */}
       {url ? (
@@ -461,7 +475,7 @@ function MediaPreview({
           <video src={url} className="h-full w-full object-cover" muted playsInline />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={`Selected media ${index + 1}`} className="h-full w-full object-cover" />
+          <img src={url} alt={description} className="h-full w-full object-cover" />
         )
       ) : null}
       <span className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-bold text-white">
@@ -484,6 +498,21 @@ function MediaPreview({
           />
         </div>
       )}
+      </div>
+      {file.type.startsWith("image/") ? (
+        <div>
+          <label htmlFor={`media-description-${index}`} className="sr-only">Description for photo {index + 1}</label>
+          <input
+            id={`media-description-${index}`}
+            type="text"
+            value={description}
+            maxLength={300}
+            onChange={(event) => onDescriptionChange(event.target.value)}
+            placeholder="Describe photo (optional)"
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

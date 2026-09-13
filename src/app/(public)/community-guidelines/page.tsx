@@ -31,7 +31,7 @@ export default function CommunityGuidelinesPage() {
 
       <h2>Be accurate and authentic</h2>
       <p>
-        Use one account and your real ownership context. Do not impersonate another person, shop, or manufacturer; fabricate inspection evidence, mileage, service history, or reviews; conceal a material relationship with a seller or shop; misstate credentials; manipulate ratings; or list a vehicle you are not authorized to sell. Honest positive and negative opinions are welcome.
+        Use one account and your real ownership context. Do not impersonate another person, shop, or manufacturer; fabricate inspection evidence, mileage, service history, or reviews; conceal a material relationship with a seller or shop; misstate credentials; manipulate ratings; pressure or retaliate against someone for an honest review or private inspection dispute; or list a vehicle you are not authorized to sell. Honest positive and negative opinions are welcome.
       </p>
 
       <h2 id="vehicle-safety">Vehicle safety comes first</h2>

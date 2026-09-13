@@ -166,7 +166,7 @@ export default function NewInspectionPage() {
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/ppi">
+          <Link href="/dashboard/ppi" aria-label="Back to inspections">
             <ChevronLeft className="h-5 w-5" />
           </Link>
         </Button>

@@ -44,7 +44,7 @@ export default function PrivacyPage() {
       </p>
       <h3>Transactions, contracts, and support</h3>
       <p>
-        We process order, selected-plan, price, payment-status, Stripe reference, receipt, contract, signature-status, DocuSeal reference, warranty or vehicle-service-contract workflow, support request, and dispute information. Payment card details are entered with the payment provider and are not stored in the PerfectPPI application database.
+        We process order, selected-plan, price, payment-status, Stripe reference, receipt, contract, signature-status, DocuSeal reference, warranty or vehicle-service-contract workflow, support request, and dispute information. For an inspection dispute, this includes the selected reason, your description, status, decision, private resolution note, reviewer action, and audit history. Payment card details are entered with the payment provider and are not stored in the PerfectPPI application database.
       </p>
       <h3>Device and technical information</h3>
       <p>
@@ -95,6 +95,9 @@ export default function PrivacyPage() {
       <h3>Reports, moderation, and moderator access</h3>
       <p>
         A valid first report hides a post or comment from all members while a trained member of the PerfectPPI team reviews it. Moderators see the reported content, its version history, attached media, the report reasons, the author&apos;s prior moderation history, and internal notes; reporter identity is visible only to team members holding a separately granted permission. Every moderator view of restricted media and every decision, note, claim, and enforcement action is logged. Decisions are made by people, not by automated systems, and authors can appeal removals.
+      </p>
+      <p>
+        A requester may privately dispute a completed technician inspection during the displayed dispute window. While the dispute is open, creating or editing the linked public technician review is paused, and an existing active review is hidden. An administrator records the outcome and whether a review hidden specifically by that dispute is restored; a review hidden for a separate moderation reason is never restored automatically.
       </p>
 
       <h2>8. Cookies, analytics, sale, sharing, and opt-out signals</h2>

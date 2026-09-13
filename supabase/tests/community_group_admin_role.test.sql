@@ -22,7 +22,15 @@ INSERT INTO auth.users (
   ('79000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated', 'ga-siteadmin@example.test', '', '{}', '{"username":"GaSiteAdmin"}', now(), now());
 
-UPDATE public.profiles SET is_public = true, created_at = now() - interval '30 days' WHERE auth_user_id::text LIKE '79000000-%';
+UPDATE public.profiles profile
+SET username = users.raw_user_meta_data->>'username',
+    username_normalized = lower(users.raw_user_meta_data->>'username'),
+    username_state = 'claimed',
+    is_public = true,
+    created_at = now() - interval '30 days'
+FROM auth.users users
+WHERE profile.auth_user_id = users.id
+  AND profile.auth_user_id::text LIKE '79000000-%';
 UPDATE public.profiles SET role = 'admin' WHERE auth_user_id = '79000000-0000-0000-0000-000000000007';
 
 CREATE TEMP TABLE ga AS

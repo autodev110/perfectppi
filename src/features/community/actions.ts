@@ -86,6 +86,7 @@ const postMediaSchema = z.object({
     mediaType: z.enum(["image", "video"]),
     contentType: z.string().regex(/^(image|video)\//),
     sortOrder: z.number().int().min(0).max(MAX_POST_MEDIA - 1),
+    altText: z.string().trim().max(300, "Photo descriptions can be up to 300 characters").optional().nullable(),
   })).min(1).max(MAX_POST_MEDIA).refine(
     (items) => new Set(items.map((item) => item.url)).size === items.length,
     "The same upload cannot be attached more than once",
@@ -993,6 +994,7 @@ export async function addCommunityPostMedia(input: unknown) {
       media_type: item.mediaType,
       content_type: item.contentType,
       sort_order: existing + index,
+      alt_text: item.mediaType === "image" && item.altText ? item.altText : null,
       moderation_status: "pending_scan",
     }));
 

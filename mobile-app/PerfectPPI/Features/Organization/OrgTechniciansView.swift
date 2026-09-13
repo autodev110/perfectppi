@@ -47,6 +47,7 @@ struct OrgTechniciansView: View {
                         } label: {
                             Image(systemName: "person.badge.plus")
                         }
+                        .accessibilityLabel("Invite technician")
                     }
                 }
                 .sheet(isPresented: $presentInvite) {

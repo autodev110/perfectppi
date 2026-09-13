@@ -636,6 +636,7 @@ struct CommunityPostMedia: Codable, Identifiable, Hashable {
     let mediaType: String
     let contentType: String
     let sortOrder: Int
+    let altText: String?
     let moderationStatus: String?
     let moderationReason: String?
     let createdAt: Date?
@@ -653,6 +654,7 @@ extension CommunityPostMedia {
             mediaType: mediaType,
             contentType: contentType,
             sortOrder: value,
+            altText: altText,
             moderationStatus: moderationStatus,
             moderationReason: moderationReason,
             createdAt: createdAt
@@ -1175,11 +1177,29 @@ struct ReviewEligibility: Codable, Hashable {
     let technicianProfileId: String?
     let existingReview: TechnicianReview?
     let canReview: Bool
+    let canOpenDispute: Bool?
+    let disputeDeadline: Date?
+    let activeDispute: PpiServiceDispute?
+    let serviceDispute: PpiServiceDispute?
+    let unavailableReason: String?
 }
 
 struct ReviewEligibilityResponse: Codable, Hashable {
     let eligibility: ReviewEligibility?
     let review: TechnicianReview?
+}
+
+struct PpiServiceDispute: Codable, Identifiable, Hashable {
+    let id: String
+    let ppiRequestId: String?
+    let reasonCode: String
+    let details: String
+    let status: String
+    let outcome: String?
+    let resolutionNote: String?
+    let reviewAction: String?
+    let openedAt: Date
+    let resolvedAt: Date?
 }
 
 // MARK: - PPI Request

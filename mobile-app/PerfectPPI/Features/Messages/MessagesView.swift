@@ -53,6 +53,7 @@ struct MessagesView: View {
                                     .frame(width: 42, height: 42)
                                     .background(Theme.brandGradient)
                                     .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                                    .accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(selectedBox == 0 ? "Your conversations" : "Message requests")
                                         .font(.headline)
@@ -117,6 +118,7 @@ struct MessagesView: View {
                     } label: {
                         Image(systemName: "square.and.pencil")
                     }
+                    .accessibilityLabel("New message")
                 }
                 .sheet(isPresented: $showingComposer) {
                     NewConversationView {
@@ -147,6 +149,7 @@ private struct ConversationRow: View {
                         .frame(width: 12, height: 12)
                         .overlay(Circle().stroke(Theme.Palette.card, lineWidth: 2))
                         .offset(x: 2, y: -2)
+                        .accessibilityHidden(true)
                 }
             }
 
@@ -189,6 +192,7 @@ private struct ConversationRow: View {
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.tertiary)
                 .padding(.top, 5)
+                .accessibilityHidden(true)
         }
         .padding(14)
         .background(Theme.Palette.card)
@@ -198,6 +202,7 @@ private struct ConversationRow: View {
                 .stroke(conversation.unreadCount > 0 ? Theme.Palette.primary.opacity(0.22) : Theme.Palette.hairline, lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
+        .accessibilityValue(conversation.unreadCount > 0 ? "\(conversation.unreadCount) unread" : "Read")
     }
 
     /// Car name lives on its own line below, so the title is people only.
@@ -339,6 +344,7 @@ struct MessageThreadView: View {
                                             Image(systemName: "xmark.circle.fill")
                                         }
                                         .buttonStyle(.plain)
+                                        .accessibilityLabel("Remove attachment")
                                     }
                                 }
                                 if let label = uploadProgress.label {
@@ -368,6 +374,7 @@ struct MessageThreadView: View {
                                 Image(systemName: "paperclip")
                                     .frame(width: 32, height: 32)
                             }
+                            .accessibilityLabel("Add attachment")
                             .disabled(sending)
 
                             TextField("Message", text: $draft, axis: .vertical)
@@ -378,6 +385,7 @@ struct MessageThreadView: View {
                             } label: {
                                 Image(systemName: sending ? "hourglass" : "paperplane.fill")
                             }
+                            .accessibilityLabel(sending ? "Sending message" : "Send message")
                             .disabled(sending || (draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachment == nil))
                         }
 

@@ -166,7 +166,9 @@ private struct UsernameCompletionView: View {
                             .accessibilityLabel("Username")
                         if availability == .checking { ProgressView().controlSize(.small) }
                         if availability == .available {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                                .accessibilityHidden(true)
                         }
                     }
                     .padding(16)
@@ -181,6 +183,11 @@ private struct UsernameCompletionView: View {
                         Text("Username is unavailable.")
                             .font(.callout)
                             .foregroundStyle(Theme.Palette.danger)
+                    }
+                    if availability == .available {
+                        Text("Username is available.")
+                            .font(.callout)
+                            .foregroundStyle(Theme.Palette.success)
                     }
                     if let error {
                         Text(error).foregroundStyle(Theme.Palette.danger)

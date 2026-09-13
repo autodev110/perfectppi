@@ -127,6 +127,7 @@ enum CommunityAPI {
         let mediaType: String
         let contentType: String
         let sortOrder: Int
+        let altText: String?
     }
 
     struct AddMediaPayload: Encodable {

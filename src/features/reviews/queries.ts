@@ -150,6 +150,7 @@ export async function getReviewEligibilityForRequest(ppiRequestId: string) {
       requester_id,
       assigned_tech_id,
       status,
+      updated_at,
       vehicle:vehicles!ppi_requests_vehicle_id_fkey(id, year, make, model, trim)
     `)
     .eq("id", ppiRequestId)
@@ -168,6 +169,11 @@ export async function getReviewEligibilityForRequest(ppiRequestId: string) {
       technicianProfileId: null,
       existingReview: null,
       canReview: false,
+      canOpenDispute: false,
+      disputeDeadline: null,
+      activeDispute: null,
+      serviceDispute: null,
+      unavailableReason: "Only completed technician-performed inspections can be reviewed.",
     };
   }
 
@@ -178,10 +184,15 @@ export async function getReviewEligibilityForRequest(ppiRequestId: string) {
       technicianProfileId: null,
       existingReview: null,
       canReview: false,
+      canOpenDispute: false,
+      disputeDeadline: null,
+      activeDispute: null,
+      serviceDispute: null,
+      unavailableReason: "The technician profile is unavailable.",
     };
   }
 
-  const [{ data: technicianProfile }, { data: existingReview }] = await Promise.all([
+  const [{ data: technicianProfile }, { data: existingReview }, { data: serviceDispute }, { data: completedSubmission }] = await Promise.all([
     admin
       .from("technician_profiles")
       .select("id")
@@ -193,13 +204,42 @@ export async function getReviewEligibilityForRequest(ppiRequestId: string) {
       .eq("ppi_request_id", request.id)
       .eq("reviewer_id", profile.id)
       .maybeSingle(),
+    admin
+      .from("ppi_service_disputes")
+      .select("id, reason_code, details, status, opened_at, outcome, resolution_note, review_action, resolved_at")
+      .eq("ppi_request_id", request.id)
+      .maybeSingle(),
+    admin
+      .from("ppi_submissions")
+      .select("completed_at")
+      .eq("ppi_request_id", request.id)
+      .eq("status", "completed")
+      .order("completed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
+
+  const completionTime = completedSubmission?.completed_at ?? request.updated_at;
+  const disputeDeadline = new Date(new Date(completionTime).getTime() + 30 * 24 * 60 * 60 * 1000);
+  const disputeWindowOpen = Number.isFinite(disputeDeadline.getTime()) && disputeDeadline > new Date();
+  const activeDispute = serviceDispute?.status === "open" ? serviceDispute : null;
+  const reviewUnderModeration = existingReview?.status === "hidden" && !existingReview.dispute_hold_id;
+  const canReview = !!technicianProfile && !activeDispute && !reviewUnderModeration;
 
   return {
     request,
     technicianProfileId: technicianProfile?.id ?? null,
     existingReview: (existingReview as TechnicianReview | null) ?? null,
-    canReview: !!technicianProfile,
+    canReview,
+    canOpenDispute: !!technicianProfile && disputeWindowOpen && !serviceDispute,
+    disputeDeadline: disputeWindowOpen ? disputeDeadline.toISOString() : null,
+    activeDispute: activeDispute ?? null,
+    serviceDispute: serviceDispute ?? null,
+    unavailableReason: activeDispute
+      ? "Your review is paused while the inspection dispute is open."
+      : reviewUnderModeration
+        ? "This review cannot be edited while it is hidden by content moderation."
+        : canReview ? null : "The technician profile is unavailable.",
   };
 }
 

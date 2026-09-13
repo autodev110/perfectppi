@@ -46,6 +46,7 @@ struct MediaPackagesView: View {
                     Button { showingCreate = true } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel("New media package")
                 }
                 .sheet(isPresented: $showingCreate) {
                     NewMediaPackageView {

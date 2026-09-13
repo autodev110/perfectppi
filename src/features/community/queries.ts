@@ -48,7 +48,7 @@ type CommunityFeedListing = Pick<
 >;
 type CommunityFeedMedia = Pick<
   CommunityPostMediaRow,
-  "id" | "post_id" | "url" | "media_type" | "content_type" | "sort_order" | "created_at"
+  "id" | "post_id" | "url" | "media_type" | "content_type" | "sort_order" | "alt_text" | "created_at"
 >;
 type CommunityFeedComment = Pick<
   CommunityCommentRow,
@@ -357,6 +357,7 @@ function toCommunityFeedPost(
         media_type: item.media_type,
         content_type: item.content_type,
         sort_order: item.sort_order,
+        alt_text: item.alt_text,
         created_at: item.created_at,
       })),
     comments: visibleComments

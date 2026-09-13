@@ -119,7 +119,7 @@ export function PostMediaManager({
                 </>
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.url} alt={`Post media ${index + 1}`} className="h-full w-full object-cover" />
+                <img src={item.url} alt={item.alt_text ?? ""} className="h-full w-full object-cover" />
               )}
               {item.moderation_status === "legal_hold" || locked ? null : <Button
                 type="button"

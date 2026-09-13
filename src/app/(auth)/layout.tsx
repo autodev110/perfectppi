@@ -15,7 +15,7 @@ export default function AuthLayout({
         <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-on-tertiary-container/5 rounded-full blur-[120px]" />
       </div>
 
-      <main className="w-full max-w-[1100px] grid md:grid-cols-2 bg-surface-container-lowest rounded-[2rem] shadow-2xl overflow-hidden min-h-[700px]">
+      <main id="main-content" tabIndex={-1} className="w-full max-w-[1100px] grid md:grid-cols-2 bg-surface-container-lowest rounded-[2rem] shadow-2xl overflow-hidden min-h-[700px] outline-none">
         {/* Left — Branding panel */}
         <section className="hidden md:flex flex-col justify-between p-12 bg-primary-container text-white relative overflow-hidden">
           <div className="relative z-10">

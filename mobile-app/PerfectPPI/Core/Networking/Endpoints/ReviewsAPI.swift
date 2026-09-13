@@ -36,4 +36,25 @@ enum ReviewsAPI {
             body: UpsertPayload(rating: rating, title: title, content: content)
         )
     }
+
+    private struct OpenDisputePayload: Encodable {
+        let reasonCode: String
+        let details: String
+    }
+
+    static func openDispute(requestId: String, reasonCode: String, details: String) async throws -> PpiServiceDispute {
+        try await APIClient.shared.postCamel(
+            "/api/ppi/requests/\(requestId)/dispute",
+            body: OpenDisputePayload(reasonCode: reasonCode, details: details)
+        )
+    }
+
+    private struct WithdrawDisputePayload: Encodable { let disputeId: String }
+
+    static func withdrawDispute(requestId: String, disputeId: String) async throws -> PpiServiceDispute {
+        try await APIClient.shared.delete(
+            "/api/ppi/requests/\(requestId)/dispute",
+            body: WithdrawDisputePayload(disputeId: disputeId)
+        )
+    }
 }

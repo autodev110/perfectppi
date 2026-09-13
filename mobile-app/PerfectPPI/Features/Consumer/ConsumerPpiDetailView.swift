@@ -62,7 +62,7 @@ struct ConsumerPpiDetailView: View {
                             Button {
                                 showingReview = true
                             } label: {
-                                Label("Review Technician", systemImage: "star")
+                                Label("Review or report concern", systemImage: "star")
                             }
                             .buttonStyle(OutlineButtonStyle())
                         }
