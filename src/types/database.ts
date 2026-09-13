@@ -6324,6 +6324,23 @@ export type Database = {
         }
         Returns: { listing_id: string; saved_at: string; listing_status: Database["public"]["Enums"]["listing_status"] }[]
       }
+      list_marketplace_listing_ids_cursor: {
+        Args: {
+          p_viewer_id?: string | null
+          p_filters?: Json
+          p_sort?: string
+          p_limit?: number
+          p_before_numeric?: number | null
+          p_before_timestamp?: string | null
+          p_before_listing_id?: string | null
+        }
+        Returns: {
+          listing_id: string
+          sort_numeric: number | null
+          sort_timestamp: string | null
+          total_count: number
+        }[]
+      }
       set_community_post_save: {
         Args: { p_actor_profile_id: string; p_post_id: string; p_saved: boolean }
         Returns: Json

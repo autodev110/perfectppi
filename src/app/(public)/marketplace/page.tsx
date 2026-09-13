@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getMarketplaceListingsPage } from "@/features/marketplace/queries";
+import { getMarketplaceListingsCursorPage } from "@/features/marketplace/queries";
 import { getSavedSearch, listSavedSearches } from "@/features/marketplace/saved-searches";
 import { getCurrentSocialProfileId } from "@/features/social/relationships";
 import { ListingSaveButton } from "@/components/shared/listing-save-button";
@@ -22,6 +22,7 @@ import {
   parseMarketplaceFilters,
 } from "@/lib/marketplace/filters";
 import { ArrowRight, Car, ClipboardCheck, Gauge, MapPin, Search, ShieldCheck, SlidersHorizontal, Wrench, X } from "lucide-react";
+import { decodeMarketplaceCursor } from "@/features/marketplace/cursor";
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -39,15 +40,17 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
   const savedParam = typeof params.saved === "string" ? params.saved : null;
   const savedSearch = viewerId && savedParam ? await getSavedSearch(savedParam) : null;
   const filters = savedSearch ? savedSearch.filters : parseMarketplaceFilters(params);
-  const requestedPage = Number(typeof params.page === "string" ? params.page : "1");
+  const rawCursor = typeof params.cursor === "string" ? params.cursor : null;
+  const cursor = rawCursor ? decodeMarketplaceCursor(rawCursor, filters) : null;
+  const isContinuation = cursor !== null;
   const [results, savedSearches] = await Promise.all([
-    getMarketplaceListingsPage(filters, Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1),
+    getMarketplaceListingsCursorPage(filters, cursor),
     viewerId ? listSavedSearches() : Promise.resolve([]),
   ]);
   const listings = results.items;
-  const pageHref = (page: number) => {
+  const pageHref = (cursor?: string) => {
     const search = savedSearch ? new URLSearchParams({ saved: savedSearch.id }) : filtersToSearchParams(filters);
-    if (page > 1) search.set("page", String(page));
+    if (cursor) search.set("cursor", cursor);
     const qs = search.toString();
     return qs ? `/marketplace?${qs}` : "/marketplace";
   };
@@ -201,7 +204,7 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
               {results.total === 0
                 ? "No listings found"
                 : `${results.total} listing${results.total !== 1 ? "s" : ""} found`}
-              {results.total > results.per_page ? ` · Page ${results.page}` : ""}
+              {isContinuation ? " · More results" : ""}
               {hasFilters && " · Filtered"}
             </p>
             {hasFilters && (
@@ -339,11 +342,11 @@ export default async function MarketplacePage({ searchParams }: PageProps) {
               })}
             </div>
           )}
-          {results.total > 0 && (results.page > 1 || results.has_more) ? (
+          {results.total > 0 && (isContinuation || results.has_more) ? (
             <nav className="mt-8 flex items-center justify-between" aria-label="Listing pages">
-              {results.page > 1 ? <Button asChild variant="outline"><Link href={pageHref(results.page - 1)}>Previous</Link></Button> : <span />}
+              {isContinuation ? <Button asChild variant="outline"><Link href={pageHref()}>Back to first results</Link></Button> : <span />}
               {results.has_more ? (
-                <Button asChild variant="outline"><Link href={pageHref(results.page + 1)}>Next</Link></Button>
+                <Button asChild variant="outline"><Link href={pageHref(results.next_cursor ?? undefined)}>More results</Link></Button>
               ) : (
                 <p className="text-xs font-semibold text-on-surface-variant">That&rsquo;s every listing{hasFilters ? " matching these filters" : ""}.</p>
               )}

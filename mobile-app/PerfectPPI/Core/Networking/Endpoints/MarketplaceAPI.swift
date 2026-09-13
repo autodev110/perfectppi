@@ -112,6 +112,7 @@ struct MarketplaceListingPage: Decodable {
     let page: Int
     let total: Int
     let hasMore: Bool
+    let nextCursor: String?
 }
 
 enum MarketplaceAPI {
@@ -124,6 +125,12 @@ enum MarketplaceAPI {
             "/api/marketplace/listings",
             query: filters.queryItems + [URLQueryItem(name: "page", value: String(max(page, 1)))]
         )
+    }
+
+    static func listCursorPage(filters: MarketplaceFilters, cursor: String? = nil) async throws -> MarketplaceListingPage {
+        var query = filters.queryItems + [URLQueryItem(name: "pagination", value: "cursor")]
+        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await APIClient.shared.get("/api/marketplace/listings", query: query)
     }
 
     static func list(query: String?) async throws -> [MarketplaceListing] {

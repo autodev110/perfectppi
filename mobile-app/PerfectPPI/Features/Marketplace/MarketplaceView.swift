@@ -16,8 +16,8 @@ struct MarketplaceView: View {
     @State private var notice: String?
     /// Pages after the first, appended by "Load more" (plan 25.1).
     @State private var morePages: [MarketplaceListing] = []
-    @State private var lastPage: Int = 1
-    @State private var moreAvailable: Bool?
+    @State private var nextCursor: String?
+    @State private var paginationStarted = false
     @State private var loadingMore = false
     @State private var loadMoreError: String?
 
@@ -28,10 +28,11 @@ struct MarketplaceView: View {
 
     var body: some View {
         AsyncContent(
-            load: { try await MarketplaceAPI.listPage(filters: filters, page: 1) },
+            load: { try await MarketplaceAPI.listCursorPage(filters: filters) },
             loaded: { firstPage in
-                let listings = firstPage.items + morePages
-                let hasMore = moreAvailable ?? firstPage.hasMore
+                let firstPageIds = Set(firstPage.items.map(\.id))
+                let listings = firstPage.items + morePages.filter { !firstPageIds.contains($0.id) }
+                let cursor = paginationStarted ? nextCursor : firstPage.nextCursor
                 VStack(spacing: 0) {
                     if !savedSearches.isEmpty || filters.narrowsResults {
                         filterSummaryBar
@@ -73,9 +74,9 @@ struct MarketplaceView: View {
                                 }
                             }
                             Section {
-                                if hasMore {
+                                if let cursor {
                                     Button {
-                                        Task { await loadMore() }
+                                        Task { await loadMore(after: cursor) }
                                     } label: {
                                         HStack {
                                             Spacer()
@@ -89,7 +90,7 @@ struct MarketplaceView: View {
                                         }
                                     }
                                     .disabled(loadingMore)
-                                    .onAppear { Task { await loadMore() } }
+                                    .onAppear { Task { await loadMore(after: cursor) } }
                                     if let loadMoreError {
                                         Text(loadMoreError)
                                             .font(.caption)
@@ -223,23 +224,23 @@ struct MarketplaceView: View {
     /// Restart from page one; the appended pages belong to the old query.
     private func refresh() {
         morePages = []
-        lastPage = 1
-        moreAvailable = nil
+        nextCursor = nil
+        paginationStarted = false
         loadMoreError = nil
         reloadToken = UUID()
     }
 
     @MainActor
-    private func loadMore() async {
-        guard !loadingMore, moreAvailable != false else { return }
+    private func loadMore(after cursor: String) async {
+        guard !loadingMore else { return }
         loadingMore = true
         defer { loadingMore = false }
         do {
-            let next = try await MarketplaceAPI.listPage(filters: filters, page: lastPage + 1)
+            let next = try await MarketplaceAPI.listCursorPage(filters: filters, cursor: cursor)
             let known = Set(morePages.map(\.id))
             morePages.append(contentsOf: next.items.filter { !known.contains($0.id) })
-            lastPage = next.page
-            moreAvailable = next.hasMore
+            nextCursor = next.nextCursor
+            paginationStarted = true
             loadMoreError = nil
         } catch {
             loadMoreError = error.localizedDescription

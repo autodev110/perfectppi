@@ -1,9 +1,15 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import type { Database } from "@/types/database";
+import type { Database, Json } from "@/types/database";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 import { getCurrentSocialProfileId } from "@/features/social/relationships";
 import { encodeSavedCursor, type SavedCursor } from "@/features/saved/cursor";
+import {
+  encodeMarketplaceCursor,
+  marketplaceFilterFingerprint,
+  marketplaceSort,
+  type MarketplaceCursor,
+} from "@/features/marketplace/cursor";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -67,7 +73,7 @@ const LISTING_SELECT = `
 
 type ListingRow = Omit<MarketplaceListing, "inspection_summary" | "inspection_request" | "viewer_is_seller" | "saved_by_viewer" | "seller_type">;
 
-import type { MarketplaceFilters } from "@/lib/marketplace/filters";
+import { cleanFilters, type MarketplaceFilters } from "@/lib/marketplace/filters";
 import type { InspectionReport } from "@/lib/marketplace/inspection-report";
 import { getInspectionReport } from "@/features/marketplace/inspection-sharing";
 export type { MarketplaceFilters } from "@/lib/marketplace/filters";
@@ -401,6 +407,10 @@ export type MarketplaceListingPage = {
   has_more: boolean;
 };
 
+export type MarketplaceListingCursorPage = MarketplaceListingPage & {
+  next_cursor: string | null;
+};
+
 /** One page of the browse results (plan 25.1); `page` is clamped to 1+. */
 export async function getMarketplaceListingsPage(
   filters: MarketplaceFilters | undefined,
@@ -417,6 +427,76 @@ export async function getMarketplaceListingsPage(
     per_page: size,
     total: all.length,
     has_more: start + size < all.length,
+  };
+}
+
+async function hydrateMarketplaceListingIds(viewerId: string | null, ids: string[]) {
+  if (ids.length === 0) return [];
+  const { data, error } = await createAdminClient()
+    .from("marketplace_listings")
+    .select(LISTING_SELECT)
+    .in("id", ids);
+  if (error) {
+    console.error("[marketplace] listing hydration failed", error.message);
+    throw new Error("Marketplace listings are temporarily unavailable.");
+  }
+  const rows = (data ?? []) as unknown as ListingRow[];
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const ordered = ids.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [row] : [];
+  });
+  const cleaned = await Promise.all(ordered.map((item) => cleanListingMedia(item)));
+  return addInspectionTrust(cleaned, viewerId);
+}
+
+export async function getMarketplaceListingsCursorPage(
+  filters: MarketplaceFilters = {},
+  cursor: MarketplaceCursor | null = null,
+  perPage = MARKETPLACE_PAGE_SIZE,
+): Promise<MarketplaceListingCursorPage> {
+  const viewerId = await getCurrentSocialProfileId();
+  const size = Math.min(Math.max(Number.isInteger(perPage) ? perPage : MARKETPLACE_PAGE_SIZE, 1), 99);
+  const cleanedFilters = cleanFilters(filters);
+  const sort = marketplaceSort(cleanedFilters);
+  const { data, error } = await createAdminClient().rpc("list_marketplace_listing_ids_cursor", {
+    p_viewer_id: viewerId,
+    p_filters: cleanedFilters as Json,
+    p_sort: sort,
+    p_limit: size + 1,
+    p_before_numeric: cursor && "numeric" in cursor ? cursor.numeric : null,
+    p_before_timestamp: cursor && "timestamp" in cursor ? cursor.timestamp : null,
+    p_before_listing_id: cursor?.id ?? null,
+  });
+  if (error) {
+    console.error("[marketplace] listing cursor failed", error.message);
+    throw new Error("Marketplace listings are temporarily unavailable.");
+  }
+  const pageRows = (data ?? []).slice(0, size);
+  const boundary = (data?.length ?? 0) > size ? pageRows.at(-1) : null;
+  const fingerprint = marketplaceFilterFingerprint(cleanedFilters);
+  const nextCursor = boundary
+    ? sort === "newest" || sort === "oldest" || sort === "recently_inspected"
+      ? boundary.sort_timestamp
+        ? encodeMarketplaceCursor({
+          v: 1, kind: "marketplace", filters: fingerprint,
+          sort, timestamp: boundary.sort_timestamp, id: boundary.listing_id,
+        })
+        : null
+      : boundary.sort_numeric !== null
+        ? encodeMarketplaceCursor({
+          v: 1, kind: "marketplace", filters: fingerprint,
+          sort, numeric: boundary.sort_numeric, id: boundary.listing_id,
+        })
+        : null
+    : null;
+  return {
+    items: await hydrateMarketplaceListingIds(viewerId, pageRows.map((row) => row.listing_id)),
+    page: 1,
+    per_page: size,
+    total: data?.[0]?.total_count ?? 0,
+    has_more: Boolean(nextCursor),
+    next_cursor: nextCursor,
   };
 }
 
