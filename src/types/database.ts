@@ -6538,6 +6538,17 @@ export type Database = {
         Args: { p_viewer_id: string; p_group_id: string; p_limit?: number; p_offset?: number; p_exclude_pinned?: boolean }
         Returns: { post_id: string }[]
       }
+      social_visible_community_group_post_ids_cursor: {
+        Args: {
+          p_viewer_id: string
+          p_group_id: string
+          p_limit?: number
+          p_before_created_at?: string | null
+          p_before_post_id?: string | null
+          p_exclude_pinned?: boolean
+        }
+        Returns: { post_id: string; created_at: string }[]
+      }
       social_visible_community_group_pinned_post_ids: {
         Args: { p_viewer_id: string; p_group_id: string }
         Returns: { post_id: string }[]
@@ -6545,6 +6556,17 @@ export type Database = {
       search_group_posts: {
         Args: { p_viewer_id: string; p_group_id: string; p_query: string; p_limit?: number; p_offset?: number }
         Returns: { post_id: string }[]
+      }
+      search_group_posts_cursor: {
+        Args: {
+          p_viewer_id: string
+          p_group_id: string
+          p_query: string
+          p_limit?: number
+          p_before_created_at?: string | null
+          p_before_post_id?: string | null
+        }
+        Returns: { post_id: string; created_at: string }[]
       }
       list_group_members: {
         Args: { p_viewer_id: string; p_group_id: string; p_limit?: number; p_offset?: number }
@@ -6556,6 +6578,26 @@ export type Database = {
           role: Database["public"]["Enums"]["community_group_role"]
           joined_at: string
           posting_restricted_until: string | null
+        }[]
+      }
+      list_group_members_cursor: {
+        Args: {
+          p_viewer_id: string
+          p_group_id: string
+          p_limit?: number
+          p_before_role_rank?: number | null
+          p_before_joined_at?: string | null
+          p_before_profile_id?: string | null
+        }
+        Returns: {
+          profile_id: string
+          username: string | null
+          display_name: string | null
+          avatar_url: string | null
+          role: Database["public"]["Enums"]["community_group_role"]
+          joined_at: string
+          posting_restricted_until: string | null
+          role_rank: number
         }[]
       }
       acknowledge_community_group_rules: {
@@ -6578,6 +6620,17 @@ export type Database = {
       }
       list_community_group_faq: {
         Args: { p_viewer_id: string; p_group_id: string; p_query?: string | null; p_limit?: number; p_offset?: number }
+        Returns: Database["public"]["Tables"]["community_group_faq_entries"]["Row"][]
+      }
+      list_community_group_faq_cursor: {
+        Args: {
+          p_viewer_id: string
+          p_group_id: string
+          p_query?: string | null
+          p_limit?: number
+          p_before_updated_at?: string | null
+          p_before_entry_id?: string | null
+        }
         Returns: Database["public"]["Tables"]["community_group_faq_entries"]["Row"][]
       }
       upsert_community_group_faq: {

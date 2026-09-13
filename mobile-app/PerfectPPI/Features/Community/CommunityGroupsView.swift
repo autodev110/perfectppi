@@ -324,6 +324,8 @@ private struct CommunityGroupFAQView: View {
     @State private var entries: [CommunityGroupFAQEntry] = []
     @State private var query = ""
     @State private var loading = true
+    @State private var loadingMore = false
+    @State private var nextCursor: String?
     @State private var reloadToken = UUID()
     @State private var showingAdd = false
     @State private var error: String?
@@ -355,6 +357,18 @@ private struct CommunityGroupFAQView: View {
                         }
                     }
                 }
+                if let nextCursor {
+                    Button {
+                        Task { await loadMore(after: nextCursor) }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            if loadingMore { ProgressView() } else { Text("Load more") }
+                            Spacer()
+                        }
+                    }
+                    .disabled(loadingMore)
+                }
             }
             if let error { Text(error).foregroundStyle(Theme.Palette.danger) }
         }
@@ -380,9 +394,30 @@ private struct CommunityGroupFAQView: View {
     @MainActor
     private func load() async {
         loading = true
+        nextCursor = nil
         defer { loading = false }
         do {
-            entries = try await CommunityAPI.groupFAQ(slug: group.slug, query: query).entries
+            let page = try await CommunityAPI.groupFAQPage(slug: group.slug, query: query)
+            entries = page.entries
+            nextCursor = page.nextCursor
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func loadMore(after cursor: String) async {
+        guard !loadingMore else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        let requestedQuery = query
+        do {
+            let page = try await CommunityAPI.groupFAQPage(slug: group.slug, query: requestedQuery, cursor: cursor)
+            guard requestedQuery == query else { return }
+            let existing = Set(entries.map(\.id))
+            entries.append(contentsOf: page.entries.filter { !existing.contains($0.id) })
+            nextCursor = page.nextCursor
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -456,16 +491,22 @@ struct CommunityGroupDetailView: View {
     @State private var showingSlowMode = false
     @State private var searchQuery = ""
     @State private var searchResults: [CommunityPost]?
+    @State private var searchNextCursor: String?
+    @State private var loadingMoreSearch = false
     @State private var searching = false
     @State private var searchTask: Task<Void, Never>?
     @State private var error: String?
     @State private var composingRequest = false
     @State private var requestMessage = ""
     @State private var requestGroupId: String?
+    @State private var additionalPosts: [CommunityPost] = []
+    @State private var nextPostCursor: String?
+    @State private var postPaginationStarted = false
+    @State private var loadingMorePosts = false
 
     var body: some View {
         AsyncContent(
-            load: { try await CommunityAPI.group(slug: slug) },
+            load: { try await CommunityAPI.groupPage(slug: slug) },
             loaded: { detail in content(detail) },
             failure: { error, retry in
                 ErrorView(message: error.localizedDescription, retry: retry)
@@ -491,6 +532,9 @@ struct CommunityGroupDetailView: View {
     @ViewBuilder
     private func content(_ detail: CommunityGroupDetail) -> some View {
         let canModerate = detail.group.moderates
+        let firstPageIds = Set(detail.posts.map(\.id))
+        let posts = detail.posts + additionalPosts.filter { !firstPageIds.contains($0.id) }
+        let postCursor = postPaginationStarted ? nextPostCursor : detail.nextCursor
         List {
             if let cover = detail.group.coverUrl, let coverURL = URL(string: cover) {
                 Section {
@@ -558,7 +602,7 @@ struct CommunityGroupDetailView: View {
                 if canModerate && (detail.group.requiresRequest || (detail.group.pendingRequestCount ?? 0) > 0) {
                     NavigationLink {
                         CommunityGroupJoinRequestsView(group: detail.group) {
-                            reloadToken = UUID()
+                            reload()
                             onMembershipChanged()
                         }
                     } label: {
@@ -612,7 +656,11 @@ struct CommunityGroupDetailView: View {
                             .onChange(of: searchQuery) { _, _ in scheduleSearch() }
                         if searching { ProgressView().controlSize(.small) }
                         else if !searchQuery.isEmpty {
-                            Button { searchQuery = ""; searchResults = nil } label: {
+                            Button {
+                                searchQuery = ""
+                                searchResults = nil
+                                searchNextCursor = nil
+                            } label: {
                                 Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
@@ -629,6 +677,18 @@ struct CommunityGroupDetailView: View {
                     ForEach(results) { post in
                         postLink(post, slug: detail.group.slug, canModerate: canModerate)
                     }
+                    if let searchNextCursor {
+                        Button {
+                            Task { await loadMoreSearchResults(after: searchNextCursor) }
+                        } label: {
+                            HStack {
+                                Spacer()
+                                if loadingMoreSearch { ProgressView() } else { Text("Load more results") }
+                                Spacer()
+                            }
+                        }
+                        .disabled(loadingMoreSearch)
+                    }
                 }
             } else {
                 if let pinned = detail.pinned, !pinned.isEmpty {
@@ -642,12 +702,24 @@ struct CommunityGroupDetailView: View {
                 }
 
                 Section("Posts") {
-                    if detail.posts.isEmpty {
+                    if posts.isEmpty {
                         Text("No posts in this group yet.").foregroundStyle(.secondary)
                     } else {
-                        ForEach(detail.posts) { post in
+                        ForEach(posts) { post in
                             postLink(post, slug: detail.group.slug, canModerate: canModerate)
                         }
+                    }
+                    if let postCursor {
+                        Button {
+                            Task { await loadNextPosts(after: postCursor) }
+                        } label: {
+                            HStack {
+                                Spacer()
+                                if loadingMorePosts { ProgressView() } else { Text("Load more posts") }
+                                Spacer()
+                            }
+                        }
+                        .disabled(loadingMorePosts)
                     }
                 }
             }
@@ -685,20 +757,20 @@ struct CommunityGroupDetailView: View {
         }
         .sheet(isPresented: $showingComposer) {
             NewCommunityPostView(preselectedGroupId: detail.group.id) {
-                reloadToken = UUID()
+                reload()
             }
         }
         .sheet(isPresented: $showingSettings) {
             NavigationStack {
                 GroupSettingsView(mode: .edit(slug: detail.group.slug), initial: detail.group) { _ in
-                    reloadToken = UUID()
+                    reload()
                     onMembershipChanged()
                 }
             }
         }
         .sheet(isPresented: $showingSlowMode) {
             NavigationStack {
-                CommunityGroupSlowModeView(group: detail.group) { reloadToken = UUID() }
+                CommunityGroupSlowModeView(group: detail.group) { reload() }
             }
         }
         .confirmationDialog("Archive this group?", isPresented: $showingArchive, titleVisibility: .visible) {
@@ -713,7 +785,7 @@ struct CommunityGroupDetailView: View {
 
     private func postLink(_ post: CommunityPost, slug: String, canModerate: Bool, pinnedBadge: Bool = false) -> some View {
         NavigationLink {
-            CommunityPostDetailView(post: post) { reloadToken = UUID() }
+            CommunityPostDetailView(post: post) { reload() }
         } label: {
             VStack(alignment: .leading, spacing: 4) {
                 if pinnedBadge {
@@ -721,7 +793,7 @@ struct CommunityGroupDetailView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(Theme.Palette.primary)
                 }
-                CommunityPostRow(post: post) { reloadToken = UUID() }
+                CommunityPostRow(post: post) { reload() }
             }
         }
         .contextMenu {
@@ -817,6 +889,7 @@ struct CommunityGroupDetailView: View {
         let term = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard term.count >= 2 else {
             searchResults = nil
+            searchNextCursor = nil
             return
         }
         searchTask = Task {
@@ -831,9 +904,44 @@ struct CommunityGroupDetailView: View {
         searching = true
         defer { searching = false }
         do {
-            let page = try await CommunityAPI.searchGroupPosts(slug: slug, query: term)
+            let page = try await CommunityAPI.searchGroupPostsPage(slug: slug, query: term)
             guard term == searchQuery.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
             searchResults = page.posts
+            searchNextCursor = page.nextCursor
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func loadMoreSearchResults(after cursor: String) async {
+        guard !loadingMoreSearch else { return }
+        let term = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard term.count >= 2 else { return }
+        loadingMoreSearch = true
+        defer { loadingMoreSearch = false }
+        do {
+            let page = try await CommunityAPI.searchGroupPostsPage(slug: slug, query: term, cursor: cursor)
+            guard term == searchQuery.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+            let existing = Set((searchResults ?? []).map(\.id))
+            searchResults = (searchResults ?? []) + page.posts.filter { !existing.contains($0.id) }
+            searchNextCursor = page.nextCursor
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func loadNextPosts(after cursor: String) async {
+        guard !loadingMorePosts else { return }
+        loadingMorePosts = true
+        defer { loadingMorePosts = false }
+        do {
+            let page = try await CommunityAPI.groupPage(slug: slug, cursor: cursor)
+            let existing = Set(additionalPosts.map(\.id))
+            additionalPosts.append(contentsOf: page.posts.filter { !existing.contains($0.id) })
+            nextPostCursor = page.nextCursor
+            postPaginationStarted = true
         } catch {
             self.error = error.localizedDescription
         }
@@ -846,7 +954,7 @@ struct CommunityGroupDetailView: View {
             if action == .archive {
                 onMembershipChanged()
             }
-            reloadToken = UUID()
+            reload()
         } catch {
             self.error = error.localizedDescription
         }
@@ -861,7 +969,7 @@ struct CommunityGroupDetailView: View {
             _ = try await CommunityAPI.setGroupMembership(id: id, action: action, message: trimmed?.isEmpty == false ? trimmed : nil)
             requestMessage = ""
             await auth.refreshBadges()
-            reloadToken = UUID()
+            reload()
             onMembershipChanged()
         } catch {
             self.error = error.localizedDescription
@@ -872,7 +980,7 @@ struct CommunityGroupDetailView: View {
     private func acknowledgeRules(slug: String) async {
         do {
             try await CommunityAPI.acknowledgeGroupRules(slug: slug)
-            reloadToken = UUID()
+            reload()
         } catch {
             self.error = error.localizedDescription
         }
@@ -882,10 +990,22 @@ struct CommunityGroupDetailView: View {
     private func addAcceptedAnswerToFAQ(slug: String, postId: String) async {
         do {
             _ = try await CommunityAPI.addAcceptedAnswerToGroupFAQ(slug: slug, postId: postId)
-            reloadToken = UUID()
+            reload()
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    @MainActor
+    private func reload() {
+        searchTask?.cancel()
+        searchQuery = ""
+        searchResults = nil
+        searchNextCursor = nil
+        additionalPosts = []
+        nextPostCursor = nil
+        postPaginationStarted = false
+        reloadToken = UUID()
     }
 }
 
@@ -991,6 +1111,10 @@ private struct CommunityGroupMembersView: View {
     @State private var composingInvite = false
     @State private var inviteUsername = ""
     @State private var inviteNotice: String?
+    @State private var additionalMembers: [CommunityGroupMember] = []
+    @State private var nextMemberCursor: String?
+    @State private var memberPaginationStarted = false
+    @State private var loadingMoreMembers = false
 
     private var viewerRole: String? { group.membershipRole }
     private var isOwner: Bool { viewerRole == "owner" }
@@ -1007,8 +1131,11 @@ private struct CommunityGroupMembersView: View {
 
     var body: some View {
         AsyncContent(
-            load: { try await CommunityAPI.groupMembers(slug: group.slug) },
+            load: { try await CommunityAPI.groupMembersPage(slug: group.slug) },
             loaded: { page in
+                let firstPageIds = Set(page.members.map(\.id))
+                let members = page.members + additionalMembers.filter { !firstPageIds.contains($0.id) }
+                let cursor = memberPaginationStarted ? nextMemberCursor : page.nextCursor
                 List {
                     if canModerate {
                         Section {
@@ -1024,13 +1151,25 @@ private struct CommunityGroupMembersView: View {
                         }
                     }
                     Section {
-                        ForEach(page.members) { member in
+                        ForEach(members) { member in
                             row(member)
+                        }
+                        if let cursor {
+                            Button {
+                                Task { await loadNextMembers(after: cursor) }
+                            } label: {
+                                HStack {
+                                    Spacer()
+                                    if loadingMoreMembers { ProgressView() } else { Text("Load more members") }
+                                    Spacer()
+                                }
+                            }
+                            .disabled(loadingMoreMembers)
                         }
                     }
                 }
                 .listStyle(.insetGrouped)
-                .refreshable { reloadToken = UUID() }
+                .refreshable { reload() }
             },
             failure: { error, retry in ErrorView(message: error.localizedDescription, retry: retry) }
         )
@@ -1072,7 +1211,7 @@ private struct CommunityGroupMembersView: View {
         .sheet(item: $restrictionTarget) { member in
             NavigationStack {
                 CommunityMemberPostingRestrictionView(group: group, member: member) {
-                    reloadToken = UUID()
+                    reload()
                 }
             }
         }
@@ -1145,7 +1284,7 @@ private struct CommunityGroupMembersView: View {
     private func act(_ action: CommunityAPI.GroupModerationAction, _ member: CommunityGroupMember) async {
         do {
             try await CommunityAPI.moderateGroup(slug: group.slug, action: action, profileId: member.id)
-            reloadToken = UUID()
+            reload()
         } catch {
             self.error = error.localizedDescription
         }
@@ -1159,7 +1298,7 @@ private struct CommunityGroupMembersView: View {
             let result = try await CommunityAPI.inviteToGroup(slug: group.slug, username: handle)
             if result.status == "active" {
                 inviteNotice = "@\(handle) is now a member."
-                reloadToken = UUID()
+                reload()
             } else if result.changed == false {
                 inviteNotice = "@\(handle) already has an invitation."
             } else {
@@ -1168,5 +1307,29 @@ private struct CommunityGroupMembersView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    @MainActor
+    private func loadNextMembers(after cursor: String) async {
+        guard !loadingMoreMembers else { return }
+        loadingMoreMembers = true
+        defer { loadingMoreMembers = false }
+        do {
+            let page = try await CommunityAPI.groupMembersPage(slug: group.slug, cursor: cursor)
+            let existing = Set(additionalMembers.map(\.id))
+            additionalMembers.append(contentsOf: page.members.filter { !existing.contains($0.id) })
+            nextMemberCursor = page.nextCursor
+            memberPaginationStarted = true
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func reload() {
+        additionalMembers = []
+        nextMemberCursor = nil
+        memberPaginationStarted = false
+        reloadToken = UUID()
     }
 }

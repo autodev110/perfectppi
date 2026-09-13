@@ -9,6 +9,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { FEATURE_UNAVAILABLE_MESSAGE, isFeatureEnabled } from "@/lib/feature-flags";
 import type { Database } from "@/types/database";
+import {
+  encodeGroupDirectoryCursor,
+  normalizeGroupDirectoryQuery,
+  type GroupDirectoryCursorFor,
+} from "@/features/community/group-cursor";
 
 export type GroupRole = Database["public"]["Enums"]["community_group_role"];
 
@@ -128,6 +133,49 @@ export async function getGroupMembers(groupId: string, page = 1, perPage = 50): 
     joined_at: row.joined_at,
     posting_restricted_until: row.posting_restricted_until,
   }));
+}
+
+export type GroupMembersPage = { items: GroupMember[]; nextCursor: string | null };
+
+export async function getGroupMembersPage(
+  groupId: string,
+  cursor: GroupDirectoryCursorFor<"members"> | null,
+  perPage = 50,
+): Promise<GroupMembersPage> {
+  const viewerId = await currentProfileId();
+  if (!viewerId || !(await isFeatureEnabled("groups"))) return { items: [], nextCursor: null };
+  const size = Math.min(Math.max(Number.isInteger(perPage) ? perPage : 50, 1), 99);
+  const { data, error } = await createAdminClient().rpc("list_group_members_cursor", {
+    p_viewer_id: viewerId,
+    p_group_id: groupId,
+    p_limit: size + 1,
+    p_before_role_rank: cursor?.roleRank ?? null,
+    p_before_joined_at: cursor?.sortAt ?? null,
+    p_before_profile_id: cursor?.id ?? null,
+  });
+  if (error) {
+    console.error("list_group_members_cursor failed", error.message);
+    throw new Error("Group members are temporarily unavailable.");
+  }
+  const pageRows = (data ?? []).slice(0, size);
+  const boundary = (data?.length ?? 0) > size ? pageRows.at(-1) : null;
+  return {
+    items: pageRows.map((row) => ({
+      id: row.profile_id,
+      username: row.username,
+      display_name: row.display_name,
+      avatar_url: row.avatar_url,
+      role: row.role,
+      joined_at: row.joined_at,
+      posting_restricted_until: row.posting_restricted_until,
+    })),
+    nextCursor: boundary
+      ? encodeGroupDirectoryCursor({
+        v: 1, kind: "members", groupId, roleRank: boundary.role_rank,
+        sortAt: boundary.joined_at, id: boundary.profile_id,
+      })
+      : null,
+  };
 }
 
 /** Pending join requests, moderators only (plan 13.3); empty for everyone else. */
@@ -334,6 +382,43 @@ export async function getGroupFaqEntries(groupId: string, query = "", page = 1, 
     return [];
   }
   return data ?? [];
+}
+
+export type GroupFaqPage = { items: GroupFaqEntry[]; nextCursor: string | null };
+
+export async function getGroupFaqEntriesPage(
+  groupId: string,
+  query: string,
+  cursor: GroupDirectoryCursorFor<"faq"> | null,
+  perPage = 50,
+): Promise<GroupFaqPage> {
+  const viewerId = await currentProfileId();
+  if (!viewerId || !(await isFeatureEnabled("groups"))) return { items: [], nextCursor: null };
+  const size = Math.min(Math.max(Number.isInteger(perPage) ? perPage : 50, 1), 99);
+  const normalizedQuery = normalizeGroupDirectoryQuery(query);
+  const { data, error } = await createAdminClient().rpc("list_community_group_faq_cursor", {
+    p_viewer_id: viewerId,
+    p_group_id: groupId,
+    p_query: query.trim().slice(0, 100) || null,
+    p_limit: size + 1,
+    p_before_updated_at: cursor?.sortAt ?? null,
+    p_before_entry_id: cursor?.id ?? null,
+  });
+  if (error) {
+    console.error("list_community_group_faq_cursor failed", error.message);
+    throw new Error("Group FAQ is temporarily unavailable.");
+  }
+  const pageRows = (data ?? []).slice(0, size);
+  const boundary = (data?.length ?? 0) > size ? pageRows.at(-1) : null;
+  return {
+    items: pageRows,
+    nextCursor: boundary
+      ? encodeGroupDirectoryCursor({
+        v: 1, kind: "faq", groupId, q: normalizedQuery,
+        sortAt: boundary.updated_at, id: boundary.id,
+      })
+      : null,
+  };
 }
 
 export async function saveGroupFaq(input: unknown) {

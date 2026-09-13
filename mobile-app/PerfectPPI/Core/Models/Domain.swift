@@ -875,6 +875,7 @@ struct CommunityGroupDetail: Codable, Hashable {
     let posts: [CommunityPost]
     let page: Int
     let hasMore: Bool
+    let nextCursor: String?
 }
 
 struct CommunityGroupMember: Codable, Identifiable, Hashable {
@@ -907,12 +908,14 @@ struct CommunityGroupFAQPage: Codable {
     let query: String
     let page: Int
     let hasMore: Bool
+    let nextCursor: String?
 }
 
 struct CommunityGroupMembersPage: Codable {
     let members: [CommunityGroupMember]
     let page: Int
     let hasMore: Bool
+    let nextCursor: String?
 }
 
 struct CommunityGroupSearchPage: Codable {
@@ -920,6 +923,7 @@ struct CommunityGroupSearchPage: Codable {
     let posts: [CommunityPost]
     let page: Int
     let hasMore: Bool
+    let nextCursor: String?
 }
 
 // MARK: - Community Events

@@ -15,8 +15,8 @@ import { CommunityMentionText } from "@/components/shared/community-mention-text
 import { createCommunityComment } from "@/features/community/actions";
 import {
   getCommunityGroupPinnedPosts,
-  getCommunityGroupPosts,
-  searchCommunityGroupPosts,
+  getCommunityGroupPostsPage,
+  searchCommunityGroupPostsPage,
   type CommunityFeedPost,
 } from "@/features/community/queries";
 import { getOptionalProfile } from "@/features/auth/guards";
@@ -24,7 +24,7 @@ import { getCommunityGroup } from "@/features/social/groups";
 import { getGroupSharePreview, groupShareCard } from "@/features/share/previews";
 import { ShareButton } from "@/components/shared/share-button";
 import { sharePath } from "@/lib/share/links";
-import { getGroupFaqEntries, getGroupJoinRequests, getGroupMembers, getViewerGroupRole } from "@/features/social/group-tools";
+import { getGroupFaqEntriesPage, getGroupJoinRequests, getGroupMembersPage, getViewerGroupRole } from "@/features/social/group-tools";
 import { GroupArchiveButton, GroupInviteForm, GroupJoinRequestControls, GroupMemberModerationMenu, GroupPostModerationMenu } from "@/components/shared/group-moderation-controls";
 import { GroupFaqDeleteButton, GroupFaqForm, GroupRulesAcknowledgement, GroupSlowModeControl, SaveAcceptedAnswerToFaqButton } from "@/components/shared/group-quality-controls";
 import { GROUP_JOIN_POLICY_LABELS, GROUP_VISIBILITY_LABELS } from "@/lib/social/group-options";
@@ -37,6 +37,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDate, getInitials } from "@/lib/utils/formatting";
 import { ArrowLeft, BookOpen, Clock3, Lock, MessageSquare, Pin, Plus, Search, ShieldCheck, Users } from "lucide-react";
+import { decodeGroupDirectoryCursor } from "@/features/community/group-cursor";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,7 @@ export default async function CommunityGroupPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ page?: string; q?: string; tab?: string }>;
+  searchParams: Promise<{ q?: string; tab?: string; cursor?: string }>;
 }) {
   const viewer = await getOptionalProfile(["consumer", "technician", "org_manager", "admin"]);
   const { slug } = await params;
@@ -98,8 +99,6 @@ export default async function CommunityGroupPage({
   const group = await getCommunityGroup(slug);
   if (!group) notFound();
   const query = await searchParams;
-  const requestedPage = Number(query.page ?? "1");
-  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const search = (query.q ?? "").trim();
   const locked = !group.can_view_content;
   const showMembers = !locked && query.tab === "members";
@@ -108,15 +107,36 @@ export default async function CommunityGroupPage({
   const showRequests = canModerate && query.tab === "requests";
   const showFaq = !locked && query.tab === "faq";
   const showPosts = !locked && !showMembers && !showRequests && !showFaq;
-  const [posts, pinned, members, requests, faqEntries] = await Promise.all([
-    !showPosts ? Promise.resolve([] as CommunityFeedPost[]) : search ? searchCommunityGroupPosts(group.id, search, page, 20) : getCommunityGroupPosts(group.id, page, 20),
-    !showPosts || search || page > 1 ? Promise.resolve([] as CommunityFeedPost[]) : getCommunityGroupPinnedPosts(group.id),
-    showMembers ? getGroupMembers(group.id, 1, 100) : Promise.resolve([]),
+  const postCursor = showPosts && !search ? decodeGroupDirectoryCursor(query.cursor, "posts", group.id) : null;
+  const searchCursor = showPosts && search ? decodeGroupDirectoryCursor(query.cursor, "search", group.id, search) : null;
+  const memberCursor = showMembers ? decodeGroupDirectoryCursor(query.cursor, "members", group.id) : null;
+  const faqCursor = showFaq ? decodeGroupDirectoryCursor(query.cursor, "faq", group.id, search) : null;
+  const [postPage, pinned, memberPage, requests, faqPage] = await Promise.all([
+    !showPosts
+      ? Promise.resolve({ items: [] as CommunityFeedPost[], nextCursor: null })
+      : search
+        ? searchCommunityGroupPostsPage(group.id, search, searchCursor, 20)
+        : getCommunityGroupPostsPage(group.id, postCursor, 20),
+    !showPosts || search || query.cursor ? Promise.resolve([] as CommunityFeedPost[]) : getCommunityGroupPinnedPosts(group.id),
+    showMembers ? getGroupMembersPage(group.id, memberCursor, 50) : Promise.resolve({ items: [], nextCursor: null }),
     showRequests ? getGroupJoinRequests(group.id) : Promise.resolve([]),
-    showFaq ? getGroupFaqEntries(group.id, search, page, 50) : Promise.resolve([]),
+    showFaq ? getGroupFaqEntriesPage(group.id, search, faqCursor, 50) : Promise.resolve({ items: [], nextCursor: null }),
   ]);
+  const posts = postPage.items;
+  const members = memberPage.items;
+  const faqEntries = faqPage.items;
   const baseHref = `/community/groups/${group.slug}`;
-  const pageHref = (nextPage: number) => `${baseHref}?${new URLSearchParams({ ...(showFaq ? { tab: "faq" } : {}), ...(search ? { q: search } : {}), page: String(nextPage) })}`;
+  const activeNextCursor = showMembers ? memberPage.nextCursor : showFaq ? faqPage.nextCursor : postPage.nextCursor;
+  const pageHref = (cursor?: string) => {
+    const params = new URLSearchParams({
+      ...(showMembers ? { tab: "members" } : {}),
+      ...(showFaq ? { tab: "faq" } : {}),
+      ...(search ? { q: search } : {}),
+      ...(cursor ? { cursor } : {}),
+    });
+    const suffix = params.toString();
+    return suffix ? `${baseHref}?${suffix}` : baseHref;
+  };
   const postingRestricted = Boolean(group.posting_restricted_until && new Date(group.posting_restricted_until).getTime() > Date.now());
   const canPostByRole = group.posting_policy !== "moderators" || canModerate;
 
@@ -330,7 +350,12 @@ export default async function CommunityGroupPage({
             </article>
           ))}
         </div>
-        {showPosts || showFaq ? <nav className="mt-6 flex justify-between" aria-label={showFaq ? "Group FAQ pages" : "Group post pages"}>{page > 1 ? <Button asChild variant="outline"><Link href={pageHref(page - 1)}>Previous</Link></Button> : <span />}{(showFaq ? faqEntries.length === 50 : posts.length === 20) ? <Button asChild variant="outline"><Link href={pageHref(page + 1)}>Next</Link></Button> : <span />}</nav> : null}
+        {showPosts || showFaq || showMembers ? (
+          <nav className="mt-6 flex justify-between" aria-label={showMembers ? "Group member pages" : showFaq ? "Group FAQ pages" : "Group post pages"}>
+            {query.cursor ? <Button asChild variant="outline"><Link href={pageHref()}>Back to first results</Link></Button> : <span />}
+            {activeNextCursor ? <Button asChild variant="outline"><Link href={pageHref(activeNextCursor)}>More results</Link></Button> : <span />}
+          </nav>
+        ) : null}
       </div>
     </main>
   );

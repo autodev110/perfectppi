@@ -548,6 +548,12 @@ enum CommunityAPI {
         )
     }
 
+    static func groupPage(slug: String, cursor: String? = nil) async throws -> CommunityGroupDetail {
+        var query = [URLQueryItem(name: "pagination", value: "cursor")]
+        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await APIClient.shared.get("/api/community/groups/\(slug)", query: query)
+    }
+
     /// Membership moves (plan 13.3). `join` also accepts an invitation;
     /// `leave` also cancels a pending request or declines an invitation.
     enum GroupMembershipAction: String, Encodable {
@@ -643,11 +649,26 @@ enum CommunityAPI {
         )
     }
 
+    static func groupMembersPage(slug: String, cursor: String? = nil) async throws -> CommunityGroupMembersPage {
+        var query = [URLQueryItem(name: "pagination", value: "cursor")]
+        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await APIClient.shared.get("/api/community/groups/\(slug)/members", query: query)
+    }
+
     static func searchGroupPosts(slug: String, query: String, page: Int = 1) async throws -> CommunityGroupSearchPage {
         try await APIClient.shared.get(
             "/api/community/groups/\(slug)/search",
             query: [URLQueryItem(name: "q", value: query), URLQueryItem(name: "page", value: String(max(page, 1)))]
         )
+    }
+
+    static func searchGroupPostsPage(slug: String, query: String, cursor: String? = nil) async throws -> CommunityGroupSearchPage {
+        var params = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "pagination", value: "cursor")
+        ]
+        if let cursor { params.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await APIClient.shared.get("/api/community/groups/\(slug)/search", query: params)
     }
 
     enum GroupModerationAction: String, Encodable {
@@ -724,6 +745,15 @@ enum CommunityAPI {
             "/api/community/groups/\(slug)/faq",
             query: [URLQueryItem(name: "q", value: query), URLQueryItem(name: "page", value: String(max(page, 1)))]
         )
+    }
+
+    static func groupFAQPage(slug: String, query: String = "", cursor: String? = nil) async throws -> CommunityGroupFAQPage {
+        var params = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "pagination", value: "cursor")
+        ]
+        if let cursor { params.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await APIClient.shared.get("/api/community/groups/\(slug)/faq", query: params)
     }
 
     private struct GroupFAQPayload: Encodable {

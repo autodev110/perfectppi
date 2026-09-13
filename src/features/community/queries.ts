@@ -18,6 +18,11 @@ import {
   type CommunityFeedCursor,
 } from "@/features/community/feed-cursor";
 import { encodeSavedCursor, type SavedCursor } from "@/features/saved/cursor";
+import {
+  encodeGroupDirectoryCursor,
+  normalizeGroupDirectoryQuery,
+  type GroupDirectoryCursorFor,
+} from "@/features/community/group-cursor";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -1036,6 +1041,47 @@ export async function searchCommunityGroupPosts(groupId: string, query: string, 
   return hydrateGroupPostIds(viewerId, (data ?? []).map((row) => row.post_id));
 }
 
+export type CommunityGroupPostsPage = {
+  items: CommunityFeedPost[];
+  nextCursor: string | null;
+};
+
+export async function searchCommunityGroupPostsPage(
+  groupId: string,
+  query: string,
+  cursor: GroupDirectoryCursorFor<"search"> | null,
+  perPage = 20,
+): Promise<CommunityGroupPostsPage> {
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId || !(await getFeatureFlags()).flags.groups) return { items: [], nextCursor: null };
+  const size = Math.min(Math.max(Number.isInteger(perPage) ? perPage : 20, 1), 49);
+  const normalizedQuery = normalizeGroupDirectoryQuery(query);
+  if (normalizedQuery.length < 2) return { items: [], nextCursor: null };
+  const { data, error } = await createAdminClient().rpc("search_group_posts_cursor", {
+    p_viewer_id: viewerId,
+    p_group_id: groupId,
+    p_query: query.trim().slice(0, 100),
+    p_limit: size + 1,
+    p_before_created_at: cursor?.sortAt ?? null,
+    p_before_post_id: cursor?.id ?? null,
+  });
+  if (error) {
+    console.error("search_group_posts_cursor failed", error.message);
+    throw new Error("Group search is temporarily unavailable.");
+  }
+  const pageRows = (data ?? []).slice(0, size);
+  const boundary = (data?.length ?? 0) > size ? pageRows.at(-1) : null;
+  return {
+    items: await hydrateGroupPostIds(viewerId, pageRows.map((row) => row.post_id)),
+    nextCursor: boundary
+      ? encodeGroupDirectoryCursor({
+        v: 1, kind: "search", groupId, q: normalizedQuery,
+        sortAt: boundary.created_at, id: boundary.post_id,
+      })
+      : null,
+  };
+}
+
 export async function getCommunityGroupPosts(groupId: string, page = 1, perPage = 20) {
   const viewerId = await getCommunityViewerId();
   if (!viewerId || !(await getFeatureFlags()).flags.groups) return [];
@@ -1062,6 +1108,39 @@ export async function getCommunityGroupPosts(groupId: string, page = 1, perPage 
     return post ? [toCommunityFeedPost(post, viewerId, memberGroupIds)] : [];
   });
   return withPostLikeState(visiblePosts, viewerId);
+}
+
+export async function getCommunityGroupPostsPage(
+  groupId: string,
+  cursor: GroupDirectoryCursorFor<"posts"> | null,
+  perPage = 20,
+): Promise<CommunityGroupPostsPage> {
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId || !(await getFeatureFlags()).flags.groups) return { items: [], nextCursor: null };
+  const size = Math.min(Math.max(Number.isInteger(perPage) ? perPage : 20, 1), 99);
+  const { data, error } = await createAdminClient().rpc("social_visible_community_group_post_ids_cursor", {
+    p_viewer_id: viewerId,
+    p_group_id: groupId,
+    p_limit: size + 1,
+    p_before_created_at: cursor?.sortAt ?? null,
+    p_before_post_id: cursor?.id ?? null,
+    p_exclude_pinned: true,
+  });
+  if (error) {
+    console.error("social_visible_community_group_post_ids_cursor failed", error.message);
+    throw new Error("Group posts are temporarily unavailable.");
+  }
+  const pageRows = (data ?? []).slice(0, size);
+  const boundary = (data?.length ?? 0) > size ? pageRows.at(-1) : null;
+  return {
+    items: await hydrateGroupPostIds(viewerId, pageRows.map((row) => row.post_id)),
+    nextCursor: boundary
+      ? encodeGroupDirectoryCursor({
+        v: 1, kind: "posts", groupId,
+        sortAt: boundary.created_at, id: boundary.post_id,
+      })
+      : null,
+  };
 }
 
 export async function getVehicleDiscussionPosts(vehicleId: string) {

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
 import { updateCommunityGroupSettings, type GroupCreateOutcome } from "@/features/social/group-create";
-import { getCommunityGroupPinnedPosts, getCommunityGroupPosts } from "@/features/community/queries";
+import { getCommunityGroupPinnedPosts, getCommunityGroupPosts, getCommunityGroupPostsPage } from "@/features/community/queries";
 import { getCommunityGroup } from "@/features/social/groups";
+import { decodeGroupDirectoryCursor } from "@/features/community/group-cursor";
 
 const ROLES = ["consumer", "technician", "org_manager", "admin"] as const;
 
@@ -16,18 +17,43 @@ export async function GET(
   const group = await getCommunityGroup(slug);
   if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 });
 
-  const requestedPage = Number(new URL(request.url).searchParams.get("page") ?? "1");
+  const searchParams = new URL(request.url).searchParams;
+  const requestedPage = Number(searchParams.get("page") ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const cursorMode = searchParams.get("pagination") === "cursor";
+  const rawCursor = searchParams.get("cursor");
+  const cursor = rawCursor ? decodeGroupDirectoryCursor(rawCursor, "posts", group.id) : null;
+  if (cursorMode && rawCursor && !cursor) {
+    return NextResponse.json({ error: "This group-posts page link is invalid." }, { status: 400 });
+  }
   // Private/unlisted content stays locked until the viewer is a member; the
   // post RPCs enforce this too, so skipping them is only a shortcut.
-  const [posts, pinned] = group.can_view_content
-    ? await Promise.all([
-      getCommunityGroupPosts(group.id, page, 20),
-      page === 1 ? getCommunityGroupPinnedPosts(group.id) : Promise.resolve([]),
-    ])
-    : [[], []];
+  let postResult;
+  let pinned;
+  try {
+    [postResult, pinned] = group.can_view_content
+      ? await Promise.all([
+        cursorMode
+          ? getCommunityGroupPostsPage(group.id, cursor, 20)
+          : getCommunityGroupPosts(group.id, page, 20).then((items) => ({ items, nextCursor: null })),
+        cursorMode ? (!rawCursor ? getCommunityGroupPinnedPosts(group.id) : Promise.resolve([]))
+          : page === 1 ? getCommunityGroupPinnedPosts(group.id) : Promise.resolve([]),
+      ])
+      : [{ items: [], nextCursor: null }, []];
+  } catch {
+    return NextResponse.json(
+      { error: "Group posts are temporarily unavailable. Please try again." },
+      { status: 503, headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
   return NextResponse.json(
-    { data: { group, pinned, posts, page, hasMore: posts.length === 20 } },
+    {
+      data: {
+        group, pinned, posts: postResult.items, page,
+        hasMore: cursorMode ? Boolean(postResult.nextCursor) : postResult.items.length === 20,
+        nextCursor: postResult.nextCursor,
+      },
+    },
     { headers: { "Cache-Control": "private, no-store" } },
   );
 }
