@@ -13,6 +13,7 @@ import type { Json } from "@/types/database";
 export type RetentionPurgeReport = {
   cases: { purged: number; skipped: Record<string, number>; failed: Array<{ id: string; error: string }> };
   archivedPosts: { purged: number; skipped: Record<string, number>; failed: Array<{ id: string; error: string }> };
+  vehicleHandoffAttemptsPurged: number;
   storage: unknown;
   status: Record<string, number>;
 };
@@ -45,6 +46,7 @@ export async function runRetentionPurge(limits = { cases: 25, archivedPosts: 25 
   const report: RetentionPurgeReport = {
     cases: { purged: 0, skipped: {}, failed: [] },
     archivedPosts: { purged: 0, skipped: {}, failed: [] },
+    vehicleHandoffAttemptsPurged: 0,
     storage: null,
     status: {},
   };
@@ -92,6 +94,13 @@ export async function runRetentionPurge(limits = { cases: 25, archivedPosts: 25 
       report.archivedPosts.failed.push({ id: row.id, error: error instanceof Error ? error.message : "purge failed" });
     }
   }
+
+  const { count: handoffAttemptCount, error: handoffAttemptError } = await admin
+    .from("vehicle_handoff_claim_attempts")
+    .delete({ count: "exact" })
+    .lt("attempted_at", cutoff);
+  if (handoffAttemptError) throw new Error(handoffAttemptError.message);
+  report.vehicleHandoffAttemptsPurged = handoffAttemptCount ?? 0;
 
   // Queued object deletions are processed by the existing retrying cleanup.
   try {

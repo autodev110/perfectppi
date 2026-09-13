@@ -4965,6 +4965,100 @@ export type Database = {
           },
         ]
       }
+      vehicle_handoff_claim_attempts: {
+        Row: {
+          attempted_at: string
+          id: number
+          profile_id: string
+        }
+        Insert: {
+          attempted_at?: string
+          id?: never
+          profile_id: string
+        }
+        Update: {
+          attempted_at?: string
+          id?: never
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_handoff_claim_attempts_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_handoff_claims: {
+        Row: {
+          claim_code_hash: string | null
+          claimed_at: string | null
+          claimed_by_profile_id: string | null
+          claimed_vehicle_id: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          revoked_at: string | null
+          seller_profile_id: string
+          source_vehicle_id: string
+        }
+        Insert: {
+          claim_code_hash?: string | null
+          claimed_at?: string | null
+          claimed_by_profile_id?: string | null
+          claimed_vehicle_id?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          revoked_at?: string | null
+          seller_profile_id: string
+          source_vehicle_id: string
+        }
+        Update: {
+          claim_code_hash?: string | null
+          claimed_at?: string | null
+          claimed_by_profile_id?: string | null
+          claimed_vehicle_id?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          revoked_at?: string | null
+          seller_profile_id?: string
+          source_vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_handoff_claims_claimed_by_profile_id_fkey"
+            columns: ["claimed_by_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_handoff_claims_claimed_vehicle_id_fkey"
+            columns: ["claimed_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_handoff_claims_seller_profile_id_fkey"
+            columns: ["seller_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_handoff_claims_source_vehicle_id_fkey"
+            columns: ["source_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicles: {
         Row: {
           body_style: string | null
@@ -5317,6 +5411,28 @@ export type Database = {
           p_vehicle_id: string
         }
         Returns: Database["public"]["Tables"]["vehicles"]["Row"]
+      }
+      issue_vehicle_handoff_claim: {
+        Args: {
+          p_claim_code_hash: string
+          p_seller_profile_id: string
+          p_vehicle_id: string
+        }
+        Returns: {
+          claim_expires_at: string
+          claim_id: string
+        }[]
+      }
+      claim_vehicle_handoff: {
+        Args: {
+          p_buyer_profile_id: string
+          p_claim_code_hash: string
+          p_vin: string
+        }
+        Returns: {
+          outcome: string
+          vehicle_id: string | null
+        }[]
       }
       request_marketplace_inspection: {
         Args: {

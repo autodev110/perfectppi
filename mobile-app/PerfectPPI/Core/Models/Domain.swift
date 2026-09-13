@@ -94,6 +94,7 @@ struct VehicleMedia: Codable, Identifiable, Hashable {
     let uploadedAt: Date?
     let isPrimary: Bool?
     let sortOrder: Int?
+    let moderationStatus: String?
 }
 
 struct VehicleBuildEntry: Codable, Identifiable, Hashable {
@@ -537,6 +538,14 @@ struct MemberProfile: Codable {
 }
 
 // MARK: - Community
+
+struct CommunityQuestionOutcomeEvent: Codable, Identifiable, Hashable {
+    let id: String
+    let previousOutcome: CommunityQuestionOutcome?
+    let outcome: CommunityQuestionOutcome?
+    let createdAt: Date
+    let appliesToCurrentAnswer: Bool
+}
 
 struct CommunityPost: Codable, Identifiable, Hashable {
     let id: String

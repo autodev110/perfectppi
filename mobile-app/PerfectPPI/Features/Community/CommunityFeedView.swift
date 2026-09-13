@@ -643,6 +643,7 @@ struct CommunityPostDetailView: View {
     @State private var liking = false
     @State private var acceptedAnswerBusyId: String?
     @State private var outcomeBusy = false
+    @State private var showingOutcomeHistory = false
     @State private var helpfulBusyIds: Set<String> = []
     @State private var comment = ""
     @State private var submitting = false
@@ -694,6 +695,11 @@ struct CommunityPostDetailView: View {
         )
         .onChange(of: pickerItems) { _, items in
             Task { await addMedia(items) }
+        }
+        .sheet(isPresented: $showingOutcomeHistory) {
+            NavigationStack {
+                QuestionOutcomeHistoryView(postId: post.id)
+            }
         }
         .sheet(item: $reportTarget) { target in
             CommunityReportSheet { reasonCode, details in
@@ -970,41 +976,52 @@ struct CommunityPostDetailView: View {
 
     @ViewBuilder
     private var questionOutcomeControl: some View {
-        if acceptedAnswerCommentId == nil {
-            if isMyPost {
-                Text("Accept an answer to record what solved the issue.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        } else if isMyPost {
-            Menu {
-                ForEach(CommunityQuestionOutcome.allCases) { outcome in
-                    Button {
-                        Task { await setQuestionOutcome(outcome) }
-                    } label: {
-                        if questionOutcome == outcome {
-                            Label(outcome.label, systemImage: "checkmark")
-                        } else {
-                            Text(outcome.label)
+        VStack(alignment: .leading, spacing: 8) {
+            if acceptedAnswerCommentId == nil {
+                if isMyPost {
+                    Text("Accept an answer to record what solved the issue.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if isMyPost {
+                Menu {
+                    ForEach(CommunityQuestionOutcome.allCases) { outcome in
+                        Button {
+                            Task { await setQuestionOutcome(outcome) }
+                        } label: {
+                            if questionOutcome == outcome {
+                                Label(outcome.label, systemImage: "checkmark")
+                            } else {
+                                Text(outcome.label)
+                            }
                         }
                     }
-                }
-                if questionOutcome != nil {
-                    Divider()
-                    Button("Clear outcome", role: .destructive) {
-                        Task { await setQuestionOutcome(nil) }
+                    if questionOutcome != nil {
+                        Divider()
+                        Button("Clear outcome", role: .destructive) {
+                            Task { await setQuestionOutcome(nil) }
+                        }
                     }
+                } label: {
+                    Label(
+                        questionOutcome.map { "Outcome: \($0.label)" } ?? "Record question outcome",
+                        systemImage: "checkmark.circle"
+                    )
+                    .font(.caption.weight(.semibold))
                 }
-            } label: {
-                Label(
-                    questionOutcome.map { "Outcome: \($0.label)" } ?? "Record question outcome",
-                    systemImage: "checkmark.circle"
-                )
-                .font(.caption.weight(.semibold))
+                .disabled(outcomeBusy)
+            } else if let questionOutcome {
+                Label("Outcome: \(questionOutcome.label)", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.Palette.primary)
             }
-            .disabled(outcomeBusy)
-        } else if let questionOutcome {
-            Label("Outcome: \(questionOutcome.label)", systemImage: "checkmark.circle.fill")
+
+            Button {
+                showingOutcomeHistory = true
+            } label: {
+                Label("View outcome history", systemImage: "clock.arrow.circlepath")
+            }
+            .buttonStyle(.plain)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.Palette.primary)
         }
@@ -1212,6 +1229,61 @@ struct CommunityPostDetailView: View {
             dismiss()
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+private struct QuestionOutcomeHistoryView: View {
+    @Environment(\.dismiss) private var dismiss
+    let postId: String
+
+    var body: some View {
+        AsyncContent(
+            load: { try await CommunityAPI.questionOutcomeHistory(postId: postId) },
+            loaded: { events in
+                if events.isEmpty {
+                    ScrollView {
+                        EmptyStateCard(
+                            title: "No outcome changes yet",
+                            message: "When the question author records or changes the result, it will appear here.",
+                            systemImage: "clock.arrow.circlepath"
+                        )
+                        .padding()
+                    }
+                } else {
+                    List(events) { event in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(event.outcome.map { "Changed to \($0.label)" } ?? "Cleared the outcome")
+                                .font(.subheadline.weight(.semibold))
+                            Text(event.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if let previous = event.previousOutcome {
+                                Text("Previously: \(previous.label)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if !event.appliesToCurrentAnswer {
+                                Label("For an earlier accepted answer", systemImage: "arrow.triangle.branch")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .listStyle(.insetGrouped)
+                }
+            },
+            failure: { error, retry in
+                ErrorView(message: error.localizedDescription, retry: retry)
+            }
+        )
+        .navigationTitle("Outcome History")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { dismiss() }
+            }
         }
     }
 }

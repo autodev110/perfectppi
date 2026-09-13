@@ -5,6 +5,7 @@ import SwiftUI
 
 struct VehiclesListView: View {
     @State private var presentNew = false
+    @State private var presentClaim = false
     @State private var reloadToken = UUID()
     @State private var garageFilter: GarageFilter = .all
 
@@ -19,15 +20,22 @@ struct VehiclesListView: View {
         .id(reloadToken)
         .navigationTitle("Garage")
         .toolbar {
-            Button {
-                presentNew = true
+            Menu {
+                Button("Add Vehicle", systemImage: "plus") { presentNew = true }
+                Button("Claim Purchased Vehicle", systemImage: "key") { presentClaim = true }
             } label: {
                 Image(systemName: "plus")
             }
-            .accessibilityLabel("Add vehicle")
+            .accessibilityLabel("Garage actions")
         }
         .sheet(isPresented: $presentNew) {
             NewVehicleView { _ in
+                reloadToken = UUID()
+            }
+        }
+        .sheet(isPresented: $presentClaim) {
+            ClaimPurchasedVehicleView {
+                presentClaim = false
                 reloadToken = UUID()
             }
         }
@@ -322,6 +330,8 @@ struct VehicleDetailView: View {
     @State private var showingVisibilityOptions = false
     @State private var showingSoldOptions = false
     @State private var markingSold = false
+    @State private var issuingHandoff = false
+    @State private var handoffClaim: VehiclesAPI.HandoffClaim?
     @State private var savingNotes = false
     @State private var notes = ""
     @State private var showingEdit = false
@@ -541,6 +551,33 @@ struct VehicleDetailView: View {
                         }
                     }
 
+                    if vehicle.ownershipState == .previouslyOwned {
+                        Section {
+                            if let claim = handoffClaim {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Buyer claim code").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                    Text(claim.code).font(.title3.monospaced().weight(.bold)).textSelection(.enabled)
+                                    Text("Expires \(claim.expiresAt.formatted(date: .abbreviated, time: .shortened)). Creating another code revokes this one.")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                    ShareLink(item: claim.code) {
+                                        Label("Share Code", systemImage: "square.and.arrow.up")
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                            Button(issuingHandoff ? "Creating Code…" : handoffClaim == nil ? "Create Buyer Claim Code" : "Create a New Code", systemImage: "key") {
+                                Task { await issueHandoffClaim() }
+                            }
+                            .disabled(issuingHandoff || vehicle.vin?.count != 17)
+                        } header: {
+                            Text("Buyer Garage Claim")
+                        } footer: {
+                            Text(vehicle.vin?.count == 17
+                                 ? "The buyer must enter this code and the full VIN. Only vehicle identity and configuration are copied into a new private record. Your photos, mileage, inspections, reports, notes, receipts, posts, and maintenance history stay with you. This is not proof of legal title."
+                                 : "Add the complete VIN before creating a buyer claim code.")
+                        }
+                    }
+
                     Section {
                         Button("Delete Vehicle", role: .destructive) {
                             showingDeleteVehicle = true
@@ -728,7 +765,7 @@ struct VehicleDetailView: View {
             Button("Keep History Private") { Task { await markSold(keepPublicHistory: false) } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Active listings will be closed. Your Garage record and private inspection data stay with your account.")
+            Text(soldHistoryPreview)
         }
         .confirmationDialog(
             "Delete this media item?",
@@ -765,6 +802,23 @@ struct VehicleDetailView: View {
             self.error = nil
         } catch {
             self.error = error
+        }
+    }
+
+    private var soldHistoryPreview: String {
+        guard let vehicle else { return "Active listings will be closed." }
+        let publicMedia = vehicle.vehicleMedia?.filter { $0.moderationStatus == "active" }.count ?? 0
+        return "Keep Public History shows the year, make, model, trim, nickname, current vehicle specifications, reported mileage, owner attribution, and \(publicMedia) approved media item\(publicMedia == 1 ? "" : "s"). Public build and maintenance entries remain visible. Full VIN, notes, receipts, private entries, addresses, keys or codes, and private inspection material stay private. Choosing Keep Public History confirms your consent."
+    }
+
+    private func issueHandoffClaim() async {
+        guard !issuingHandoff else { return }
+        issuingHandoff = true
+        defer { issuingHandoff = false }
+        do {
+            handoffClaim = try await VehiclesAPI.issueHandoffClaim(id: vehicleId)
+        } catch {
+            inlineAlert = error.localizedDescription
         }
     }
 
@@ -1527,6 +1581,69 @@ private struct EditVehicleView: View {
                 )
             )
             onSaved()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+struct ClaimPurchasedVehicleView: View {
+    @Environment(\.dismiss) private var dismiss
+    let onClaimed: () -> Void
+
+    @State private var code = ""
+    @State private var vin = ""
+    @State private var saving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Verify the handoff") {
+                    TextField("Seller claim code", text: $code)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                    TextField("Full 17-character VIN", text: $vin)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        .onChange(of: vin) { _, value in
+                            vin = String(value.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(17))
+                        }
+                }
+                Section {
+                    Text("A successful claim creates a new private Garage record with vehicle identity and configuration only. Seller photos, mileage, inspections, reports, notes, receipts, posts, and maintenance history are not copied.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Text("This verifies the handoff inside PerfectPPI; it is not proof of legal title or registration.")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                if let error {
+                    Section { Text(error).foregroundStyle(Theme.Palette.danger) }
+                }
+            }
+            .navigationTitle("Claim Purchased Vehicle")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "Verifying…" : "Claim") { Task { await claim() } }
+                        .disabled(saving || code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || vin.count != 17)
+                }
+            }
+        }
+    }
+
+    private func claim() async {
+        guard !saving else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            _ = try await VehiclesAPI.claimHandoff(code: code, vin: vin)
+            onClaimed()
             dismiss()
         } catch {
             self.error = error.localizedDescription

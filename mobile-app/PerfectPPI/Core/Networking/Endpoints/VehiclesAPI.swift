@@ -183,6 +183,31 @@ enum VehiclesAPI {
         )
     }
 
+    struct HandoffClaim: Codable {
+        let code: String
+        let expiresAt: Date
+    }
+
+    struct ClaimHandoffPayload: Encodable {
+        let code: String
+        let vin: String
+    }
+
+    struct ClaimedVehicle: Codable {
+        let vehicleId: String
+    }
+
+    static func issueHandoffClaim(id: String) async throws -> HandoffClaim {
+        try await APIClient.shared.post("/api/vehicles/\(id)/handoff", body: Empty())
+    }
+
+    static func claimHandoff(code: String, vin: String) async throws -> ClaimedVehicle {
+        try await APIClient.shared.post(
+            "/api/vehicles/claim",
+            body: ClaimHandoffPayload(code: code, vin: vin)
+        )
+    }
+
     static func media(id: String) async throws -> [VehicleMedia] {
         try await APIClient.shared.get("/api/vehicles/\(id)/media")
     }

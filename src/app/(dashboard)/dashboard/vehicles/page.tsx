@@ -2,7 +2,7 @@ import { getMyVehicles } from "@/features/vehicles/queries";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Car, ClipboardCheck, Tag } from "lucide-react";
+import { Plus, Car, ClipboardCheck, KeyRound, Tag } from "lucide-react";
 import Link from "next/link";
 import { formatDate, formatMileage } from "@/lib/utils/formatting";
 
@@ -53,12 +53,20 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
             Keep your vehicles, projects, and shopping list organized.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/dashboard/vehicles/new">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Vehicle
-          </Link>
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button asChild variant="outline">
+            <Link href="/dashboard/vehicles/claim">
+              <KeyRound className="mr-2 h-4 w-4" />
+              Claim Purchased Vehicle
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/dashboard/vehicles/new">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Vehicle
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {vehicles.length > 0 && (

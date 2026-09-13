@@ -15,6 +15,7 @@ import { VehicleNotesForm } from "./vehicle-notes-form";
 import { VehicleDeleteButton } from "./vehicle-danger-actions";
 import { InspectionDeleteButton } from "@/components/shared/inspection-delete-button";
 import { VehicleSoldAction } from "./vehicle-sold-action";
+import { VehicleHandoffAction } from "./vehicle-handoff-action";
 import { getOwnedVehicleTimelines } from "@/features/vehicles/timelines";
 import { VehicleBuildManager, VehicleMaintenanceManager } from "./vehicle-timeline-manager";
 
@@ -182,7 +183,32 @@ export default async function VehicleDetailPage({ params, searchParams }: {
           <CardHeader><CardTitle>Ownership History</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div><p className="text-sm font-medium">No longer own this vehicle?</p><p className="text-sm text-muted-foreground">Close active listings and move it to Previously Owned without transferring any private records.</p></div>
-            <VehicleSoldAction vehicleId={vehicle.id} />
+            <VehicleSoldAction
+              vehicleId={vehicle.id}
+              preview={{
+                vehicleLabel,
+                nickname: vehicle.nickname,
+                details: [
+                  vehicle.trim ? `Trim: ${vehicle.trim}` : null,
+                  vehicle.engine ? `Current engine/motor: ${vehicle.engine}` : null,
+                  vehicle.drivetrain ? `Current drivetrain: ${vehicle.drivetrain}` : null,
+                  vehicle.transmission ? `Current transmission: ${vehicle.transmission}` : null,
+                  vehicle.body_style ? `Body style: ${vehicle.body_style}` : null,
+                  vehicle.mileage != null ? `Reported mileage: ${formatMileage(vehicle.mileage)} miles` : null,
+                ].filter((value): value is string => value !== null),
+                mediaCount: gallery.filter((media) => media.moderation_status === "active").length,
+                buildCount: timelines.build.filter((entry) => entry.is_public).length,
+                maintenanceCount: timelines.maintenance.filter((entry) => entry.is_public).length,
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
+      {vehicle.ownership_state === "previously_owned" && (
+        <Card>
+          <CardHeader><CardTitle>Buyer Garage Claim</CardTitle></CardHeader>
+          <CardContent>
+            <VehicleHandoffAction vehicleId={vehicle.id} vehicleLabel={vehicleLabel} hasVin={!!vehicle.vin} />
           </CardContent>
         </Card>
       )}

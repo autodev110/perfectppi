@@ -72,6 +72,14 @@ export type CommunityPollView = {
   options: Array<{ key: string; label: string; votes: number | null }>;
 };
 
+export type CommunityQuestionOutcomeHistoryItem = {
+  id: string;
+  previous_outcome: Database["public"]["Enums"]["community_question_outcome"] | null;
+  outcome: Database["public"]["Enums"]["community_question_outcome"] | null;
+  created_at: string;
+  applies_to_current_answer: boolean;
+};
+
 /** Redacted inspection card for Inspection Discussion posts: never findings. */
 export type CommunityInspectionSummary = {
   id: string;
@@ -608,6 +616,53 @@ export async function getCommunityPostById(id: string) {
     comments: (post.comments ?? []).filter((comment) => !blockedAuthors.has(comment.author_id)),
   }, viewerId, memberGroupIds);
   return (await withPostLikeState([visiblePost], viewerId))[0] ?? null;
+}
+
+/** Redacted, bounded history for a question the current member may view. */
+export async function getCommunityQuestionOutcomeHistory(
+  postId: string,
+): Promise<CommunityQuestionOutcomeHistoryItem[] | null> {
+  const viewerId = await getCommunityViewerId();
+  if (!viewerId) return null;
+
+  const admin = createAdminClient();
+  const { data: canView, error: visibilityError } = await admin.rpc(
+    "social_can_view_community_post",
+    {
+      p_viewer_id: viewerId,
+      p_post_id: postId,
+      p_include_muted: false,
+    },
+  );
+  if (visibilityError || !canView) return null;
+
+  const { data: post, error: postError } = await admin
+    .from("community_posts")
+    .select("post_type, accepted_answer_comment_id")
+    .eq("id", postId)
+    .eq("status", "active")
+    .eq("moderation_status", "active")
+    .eq("group_status", "active")
+    .maybeSingle();
+  if (postError) throw new Error("Question history could not be loaded.");
+  if (!post || post.post_type !== "question") return null;
+
+  const { data: events, error: eventsError } = await admin
+    .from("community_question_outcome_events")
+    .select("id, answer_comment_id, previous_outcome, outcome, created_at")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(50);
+  if (eventsError) throw new Error("Question history could not be loaded.");
+
+  return (events ?? []).map((event) => ({
+    id: event.id,
+    previous_outcome: event.previous_outcome,
+    outcome: event.outcome,
+    created_at: event.created_at,
+    applies_to_current_answer: event.answer_comment_id === post.accepted_answer_comment_id,
+  }));
 }
 
 // Posts on a member's social profile (plan 9.1 "Posts" section): the

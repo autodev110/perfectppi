@@ -241,6 +241,10 @@ enum CommunityAPI {
         )
     }
 
+    static func questionOutcomeHistory(postId: String) async throws -> [CommunityQuestionOutcomeEvent] {
+        try await APIClient.shared.get("/api/community/posts/\(postId)/outcome")
+    }
+
     struct LikePayload: Encodable { let liked: Bool }
     struct LikeResult: Decodable {
         let postId: String

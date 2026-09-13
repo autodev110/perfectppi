@@ -57,6 +57,8 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     profile,
     vehicles,
     vehicleOwnershipEvents,
+    issuedVehicleHandoffs,
+    receivedVehicleHandoffs,
     requestedInspections,
     performedSubmissions,
     communityPosts,
@@ -96,6 +98,18 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     rows(
       "vehicle ownership events",
       admin.from("vehicle_ownership_events").select("*").eq("profile_id", profileId),
+    ),
+    rows(
+      "issued vehicle handoffs",
+      admin.from("vehicle_handoff_claims")
+        .select("id, source_vehicle_id, seller_profile_id, claimed_by_profile_id, claimed_vehicle_id, expires_at, claimed_at, revoked_at, created_at")
+        .eq("seller_profile_id", profileId),
+    ),
+    rows(
+      "received vehicle handoffs",
+      admin.from("vehicle_handoff_claims")
+        .select("id, source_vehicle_id, seller_profile_id, claimed_by_profile_id, claimed_vehicle_id, expires_at, claimed_at, revoked_at, created_at")
+        .eq("claimed_by_profile_id", profileId),
     ),
     rows(
       "inspection requests",
@@ -216,6 +230,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
   const [
     communityMedia,
     postComments,
+    questionOutcomeEvents,
     moderationEvents,
     conversationMessages,
     conversations,
@@ -224,6 +239,12 @@ export async function buildAccountDataExport(profileId: string, user: User) {
   ] = await Promise.all([
     rowsForIds("community media", "community_post_media", "post_id", postIds),
     rowsForIds("comments on owned posts", "community_comments", "post_id", postIds),
+    rowsForIds(
+      "question outcome history",
+      "community_question_outcome_events",
+      "post_id",
+      postIds,
+    ),
     rows(
       "moderation events",
       moderationItemIds.length === 0
@@ -297,6 +318,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
       maintenanceEvents: vehicleMaintenanceEvents,
       listings: marketplaceListings,
       ownershipEvents: vehicleOwnershipEvents,
+      handoffs: mergeById(issuedVehicleHandoffs, receivedVehicleHandoffs),
     },
     inspections: {
       requests: requestedInspections,
@@ -313,6 +335,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     community: {
       posts: communityPosts,
       comments: mergeById(communityComments, postComments),
+      questionOutcomeEvents,
       events: {
         organized: organizedEvents,
         rsvps: eventRsvps,
