@@ -9,6 +9,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
+import { observeOperationalOperation } from "../../features/operations/telemetry.ts";
 
 // Cloudflare R2 presigned URL generation
 // Client PUTs file directly to R2 using the signed URL
@@ -142,14 +143,14 @@ export async function uploadObject(params: {
   const client = getS3Client();
   const bucket = process.env.R2_BUCKET_NAME!;
 
-  await client.send(
+  await observeOperationalOperation("storage_put", () => client.send(
     new PutObjectCommand({
       Bucket: bucket,
       Key: params.key,
       Body: params.body,
       ContentType: params.contentType,
     })
-  );
+  ));
 
   return { publicUrl: `${process.env.R2_PUBLIC_URL!.replace(/\/$/, "")}/${params.key}` };
 }
@@ -166,14 +167,14 @@ export async function uploadPrivateObject(params: {
   const client = getS3Client();
   const key = params.key.replace(/^\/+/, "");
 
-  await client.send(
+  await observeOperationalOperation("storage_put", () => client.send(
     new PutObjectCommand({
       Bucket: process.env.R2_PRIVATE_BUCKET_NAME!,
       Key: key,
       Body: params.body,
       ContentType: params.contentType,
     }),
-  );
+  ));
 
   return { storageReference: privateStorageReference(key) };
 }
@@ -198,12 +199,12 @@ export async function promoteQuarantinedObject(params: {
     .map(encodeURIComponent)
     .join("/");
 
-  await getS3Client().send(new CopyObjectCommand({
+  await observeOperationalOperation("storage_copy", () => getS3Client().send(new CopyObjectCommand({
     Bucket: process.env.R2_BUCKET_NAME!,
     Key: destinationKey,
     CopySource: source,
     MetadataDirective: "COPY",
-  }));
+  })));
   return {
     publicUrl: `${process.env.R2_PUBLIC_URL!.replace(/\/$/, "")}/${destinationKey}`,
   };
@@ -232,12 +233,12 @@ export async function copyPrivateObject(params: {
   const destinationKey = params.destinationKey.replace(/^\/+/, "");
   const source = [bucket, ...sourceKey.split("/")].map(encodeURIComponent).join("/");
 
-  await getS3Client().send(new CopyObjectCommand({
+  await observeOperationalOperation("storage_copy", () => getS3Client().send(new CopyObjectCommand({
     Bucket: bucket,
     Key: destinationKey,
     CopySource: source,
     MetadataDirective: "COPY",
-  }));
+  })));
   return { storageReference: privateStorageReference(destinationKey) };
 }
 
@@ -247,7 +248,10 @@ export async function copyPrivateObject(params: {
  * request, not the S3 API, so a CDN or bucket-policy cache is caught too.
  */
 export async function publicUrlStillResolves(url: string): Promise<boolean> {
-  const response = await fetch(url, { method: "HEAD", cache: "no-store", redirect: "manual" });
+  const response = await observeOperationalOperation(
+    "storage_public_probe",
+    () => fetch(url, { method: "HEAD", cache: "no-store", redirect: "manual" }),
+  );
   return response.status >= 200 && response.status < 400;
 }
 
@@ -272,7 +276,10 @@ export async function getStoredObjectRange(
   const { bucket, key } = resolveStoredObject(storedValue);
   const range = rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader.trim()) ? rangeHeader.trim() : undefined;
 
-  const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key, Range: range }));
+  const response = await observeOperationalOperation(
+    "storage_get",
+    () => client.send(new GetObjectCommand({ Bucket: bucket, Key: key, Range: range })),
+  );
   const body = response.Body;
   if (!body) throw new Error("Empty response body from R2");
 
@@ -298,7 +305,10 @@ export async function getStoredObjectRange(
 /** Deletes a public URL or private storage reference created by this module. */
 export async function deleteStoredObject(storedValue: string): Promise<void> {
   const { bucket, key } = resolveStoredObject(storedValue);
-  await getS3Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  await observeOperationalOperation(
+    "storage_delete",
+    () => getS3Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key })),
+  );
 }
 
 async function deleteBucketPrefix(
@@ -310,20 +320,26 @@ async function deleteBucketPrefix(
   let deleted = 0;
 
   do {
-    const listed = await getS3Client().send(new ListObjectsV2Command({
-      Bucket: bucket,
-      Prefix: prefix,
-      ContinuationToken: continuationToken,
-      MaxKeys: 1000,
-    }));
+    const listed = await observeOperationalOperation(
+      "storage_list",
+      () => getS3Client().send(new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+        MaxKeys: 1000,
+      })),
+    );
     const keys = (listed.Contents ?? [])
       .flatMap((object) => object.Key ? [object.Key] : [])
       .filter((key) => !retainKeys.has(key));
     if (keys.length > 0) {
-      const result = await getS3Client().send(new DeleteObjectsCommand({
-        Bucket: bucket,
-        Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
-      }));
+      const result = await observeOperationalOperation(
+        "storage_delete",
+        () => getS3Client().send(new DeleteObjectsCommand({
+          Bucket: bucket,
+          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+        })),
+      );
       if (result.Errors?.length) {
         throw new Error(`R2 rejected ${result.Errors.length} account-deletion objects`);
       }
@@ -458,9 +474,9 @@ export async function getObjectFromStoredUrl(
   const client = getS3Client();
   const { bucket, key } = resolveStoredObject(storedPublicUrl);
 
-  const response = await client.send(
+  const response = await observeOperationalOperation("storage_get", () => client.send(
     new GetObjectCommand({ Bucket: bucket, Key: key })
-  );
+  ));
 
   const declaredSize = response.ContentLength;
   if (declaredSize !== undefined && limits.maxBytes !== undefined && declaredSize > limits.maxBytes) {
@@ -534,9 +550,9 @@ export async function getPrivateObjectByKey(key: string): Promise<{
   const client = getS3Client();
   const bucket = process.env.R2_PRIVATE_BUCKET_NAME!;
 
-  const response = await client.send(
+  const response = await observeOperationalOperation("storage_get", () => client.send(
     new GetObjectCommand({ Bucket: bucket, Key: key.replace(/^\/+/, "") }),
-  );
+  ));
 
   const body = response.Body;
   if (!body) {

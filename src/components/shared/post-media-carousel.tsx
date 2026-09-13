@@ -44,7 +44,13 @@ export function PostMediaCarousel({ media }: { media: PostMedia[] }) {
               />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.url} alt={item.alt_text ?? ""} className="h-full w-full object-cover" />
+              <img
+                src={item.url}
+                alt={item.alt_text ?? ""}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
             )}
             {media.length > 1 ? (
               <span className="absolute right-3 top-3 rounded-full bg-black/65 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur-sm">

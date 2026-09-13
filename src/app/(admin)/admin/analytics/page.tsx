@@ -1,7 +1,7 @@
-import { Activity, Target, UserCheck, Users } from "lucide-react";
+import { Activity, Gauge, Target, UserCheck, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/guards";
-import { getProductAnalyticsSummary } from "@/features/analytics/queries";
+import { getOperationalQueryMetrics, getProductAnalyticsSummary } from "@/features/analytics/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +23,24 @@ const eventLabels: Record<string, string> = {
   answer_accepted: "Answers accepted",
 };
 
+const operationLabels: Record<string, string> = {
+  community_feed: "Community feed",
+  marketplace_directory: "Marketplace directory",
+  saved_content: "Saved content",
+  group_posts: "Group posts",
+  group_search: "Group search",
+  group_members: "Group members",
+  group_faq: "Group FAQ",
+  people_search: "People search",
+  unified_search: "Unified search",
+};
+
 export default async function ProductAnalyticsPage() {
   await requireRole(["admin"]);
-  const summary = await getProductAnalyticsSummary(30);
+  const [summary, queryMetrics] = await Promise.all([
+    getProductAnalyticsSummary(30),
+    getOperationalQueryMetrics(),
+  ]);
   const activationRate = summary.eligibleNewProfiles > 0
     ? Math.round((summary.activatedNewProfiles / summary.eligibleNewProfiles) * 100)
     : 0;
@@ -86,6 +101,47 @@ export default async function ProductAnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Gauge className="h-5 w-5" aria-hidden="true" />Database reliability</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {queryMetrics.operations.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No production read-path statistics have been recorded since the last database statistics reset.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="pb-3">Operation</th>
+                    <th className="pb-3 text-right">Calls</th>
+                    <th className="pb-3 text-right">Average</th>
+                    <th className="pb-3 text-right">Slowest</th>
+                    <th className="pb-3 text-right">Rows</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {queryMetrics.operations.map((operation) => (
+                    <tr key={operation.operationCode} className="border-b last:border-0">
+                      <td className="py-3 font-medium">{operationLabels[operation.operationCode]}</td>
+                      <td className="py-3 text-right tabular-nums">{operation.calls.toLocaleString()}</td>
+                      <td className="py-3 text-right tabular-nums">{operation.meanExecMs.toLocaleString()} ms</td>
+                      <td className="py-3 text-right tabular-nums">{operation.maxExecMs.toLocaleString()} ms</td>
+                      <td className="py-3 text-right tabular-nums">{operation.rows.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="pt-4 text-xs text-muted-foreground">
+            Aggregate normalized database statistics{queryMetrics.statsReset
+              ? ` since ${new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(queryMetrics.statsReset))} UTC`
+              : " for the current database statistics window"}. SQL text, parameters, content, and account identifiers are not exposed.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

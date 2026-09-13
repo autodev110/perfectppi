@@ -2023,7 +2023,7 @@ private struct CommunityMediaCarousel: View {
                         if item.mediaType == "video" {
                             SecureVideoPlayer(path: item.url)
                         } else {
-                            SecureImage(path: item.url, contentMode: .fill)
+                            SecureImage(path: item.url, contentMode: .fill, maxPixelSize: 1_280)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .clipped()
                                 .accessibilityLabel(item.altText ?? "")

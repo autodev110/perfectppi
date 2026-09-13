@@ -5655,6 +5655,10 @@ export type Database = {
         Args: { p_days?: number }
         Returns: Json
       }
+      get_operational_query_metrics: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       prune_product_analytics_events: {
         Args: Record<PropertyKey, never>
         Returns: number
