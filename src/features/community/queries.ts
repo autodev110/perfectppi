@@ -110,6 +110,8 @@ export type CommunityFeedPost = Pick<
   report_context: string | null;
   /** Plan 15.5: present when the post involves a high-consequence repair topic. */
   safety_notice: SafetyNotice | null;
+  /** Same-author copies hidden behind this representative in the current feed. */
+  collapsed_repost_count: number;
 };
 
 export type CommunityComment = CommunityCommentRow & {
@@ -241,6 +243,7 @@ function toCommunityFeedPost(
   post: CommunityPost,
   viewerId: string,
   memberGroupIds: ReadonlyMap<string, GroupRole> = new Map(),
+  collapsedRepostCount = 0,
 ): CommunityFeedPost {
   const visibleComments = (post.comments ?? [])
     .filter((comment) => comment.status === "active" && comment.moderation_status === "active");
@@ -304,6 +307,7 @@ function toCommunityFeedPost(
       revisionId: post.active_revision_id,
     }),
     safety_notice: buildSafetyNotice(post.content),
+    collapsed_repost_count: collapsedRepostCount,
     details: (post.details && typeof post.details === "object" && !Array.isArray(post.details) ? post.details : {}) as Record<string, unknown>,
     poll: null,
     inspection: null,
@@ -536,14 +540,16 @@ export async function getCommunityPosts(
   if (!viewerId) return [];
 
   const admin = createAdminClient();
-  const flags = await getFeatureFlags();
-  const postIds = await getFilteredCommunityPostIds({
+  const feedItems = await getFilteredCommunityPostIds({
     viewerId,
     filter,
     page,
     perPage,
-    includeGroupPosts: flags.flags.groups,
+    // Plan 27.1: joined-group activity stays in Groups rather than the
+    // general All/Friends/My Cars stream.
+    includeGroupPosts: false,
   });
+  const postIds = feedItems.map((item) => item.postId);
   if (postIds.length === 0) return [];
   const { data } = await admin
     .from("community_posts")
@@ -562,9 +568,9 @@ export async function getCommunityPosts(
     ...post,
     comments: (post.comments ?? []).filter((comment) => !blockedCommentAuthors.has(comment.author_id)),
   }]));
-  const visiblePosts = postIds.flatMap((id) => {
-    const post = byId.get(id);
-    return post ? [toCommunityFeedPost(post, viewerId, memberGroupIds)] : [];
+  const visiblePosts = feedItems.flatMap((item) => {
+    const post = byId.get(item.postId);
+    return post ? [toCommunityFeedPost(post, viewerId, memberGroupIds, item.collapsedRepostCount)] : [];
   });
   return withPostLikeState(visiblePosts, viewerId);
 }

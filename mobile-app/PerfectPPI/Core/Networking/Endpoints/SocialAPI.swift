@@ -24,6 +24,15 @@ enum SocialAPI {
         try await APIClient.shared.get("/api/social/friends")
     }
 
+    private struct ContactDiscoveryPayload: Encodable { let hashes: [String] }
+
+    static func discoverContacts(hashes: [String]) async throws -> [ContactDiscoveryResult] {
+        try await APIClient.shared.postCamel(
+            "/api/social/contacts",
+            body: ContactDiscoveryPayload(hashes: hashes)
+        )
+    }
+
     private struct FriendMutationPayload: Encodable {
         let profileId: String
         let action: FriendAction

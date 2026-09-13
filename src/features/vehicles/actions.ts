@@ -36,6 +36,11 @@ const createVehicleSchema = z.object({
   drivetrain: z.string().trim().max(100).optional().or(z.literal("")),
   transmission: z.string().trim().max(100).optional().or(z.literal("")),
   body_style: z.string().trim().max(100).optional().or(z.literal("")),
+  configuration_type: z.enum(["stock", "modified", "custom_build"]).optional(),
+  engine_original: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
+  transmission_original: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
+  drivetrain_original: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
+  mileage_status: z.enum(["actual", "not_actual", "unknown"]).optional(),
   nickname: z.string().trim().max(60).optional().or(z.literal("")),
   ownership_state: z.enum(["owned", "previously_owned", "considering", "project"]).optional(),
   mileage: z.coerce.number().min(0).optional(),
@@ -107,6 +112,15 @@ export async function createVehicle(formData: FormData) {
   if (!profile) return { error: "Profile not found" };
 
   const normalizedVin = parsed.data.vin?.trim().toUpperCase() || null;
+  const configurationType = parsed.data.configuration_type ?? "stock";
+  const originalEquipment = [
+    parsed.data.engine_original ?? true,
+    parsed.data.transmission_original ?? true,
+    parsed.data.drivetrain_original ?? true,
+  ];
+  if (configurationType === "stock" && originalEquipment.includes(false)) {
+    return { error: "Choose Modified or Custom build when factory equipment has been replaced." };
+  }
 
   if (normalizedVin) {
     const { data: existingVehicles } = await supabase
@@ -187,20 +201,28 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
   if (!parsed.success) {
     return { error: parsed.error.errors[0].message };
   }
-
   const profile = await getCurrentProfileId();
   if ("error" in profile) return { error: profile.error };
   const admin = createAdminClient();
 
   const { data: ownedVehicle } = await admin
     .from("vehicles")
-    .select("id, ownership_state")
+    .select("id, ownership_state, configuration_type, engine_original, transmission_original, drivetrain_original")
     .eq("id", vehicleId)
     .eq("owner_id", profile.profileId)
     .maybeSingle();
   if (!ownedVehicle) return { error: "Vehicle not found" };
   if (parsed.data.ownership_state === "previously_owned" && ownedVehicle.ownership_state !== "previously_owned") {
     return { error: "Use Mark as sold so active listings and your history privacy choice are updated together." };
+  }
+  const effectiveConfigurationType = parsed.data.configuration_type ?? ownedVehicle.configuration_type;
+  const effectiveOriginalEquipment = [
+    parsed.data.engine_original ?? ownedVehicle.engine_original,
+    parsed.data.transmission_original ?? ownedVehicle.transmission_original,
+    parsed.data.drivetrain_original ?? ownedVehicle.drivetrain_original,
+  ];
+  if (effectiveConfigurationType === "stock" && effectiveOriginalEquipment.includes(false)) {
+    return { error: "Choose Modified or Custom build when factory equipment has been replaced." };
   }
 
   const { notes, ...vehicleFields } = parsed.data;

@@ -23,6 +23,7 @@ import { POST_TYPE_LABELS, type PostType } from "@/lib/community/post-types";
 import { CommunityHelpfulButton } from "@/components/shared/community-helpful-button";
 import { QuestionOutcomeControl } from "@/components/shared/question-outcome-control";
 import { SavedCollectionButton } from "@/components/shared/saved-collection-button";
+import { CommunityFeedMuteMenu } from "@/components/shared/community-feed-mute-menu";
 
 function getVehicleName(vehicle: { year: number | null; make: string | null; model: string | null; trim: string | null } | null) {
   return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ");
@@ -69,6 +70,13 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
               <Badge className="bg-teal/10 text-teal hover:bg-teal/10">{POST_TYPE_LABELS[post.post_type as PostType].chip}</Badge>
             ) : null}
             <Badge variant="outline" className="rounded-full capitalize">{post.audience}</Badge>
+            {post.author_id !== viewerId ? (
+              <CommunityFeedMuteMenu
+                group={post.group ? { id: post.group.id, name: post.group.name } : null}
+                postType={post.post_type as PostType}
+                vehicle={post.vehicle ? { make: post.vehicle.make, model: post.vehicle.model } : null}
+              />
+            ) : null}
             {post.author_id !== viewerId ? <MemberSafetyActions profileId={post.author_id} compact /> : null}
             {post.report_context ? (
               <CommunityReportControl entityType="community_post" entityId={post.id} reportContext={post.report_context} />
@@ -95,6 +103,11 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
           <div className="mt-4">
             <SafetyNotice notice={post.safety_notice} />
           </div>
+        ) : null}
+        {post.collapsed_repost_count > 0 ? (
+          <p className="mt-4 rounded-xl bg-surface-container px-3 py-2 text-xs text-on-surface-variant">
+            {post.collapsed_repost_count} repetitive repost{post.collapsed_repost_count === 1 ? "" : "s"} collapsed.
+          </p>
         ) : null}
       </div>
 

@@ -136,7 +136,7 @@ export async function runOutputGenerationJob(params: {
     .select(
       `
       id, ppi_type, inspection_scope, performer_type, requester_id, requesting_organization_id,
-      vehicle:vehicles(year, make, model, trim, vin, mileage)
+      vehicle:vehicles(year, make, model, trim, vin, mileage, configuration_type, engine, drivetrain, transmission, engine_original, transmission_original, drivetrain_original, mileage_status)
     `,
     )
     .eq("id", submission.ppi_request_id)
@@ -159,6 +159,14 @@ export async function runOutputGenerationJob(params: {
     trim: string | null;
     vin: string | null;
     mileage: number | null;
+    configuration_type: "stock" | "modified" | "custom_build";
+    engine: string | null;
+    drivetrain: string | null;
+    transmission: string | null;
+    engine_original: boolean;
+    transmission_original: boolean;
+    drivetrain_original: boolean;
+    mileage_status: "actual" | "not_actual" | "unknown";
   } | null;
 
   const sortedSections = [...(submission.sections ?? [])]
@@ -245,6 +253,14 @@ export async function runOutputGenerationJob(params: {
             trim: null,
             vin: null,
             mileage: null,
+            configuration_type: "stock",
+            engine: null,
+            drivetrain: null,
+            transmission: null,
+            engine_original: true,
+            transmission_original: true,
+            drivetrain_original: true,
+            mileage_status: "unknown",
           },
         request: {
           ppi_type: request.ppi_type,

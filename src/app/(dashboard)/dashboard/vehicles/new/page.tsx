@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { VinScanButton } from "@/components/shared/vin-scan-button";
+import { VehicleConfigurationFields } from "@/components/shared/vehicle-configuration-fields";
+import { VehicleMakeModelFields } from "@/components/shared/vehicle-make-model-fields";
 import Link from "next/link";
 
 export default function NewVehiclePage() {
@@ -94,12 +96,6 @@ export default function NewVehiclePage() {
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Engine" name="engine" placeholder="2.0L turbo" maxLength={100} />
-              <Field label="Drivetrain" name="drivetrain" placeholder="AWD" maxLength={100} />
-              <Field label="Transmission" name="transmission" placeholder="10-speed automatic" maxLength={100} />
-              <Field label="Body style" name="body_style" placeholder="Sedan" maxLength={100} />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="year">Year</Label>
                 <Input
@@ -114,30 +110,6 @@ export default function NewVehiclePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="make">Make *</Label>
-                <Input
-                  id="make"
-                  name="make"
-                  placeholder="Toyota"
-                  required
-                  value={make}
-                  onChange={(event) => setMake(event.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="model">Model *</Label>
-                <Input
-                  id="model"
-                  name="model"
-                  placeholder="Camry"
-                  required
-                  value={model}
-                  onChange={(event) => setModel(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="trim">Trim</Label>
                 <Input
                   id="trim"
@@ -147,6 +119,9 @@ export default function NewVehiclePage() {
                   onChange={(event) => setTrim(event.target.value)}
                 />
               </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <VehicleMakeModelFields make={make} model={model} year={year} onMakeChange={(value) => { setMake(value); setModel(""); }} onModelChange={setModel} />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -180,6 +155,13 @@ export default function NewVehiclePage() {
                   min={0}
                 />
               </div>
+            </div>
+            <VehicleConfigurationFields />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Current engine/motor" name="engine" placeholder="2.0L turbo or swapped engine" maxLength={100} />
+              <Field label="Current drivetrain" name="drivetrain" placeholder="FWD, RWD, AWD, or 4WD" maxLength={100} />
+              <Field label="Current transmission" name="transmission" placeholder="10-speed automatic" maxLength={100} />
+              <Field label="Body style" name="body_style" placeholder="Sedan" maxLength={100} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="visibility">Visibility</Label>

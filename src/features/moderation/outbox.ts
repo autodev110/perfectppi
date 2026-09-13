@@ -12,8 +12,10 @@ import {
   operationalWebhookBody,
   reportReceivedMessage,
   reporterReviewCompleteMessage,
+  visibilityIntegrityWebhookBody,
   type NotificationDraft,
 } from "./outbox-messages";
+import { getModerationVisibilityIntegrity } from "./visibility-integrity";
 
 // Moderation outbox processor (plan 22.1 / 29.8 / 33). Claims durable jobs,
 // creates in-app notification records first (so a failed push never loses
@@ -26,6 +28,10 @@ type NotificationType = Database["public"]["Enums"]["notification_type"];
 
 export type OutboxReport = {
   sla: Record<string, number>;
+  visibilityIntegrity: {
+    available: boolean;
+    totalViolations: number;
+  };
   claimed: number;
   completed: number;
   failed: number;
@@ -107,7 +113,9 @@ async function moderatorRecipients(): Promise<string[]> {
   return eligible.filter((profileId): profileId is string => Boolean(profileId));
 }
 
-async function postOperationalWebhook(body: ReturnType<typeof operationalWebhookBody>) {
+async function postOperationalWebhook(
+  body: ReturnType<typeof operationalWebhookBody> | ReturnType<typeof visibilityIntegrityWebhookBody>,
+) {
   const url = process.env.MODERATION_ALERT_WEBHOOK_URL;
   if (!url) return;
   const response = await fetch(url, {
@@ -223,7 +231,19 @@ async function handle(job: OutboxRow): Promise<void> {
 
 export async function processModerationOutbox(limit = 50): Promise<OutboxReport> {
   const admin = createAdminClient();
-  const report: OutboxReport = { sla: {}, claimed: 0, completed: 0, failed: 0, deadLettered: 0, byType: {} };
+  const integrity = await getModerationVisibilityIntegrity();
+  const report: OutboxReport = {
+    sla: {},
+    visibilityIntegrity: {
+      available: integrity.available,
+      totalViolations: integrity.totalViolations,
+    },
+    claimed: 0,
+    completed: 0,
+    failed: 0,
+    deadLettered: 0,
+    byType: {},
+  };
 
   const { data: sla, error: slaError } = await admin.rpc("enqueue_moderation_sla_alerts");
   if (slaError) {
@@ -255,6 +275,12 @@ export async function processModerationOutbox(limit = 50): Promise<OutboxReport>
       if (updated?.dead_lettered_at) report.deadLettered += 1;
       console.error("[moderation-outbox] job failed", { id: job.id, type: job.event_type, message });
     }
+  }
+
+  // Page after draining durable jobs so an alert-provider outage cannot stop
+  // reporter or moderator notifications from progressing.
+  if (!integrity.available || integrity.totalViolations > 0) {
+    await postOperationalWebhook(visibilityIntegrityWebhookBody(integrity));
   }
   return report;
 }

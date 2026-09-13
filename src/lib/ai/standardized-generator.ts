@@ -88,6 +88,14 @@ interface GeneratorInput {
     trim: string | null;
     vin: string | null;
     mileage: number | null;
+    configuration_type: "stock" | "modified" | "custom_build";
+    engine: string | null;
+    drivetrain: string | null;
+    transmission: string | null;
+    engine_original: boolean;
+    transmission_original: boolean;
+    drivetrain_original: boolean;
+    mileage_status: "actual" | "not_actual" | "unknown";
   };
   request: {
     ppi_type: string;

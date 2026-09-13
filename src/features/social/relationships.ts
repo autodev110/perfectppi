@@ -99,7 +99,7 @@ export async function getFilteredCommunityPostIds({
   perPage?: number;
   includeGroupPosts?: boolean;
 }) {
-  const { data, error } = await createAdminClient().rpc("social_filtered_community_post_ids", {
+  const { data, error } = await createAdminClient().rpc("social_quality_filtered_community_post_ids", {
     p_viewer_id: viewerId,
     p_filter: filter,
     p_limit: perPage,
@@ -110,7 +110,10 @@ export async function getFilteredCommunityPostIds({
     console.error("getFilteredCommunityPostIds failed", error);
     return [];
   }
-  return (data ?? []).map((row) => row.post_id);
+  return (data ?? []).map((row) => ({
+    postId: row.post_id,
+    collapsedRepostCount: row.collapsed_repost_count,
+  }));
 }
 
 export async function getVisibleCommunityGroupPostIds({

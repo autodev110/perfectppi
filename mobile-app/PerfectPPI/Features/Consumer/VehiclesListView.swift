@@ -369,6 +369,9 @@ struct VehicleDetailView: View {
                                     systemImage: (vehicle.visibility ?? .private).systemImage,
                                     tint: .secondary
                                 )
+                                if vehicle.configurationType != nil && vehicle.configurationType != .stock {
+                                    GarageChip(text: (vehicle.configurationType ?? .stock).label, systemImage: "wrench.and.screwdriver.fill", tint: Theme.Palette.warning)
+                                }
                                 if vehicle.marketplaceListings?.contains(where: { $0.status.isLive }) == true {
                                     GarageChip(text: "Listed", systemImage: "tag.fill", tint: Theme.Palette.warning)
                                 }
@@ -415,19 +418,19 @@ struct VehicleDetailView: View {
                         }
                         if let mileage = vehicle.mileage {
                             VehicleDetailRow(
-                                label: "Mileage",
-                                value: mileageDetail(mileage, updatedAt: vehicle.mileageUpdatedAt),
+                                label: "Odometer",
+                                value: "\(mileageDetail(mileage, updatedAt: vehicle.mileageUpdatedAt)) · \((vehicle.mileageStatus ?? .actual).label)",
                                 systemImage: "gauge.with.dots.needle.50percent"
                             )
                         }
                         if let engine = vehicle.engine, !engine.isEmpty {
-                            VehicleDetailRow(label: "Engine", value: engine, systemImage: "engine.combustion")
+                            VehicleDetailRow(label: "Current engine/motor", value: "\(engine) · \(vehicle.engineOriginal == false ? "Swapped" : "Original")", systemImage: "engine.combustion")
                         }
                         if let drivetrain = vehicle.drivetrain, !drivetrain.isEmpty {
-                            VehicleDetailRow(label: "Drivetrain", value: drivetrain, systemImage: "gearshape.2")
+                            VehicleDetailRow(label: "Current drivetrain", value: "\(drivetrain) · \(vehicle.drivetrainOriginal == false ? "Converted" : "Original")", systemImage: "gearshape.2")
                         }
                         if let transmission = vehicle.transmission, !transmission.isEmpty {
-                            VehicleDetailRow(label: "Transmission", value: transmission, systemImage: "gearshift.layout.sixspeed")
+                            VehicleDetailRow(label: "Current transmission", value: "\(transmission) · \(vehicle.transmissionOriginal == false ? "Swapped" : "Original")", systemImage: "gearshift.layout.sixspeed")
                         }
                         if let bodyStyle = vehicle.bodyStyle, !bodyStyle.isEmpty {
                             VehicleDetailRow(label: "Body style", value: bodyStyle, systemImage: "car.side")
@@ -444,6 +447,11 @@ struct VehicleDetailView: View {
                             value: (vehicle.ownershipState ?? .owned).label,
                             systemImage: "key"
                         )
+                        if vehicle.configurationType == .customBuild {
+                            Button("Open Build Progression", systemImage: "wrench.and.screwdriver") {
+                                selectedTab = .build
+                            }
+                        }
                         Button("Edit Vehicle", systemImage: "pencil") {
                             showingEdit = true
                         }
@@ -1381,6 +1389,12 @@ private struct EditVehicleView: View {
     @State private var mileage: String
     @State private var saving = false
     @State private var error: String?
+    @State private var catalogTarget: VehicleCatalogTarget?
+    @State private var configurationType: VehicleConfigurationType
+    @State private var engineOriginal: Bool
+    @State private var transmissionOriginal: Bool
+    @State private var drivetrainOriginal: Bool
+    @State private var mileageStatus: VehicleMileageStatus
 
     init(vehicle: Vehicle, onSaved: @escaping () -> Void) {
         self.vehicle = vehicle
@@ -1398,6 +1412,11 @@ private struct EditVehicleView: View {
         _visibility = State(initialValue: vehicle.visibility ?? .private)
         _year = State(initialValue: vehicle.year.map(String.init) ?? "")
         _mileage = State(initialValue: vehicle.mileage.map(String.init) ?? "")
+        _configurationType = State(initialValue: vehicle.configurationType ?? .stock)
+        _engineOriginal = State(initialValue: vehicle.engineOriginal ?? true)
+        _transmissionOriginal = State(initialValue: vehicle.transmissionOriginal ?? true)
+        _drivetrainOriginal = State(initialValue: vehicle.drivetrainOriginal ?? true)
+        _mileageStatus = State(initialValue: vehicle.mileageStatus ?? .actual)
     }
 
     var body: some View {
@@ -1419,7 +1438,10 @@ private struct EditVehicleView: View {
                 }
                 TextField("VIN", text: $vin).textInputAutocapitalization(.characters)
                 TextField("Make", text: $make)
+                Button("Choose Make", systemImage: "chevron.down") { catalogTarget = .make }
                 TextField("Model", text: $model)
+                Button("Choose Model", systemImage: "chevron.down") { catalogTarget = .model }
+                    .disabled(make.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 TextField("Trim", text: $trim)
                 TextField("Engine", text: $engine)
                 TextField("Drivetrain", text: $drivetrain)
@@ -1427,6 +1449,24 @@ private struct EditVehicleView: View {
                 TextField("Body style", text: $bodyStyle)
                 TextField("Year", text: $year).keyboardType(.numberPad)
                 TextField("Mileage", text: $mileage).keyboardType(.numberPad)
+                Section("Configuration check") {
+                    Picker("Configuration", selection: $configurationType) {
+                        ForEach(VehicleConfigurationType.allCases) { Text($0.label).tag($0) }
+                    }
+                    .onChange(of: configurationType) { _, value in
+                        if value == .stock { engineOriginal = true; transmissionOriginal = true; drivetrainOriginal = true }
+                    }
+                    Toggle("Original engine/motor", isOn: $engineOriginal).disabled(configurationType == .stock)
+                    Toggle("Original transmission", isOn: $transmissionOriginal).disabled(configurationType == .stock)
+                    Toggle("Original drivetrain", isOn: $drivetrainOriginal).disabled(configurationType == .stock)
+                    Picker("Actual mileage?", selection: $mileageStatus) {
+                        ForEach(VehicleMileageStatus.allCases) { Text($0.label).tag($0) }
+                    }
+                    if configurationType == .customBuild {
+                        Text("Save, then open Build Progression to document each swap and modification.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
                 if let error { Text(error).foregroundStyle(Theme.Palette.danger) }
             }
             .navigationTitle("Edit Vehicle")
@@ -1440,6 +1480,12 @@ private struct EditVehicleView: View {
                             make.trimmingCharacters(in: .whitespaces).isEmpty ||
                             model.trimmingCharacters(in: .whitespaces).isEmpty
                         )
+                }
+            }
+            .sheet(item: $catalogTarget) { target in
+                VehicleCatalogPicker(target: target, make: make, year: Int(year)) { value in
+                    if target == .make { make = value; model = "" } else { model = value }
+                    catalogTarget = nil
                 }
             }
         }
@@ -1472,7 +1518,12 @@ private struct EditVehicleView: View {
                     engine: engine.trimmingCharacters(in: .whitespacesAndNewlines),
                     drivetrain: drivetrain.trimmingCharacters(in: .whitespacesAndNewlines),
                     transmission: transmission.trimmingCharacters(in: .whitespacesAndNewlines),
-                    bodyStyle: bodyStyle.trimmingCharacters(in: .whitespacesAndNewlines)
+                    bodyStyle: bodyStyle.trimmingCharacters(in: .whitespacesAndNewlines),
+                    configurationType: configurationType,
+                    engineOriginal: engineOriginal,
+                    transmissionOriginal: transmissionOriginal,
+                    drivetrainOriginal: drivetrainOriginal,
+                    mileageStatus: mileageStatus
                 )
             )
             onSaved()
@@ -1508,6 +1559,12 @@ struct NewVehicleView: View {
     @State private var error: String?
     @State private var showVINScanner = false
     @State private var duplicateVehicle: Vehicle?
+    @State private var catalogTarget: VehicleCatalogTarget?
+    @State private var configurationType: VehicleConfigurationType = .stock
+    @State private var engineOriginal = true
+    @State private var transmissionOriginal = true
+    @State private var drivetrainOriginal = true
+    @State private var mileageStatus: VehicleMileageStatus = .actual
 
     var body: some View {
         NavigationStack {
@@ -1540,7 +1597,10 @@ struct NewVehicleView: View {
                         Label("Scan VIN", systemImage: "camera.viewfinder")
                     }
                     TextField("Make", text: $make)
+                    Button("Choose Make", systemImage: "chevron.down") { catalogTarget = .make }
                     TextField("Model", text: $model)
+                    Button("Choose Model", systemImage: "chevron.down") { catalogTarget = .model }
+                        .disabled(make.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     TextField("Trim", text: $trim)
                     TextField("Year", text: $year).keyboardType(.numberPad)
                     TextField("Mileage", text: $mileage).keyboardType(.numberPad)
@@ -1550,6 +1610,26 @@ struct NewVehicleView: View {
                     TextField("Drivetrain", text: $drivetrain)
                     TextField("Transmission", text: $transmission)
                     TextField("Body style", text: $bodyStyle)
+                }
+                Section("Configuration check") {
+                    Text("Confirm the vehicle as it is now. VIN-decoded factory equipment may no longer be installed.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Picker("Configuration", selection: $configurationType) {
+                        ForEach(VehicleConfigurationType.allCases) { Text($0.label).tag($0) }
+                    }
+                    .onChange(of: configurationType) { _, value in
+                        if value == .stock { engineOriginal = true; transmissionOriginal = true; drivetrainOriginal = true }
+                    }
+                    Toggle("Original engine/motor", isOn: $engineOriginal).disabled(configurationType == .stock)
+                    Toggle("Original transmission", isOn: $transmissionOriginal).disabled(configurationType == .stock)
+                    Toggle("Original drivetrain", isOn: $drivetrainOriginal).disabled(configurationType == .stock)
+                    Picker("Actual mileage?", selection: $mileageStatus) {
+                        ForEach(VehicleMileageStatus.allCases) { Text($0.label).tag($0) }
+                    }
+                    if configurationType == .customBuild {
+                        Text("After saving, open Build Progression to document each swap and modification.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
                 if let error {
                     Text(error).foregroundStyle(Theme.Palette.danger)
@@ -1593,6 +1673,12 @@ struct NewVehicleView: View {
                     if let decodedMake = decoded.make { make = decodedMake }
                     if let decodedModel = decoded.model { model = decodedModel }
                     if let decodedTrim = decoded.trim { trim = decodedTrim }
+                }
+            }
+            .sheet(item: $catalogTarget) { target in
+                VehicleCatalogPicker(target: target, make: make, year: Int(year)) { value in
+                    if target == .make { make = value; model = "" } else { model = value }
+                    catalogTarget = nil
                 }
             }
         }
@@ -1642,7 +1728,12 @@ struct NewVehicleView: View {
                     engine: nilIfBlank(engine),
                     drivetrain: nilIfBlank(drivetrain),
                     transmission: nilIfBlank(transmission),
-                    bodyStyle: nilIfBlank(bodyStyle)
+                    bodyStyle: nilIfBlank(bodyStyle),
+                    configurationType: configurationType,
+                    engineOriginal: engineOriginal,
+                    transmissionOriginal: transmissionOriginal,
+                    drivetrainOriginal: drivetrainOriginal,
+                    mileageStatus: mileageStatus
                 )
             )
             onSave(created)
@@ -1664,5 +1755,63 @@ struct NewVehicleView: View {
     private func nilIfBlank(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+private enum VehicleCatalogTarget: String, Identifiable {
+    case make, model
+    var id: String { rawValue }
+    var title: String { self == .make ? "Choose Make" : "Choose Model" }
+}
+
+private struct VehicleCatalogPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    let target: VehicleCatalogTarget
+    let make: String
+    let year: Int?
+    let onSelect: (String) -> Void
+    @State private var query = ""
+    @State private var values: [String] = []
+    @State private var loading = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if loading && values.isEmpty {
+                    ProgressView("Loading suggestions…")
+                } else if let error {
+                    Text(error).foregroundStyle(Theme.Palette.danger)
+                    Text("You can close this list and type the value manually.").font(.footnote).foregroundStyle(.secondary)
+                } else if values.isEmpty {
+                    Text("No suggestions found. You can still type the value manually.").foregroundStyle(.secondary)
+                } else {
+                    ForEach(values, id: \.self) { value in
+                        Button(value) { onSelect(value) }
+                    }
+                }
+            }
+            .navigationTitle(target.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $query, prompt: target == .make ? "Search makes" : "Search models")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .task(id: query) { await load() }
+        }
+    }
+
+    @MainActor
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        do {
+            try await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            values = try await VehiclesAPI.catalog(kind: target.rawValue + "s", make: target == .model ? make : nil, year: year, query: query)
+            error = nil
+        } catch is CancellationError {
+            return
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 }

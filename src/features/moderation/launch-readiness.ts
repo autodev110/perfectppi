@@ -8,6 +8,7 @@ import {
   evaluateSocialLaunchReadiness,
   type LaunchReadinessEvaluation,
 } from "./launch-readiness-shared";
+import { getModerationVisibilityIntegrity } from "./visibility-integrity";
 
 export type SocialLaunchReadiness = LaunchReadinessEvaluation & {
   environment: string;
@@ -51,10 +52,11 @@ export async function getSocialLaunchReadiness(): Promise<SocialLaunchReadiness>
       .limit(1)
       .maybeSingle(),
   })));
-  const [flags, mediaResult, operationsResult, grantsResult, policyResult, cleanupResult, failedCleanupResult, workerRunResults] = await Promise.all([
+  const [flags, mediaResult, operationsResult, visibilityIntegrity, grantsResult, policyResult, cleanupResult, failedCleanupResult, workerRunResults] = await Promise.all([
     getFeatureFlags({ fresh: true }),
     admin.rpc("community_media_storage_status"),
     admin.rpc("moderation_operations_status"),
+    getModerationVisibilityIntegrity(),
     admin.from("moderation_role_grants").select("profile_id, capability").is("revoked_at", null),
     admin.from("moderation_retention_policies").select("basis").eq("basis", "community_safety").maybeSingle(),
     admin.from("storage_cleanup_jobs")
@@ -152,6 +154,7 @@ export async function getSocialLaunchReadiness(): Promise<SocialLaunchReadiness>
       outboxDeadLettered: operations?.outboxDeadLettered ?? 0,
       outboxOldestPendingMinutes: operations?.outboxOldestPendingMinutes ?? 0,
     },
+    visibilityIntegrity,
     moderatorCoverage: { available: coverageAvailable, counts: coverage },
     communityRetentionPolicyConfigured: policyResult.error ? null : policyResult.data !== null,
     storageCleanup: {

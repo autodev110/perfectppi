@@ -1,10 +1,11 @@
 # PerfectPPI Data Inventory
 
-Status: implemented as an engineering inventory pending business-owner and licensed-counsel approval. Last reviewed: September 2, 2026.
+Status: implemented as an engineering inventory pending business-owner and licensed-counsel approval. Last reviewed: September 13, 2026.
 
 | Data | Source and purpose | Primary storage/access | Disclosures | Deletion/retention state |
 |---|---|---|---|---|
 | Auth ID, email, name, avatar, role, Google identity | User/Google; authentication, profile, authorization | Supabase Auth and `profiles`; user, authorized staff, service processes | Supabase, Google for OAuth | Durable deletion removes Auth, profile-owned data, sessions, links, devices, and managed media; documented legal holds pause processing |
+| Contact discovery digests | Optional device-contact selection; find existing PerfectPPI accounts and invite unmatched contacts | One-way normalized email/phone SHA-256 digests in a service-only Supabase table; raw contact names and unmatched details stay on device | Supabase; matched account summaries return only to the requesting signed-in user | Synced when account identifiers change and removed by profile cascade during account deletion; users can deny or limit Contacts access |
 | Legal assent evidence | Signup or post-OAuth clickwrap; prove versioned assent | `legal_acceptances`; owner select, service-role write | Supabase | Preserve according to counsel-approved dispute/contract schedule |
 | Organization and technician profile | User/org; directory, assignment, permissions | Supabase organization, membership, technician tables | Public fields when profile is public; relevant organization members | Verification evidence and credential schedule not implemented |
 | Vehicle, VIN, make/model, mileage | User, scanner, NHTSA vPIC, partner; identify vehicle and support inspection | Supabase vehicle/inspection tables | NHTSA vPIC, Gemini where feature requires, inspectors/org/partner | VIN minimization and final schedule open |

@@ -41,6 +41,8 @@
 	<string>PerfectPPI uses Bluetooth to connect to the OBDLink CX adapter and pull diagnostic data from the vehicle.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>PerfectPPI uses the camera to scan VINs and attach photos to inspections, posts, and messages.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>PerfectPPI compares one-way hashes of the contacts you choose to suggest friends already on PerfectPPI and people to invite. Names, emails, and phone numbers stay on your iPhone.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Face ID unlocks PerfectPPI without re-entering your password.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

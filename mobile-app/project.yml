@@ -60,6 +60,7 @@ targets:
         NSPhotoLibraryUsageDescription: PerfectPPI lets you choose photos and videos for inspections, posts, and message attachments.
         NSPhotoLibraryAddUsageDescription: PerfectPPI can save photos you capture to your photo library.
         NSFaceIDUsageDescription: Face ID unlocks PerfectPPI without re-entering your password.
+        NSContactsUsageDescription: PerfectPPI compares one-way hashes of the contacts you choose to suggest friends already on PerfectPPI and people to invite. Names, emails, and phone numbers stay on your iPhone.
         ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: com.perfectppi.app

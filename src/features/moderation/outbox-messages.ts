@@ -168,3 +168,27 @@ export function operationalWebhookBody(input: {
   ].filter(Boolean).join(" ");
   return { text, eventType: input.eventType, caseId: input.caseId, priority: input.priority ?? null, stage: input.stage ?? null };
 }
+
+/** Counts-only visibility alert. It deliberately contains no content or IDs. */
+export function visibilityIntegrityWebhookBody(input: {
+  available: boolean;
+  activeRestrictedPosts: number;
+  activeRestrictedComments: number;
+  openCaseVisibleContent: number;
+  totalViolations: number;
+}) {
+  const eventType = input.available
+    ? "moderation_visibility_integrity_violation"
+    : "moderation_visibility_integrity_unavailable";
+  const text = input.available
+    ? `[PerfectPPI moderation] ${eventType} total=${input.totalViolations} posts=${input.activeRestrictedPosts} comments=${input.activeRestrictedComments} openCases=${input.openCaseVisibleContent}`
+    : `[PerfectPPI moderation] ${eventType}`;
+  return {
+    text,
+    eventType,
+    totalViolations: input.totalViolations,
+    activeRestrictedPosts: input.activeRestrictedPosts,
+    activeRestrictedComments: input.activeRestrictedComments,
+    openCaseVisibleContent: input.openCaseVisibleContent,
+  };
+}

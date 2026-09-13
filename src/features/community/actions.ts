@@ -405,7 +405,7 @@ export async function createCommunityPostFromInput(
     return rejected(evaluated.outcome);
   }
   const duplicates = evaluateDuplicates(
-    evaluated.fingerprint,
+    evaluated.text,
     await recentAuthorContent("community_posts", profile.profileId, 10 * 60 * 1000),
   );
   if (!duplicates.ok) return rejected(duplicates.outcome);
@@ -1301,7 +1301,7 @@ export async function createCommunityCommentFromInput(
     return rejected(evaluated.outcome);
   }
   const duplicates = evaluateDuplicates(
-    evaluated.fingerprint,
+    evaluated.text,
     await recentAuthorContent("community_comments", profile.profileId, 10 * 60 * 1000),
   );
   if (!duplicates.ok) return rejected(duplicates.outcome);

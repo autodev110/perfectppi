@@ -31,6 +31,13 @@ function healthyInput(): LaunchReadinessInput {
       outboxDeadLettered: 0,
       outboxOldestPendingMinutes: 0,
     },
+    visibilityIntegrity: {
+      available: true,
+      activeRestrictedPosts: 0,
+      activeRestrictedComments: 0,
+      openCaseVisibleContent: 0,
+      totalViolations: 0,
+    },
     moderatorCoverage: {
       available: true,
       counts: {
@@ -83,12 +90,13 @@ describe("social launch readiness", () => {
     input.flagSource = "safe_defaults";
     input.mediaStorage.available = false;
     input.moderationOperations.available = false;
+    input.visibilityIntegrity.available = false;
     input.moderatorCoverage.available = false;
     input.communityRetentionPolicyConfigured = null;
     input.storageCleanup.available = false;
     input.workerHealth.available = false;
     const failedClosed = evaluateSocialLaunchReadiness(input);
-    assert.equal(failedClosed.blockedCount, 7);
+    assert.equal(failedClosed.blockedCount, 8);
   });
 
   test("blocks missing capabilities and unhealthy queues", () => {
@@ -108,5 +116,22 @@ describe("social launch readiness", () => {
     input.workerHealth.issues = ["moderation_outbox most recently failed."];
     const result = evaluateSocialLaunchReadiness(input);
     assert.equal(result.automated.find((check) => check.id === "worker-heartbeats")?.status, "blocked");
+  });
+
+  test("blocks launch when hidden-content integrity is unavailable or violated", () => {
+    const unavailable = healthyInput();
+    unavailable.visibilityIntegrity.available = false;
+    assert.equal(
+      evaluateSocialLaunchReadiness(unavailable).automated.find((check) => check.id === "visibility-integrity")?.status,
+      "blocked",
+    );
+
+    const violated = healthyInput();
+    violated.visibilityIntegrity.activeRestrictedPosts = 1;
+    violated.visibilityIntegrity.openCaseVisibleContent = 1;
+    violated.visibilityIntegrity.totalViolations = 2;
+    const check = evaluateSocialLaunchReadiness(violated).automated.find((item) => item.id === "visibility-integrity");
+    assert.equal(check?.status, "blocked");
+    assert.match(check?.detail ?? "", /2 visibility invariant/);
   });
 });

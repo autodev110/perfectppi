@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Database } from "@/types/database";
+import { VehicleConfigurationFields } from "@/components/shared/vehicle-configuration-fields";
+import { VehicleMakeModelFields } from "@/components/shared/vehicle-make-model-fields";
 
 type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 
@@ -14,6 +16,9 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [year, setYear] = useState(vehicle.year?.toString() ?? "");
+  const [make, setMake] = useState(vehicle.make ?? "");
+  const [model, setModel] = useState(vehicle.model ?? "");
 
   async function save(formData: FormData) {
     setSaving(true);
@@ -48,9 +53,9 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
             <option value="project">Project</option>
           </select>
         </div>
-        <Field label="Year" name="year" type="number" defaultValue={vehicle.year ?? ""} />
-        <Field label="Make *" name="make" defaultValue={vehicle.make ?? ""} required />
-        <Field label="Model *" name="model" defaultValue={vehicle.model ?? ""} required />
+        <Field label="Year" name="year" type="number" value={year} onChange={(event) => setYear(event.target.value)} min={1900} max={2100} />
+        <div />
+        <VehicleMakeModelFields make={make} model={model} year={year} onMakeChange={(value) => { setMake(value); setModel(""); }} onModelChange={setModel} />
         <Field label="Trim" name="trim" defaultValue={vehicle.trim ?? ""} />
         <Field label="Engine" name="engine" defaultValue={vehicle.engine ?? ""} maxLength={100} />
         <Field label="Drivetrain" name="drivetrain" defaultValue={vehicle.drivetrain ?? ""} maxLength={100} />
@@ -58,6 +63,14 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
         <Field label="Body style" name="body_style" defaultValue={vehicle.body_style ?? ""} maxLength={100} />
         <Field label="VIN" name="vin" defaultValue={vehicle.vin ?? ""} maxLength={17} />
         <Field label="Mileage" name="mileage" type="number" defaultValue={vehicle.mileage ?? ""} />
+        <VehicleConfigurationFields
+          initialType={vehicle.configuration_type}
+          initialEngineOriginal={vehicle.engine_original}
+          initialTransmissionOriginal={vehicle.transmission_original}
+          initialDrivetrainOriginal={vehicle.drivetrain_original}
+          initialMileageStatus={vehicle.mileage_status}
+          vehicleId={vehicle.id}
+        />
         <div className="space-y-2 sm:col-span-2">
           <Label htmlFor="visibility">Visibility</Label>
           <select

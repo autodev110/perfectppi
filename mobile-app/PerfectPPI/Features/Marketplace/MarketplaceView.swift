@@ -758,9 +758,15 @@ private struct MarketplaceListingDetailView: View {
                                 if let make = vehicle.make, !make.isEmpty { row("Make", make) }
                                 if let model = vehicle.model, !model.isEmpty { row("Model", model) }
                                 if let trim = vehicle.trim, !trim.isEmpty { row("Trim", trim) }
-                                if let mileage = vehicle.mileage { row("Mileage", "\(mileage.formatted()) mi") }
-                                if let transmission = vehicle.transmission, !transmission.isEmpty { row("Transmission", transmission) }
-                                if let drivetrain = vehicle.drivetrain, !drivetrain.isEmpty { row("Drivetrain", drivetrain) }
+                                if let mileage = vehicle.mileage {
+                                    row("Mileage", "\(mileage.formatted()) mi\(vehicle.mileageStatus == .notActual ? " (not actual)" : vehicle.mileageStatus == .unknown ? " (unverified)" : "")")
+                                }
+                                // Owner-confirmed configuration: swapped or converted
+                                // parts must not read as factory equipment.
+                                if let type = vehicle.configurationType, type != .stock { row("Configuration", type.label) }
+                                if let engine = vehicle.engine, !engine.isEmpty { row("Engine", engine + (vehicle.engineOriginal == false ? " (swapped)" : "")) }
+                                if let transmission = vehicle.transmission, !transmission.isEmpty { row("Transmission", transmission + (vehicle.transmissionOriginal == false ? " (swapped)" : "")) }
+                                if let drivetrain = vehicle.drivetrain, !drivetrain.isEmpty { row("Drivetrain", drivetrain + (vehicle.drivetrainOriginal == false ? " (converted)" : "")) }
                                 if let bodyStyle = vehicle.bodyStyle, !bodyStyle.isEmpty { row("Body style", bodyStyle) }
                             }
                         }

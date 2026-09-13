@@ -17,6 +17,56 @@ enum CommunityAPI {
         )
     }
 
+    struct FeedMute: Decodable, Identifiable {
+        struct Group: Decodable { let name: String }
+        let id: String
+        let scope: String
+        let groupId: String?
+        let postType: CommunityPostType?
+        let vehicleMake: String?
+        let vehicleModel: String?
+        let group: Group?
+    }
+
+    private struct FeedMutePayload: Encodable {
+        let scope: String
+        let muted: Bool
+        var groupId: String? = nil
+        var postType: CommunityPostType? = nil
+        var vehicleMake: String? = nil
+        var vehicleModel: String? = nil
+    }
+
+    static func feedMutes() async throws -> [FeedMute] {
+        try await APIClient.shared.get("/api/community/feed-mutes")
+    }
+
+    static func setGroupFeedMuted(_ groupId: String, muted: Bool) async throws {
+        let _: Empty = try await APIClient.shared.patchCamel(
+            "/api/community/feed-mutes",
+            body: FeedMutePayload(scope: "group", muted: muted, groupId: groupId)
+        )
+    }
+
+    static func setPostTypeFeedMuted(_ postType: CommunityPostType, muted: Bool) async throws {
+        let _: Empty = try await APIClient.shared.patchCamel(
+            "/api/community/feed-mutes",
+            body: FeedMutePayload(scope: "post_type", muted: muted, postType: postType)
+        )
+    }
+
+    static func setVehicleTopicFeedMuted(make: String, model: String?, muted: Bool) async throws {
+        let _: Empty = try await APIClient.shared.patchCamel(
+            "/api/community/feed-mutes",
+            body: FeedMutePayload(
+                scope: "vehicle_topic",
+                muted: muted,
+                vehicleMake: make,
+                vehicleModel: model
+            )
+        )
+    }
+
     /// Visible posts tagged to one public vehicle (Garage ↔ Community).
     static func postsAboutVehicle(id: String) async throws -> [CommunityPost] {
         try await APIClient.shared.get(

@@ -281,11 +281,14 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                 { label: "Make", value: vehicle.make },
                 { label: "Model", value: vehicle.model },
                 { label: "Trim", value: vehicle.trim },
-                { label: "Engine", value: vehicle.engine },
-                { label: "Drivetrain", value: vehicle.drivetrain },
-                { label: "Transmission", value: vehicle.transmission },
+                // Owner-confirmed configuration: a swapped engine or a 2WD
+                // conversion must not read as factory equipment.
+                { label: "Configuration", value: vehicle.configuration_type === "custom_build" ? "Custom build" : vehicle.configuration_type === "modified" ? "Modified" : null },
+                { label: "Engine", value: vehicle.engine ? `${vehicle.engine}${vehicle.engine_original === false ? " (swapped)" : ""}` : vehicle.engine_original === false ? "Swapped" : null },
+                { label: "Drivetrain", value: vehicle.drivetrain ? `${vehicle.drivetrain}${vehicle.drivetrain_original === false ? " (converted)" : ""}` : vehicle.drivetrain_original === false ? "Converted" : null },
+                { label: "Transmission", value: vehicle.transmission ? `${vehicle.transmission}${vehicle.transmission_original === false ? " (swapped)" : ""}` : vehicle.transmission_original === false ? "Swapped" : null },
                 { label: "Body style", value: vehicle.body_style },
-                { label: "Mileage", value: vehicle.mileage != null ? `${formatMileage(vehicle.mileage)} miles` : null },
+                { label: "Mileage", value: vehicle.mileage != null ? `${formatMileage(vehicle.mileage)} miles${vehicle.mileage_status === "not_actual" ? " (not actual)" : vehicle.mileage_status === "unknown" ? " (unverified)" : ""}` : null },
               ].filter((f) => f.value).map(({ label, value }) => (
                 <div key={label}>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">

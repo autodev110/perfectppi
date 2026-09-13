@@ -55,6 +55,11 @@ struct Vehicle: Codable, Identifiable, Hashable {
     let drivetrain: String?
     let transmission: String?
     let bodyStyle: String?
+    var configurationType: VehicleConfigurationType? = nil
+    var engineOriginal: Bool? = nil
+    var transmissionOriginal: Bool? = nil
+    var drivetrainOriginal: Bool? = nil
+    var mileageStatus: VehicleMileageStatus? = nil
     let nickname: String?
     let ownershipState: VehicleOwnershipState?
     let mileage: Int?
@@ -405,6 +410,20 @@ struct PeopleSearchResult: Codable, Identifiable, Hashable {
     }
 }
 
+struct ContactDiscoveryResult: Codable, Identifiable, Hashable {
+    let id: String
+    let username: String?
+    let displayName: String?
+    let avatarUrl: String?
+    let relationshipState: FriendRelationshipState
+    let mutualFriendCount: Int
+    let contactHash: String
+
+    var person: PersonSummary {
+        PersonSummary(id: id, username: username, displayName: displayName, avatarUrl: avatarUrl)
+    }
+}
+
 struct FriendRequestSummary: Codable, Identifiable, Hashable {
     let id: String
     let username: String?
@@ -564,6 +583,8 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let groupPinned: Bool?
     /// Viewer is owner or moderator of this post's group (plan 13.4).
     let canModerateGroup: Bool?
+    /// Same-author copies hidden behind this representative in the feed.
+    var collapsedRepostCount: Int? = 0
 }
 
 /// Counts behind navigation badges (plan 7.1 / 22.2), from /api/me/badges.

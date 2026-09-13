@@ -17,7 +17,8 @@ type MarketplaceVehicleMedia = Pick<
 type MarketplaceVehicle = Pick<
   Database["public"]["Tables"]["vehicles"]["Row"],
   "id" | "owner_id" | "year" | "make" | "model" | "trim" | "nickname" | "mileage" | "mileage_updated_at" | "visibility" | "created_at" | "updated_at"
-  | "transmission" | "drivetrain" | "body_style"
+  | "transmission" | "drivetrain" | "body_style" | "engine"
+  | "configuration_type" | "engine_original" | "transmission_original" | "drivetrain_original" | "mileage_status"
 > & {
   vehicle_media: MarketplaceVehicleMedia[];
 };
@@ -56,7 +57,8 @@ const LISTING_SELECT = `
   attached_inspection_id, inspection_shared_at, removed_at,
   vehicle:vehicles!marketplace_listings_vehicle_id_fkey(
     id, owner_id, year, make, model, trim, nickname, mileage, mileage_updated_at, visibility, created_at, updated_at,
-    transmission, drivetrain, body_style,
+    transmission, drivetrain, body_style, engine,
+    configuration_type, engine_original, transmission_original, drivetrain_original, mileage_status,
     vehicle_media(id, vehicle_id, url, media_type, is_primary, sort_order, uploaded_at, moderation_status)
   ),
   seller:profiles!marketplace_listings_seller_id_fkey(id, display_name, username, avatar_url, is_public)

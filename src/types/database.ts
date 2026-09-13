@@ -487,6 +487,57 @@ export type Database = {
           },
         ]
       }
+      community_feed_mutes: {
+        Row: {
+          created_at: string
+          group_id: string | null
+          id: string
+          post_type: Database["public"]["Enums"]["community_post_type"] | null
+          profile_id: string
+          scope: Database["public"]["Enums"]["community_feed_mute_scope"]
+          target_key: string
+          vehicle_make: string | null
+          vehicle_model: string | null
+        }
+        Insert: {
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          post_type?: Database["public"]["Enums"]["community_post_type"] | null
+          profile_id: string
+          scope: Database["public"]["Enums"]["community_feed_mute_scope"]
+          target_key: string
+          vehicle_make?: string | null
+          vehicle_model?: string | null
+        }
+        Update: {
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          post_type?: Database["public"]["Enums"]["community_post_type"] | null
+          profile_id?: string
+          scope?: Database["public"]["Enums"]["community_feed_mute_scope"]
+          target_key?: string
+          vehicle_make?: string | null
+          vehicle_model?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_feed_mutes_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "community_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_feed_mutes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_post_assemblies: {
         Row: {
           created_at: string
@@ -923,6 +974,7 @@ export type Database = {
           content: string
           created_at: string
           details: Json
+          feed_fingerprint: string
           group_id: string | null
           group_pinned_at: string | null
           group_pinned_by: string | null
@@ -949,6 +1001,7 @@ export type Database = {
           content: string
           created_at?: string
           details?: Json
+          feed_fingerprint?: string
           group_id?: string | null
           group_pinned_at?: string | null
           group_pinned_by?: string | null
@@ -975,6 +1028,7 @@ export type Database = {
           content?: string
           created_at?: string
           details?: Json
+          feed_fingerprint?: string
           group_id?: string | null
           group_pinned_at?: string | null
           group_pinned_by?: string | null
@@ -3996,6 +4050,35 @@ export type Database = {
         Update: { blocked_id?: string; blocker_id?: string; created_at?: string }
         Relationships: []
       }
+      profile_contact_identifiers: {
+        Row: {
+          created_at: string
+          identifier_digest: string
+          kind: Database["public"]["Enums"]["contact_identifier_kind"]
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          identifier_digest: string
+          kind: Database["public"]["Enums"]["contact_identifier_kind"]
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          identifier_digest?: string
+          kind?: Database["public"]["Enums"]["contact_identifier_kind"]
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_contact_identifiers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_mutes: {
         Row: {
           created_at: string
@@ -4885,12 +4968,16 @@ export type Database = {
       vehicles: {
         Row: {
           body_style: string | null
+          configuration_type: Database["public"]["Enums"]["vehicle_configuration_type"]
           created_at: string
           drivetrain: string | null
+          drivetrain_original: boolean
           engine: string | null
+          engine_original: boolean
           id: string
           make: string | null
           mileage: number | null
+          mileage_status: Database["public"]["Enums"]["vehicle_mileage_status"]
           mileage_updated_at: string | null
           model: string | null
           nickname: string | null
@@ -4899,6 +4986,7 @@ export type Database = {
           owner_id: string | null
           sold_at: string | null
           transmission: string | null
+          transmission_original: boolean
           trim: string | null
           updated_at: string
           vin: string | null
@@ -4907,12 +4995,16 @@ export type Database = {
         }
         Insert: {
           body_style?: string | null
+          configuration_type?: Database["public"]["Enums"]["vehicle_configuration_type"]
           created_at?: string
           drivetrain?: string | null
+          drivetrain_original?: boolean
           engine?: string | null
+          engine_original?: boolean
           id?: string
           make?: string | null
           mileage?: number | null
+          mileage_status?: Database["public"]["Enums"]["vehicle_mileage_status"]
           mileage_updated_at?: string | null
           model?: string | null
           nickname?: string | null
@@ -4921,6 +5013,7 @@ export type Database = {
           owner_id?: string | null
           sold_at?: string | null
           transmission?: string | null
+          transmission_original?: boolean
           trim?: string | null
           updated_at?: string
           vin?: string | null
@@ -4929,12 +5022,16 @@ export type Database = {
         }
         Update: {
           body_style?: string | null
+          configuration_type?: Database["public"]["Enums"]["vehicle_configuration_type"]
           created_at?: string
           drivetrain?: string | null
+          drivetrain_original?: boolean
           engine?: string | null
+          engine_original?: boolean
           id?: string
           make?: string | null
           mileage?: number | null
+          mileage_status?: Database["public"]["Enums"]["vehicle_mileage_status"]
           mileage_updated_at?: string | null
           model?: string | null
           nickname?: string | null
@@ -4943,6 +5040,7 @@ export type Database = {
           owner_id?: string | null
           sold_at?: string | null
           transmission?: string | null
+          transmission_original?: boolean
           trim?: string | null
           updated_at?: string
           vin?: string | null
@@ -5703,6 +5801,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      moderation_visibility_integrity_status: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       moderation_has_capability: {
         Args: { p_capability: string; p_profile_id: string }
         Returns: boolean
@@ -5942,6 +6044,16 @@ export type Database = {
           p_include_group_posts?: boolean
         }
         Returns: { post_id: string }[]
+      }
+      social_quality_filtered_community_post_ids: {
+        Args: {
+          p_filter?: Database["public"]["Enums"]["community_feed_filter"]
+          p_include_group_posts?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_viewer_id: string
+        }
+        Returns: { collapsed_repost_count: number; post_id: string }[]
       }
       social_visible_community_group_post_ids: {
         Args: { p_viewer_id: string; p_group_id: string; p_limit?: number; p_offset?: number; p_exclude_pinned?: boolean }
@@ -6440,9 +6552,34 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: number
       }
+      set_community_feed_mute: {
+        Args: {
+          p_actor_profile_id: string
+          p_group_id?: string | null
+          p_muted: boolean
+          p_post_type?: Database["public"]["Enums"]["community_post_type"] | null
+          p_scope: Database["public"]["Enums"]["community_feed_mute_scope"]
+          p_vehicle_make?: string | null
+          p_vehicle_model?: string | null
+        }
+        Returns: boolean
+      }
       refresh_tech_review_aggregates: {
         Args: { p_tech_profile_id: string }
         Returns: undefined
+      }
+      discover_contact_profiles: {
+        Args: { p_identifier_digests: string[]; p_viewer_profile_id: string }
+        Returns: {
+          avatar_url: string | null
+          display_name: string | null
+          is_public: boolean
+          matched_digest: string
+          mutual_friend_count: number
+          profile_id: string
+          relationship_state: string
+          username: string | null
+        }[]
       }
     }
     Enums: {
@@ -6454,11 +6591,13 @@ export type Database = {
         | "payment_state_changed"
         | "submission_resubmitted"
       certification_level: "none" | "ase" | "master" | "oem_qualified"
+      contact_identifier_kind: "email" | "phone"
       community_content_status: "active" | "hidden" | "archived"
       community_event_rsvp_status: "going" | "interested" | "not_going"
       community_event_status: "scheduled" | "cancelled" | "completed" | "removed"
       community_event_type: "car_meet" | "track_day" | "car_show" | "shop_event" | "group_drive"
       community_feed_filter: "all" | "friends" | "my_cars"
+      community_feed_mute_scope: "group" | "post_type" | "vehicle_topic"
       community_group_join_policy: "open" | "request_approval" | "invite_only"
       community_group_membership_status: "active" | "left" | "removed" | "banned" | "requested" | "invited"
       community_group_post_status: "active" | "group_removed"
@@ -6552,6 +6691,8 @@ export type Database = {
         | "admin"
         | "developer"
       vehicle_visibility: "public" | "friends" | "private"
+      vehicle_configuration_type: "stock" | "modified" | "custom_build"
+      vehicle_mileage_status: "actual" | "not_actual" | "unknown"
       vehicle_ownership_state: "owned" | "previously_owned" | "considering" | "project"
       vehicle_build_status: "planned" | "installed" | "removed" | "sold"
       vehicle_installation_kind: "unknown" | "self_installed" | "shop_installed"
@@ -6704,11 +6845,13 @@ export const Constants = {
         "submission_resubmitted",
       ],
       certification_level: ["none", "ase", "master", "oem_qualified"],
+      contact_identifier_kind: ["email", "phone"],
       community_content_status: ["active", "hidden", "archived"],
       community_event_rsvp_status: ["going", "interested", "not_going"],
       community_event_status: ["scheduled", "cancelled", "completed", "removed"],
       community_event_type: ["car_meet", "track_day", "car_show", "shop_event", "group_drive"],
       community_feed_filter: ["all", "friends", "my_cars"],
+      community_feed_mute_scope: ["group", "post_type", "vehicle_topic"],
       community_post_audience: ["public", "friends"],
       community_post_assembly_state: ["assembling", "submitted", "finalized"],
       community_post_type: ["general", "question", "build_update", "maintenance", "before_after", "inspection_discussion", "buying_advice", "poll"],
@@ -6799,6 +6942,8 @@ export const Constants = {
         "developer",
       ],
       vehicle_visibility: ["public", "friends", "private"],
+      vehicle_configuration_type: ["stock", "modified", "custom_build"],
+      vehicle_mileage_status: ["actual", "not_actual", "unknown"],
       vehicle_ownership_state: ["owned", "previously_owned", "considering", "project"],
       vehicle_build_status: ["planned", "installed", "removed", "sold"],
       vehicle_installation_kind: ["unknown", "self_installed", "shop_installed"],

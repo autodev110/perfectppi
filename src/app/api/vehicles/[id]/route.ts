@@ -26,6 +26,11 @@ const updateSchema = z.object({
   drivetrain: z.string().trim().max(100).nullable().optional(),
   transmission: z.string().trim().max(100).nullable().optional(),
   body_style: z.string().trim().max(100).nullable().optional(),
+  configuration_type: z.enum(["stock", "modified", "custom_build"]).optional(),
+  engine_original: z.boolean().optional(),
+  transmission_original: z.boolean().optional(),
+  drivetrain_original: z.boolean().optional(),
+  mileage_status: z.enum(["actual", "not_actual", "unknown"]).optional(),
   nickname: z.string().trim().max(60).nullable().optional(),
   ownership_state: z.enum(["owned", "previously_owned", "considering", "project"]).optional(),
   mileage: z.number().min(0).optional(),
@@ -48,7 +53,6 @@ export async function PATCH(
       { status: 400 }
     );
   }
-
   const existing = await getOwnedVehicle(id);
   if (!existing) {
     return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
@@ -56,6 +60,18 @@ export async function PATCH(
   if (parsed.data.ownership_state === "previously_owned" && existing.ownership_state !== "previously_owned") {
     return NextResponse.json(
       { error: "Use Mark as sold so active listings and your history privacy choice are updated together." },
+      { status: 400 },
+    );
+  }
+  const effectiveConfigurationType = parsed.data.configuration_type ?? existing.configuration_type;
+  const effectiveOriginalEquipment = [
+    parsed.data.engine_original ?? existing.engine_original,
+    parsed.data.transmission_original ?? existing.transmission_original,
+    parsed.data.drivetrain_original ?? existing.drivetrain_original,
+  ];
+  if (effectiveConfigurationType === "stock" && effectiveOriginalEquipment.includes(false)) {
+    return NextResponse.json(
+      { error: "Choose Modified or Custom build when factory equipment has been replaced." },
       { status: 400 },
     );
   }

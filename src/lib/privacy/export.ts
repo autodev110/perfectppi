@@ -65,6 +65,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     eventRsvps,
     contributedEventPhotos,
     communityPostSaves,
+    communityFeedMutes,
     marketplaceListingSaves,
     marketplaceSavedSearches,
     savedCollections,
@@ -79,6 +80,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     notifications,
     notificationPreferences,
     deviceTokens,
+    contactDiscoveryEnrollment,
     legalAcceptances,
     privacyRequests,
     moderationItems,
@@ -107,6 +109,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     rows("community event RSVPs", admin.from("community_event_rsvps").select("*").eq("profile_id", profileId)),
     rows("community event photo posts", admin.from("community_event_photo_posts").select("*").eq("contributor_id", profileId)),
     rows("saved community posts", admin.from("community_post_saves").select("*").eq("profile_id", profileId)),
+    rows("community feed preferences", admin.from("community_feed_mutes").select("*").eq("profile_id", profileId)),
     rows("saved marketplace listings", admin.from("marketplace_listing_saves").select("*").eq("profile_id", profileId)),
     rows("marketplace saved searches", admin.from("marketplace_saved_searches").select("*").eq("profile_id", profileId)),
     rows("saved collections", admin.from("saved_collections").select("*").eq("owner_id", profileId)),
@@ -128,6 +131,10 @@ export async function buildAccountDataExport(profileId: string, user: User) {
       admin.from("device_tokens")
         .select("id, platform, env, app_version, created_at, last_seen_at")
         .eq("profile_id", profileId),
+    ),
+    rows(
+      "contact discovery enrollment",
+      admin.from("profile_contact_identifiers").select("kind, created_at").eq("profile_id", profileId),
     ),
     rows("legal acceptances", admin.from("legal_acceptances").select("*").eq("profile_id", profileId)),
     rows(
@@ -322,6 +329,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
       reports: moderationReports,
       appeals: moderationAppeals,
       enforcementActions,
+      feedMutes: communityFeedMutes,
     },
     savedItems: {
       communityPosts: communityPostSaves,
@@ -348,6 +356,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
       notifications,
       notificationPreferences,
       deviceTokens,
+      contactDiscoveryEnrollment,
       legalAcceptances,
       privacyRequests,
       auditLogs,

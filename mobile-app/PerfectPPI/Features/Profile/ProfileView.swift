@@ -170,6 +170,7 @@ private struct PrivacyCenterView: View {
     @State private var requests: [PrivacyRequestRecord] = []
     @State private var identities: [ConnectedIdentity] = []
     @State private var safetyRelationships = ProfilesAPI.SafetyRelationships(blocked: [], muted: [])
+    @State private var feedMutes: [CommunityAPI.FeedMute] = []
     @State private var working = false
     @State private var message: String?
     @State private var exportDocument: PrivacyExportDocument?
@@ -269,6 +270,25 @@ private struct PrivacyCenterView: View {
             }
 
             Section {
+                if feedMutes.isEmpty {
+                    Text("No hidden feed topics").foregroundStyle(.secondary)
+                } else {
+                    ForEach(feedMutes) { mute in
+                        HStack {
+                            Text(feedMuteLabel(mute))
+                            Spacer()
+                            Button("Show Again") { Task { await removeFeedMute(mute) } }
+                                .disabled(working)
+                        }
+                    }
+                }
+            } header: {
+                Text("Hidden From Community Feed")
+            } footer: {
+                Text("These preferences do not change group memberships or friendships.")
+            }
+
+            Section {
                 TextField("Type DELETE to confirm", text: $deletionConfirmation)
                     .textInputAutocapitalization(.characters)
                 Button("Request Account Deletion", role: .destructive) {
@@ -306,9 +326,11 @@ private struct PrivacyCenterView: View {
             async let requestLoad: [PrivacyRequestRecord] = APIClient.shared.get("/api/privacy/requests")
             async let identityLoad: [ConnectedIdentity] = APIClient.shared.get("/api/account/identities")
             async let safetyLoad = ProfilesAPI.safetyRelationships()
+            async let feedMuteLoad = CommunityAPI.feedMutes()
             requests = try await requestLoad
             identities = try await identityLoad
             safetyRelationships = try await safetyLoad
+            feedMutes = try await feedMuteLoad
         } catch {
             message = error.localizedDescription
         }
@@ -320,6 +342,40 @@ private struct PrivacyCenterView: View {
         do {
             try await ProfilesAPI.setRelationship(profileId: profileId, kind: kind, enabled: false)
             safetyRelationships = try await ProfilesAPI.safetyRelationships()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func feedMuteLabel(_ mute: CommunityAPI.FeedMute) -> String {
+        switch mute.scope {
+        case "group": return mute.group?.name ?? "Unavailable group"
+        case "post_type": return "\(mute.postType?.feedLabel.capitalized ?? "Post type") posts"
+        case "vehicle_topic":
+            let topic = [mute.vehicleMake, mute.vehicleModel].compactMap { $0 }.joined(separator: " ")
+            return "\(topic.isEmpty ? "Vehicle topic" : topic) posts"
+        default: return "Feed preference"
+        }
+    }
+
+    private func removeFeedMute(_ mute: CommunityAPI.FeedMute) async {
+        working = true
+        defer { working = false }
+        do {
+            switch mute.scope {
+            case "group":
+                guard let groupId = mute.groupId else { return }
+                try await CommunityAPI.setGroupFeedMuted(groupId, muted: false)
+            case "post_type":
+                guard let postType = mute.postType, postType != .unknown else { return }
+                try await CommunityAPI.setPostTypeFeedMuted(postType, muted: false)
+            case "vehicle_topic":
+                guard let make = mute.vehicleMake else { return }
+                try await CommunityAPI.setVehicleTopicFeedMuted(make: make, model: mute.vehicleModel, muted: false)
+            default:
+                return
+            }
+            feedMutes = try await CommunityAPI.feedMutes()
         } catch {
             message = error.localizedDescription
         }

@@ -195,4 +195,13 @@ BEGIN
 END
 $$;
 
+DO $$
+BEGIN
+  IF has_table_privilege('anon', 'public.marketplace_listings', 'SELECT')
+     OR has_table_privilege('authenticated', 'public.marketplace_listings', 'TRUNCATE') THEN
+    RAISE EXCEPTION 'marketplace listing table privileges are broader than intended';
+  END IF;
+END
+$$;
+
 ROLLBACK;

@@ -7,18 +7,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FriendActionButton } from "@/components/shared/friend-action-button";
 import { formatDate, getInitials } from "@/lib/utils/formatting";
 import { Search, Users } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ContactDiscoveryPanel } from "@/components/shared/contact-discovery-panel";
 
 export const dynamic = "force-dynamic";
 
 // Plan 10.4: the owner manages requests and their friend list here. Other
 // members never see this list; they only see mutual friends on a profile.
-export default async function DashboardFriendsPage() {
+export default async function DashboardFriendsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   await requireRole(["consumer", "technician", "org_manager", "admin"]);
+  const friendQuery = ((await searchParams).q ?? "").trim().toLocaleLowerCase();
   const [friends, requests, enabled] = await Promise.all([
     getMyFriends(),
     getMyFriendRequests(),
     friendsDiscoveryEnabled(),
   ]);
+  const visibleFriends = friendQuery
+    ? friends.filter((friend) => friend.username?.toLocaleLowerCase().includes(friendQuery) || friend.display_name?.toLocaleLowerCase().includes(friendQuery))
+    : friends;
 
   return (
     <div className="space-y-6">
@@ -45,6 +51,20 @@ export default async function DashboardFriendsPage() {
             Friend requests are switched off in this release. Existing friendships still apply to what you can see.
           </CardContent>
         </Card>
+      ) : null}
+
+      {enabled ? (
+        <>
+          <form action="/dashboard/friends" role="search" className="flex gap-2">
+            <Input name="q" defaultValue={friendQuery} placeholder="Search your friends" aria-label="Search your friends" />
+            <Button type="submit" variant="outline"><Search className="mr-2 h-4 w-4" />Search</Button>
+          </form>
+          <form action="/community/people" role="search" className="flex gap-2">
+            <Input name="q" placeholder="Search any PerfectPPI member" aria-label="Search all PerfectPPI members" />
+            <Button type="submit">Find account</Button>
+          </form>
+          <ContactDiscoveryPanel />
+        </>
       ) : null}
 
       <section className="space-y-3">
@@ -85,7 +105,7 @@ export default async function DashboardFriendsPage() {
             </CardContent>
           </Card>
         ) : (
-          friends.map((person) => (
+          visibleFriends.length === 0 && friendQuery ? <p className="text-sm text-muted-foreground">No friends match your search.</p> : visibleFriends.map((person) => (
             <PersonRow key={person.id} person={person} meta={`Friends since ${formatDate(person.friends_since)}`}>
               <FriendActionButton profileId={person.id} state="friends" enabled={enabled} compact />
             </PersonRow>

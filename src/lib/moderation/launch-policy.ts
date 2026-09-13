@@ -53,6 +53,7 @@ export const LAUNCH_LIMITS = {
   exactDuplicateWindowMs: 2 * 60 * 1000,
   nearDuplicateWindowMs: 10 * 60 * 1000,
   nearDuplicateLimit: 3,
+  nearDuplicateSimilarity: 0.82,
 } as const;
 
 export type PublicationRejection = {
@@ -96,6 +97,29 @@ export function normalizeForComparison(text: string): string {
 
 export function contentFingerprint(text: string): string {
   return createHash("sha256").update(normalizeForComparison(text)).digest("hex");
+}
+
+function characterTrigrams(text: string) {
+  const normalized = normalizeForComparison(text);
+  const grams = new Set<string>();
+  for (let index = 0; index <= normalized.length - 3; index += 1) {
+    grams.add(normalized.slice(index, index + 3));
+  }
+  return grams;
+}
+
+/** Conservative Dice similarity for repeated long-form spam with small edits. */
+export function nearDuplicateSimilarity(first: string, second: string) {
+  const left = normalizeForComparison(first);
+  const right = normalizeForComparison(second);
+  if (left === right) return 1;
+  if (Math.min(left.length, right.length) < 20) return 0;
+  const leftGrams = characterTrigrams(left);
+  const rightGrams = characterTrigrams(right);
+  if (leftGrams.size === 0 || rightGrams.size === 0) return 0;
+  let shared = 0;
+  for (const gram of leftGrams) if (rightGrams.has(gram)) shared += 1;
+  return (2 * shared) / (leftGrams.size + rightGrams.size);
 }
 
 // ---------------------------------------------------------------------------
@@ -259,19 +283,22 @@ export function evaluateTextForPublication(
  * the same destination, newest first.
  */
 export function evaluateDuplicates(
-  fingerprint: string,
+  content: string,
   recent: ReadonlyArray<{ content: string; created_at: string }>,
   now = Date.now(),
 ): { ok: true } | PublicationRejection {
+  const fingerprint = contentFingerprint(content);
   let sameWithinNearWindow = 0;
   for (const item of recent) {
     const age = now - new Date(item.created_at).getTime();
     if (age > LAUNCH_LIMITS.nearDuplicateWindowMs) continue;
-    if (contentFingerprint(item.content) !== fingerprint) continue;
-    if (age <= LAUNCH_LIMITS.exactDuplicateWindowMs) {
+    const exact = contentFingerprint(item.content) === fingerprint;
+    if (exact && age <= LAUNCH_LIMITS.exactDuplicateWindowMs) {
       return { ok: false, outcome: "duplicate_content", ruleId: "duplicate.exact" };
     }
-    sameWithinNearWindow += 1;
+    if (exact || nearDuplicateSimilarity(content, item.content) >= LAUNCH_LIMITS.nearDuplicateSimilarity) {
+      sameWithinNearWindow += 1;
+    }
   }
   if (sameWithinNearWindow >= LAUNCH_LIMITS.nearDuplicateLimit) {
     return { ok: false, outcome: "rate_limited", ruleId: "duplicate.near" };

@@ -90,6 +90,7 @@ struct CommunityFeedView: View {
                     }
                 }
                 .listStyle(.insetGrouped)
+                .refreshable { reloadToken = UUID() }
             }
         }
     }
@@ -333,6 +334,7 @@ struct CommunityPostRow: View {
     @State private var reportTarget: ReportTarget?
     @State private var reportAccepted = false
     @State private var reportConfirmed = false
+    @State private var feedPreferenceSaving = false
     @State private var error: String?
 
     init(post: CommunityPost, onReported: @escaping () -> Void) {
@@ -362,15 +364,40 @@ struct CommunityPostRow: View {
                     }
                 }
                 Spacer()
-                if let reportContext = post.reportContext {
-                    ReportMenu {
-                        reportTarget = ReportTarget(
-                            entityType: "community_post",
-                            entityId: post.id,
-                            contextToken: reportContext
-                        )
+                Menu {
+                    if let reportContext = post.reportContext {
+                        Button("Report Post", systemImage: "flag") {
+                            reportTarget = ReportTarget(
+                                entityType: "community_post",
+                                entityId: post.id,
+                                contextToken: reportContext
+                            )
+                        }
+                        Divider()
                     }
+                    if let group = post.group {
+                        Button("Mute \(group.name)", systemImage: "person.3") {
+                            Task { await muteGroup(group.id) }
+                        }
+                    }
+                    if let type = post.postType, type != .unknown {
+                        Button("Mute \(type.feedLabel) posts", systemImage: "tag.slash") {
+                            Task { await mutePostType(type) }
+                        }
+                    }
+                    if let vehicle = post.vehicle,
+                       let make = vehicle.make?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !make.isEmpty {
+                        let model = vehicle.model?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        Button("Mute \([make, model].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")) posts", systemImage: "speaker.slash") {
+                            Task { await muteVehicle(make: make, model: model) }
+                        }
+                    }
+                } label: {
+                    Image(systemName: feedPreferenceSaving ? "ellipsis.circle.fill" : "ellipsis.circle")
                 }
+                .disabled(feedPreferenceSaving)
+                .accessibilityLabel("Post and feed options")
             }
 
             if post.postType == .question {
@@ -401,6 +428,12 @@ struct CommunityPostRow: View {
 
             if let notice = post.safetyNotice {
                 CommunitySafetyNoticeView(notice: notice, compact: true)
+            }
+
+            if let collapsed = post.collapsedRepostCount, collapsed > 0 {
+                Label("\(collapsed) repetitive repost\(collapsed == 1 ? "" : "s") collapsed", systemImage: "rectangle.stack.badge.minus")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             if let media = post.media, !media.isEmpty {
@@ -503,6 +536,40 @@ struct CommunityPostRow: View {
         let parts = [vehicle.year.map(String.init), vehicle.make, vehicle.model, vehicle.trim]
             .compactMap { $0 }
         return parts.isEmpty ? "Vehicle" : parts.joined(separator: " ")
+    }
+
+    @MainActor
+    private func muteGroup(_ groupId: String) async {
+        await saveFeedPreference {
+            try await CommunityAPI.setGroupFeedMuted(groupId, muted: true)
+        }
+    }
+
+    @MainActor
+    private func mutePostType(_ postType: CommunityPostType) async {
+        await saveFeedPreference {
+            try await CommunityAPI.setPostTypeFeedMuted(postType, muted: true)
+        }
+    }
+
+    @MainActor
+    private func muteVehicle(make: String, model: String?) async {
+        await saveFeedPreference {
+            try await CommunityAPI.setVehicleTopicFeedMuted(make: make, model: model, muted: true)
+        }
+    }
+
+    @MainActor
+    private func saveFeedPreference(_ operation: () async throws -> Void) async {
+        guard !feedPreferenceSaving else { return }
+        feedPreferenceSaving = true
+        defer { feedPreferenceSaving = false }
+        do {
+            try await operation()
+            onReported()
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     @MainActor

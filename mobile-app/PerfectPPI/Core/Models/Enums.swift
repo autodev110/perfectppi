@@ -90,6 +90,33 @@ enum VehicleOwnershipState: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum VehicleConfigurationType: String, Codable, CaseIterable, Identifiable {
+    case stock, modified
+    case customBuild = "custom_build"
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .stock: "Stock"
+        case .modified: "Modified"
+        case .customBuild: "Custom build"
+        }
+    }
+}
+
+enum VehicleMileageStatus: String, Codable, CaseIterable, Identifiable {
+    case actual
+    case notActual = "not_actual"
+    case unknown
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .actual: "Yes, actual mileage"
+        case .notActual: "No, mileage is not actual"
+        case .unknown: "Unknown"
+        }
+    }
+}
+
 enum VehicleBuildStatus: String, Codable, CaseIterable, Identifiable {
     case planned, installed, removed, sold
     var id: String { rawValue }
@@ -353,6 +380,20 @@ enum CommunityPostType: String, Codable, CaseIterable {
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = CommunityPostType(rawValue: raw) ?? .unknown
+    }
+
+    var feedLabel: String {
+        switch self {
+        case .general: "general"
+        case .question: "question"
+        case .buildUpdate: "build update"
+        case .maintenance: "maintenance"
+        case .beforeAfter: "before and after"
+        case .inspectionDiscussion: "inspection discussion"
+        case .buyingAdvice: "buying advice"
+        case .poll: "poll"
+        case .unknown: "this type of"
+        }
     }
 }
 

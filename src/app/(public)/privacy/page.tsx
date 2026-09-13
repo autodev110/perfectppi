@@ -36,7 +36,7 @@ export default function PrivacyPage() {
       </p>
       <h3>Social identity, relationships, and reports</h3>
       <p>
-        Every account has a unique username, which is public and, in this release, cannot be changed by you after it is chosen; an existing account without one received a randomly generated username. We store your profile privacy setting (public inside PerfectPPI or private), default post audience, discoverability preferences, accepted friend relationships, and the members you block or mute. Blocking and muting are visible only to you. When you report content we record the report reason, optional details, the exact version of the content you saw, and the time; your identity is stored with the report for abuse prevention and is never shown to the author or to other members.
+        Every account has a unique username, which is public and, in this release, cannot be changed by you after it is chosen; an existing account without one received a randomly generated username. We store your profile privacy setting (public inside PerfectPPI or private), default post audience, discoverability preferences, accepted friend relationships, and the members you block or mute. If you choose the contact-discovery feature, the app sends one-way hashes of the email addresses and phone numbers in the contacts you permit so we can identify discoverable PerfectPPI accounts; address-book names and unmatched raw contact details remain on your device, and the hashes are not used for advertising. Blocking and muting are visible only to you. When you report content we record the report reason, optional details, the exact version of the content you saw, and the time; your identity is stored with the report for abuse prevention and is never shown to the author or to other members.
       </p>
       <h3>Technician and organization information</h3>
       <p>
@@ -48,7 +48,7 @@ export default function PrivacyPage() {
       </p>
       <h3>Device and technical information</h3>
       <p>
-        We receive IP address and request logs from hosting and security providers, necessary session cookies, device and app version information, APNs push tokens, error information, and security events. The iOS app asks for camera, photo-library, Bluetooth, notification, and optional Face ID access only when the related feature needs it. Bluetooth OBD data is available in the iOS app, not through browser Bluetooth.
+        We receive IP address and request logs from hosting and security providers, necessary session cookies, device and app version information, APNs push tokens, error information, and security events. The iOS app asks for camera, photo-library, Bluetooth, notifications, contacts, and optional Face ID access only when the related feature needs it. Contact access is optional and may be limited to contacts you select. Bluetooth OBD data is available in the iOS app, not through browser Bluetooth.
       </p>
       <h3>Partner information</h3>
       <p>

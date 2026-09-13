@@ -8,6 +8,7 @@ const {
   reporterReviewCompleteMessage,
   moderatorAlertMessage,
   operationalWebhookBody,
+  visibilityIntegrityWebhookBody,
 } = await import("../../src/features/moderation/outbox-messages.ts");
 
 const ids = { outboxId: "11111111-1111-4111-8111-111111111111", caseId: "22222222-2222-4222-8222-222222222222" };
@@ -58,5 +59,18 @@ describe("moderation notification privacy (plan 17.4 / 22.1 / 22.2)", () => {
     const body = operationalWebhookBody({ eventType: "case_escalated", caseId: ids.caseId, priority: "urgent", caseUrl: "https://example.test/admin/moderation/cases/x" });
     assert.deepEqual(Object.keys(body).sort(), ["caseId", "eventType", "priority", "stage", "text"]);
     assert.ok(!/reason|reporter|content/i.test(body.text));
+  });
+
+  test("visibility integrity alerts contain counts without content identifiers", () => {
+    const body = visibilityIntegrityWebhookBody({
+      available: true,
+      activeRestrictedPosts: 1,
+      activeRestrictedComments: 2,
+      openCaseVisibleContent: 3,
+      totalViolations: 6,
+    });
+    assert.equal(body.eventType, "moderation_visibility_integrity_violation");
+    assert.match(body.text, /total=6/);
+    assert.ok(!/caseId|entityId|reporter|reason/i.test(JSON.stringify(body)));
   });
 });

@@ -76,9 +76,12 @@ export default async function MarketplaceListingPage({ params, searchParams }: P
     ["Make", vehicle?.make],
     ["Model", vehicle?.model],
     ["Trim", vehicle?.trim],
-    ["Mileage", vehicle?.mileage != null ? `${formatMileage(vehicle.mileage)} mi${vehicle.mileage_updated_at ? ` (as of ${formatDate(vehicle.mileage_updated_at)})` : ""}` : null],
-    ["Transmission", vehicle?.transmission],
-    ["Drivetrain", vehicle?.drivetrain],
+    ["Mileage", vehicle?.mileage != null ? `${formatMileage(vehicle.mileage)} mi${vehicle.mileage_status === "not_actual" ? " (not actual)" : vehicle.mileage_status === "unknown" ? " (unverified)" : ""}${vehicle.mileage_updated_at ? ` (as of ${formatDate(vehicle.mileage_updated_at)})` : ""}` : null],
+    // Owner-confirmed configuration (plan 23.2): swapped or converted parts are labeled so they never read as factory equipment.
+    ["Configuration", vehicle?.configuration_type === "custom_build" ? "Custom build" : vehicle?.configuration_type === "modified" ? "Modified" : null],
+    ["Engine", vehicle?.engine ? `${vehicle.engine}${vehicle.engine_original === false ? " (swapped)" : ""}` : vehicle?.engine_original === false ? "Swapped" : null],
+    ["Transmission", vehicle?.transmission ? `${vehicle.transmission}${vehicle.transmission_original === false ? " (swapped)" : ""}` : vehicle?.transmission_original === false ? "Swapped" : null],
+    ["Drivetrain", vehicle?.drivetrain ? `${vehicle.drivetrain}${vehicle.drivetrain_original === false ? " (converted)" : ""}` : vehicle?.drivetrain_original === false ? "Converted" : null],
     ["Body style", vehicle?.body_style],
   ].filter((row): row is [string, string | number] => row[1] != null && row[1] !== "");
 

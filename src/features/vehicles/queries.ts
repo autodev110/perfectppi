@@ -119,7 +119,9 @@ export async function getVisibleVehicle(id: string) {
     .select(`
       id, owner_id, year, make, model, trim, nickname, ownership_state,
       mileage, mileage_updated_at, visibility, engine, drivetrain,
-      transmission, body_style, sold_at, created_at, updated_at,
+      transmission, body_style, configuration_type, engine_original,
+      transmission_original, drivetrain_original, mileage_status,
+      sold_at, created_at, updated_at,
       vehicle_media(id, vehicle_id, url, media_type, is_primary, sort_order, uploaded_at, moderation_status),
       owner:profiles!vehicles_owner_id_fkey(id, display_name, username, avatar_url, is_public)
     `)

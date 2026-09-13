@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatMileage } from "@/lib/utils/formatting";
-import { Car, ClipboardCheck, ExternalLink, FileText, ImagePlus, MessageSquare, Pencil, Share2, Tag } from "lucide-react";
+import { Car, ClipboardCheck, ExternalLink, FileText, ImagePlus, MessageSquare, Pencil, Share2, Tag, Wrench } from "lucide-react";
 import { VehiclePhotoUploader } from "./vehicle-photo-uploader";
 import { VehiclePhotoDeleteButton } from "./vehicle-photo-delete-button";
 import { VehicleNotesForm } from "./vehicle-notes-form";
@@ -62,6 +62,7 @@ export default async function VehicleDetailPage({ params, searchParams }: {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={isPublic ? "default" : "secondary"}>{visibilityLabel}</Badge>
+          {vehicle.configuration_type !== "stock" ? <Badge variant="outline">{vehicle.configuration_type === "custom_build" ? "Custom build" : "Modified"}</Badge> : null}
           <Button asChild variant="outline" size="sm">
             <Link href={`/dashboard/vehicles/${vehicle.id}/edit`}><Pencil className="mr-2 h-3.5 w-3.5" />Edit</Link>
           </Button>
@@ -97,11 +98,13 @@ export default async function VehicleDetailPage({ params, searchParams }: {
           <div><p className="text-sm text-muted-foreground">Garage relationship</p><p>{ownershipLabel}</p></div>
           {vehicle.sold_at && <div><p className="text-sm text-muted-foreground">Marked sold</p><p>{formatDate(vehicle.sold_at)}</p></div>}
           {vehicle.vin && <div><p className="text-sm text-muted-foreground">VIN</p><p className="font-mono">{vehicle.vin}</p></div>}
-          {vehicle.mileage != null && <div><p className="text-sm text-muted-foreground">Mileage</p><p>{formatMileage(vehicle.mileage)} miles</p>{vehicle.mileage_updated_at && <p className="text-xs text-muted-foreground">Updated {formatDate(vehicle.mileage_updated_at)}</p>}</div>}
-          {vehicle.engine && <div><p className="text-sm text-muted-foreground">Engine</p><p>{vehicle.engine}</p></div>}
-          {vehicle.drivetrain && <div><p className="text-sm text-muted-foreground">Drivetrain</p><p>{vehicle.drivetrain}</p></div>}
-          {vehicle.transmission && <div><p className="text-sm text-muted-foreground">Transmission</p><p>{vehicle.transmission}</p></div>}
+          <div><p className="text-sm text-muted-foreground">Configuration</p><p>{vehicle.configuration_type === "custom_build" ? "Custom build" : vehicle.configuration_type === "modified" ? "Modified" : "Stock"}</p></div>
+          {vehicle.mileage != null && <div><p className="text-sm text-muted-foreground">Odometer</p><p>{formatMileage(vehicle.mileage)} miles</p><p className="text-xs text-muted-foreground">{vehicle.mileage_status === "actual" ? "Reported actual mileage" : vehicle.mileage_status === "not_actual" ? "Not actual mileage" : "Actual mileage unknown"}{vehicle.mileage_updated_at ? ` · Updated ${formatDate(vehicle.mileage_updated_at)}` : ""}</p></div>}
+          {vehicle.engine && <div><p className="text-sm text-muted-foreground">Current engine/motor</p><p>{vehicle.engine}</p><p className="text-xs text-muted-foreground">{vehicle.engine_original ? "Reported original" : "Reported swapped"}</p></div>}
+          {vehicle.drivetrain && <div><p className="text-sm text-muted-foreground">Current drivetrain</p><p>{vehicle.drivetrain}</p><p className="text-xs text-muted-foreground">{vehicle.drivetrain_original ? "Reported original" : "Reported converted"}</p></div>}
+          {vehicle.transmission && <div><p className="text-sm text-muted-foreground">Current transmission</p><p>{vehicle.transmission}</p><p className="text-xs text-muted-foreground">{vehicle.transmission_original ? "Reported original" : "Reported swapped"}</p></div>}
           {vehicle.body_style && <div><p className="text-sm text-muted-foreground">Body style</p><p>{vehicle.body_style}</p></div>}
+          {vehicle.configuration_type === "custom_build" ? <div className="sm:col-span-2"><Button asChild variant="outline"><Link href={`/dashboard/vehicles/${vehicle.id}?tab=build`}><Wrench className="mr-2 h-4 w-4" />Open Build Progression</Link></Button></div> : null}
         </CardContent>
       </Card>
 

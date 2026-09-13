@@ -8,6 +8,14 @@ interface InspectionInput {
     trim: string | null;
     vin: string | null;
     mileage: number | null;
+    configuration_type: "stock" | "modified" | "custom_build";
+    engine: string | null;
+    drivetrain: string | null;
+    transmission: string | null;
+    engine_original: boolean;
+    transmission_original: boolean;
+    drivetrain_original: boolean;
+    mileage_status: "actual" | "not_actual" | "unknown";
   };
   ppiType: string;
   inspectionScope: InspectionScope;
@@ -108,7 +116,11 @@ No photos were attached to this request.`;
 ## VEHICLE
 - Vehicle: ${vehicleLine}
 - VIN: ${input.vehicle.vin ?? "Not provided"}
-- Mileage: ${input.vehicle.mileage?.toLocaleString() ?? "Not provided"} miles
+- Odometer: ${input.vehicle.mileage?.toLocaleString() ?? "Not provided"} miles (${input.vehicle.mileage_status.replaceAll("_", " ")})
+- Configuration: ${input.vehicle.configuration_type.replaceAll("_", " ")}
+- Current engine/motor: ${input.vehicle.engine ?? "Not provided"} (${input.vehicle.engine_original ? "reported original" : "reported swapped"})
+- Current transmission: ${input.vehicle.transmission ?? "Not provided"} (${input.vehicle.transmission_original ? "reported original" : "reported swapped"})
+- Current drivetrain: ${input.vehicle.drivetrain ?? "Not provided"} (${input.vehicle.drivetrain_original ? "reported original" : "reported converted"})
 
 ## INSPECTION METADATA
 - PPI Type: ${input.ppiType}
@@ -133,6 +145,8 @@ ${photosText}
 ## INSTRUCTIONS
 
 Analyze the raw inspection data and return a JSON object with this exact structure:
+
+Treat the configuration fields above as owner-reported current equipment. Do not substitute VIN-decoded factory equipment when a swap/conversion is reported. If mileage is not actual or unknown, clearly state that limitation in the overall summary and notable findings.
 
 {
   "vehicle": {

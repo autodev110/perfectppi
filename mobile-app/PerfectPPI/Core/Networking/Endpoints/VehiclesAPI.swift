@@ -24,6 +24,14 @@ enum VehiclesAPI {
         try await APIClient.shared.get("/api/vehicles")
     }
 
+    static func catalog(kind: String, make: String? = nil, year: Int? = nil, query: String = "") async throws -> [String] {
+        var items = [URLQueryItem(name: "kind", value: kind)]
+        if let make, !make.isEmpty { items.append(URLQueryItem(name: "make", value: make)) }
+        if let year { items.append(URLQueryItem(name: "year", value: String(year))) }
+        if !query.isEmpty { items.append(URLQueryItem(name: "q", value: query)) }
+        return try await APIClient.shared.get("/api/vehicles/catalog", query: items)
+    }
+
     struct CreatePayload: Encodable {
         let vin: String?
         let year: Int?
@@ -34,6 +42,11 @@ enum VehiclesAPI {
         let drivetrain: String?
         let transmission: String?
         let bodyStyle: String?
+        let configurationType: VehicleConfigurationType?
+        let engineOriginal: Bool?
+        let transmissionOriginal: Bool?
+        let drivetrainOriginal: Bool?
+        let mileageStatus: VehicleMileageStatus?
         let mileage: Int?
         let notes: String?
         let nickname: String?
@@ -54,7 +67,12 @@ enum VehiclesAPI {
             engine: String? = nil,
             drivetrain: String? = nil,
             transmission: String? = nil,
-            bodyStyle: String? = nil
+            bodyStyle: String? = nil,
+            configurationType: VehicleConfigurationType? = nil,
+            engineOriginal: Bool? = nil,
+            transmissionOriginal: Bool? = nil,
+            drivetrainOriginal: Bool? = nil,
+            mileageStatus: VehicleMileageStatus? = nil
         ) {
             self.vin = vin
             self.year = year
@@ -65,6 +83,11 @@ enum VehiclesAPI {
             self.drivetrain = drivetrain
             self.transmission = transmission
             self.bodyStyle = bodyStyle
+            self.configurationType = configurationType
+            self.engineOriginal = engineOriginal
+            self.transmissionOriginal = transmissionOriginal
+            self.drivetrainOriginal = drivetrainOriginal
+            self.mileageStatus = mileageStatus
             self.mileage = mileage
             self.notes = notes
             self.nickname = nickname
@@ -96,6 +119,11 @@ enum VehiclesAPI {
         let notes: String?
         let nickname: String?
         let ownershipState: VehicleOwnershipState?
+        let configurationType: VehicleConfigurationType?
+        let engineOriginal: Bool?
+        let transmissionOriginal: Bool?
+        let drivetrainOriginal: Bool?
+        let mileageStatus: VehicleMileageStatus?
 
         init(
             vin: String?,
@@ -111,7 +139,12 @@ enum VehiclesAPI {
             engine: String? = nil,
             drivetrain: String? = nil,
             transmission: String? = nil,
-            bodyStyle: String? = nil
+            bodyStyle: String? = nil,
+            configurationType: VehicleConfigurationType? = nil,
+            engineOriginal: Bool? = nil,
+            transmissionOriginal: Bool? = nil,
+            drivetrainOriginal: Bool? = nil,
+            mileageStatus: VehicleMileageStatus? = nil
         ) {
             self.vin = vin
             self.year = year
@@ -127,6 +160,11 @@ enum VehiclesAPI {
             self.notes = notes
             self.nickname = nickname
             self.ownershipState = ownershipState
+            self.configurationType = configurationType
+            self.engineOriginal = engineOriginal
+            self.transmissionOriginal = transmissionOriginal
+            self.drivetrainOriginal = drivetrainOriginal
+            self.mileageStatus = mileageStatus
         }
     }
 

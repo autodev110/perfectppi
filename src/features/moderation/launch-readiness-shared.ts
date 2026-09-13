@@ -44,6 +44,13 @@ export type LaunchReadinessInput = {
     outboxDeadLettered: number;
     outboxOldestPendingMinutes: number;
   };
+  visibilityIntegrity: {
+    available: boolean;
+    activeRestrictedPosts: number;
+    activeRestrictedComments: number;
+    openCaseVisibleContent: number;
+    totalViolations: number;
+  };
   moderatorCoverage: {
     available: boolean;
     counts: Partial<Record<ModerationCapability, number>>;
@@ -138,6 +145,19 @@ export function evaluateSocialLaunchReadiness(input: LaunchReadinessInput): Laun
     automated.push(unhealthy
       ? blocked("moderation-health", "Moderation queue health", `${operations.casesOverdue} overdue, ${operations.urgentUnacknowledged} urgent unacknowledged, ${operations.outboxDeadLettered} dead-lettered; oldest pending notification ${operations.outboxOldestPendingMinutes} minute(s).`, "/admin/moderation")
       : ready("moderation-health", "Moderation queue health", `${operations.casesOpen} open case(s); no SLA or notification-outbox guardrail is exceeded.`, "/admin/moderation"));
+  }
+
+  if (!input.visibilityIntegrity.available) {
+    automated.push(blocked("visibility-integrity", "Hidden-content integrity", "Visibility integrity could not be verified; the social beta must remain closed.", "/admin/moderation"));
+  } else if (input.visibilityIntegrity.totalViolations > 0) {
+    automated.push(blocked(
+      "visibility-integrity",
+      "Hidden-content integrity",
+      `${input.visibilityIntegrity.totalViolations} visibility invariant violation(s): ${input.visibilityIntegrity.activeRestrictedPosts} post state mismatch(es), ${input.visibilityIntegrity.activeRestrictedComments} comment state mismatch(es), ${input.visibilityIntegrity.openCaseVisibleContent} visible open-case item(s).`,
+      "/admin/moderation",
+    ));
+  } else {
+    automated.push(ready("visibility-integrity", "Hidden-content integrity", "No restrictive-state or visible open-case inconsistencies were detected.", "/admin/moderation"));
   }
 
   automated.push(input.communityRetentionPolicyConfigured === null

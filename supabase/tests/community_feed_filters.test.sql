@@ -25,6 +25,11 @@ SELECT
   max(id::text) FILTER (WHERE auth_user_id = '67000000-0000-0000-0000-000000000003')::uuid AS stranger_id
 FROM public.profiles;
 
+-- Repost clustering is per UTC day, so all post timestamps hang off noon of
+-- the current UTC day; a run that straddles midnight cannot split them.
+CREATE TEMP TABLE filter_clock AS
+SELECT ((date_trunc('day', now() AT TIME ZONE 'UTC') + interval '12 hours') AT TIME ZONE 'UTC') AS base;
+
 INSERT INTO public.friend_relationships (
   profile_low_id, profile_high_id, requested_by, status, responded_at
 )
@@ -48,17 +53,17 @@ INSERT INTO public.community_posts (
 )
 SELECT '69000000-0000-0000-0000-000000000001'::uuid, friend_id, NULL,
        'Friend post', 'public'::public.community_post_audience,
-       'active'::public.community_content_status, 'active', now() - interval '4 minutes'
+       'active'::public.community_content_status, 'active', (SELECT base FROM filter_clock) - interval '4 minutes'
 FROM filter_ids
 UNION ALL
 SELECT '69000000-0000-0000-0000-000000000002'::uuid, stranger_id,
        '68000000-0000-0000-0000-000000000002'::uuid,
-       'Matching TLX post', 'public', 'active', 'active', now() - interval '3 minutes'
+       'Matching TLX post', 'public', 'active', 'active', (SELECT base FROM filter_clock) - interval '3 minutes'
 FROM filter_ids
 UNION ALL
 SELECT '69000000-0000-0000-0000-000000000003'::uuid, stranger_id,
        '68000000-0000-0000-0000-000000000003'::uuid,
-       'Other car post', 'public', 'active', 'active', now() - interval '2 minutes'
+       'Other car post', 'public', 'active', 'active', (SELECT base FROM filter_clock) - interval '2 minutes'
 FROM filter_ids;
 
 INSERT INTO public.community_groups (
@@ -85,7 +90,7 @@ INSERT INTO public.community_posts (
 )
 SELECT '69000000-0000-0000-0000-000000000004'::uuid, friend_id,
        '6a000000-0000-0000-0000-000000000001'::uuid, 'active',
-       'Group post', 'public', 'active', 'active', now()
+       'Group post', 'public', 'active', 'active', (SELECT base FROM filter_clock)
 FROM filter_ids;
 
 DO $$
@@ -121,6 +126,99 @@ BEGIN
     'EXECUTE'
   ) THEN
     RAISE EXCEPTION 'filtered feed function leaked to authenticated clients';
+  END IF;
+END
+$$;
+
+-- Plan 27.1: the quality feed collapses repetitive same-author reposts and
+-- applies private group, post-type, and vehicle-topic mutes.
+INSERT INTO public.community_posts (
+  id, author_id, content, audience, post_type, status, moderation_status, created_at
+)
+SELECT '69000000-0000-0000-0000-000000000005'::uuid, friend_id,
+       'Friend post', 'public'::public.community_post_audience,
+       'general'::public.community_post_type,
+       'active'::public.community_content_status, 'active', (SELECT base FROM filter_clock) - interval '1 minute'
+FROM filter_ids
+UNION ALL
+SELECT '69000000-0000-0000-0000-000000000006'::uuid, stranger_id,
+       'Which brake pads should I use?', 'public'::public.community_post_audience,
+       'question'::public.community_post_type,
+       'active'::public.community_content_status, 'active', (SELECT base FROM filter_clock) - interval '30 seconds'
+FROM filter_ids;
+
+-- Two punctuation-only posts by one author on the same day are different
+-- posts, not a repost cluster.
+INSERT INTO public.community_posts (
+  id, author_id, content, audience, post_type, status, moderation_status, created_at
+)
+SELECT '69000000-0000-0000-0000-000000000007'::uuid, stranger_id, '...', 'public'::public.community_post_audience,
+       'general'::public.community_post_type, 'active'::public.community_content_status, 'active', (SELECT base FROM filter_clock) - interval '20 seconds'
+FROM filter_ids
+UNION ALL
+SELECT '69000000-0000-0000-0000-000000000008'::uuid, stranger_id, '!!!', 'public'::public.community_post_audience,
+       'general'::public.community_post_type, 'active'::public.community_content_status, 'active', (SELECT base FROM filter_clock) - interval '10 seconds'
+FROM filter_ids;
+
+DO $$
+DECLARE
+  v_viewer uuid := (SELECT viewer_id FROM filter_ids);
+BEGIN
+  IF (SELECT count(*) FROM public.social_quality_filtered_community_post_ids(v_viewer, 'all', 20, 0)
+      WHERE post_id IN ('69000000-0000-0000-0000-000000000007', '69000000-0000-0000-0000-000000000008')) <> 2 THEN
+    RAISE EXCEPTION 'punctuation-only posts must not collapse into each other';
+  END IF;
+  IF (SELECT count(*) FROM public.social_quality_filtered_community_post_ids(v_viewer, 'all', 20, 0)) <> 7 THEN
+    RAISE EXCEPTION 'quality feed did not collapse the repetitive repost';
+  END IF;
+  IF (SELECT collapsed_repost_count FROM public.social_quality_filtered_community_post_ids(v_viewer, 'all', 20, 0)
+      WHERE post_id = '69000000-0000-0000-0000-000000000005') <> 1 THEN
+    RAISE EXCEPTION 'quality feed did not describe the collapsed repost';
+  END IF;
+
+  PERFORM public.set_community_feed_mute(
+    v_viewer, 'group', true, '6a000000-0000-0000-0000-000000000001'
+  );
+  IF EXISTS (
+    SELECT 1 FROM public.social_quality_filtered_community_post_ids(v_viewer, 'all', 20, 0)
+    WHERE post_id = '69000000-0000-0000-0000-000000000004'
+  ) THEN
+    RAISE EXCEPTION 'group mute did not remove the group from the feed';
+  END IF;
+  PERFORM public.set_community_feed_mute(
+    v_viewer, 'group', false, '6a000000-0000-0000-0000-000000000001'
+  );
+
+  PERFORM public.set_community_feed_mute(
+    v_viewer, 'post_type', true, NULL, 'question'
+  );
+  IF EXISTS (
+    SELECT 1 FROM public.social_quality_filtered_community_post_ids(v_viewer, 'all', 20, 0)
+    WHERE post_id = '69000000-0000-0000-0000-000000000006'
+  ) THEN
+    RAISE EXCEPTION 'post-type mute did not remove questions from the feed';
+  END IF;
+
+  PERFORM public.set_community_feed_mute(
+    v_viewer, 'vehicle_topic', true, NULL, NULL, '  ACURA ', 'TLX'
+  );
+  IF EXISTS (
+    SELECT 1 FROM public.social_quality_filtered_community_post_ids(v_viewer, 'all', 20, 0)
+    WHERE post_id = '69000000-0000-0000-0000-000000000002'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM public.social_quality_filtered_community_post_ids(v_viewer, 'all', 20, 0)
+    WHERE post_id = '69000000-0000-0000-0000-000000000003'
+  ) THEN
+    RAISE EXCEPTION 'vehicle-topic mute did not stay scoped to normalized make/model';
+  END IF;
+
+  IF has_table_privilege('authenticated', 'public.community_feed_mutes', 'SELECT')
+     OR has_function_privilege(
+       'authenticated',
+       'public.set_community_feed_mute(uuid,public.community_feed_mute_scope,boolean,uuid,public.community_post_type,text,text)',
+       'EXECUTE'
+     ) THEN
+    RAISE EXCEPTION 'private feed mute storage or mutation leaked to clients';
   END IF;
 END
 $$;

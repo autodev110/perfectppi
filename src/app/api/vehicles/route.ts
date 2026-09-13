@@ -20,6 +20,11 @@ const createSchema = z.object({
   drivetrain: z.string().trim().max(100).optional(),
   transmission: z.string().trim().max(100).optional(),
   body_style: z.string().trim().max(100).optional(),
+  configuration_type: z.enum(["stock", "modified", "custom_build"]).optional(),
+  engine_original: z.boolean().optional(),
+  transmission_original: z.boolean().optional(),
+  drivetrain_original: z.boolean().optional(),
+  mileage_status: z.enum(["actual", "not_actual", "unknown"]).optional(),
   nickname: z.string().trim().max(60).optional(),
   ownership_state: z.enum(["owned", "previously_owned", "considering", "project"]).optional(),
   mileage: z.number().min(0).optional(),
@@ -53,6 +58,18 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: parsed.error.errors[0].message },
       { status: 400 }
+    );
+  }
+  const configurationType = parsed.data.configuration_type ?? "stock";
+  const originalEquipment = [
+    parsed.data.engine_original ?? true,
+    parsed.data.transmission_original ?? true,
+    parsed.data.drivetrain_original ?? true,
+  ];
+  if (configurationType === "stock" && originalEquipment.includes(false)) {
+    return NextResponse.json(
+      { error: "Choose Modified or Custom build when factory equipment has been replaced." },
+      { status: 400 },
     );
   }
 

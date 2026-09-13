@@ -8,7 +8,7 @@ export const LEGAL_LAST_UPDATED = "September 2, 2026";
 // Non-assent disclosures (Community Guidelines, AI Processing Disclosure,
 // Privacy Policy, Support & Safety) are revised to match the shipped social
 // configuration without changing the Terms version users accepted.
-export const DISCLOSURES_LAST_UPDATED = "September 10, 2026";
+export const DISCLOSURES_LAST_UPDATED = "September 13, 2026";
 export const MODERATION_RESPONSE_TARGETS = {
   urgentHours: 4,
   ordinaryHours: 24,
