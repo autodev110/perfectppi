@@ -25,6 +25,11 @@ SELECT set_config('test.safety_analytics_profile_two', id::text, true)
 FROM public.profiles
 WHERE auth_user_id = '8f100000-0000-0000-0000-000000000002'::uuid;
 
+-- Reproduce the production/fresh-migration boundary even if a developer's
+-- reused local database retained a historical service-role table grant.
+REVOKE SELECT ON public.community_posts, public.community_comments, public.community_post_media
+  FROM service_role;
+
 SET LOCAL ROLE service_role;
 
 DO $$
@@ -76,6 +81,17 @@ BEGIN
        'anon', 'public.get_product_safety_analytics_summary(integer)', 'EXECUTE'
      ) THEN
     RAISE EXCEPTION 'aggregate analytics function leaked to application roles';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_proc procedure
+    JOIN pg_namespace namespace ON namespace.oid = procedure.pronamespace
+    WHERE namespace.nspname = 'public'
+      AND procedure.proname = 'get_product_safety_analytics_summary'
+      AND procedure.prosecdef
+      AND procedure.proconfig @> ARRAY['search_path=""']::text[]
+  ) THEN
+    RAISE EXCEPTION 'aggregate analytics function is missing its restricted definer boundary';
   END IF;
 END
 $$;

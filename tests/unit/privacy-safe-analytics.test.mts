@@ -47,9 +47,13 @@ describe("privacy-safe product analytics", () => {
 
   test("safety analytics suppress small report cohorts and remain service-only", () => {
     const migration = read("supabase/migrations/20260913215140_product_safety_analytics.sql");
+    const privilegeFix = read("supabase/migrations/20260913220718_fix_product_safety_analytics_privileges.sql");
     assert.match(migration, /FROM report_groups WHERE report_count >= 5/);
     assert.match(migration, /reportBreakdownSuppressed/);
     assert.match(migration, /REVOKE ALL ON FUNCTION public\.get_product_safety_analytics_summary\(integer\)[\s\S]*FROM PUBLIC, anon, authenticated/);
     assert.doesNotMatch(migration, /report\.details|content_snapshot|statement/);
+    assert.match(privilegeFix, /ALTER FUNCTION public\.get_product_safety_analytics_summary\(integer\)[\s\S]*SECURITY DEFINER/);
+    assert.match(privilegeFix, /SET search_path = ''/);
+    assert.match(privilegeFix, /GRANT EXECUTE ON FUNCTION public\.get_product_safety_analytics_summary\(integer\)[\s\S]*TO service_role/);
   });
 });
