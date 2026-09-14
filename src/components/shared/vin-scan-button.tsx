@@ -10,6 +10,8 @@ export interface DecodedVinVehicle {
   make: string | null;
   model: string | null;
   trim: string | null;
+  /** Factory values in the shape of the current-build fields (Renditions doc). */
+  factory_summary?: { engine: string | null; transmission: string | null; drivetrain: string | null; body_style: string | null; trim: string | null } | null;
 }
 
 interface VinScanButtonProps {

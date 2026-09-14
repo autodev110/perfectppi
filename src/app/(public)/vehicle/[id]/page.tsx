@@ -6,6 +6,7 @@ import {
   getVehiclePpiHistory,
 } from "@/features/vehicles/queries";
 import { getVehicleActiveListing } from "@/features/marketplace/queries";
+import { FactorySpecComparison } from "@/components/shared/factory-spec-comparison";
 import {
   contactSellerFromListing,
   requestMarketplaceInspectionFromListing,
@@ -301,6 +302,24 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
               ))}
             </div>
           </div>
+
+          {/* Factory spec vs current build (Renditions doc) */}
+          {vehicle.factory_spec || vehicle.engine_original === false || vehicle.transmission_original === false || vehicle.drivetrain_original === false ? (
+            <div className="bg-surface-container-lowest rounded-[1.25rem] p-6 ghost-border shadow-sm">
+              <h2 className="font-heading font-extrabold text-base mb-4 text-on-surface">
+                Factory spec vs. current build
+              </h2>
+              <FactorySpecComparison
+                spec={vehicle.factory_spec}
+                current={{
+                  engine: vehicle.engine, transmission: vehicle.transmission, drivetrain: vehicle.drivetrain,
+                  body_style: vehicle.body_style, trim: vehicle.trim,
+                  engine_original: vehicle.engine_original, transmission_original: vehicle.transmission_original, drivetrain_original: vehicle.drivetrain_original,
+                }}
+                ownerView={vehicle.viewer_is_owner}
+              />
+            </div>
+          ) : null}
 
           {/* Inspection summary */}
           <div className="bg-surface-container-lowest rounded-[1.25rem] p-6 ghost-border shadow-sm">

@@ -1,3 +1,4 @@
+import { factorySpecSummary, parseFactorySpec } from "@/lib/vehicles/factory-spec";
 import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isGeminiConfigured } from "@/lib/ai/gemini";
@@ -136,7 +137,7 @@ export async function runOutputGenerationJob(params: {
     .select(
       `
       id, ppi_type, inspection_scope, performer_type, requester_id, requesting_organization_id,
-      vehicle:vehicles(year, make, model, trim, vin, mileage, configuration_type, engine, drivetrain, transmission, engine_original, transmission_original, drivetrain_original, mileage_status)
+      vehicle:vehicles(year, make, model, trim, vin, mileage, configuration_type, engine, drivetrain, transmission, engine_original, transmission_original, drivetrain_original, mileage_status, factory_spec)
     `,
     )
     .eq("id", submission.ppi_request_id)
@@ -167,7 +168,9 @@ export async function runOutputGenerationJob(params: {
     transmission_original: boolean;
     drivetrain_original: boolean;
     mileage_status: "actual" | "not_actual" | "unknown";
+    factory_spec: Json | null;
   } | null;
+  const factorySpec = vehicle ? parseFactorySpec(vehicle.factory_spec) : null;
 
   const sortedSections = [...(submission.sections ?? [])]
     .sort((a, b) => a.sort_order - b.sort_order)
@@ -246,7 +249,7 @@ export async function runOutputGenerationJob(params: {
     try {
       standardizedContent = await generateStandardizedOutput({
         vehicle:
-          vehicle ?? {
+          vehicle ? { ...vehicle, factory: factorySpec ? factorySpecSummary(factorySpec) : null } : {
             year: null,
             make: null,
             model: null,

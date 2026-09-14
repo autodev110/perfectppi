@@ -7,6 +7,8 @@ enum VehiclesAPI {
         let make: String?
         let model: String?
         let trim: String?
+        /// Factory values in the shape of the current-build fields (Renditions doc).
+        var factorySummary: VehicleFactorySummary? = nil
     }
 
     private struct DecodeVinPayload: Encodable {

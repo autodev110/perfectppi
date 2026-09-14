@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { getMyVehicles } from "@/features/vehicles/queries";
 import { recordProductEvent } from "@/features/analytics/product-events";
+import { decodeFactorySpec, factoryConflictMessage, storeFactorySpec } from "@/features/vehicles/factory-spec";
+import { prefillFromFactory } from "@/lib/vehicles/factory-spec";
 
 export async function GET() {
   const supabase = await createClient();
@@ -94,16 +96,35 @@ export async function POST(request: Request) {
   }
 
   const { notes, ...vehicleFields } = parsed.data;
+  // Factory layer (Renditions doc): decode once, fill blanks of the current
+  // build from it, refuse a current build that contradicts it as "original".
+  const factorySpec = await decodeFactorySpec(normalizedVin);
+  const entered = {
+    engine: parsed.data.engine || null,
+    transmission: parsed.data.transmission || null,
+    drivetrain: parsed.data.drivetrain || null,
+    body_style: parsed.data.body_style || null,
+    trim: parsed.data.trim || null,
+  };
+  const currentBuild = factorySpec ? prefillFromFactory(factorySpec, entered) : entered;
+  const conflict = factoryConflictMessage(factorySpec, {
+    ...currentBuild,
+    engine_original: originalEquipment[0],
+    transmission_original: originalEquipment[1],
+    drivetrain_original: originalEquipment[2],
+  });
+  if (conflict) return NextResponse.json({ error: conflict, code: "factory_conflict" }, { status: 400 });
+
   const { data, error } = await supabase
     .from("vehicles")
     .insert({
       ...vehicleFields,
       vin: normalizedVin,
-      trim: parsed.data.trim || null,
-      engine: parsed.data.engine || null,
-      drivetrain: parsed.data.drivetrain || null,
-      transmission: parsed.data.transmission || null,
-      body_style: parsed.data.body_style || null,
+      trim: currentBuild.trim || null,
+      engine: currentBuild.engine || null,
+      drivetrain: currentBuild.drivetrain || null,
+      transmission: currentBuild.transmission || null,
+      body_style: currentBuild.body_style || null,
       nickname: parsed.data.nickname || null,
       owner_id: profile.id,
     })
@@ -131,6 +152,7 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+  if (factorySpec) await storeFactorySpec(data.id, factorySpec);
 
   if (notes) {
     const { error: notesError } = await supabase

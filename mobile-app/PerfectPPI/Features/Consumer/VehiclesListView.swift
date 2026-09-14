@@ -445,6 +445,9 @@ struct VehicleDetailView: View {
                         if let bodyStyle = vehicle.bodyStyle, !bodyStyle.isEmpty {
                             VehicleDetailRow(label: "Body style", value: bodyStyle, systemImage: "car.side")
                         }
+                        if vehicle.factorySpec != nil {
+                            FactoryComparisonSection(vehicle: vehicle)
+                        }
                         if let soldAt = vehicle.soldAt {
                             VehicleDetailRow(
                                 label: "Marked sold",
@@ -1443,6 +1446,16 @@ private struct EditVehicleView: View {
     @State private var mileage: String
     @State private var saving = false
     @State private var error: String?
+    /// The VIN-decoded factory layer, shown under each current-build field.
+    private var factory: VehicleFactorySummary? { vehicle.factorySpec?.summary }
+    private var drivetrainConflict: Bool {
+        guard let f = VehicleFactorySpec.normalizeDrivetrain(factory?.drivetrain), let c = VehicleFactorySpec.normalizeDrivetrain(drivetrain) else { return false }
+        return f != c && drivetrainOriginal
+    }
+    private var transmissionConflict: Bool {
+        guard let f = VehicleFactorySpec.normalizeTransmissionStyle(factory?.transmission), let c = VehicleFactorySpec.normalizeTransmissionStyle(transmission) else { return false }
+        return f != c && transmissionOriginal
+    }
     @State private var catalogTarget: VehicleCatalogTarget?
     @State private var configurationType: VehicleConfigurationType
     @State private var engineOriginal: Bool
@@ -1497,10 +1510,15 @@ private struct EditVehicleView: View {
                 Button("Choose Model", systemImage: "chevron.down") { catalogTarget = .model }
                     .disabled(make.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 TextField("Trim", text: $trim)
+                FactoryHint(factory: factory?.trim, current: $trim)
                 TextField("Engine", text: $engine)
+                FactoryHint(factory: factory?.engine, current: $engine)
                 TextField("Drivetrain", text: $drivetrain)
+                FactoryHint(factory: factory?.drivetrain, current: $drivetrain, conflict: drivetrainConflict)
                 TextField("Transmission", text: $transmission)
+                FactoryHint(factory: factory?.transmission, current: $transmission, conflict: transmissionConflict)
                 TextField("Body style", text: $bodyStyle)
+                FactoryHint(factory: factory?.bodyStyle, current: $bodyStyle)
                 TextField("Year", text: $year).keyboardType(.numberPad)
                 TextField("Mileage", text: $mileage).keyboardType(.numberPad)
                 Section("Configuration check") {
@@ -1674,6 +1692,8 @@ struct NewVehicleView: View {
     @State private var visibility: VehicleVisibility = .private
     @State private var saving = false
     @State private var error: String?
+    /// Factory values from the VIN decode; only blanks are filled from them.
+    @State private var factory: VehicleFactorySummary?
     @State private var showVINScanner = false
     @State private var duplicateVehicle: Vehicle?
     @State private var catalogTarget: VehicleCatalogTarget?
@@ -1682,6 +1702,15 @@ struct NewVehicleView: View {
     @State private var transmissionOriginal = true
     @State private var drivetrainOriginal = true
     @State private var mileageStatus: VehicleMileageStatus = .actual
+
+    private var newDrivetrainConflict: Bool {
+        guard let f = VehicleFactorySpec.normalizeDrivetrain(factory?.drivetrain), let c = VehicleFactorySpec.normalizeDrivetrain(drivetrain) else { return false }
+        return f != c && drivetrainOriginal
+    }
+    private var newTransmissionConflict: Bool {
+        guard let f = VehicleFactorySpec.normalizeTransmissionStyle(factory?.transmission), let c = VehicleFactorySpec.normalizeTransmissionStyle(transmission) else { return false }
+        return f != c && transmissionOriginal
+    }
 
     var body: some View {
         NavigationStack {
@@ -1722,11 +1751,21 @@ struct NewVehicleView: View {
                     TextField("Year", text: $year).keyboardType(.numberPad)
                     TextField("Mileage", text: $mileage).keyboardType(.numberPad)
                 }
-                Section("Specifications") {
+                Section {
                     TextField("Engine", text: $engine)
+                    FactoryHint(factory: factory?.engine, current: $engine)
                     TextField("Drivetrain", text: $drivetrain)
+                    FactoryHint(factory: factory?.drivetrain, current: $drivetrain, conflict: newDrivetrainConflict)
                     TextField("Transmission", text: $transmission)
+                    FactoryHint(factory: factory?.transmission, current: $transmission, conflict: newTransmissionConflict)
                     TextField("Body style", text: $bodyStyle)
+                    FactoryHint(factory: factory?.bodyStyle, current: $bodyStyle)
+                } header: {
+                    Text("Current build")
+                } footer: {
+                    if factory != nil {
+                        Text("Factory values come from the VIN and are kept separately; what you enter here describes the car as it is now.")
+                    }
                 }
                 Section("Configuration check") {
                     Text("Confirm the vehicle as it is now. VIN-decoded factory equipment may no longer be installed.")
@@ -1790,6 +1829,15 @@ struct NewVehicleView: View {
                     if let decodedMake = decoded.make { make = decodedMake }
                     if let decodedModel = decoded.model { model = decodedModel }
                     if let decodedTrim = decoded.trim { trim = decodedTrim }
+                    // The factory layer only fills blanks; typed values stay
+                    // as the current build.
+                    factory = decoded.factorySummary
+                    if let summary = decoded.factorySummary {
+                        if engine.isEmpty, let value = summary.engine { engine = value }
+                        if drivetrain.isEmpty, let value = summary.drivetrain { drivetrain = value }
+                        if transmission.isEmpty, let value = summary.transmission { transmission = value }
+                        if bodyStyle.isEmpty, let value = summary.bodyStyle { bodyStyle = value }
+                    }
                 }
             }
             .sheet(item: $catalogTarget) { target in
@@ -1929,6 +1977,106 @@ private struct VehicleCatalogPicker: View {
             return
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+
+/// "Factory (VIN): X · Use" under a current-build field (Renditions doc:
+/// Factory Spec vs Current Build). A drivetrain or transmission that
+/// contradicts the factory record while marked original is flagged before
+/// the server refuses the save.
+private struct FactoryHint: View {
+    let factory: String?
+    @Binding var current: String
+    var conflict: Bool = false
+
+    var body: some View {
+        if let factory, !factory.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Factory (VIN): ").foregroundStyle(.secondary) + Text(factory).fontWeight(.semibold)
+                    Spacer()
+                    if current.trimmingCharacters(in: .whitespaces) != factory {
+                        Button("Use factory value") { current = factory }
+                            .font(.caption.weight(.semibold))
+                            .buttonStyle(.borderless)
+                    }
+                }
+                .font(.caption)
+                if conflict {
+                    Text("Contradicts the VIN's factory record. Use the factory value, or choose Modified / Custom build and mark this part as not original.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.Palette.danger)
+                }
+            }
+        }
+    }
+}
+
+/// Factory vs current rows on the vehicle detail screen.
+private struct FactoryComparisonSection: View {
+    let vehicle: Vehicle
+
+    var body: some View {
+        let rows = vehicle.factoryComparison
+        let unconfirmed = rows.filter { $0.status == .differs }
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Factory spec vs. current build")
+                .font(.subheadline.weight(.semibold))
+            Text("Factory values come from the VIN and are never edited. The current build is what you report today.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            ForEach(rows) { row in
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(row.label).font(.caption.weight(.semibold))
+                        Spacer()
+                        Text(statusLabel(row.status))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(statusColor(row.status))
+                    }
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Factory").font(.caption2).foregroundStyle(.secondary)
+                            Text(row.factory ?? "—").font(.caption)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Current").font(.caption2).foregroundStyle(.secondary)
+                            Text(row.current ?? "—").font(.caption.weight(.medium))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            if !unconfirmed.isEmpty {
+                Label(
+                    "\(unconfirmed.map(\.label).joined(separator: ", ")) \(unconfirmed.count == 1 ? "differs" : "differ") from the factory record but \(unconfirmed.count == 1 ? "is" : "are") still marked original. Edit the vehicle to use the factory value or mark the part as swapped.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(.caption2)
+                .foregroundStyle(Theme.Palette.danger)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func statusLabel(_ status: FactoryComparisonRow.Status) -> String {
+        switch status {
+        case .match: "Factory"
+        case .declared: "Swapped / converted"
+        case .differs: "Differs — not confirmed"
+        case .unknown: "No factory data"
+        }
+    }
+
+    private func statusColor(_ status: FactoryComparisonRow.Status) -> Color {
+        switch status {
+        case .match, .unknown: .secondary
+        case .declared: Theme.Palette.warning
+        case .differs: Theme.Palette.danger
         }
     }
 }

@@ -26,6 +26,8 @@ import {
   collectInspectionStorageReferences,
 } from "@/features/ppi/deletion";
 import { recordProductEvent } from "@/features/analytics/product-events";
+import { decodeFactorySpec, ensureFactorySpec, factoryConflictMessage, storeFactorySpec } from "@/features/vehicles/factory-spec";
+import { prefillFromFactory } from "@/lib/vehicles/factory-spec";
 
 const createVehicleSchema = z.object({
   vin: z.string().max(17).optional().or(z.literal("")),
@@ -143,14 +145,41 @@ export async function createVehicle(formData: FormData) {
   }
 
   const { notes, ...vehicleFields } = parsed.data;
+  // Factory layer (Renditions doc): decode once from the VIN, fill only the
+  // blanks of the current build from it, and refuse a current build that
+  // contradicts it while claiming factory equipment.
+  const factorySpec = await decodeFactorySpec(normalizedVin);
+  const currentBuild = factorySpec
+    ? prefillFromFactory(factorySpec, {
+        engine: parsed.data.engine || null,
+        transmission: parsed.data.transmission || null,
+        drivetrain: parsed.data.drivetrain || null,
+        body_style: parsed.data.body_style || null,
+        trim: parsed.data.trim || null,
+      })
+    : {
+        engine: parsed.data.engine || null,
+        transmission: parsed.data.transmission || null,
+        drivetrain: parsed.data.drivetrain || null,
+        body_style: parsed.data.body_style || null,
+        trim: parsed.data.trim || null,
+      };
+  const conflict = factoryConflictMessage(factorySpec, {
+    ...currentBuild,
+    engine_original: originalEquipment[0],
+    transmission_original: originalEquipment[1],
+    drivetrain_original: originalEquipment[2],
+  });
+  if (conflict) return { error: conflict };
+
   const insertData = {
     ...vehicleFields,
     vin: normalizedVin,
-    trim: parsed.data.trim || null,
-    engine: parsed.data.engine || null,
-    drivetrain: parsed.data.drivetrain || null,
-    transmission: parsed.data.transmission || null,
-    body_style: parsed.data.body_style || null,
+    trim: currentBuild.trim || null,
+    engine: currentBuild.engine || null,
+    drivetrain: currentBuild.drivetrain || null,
+    transmission: currentBuild.transmission || null,
+    body_style: currentBuild.body_style || null,
     nickname: parsed.data.nickname || null,
     owner_id: profile.id,
   };
@@ -177,6 +206,7 @@ export async function createVehicle(formData: FormData) {
     };
   }
   if (error) return { error: "The vehicle could not be saved. Please try again." };
+  if (factorySpec) await storeFactorySpec(data.id, factorySpec);
 
   if (notes) {
     const { error: notesError } = await supabase
@@ -214,7 +244,7 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
 
   const { data: ownedVehicle } = await admin
     .from("vehicles")
-    .select("id, ownership_state, configuration_type, engine_original, transmission_original, drivetrain_original")
+    .select("id, vin, factory_spec, ownership_state, configuration_type, engine_original, transmission_original, drivetrain_original, engine, transmission, drivetrain, body_style, trim")
     .eq("id", vehicleId)
     .eq("owner_id", profile.profileId)
     .maybeSingle();
@@ -231,6 +261,23 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
   if (effectiveConfigurationType === "stock" && effectiveOriginalEquipment.includes(false)) {
     return { error: "Choose Modified or Custom build when factory equipment has been replaced." };
   }
+
+  // The factory layer follows the VIN: a new VIN is decoded now, an unchanged
+  // one keeps (or lazily establishes) its stored record.
+  const nextVin = parsed.data.vin === undefined ? (ownedVehicle.vin ?? null) : parsed.data.vin.trim().toUpperCase() || null;
+  const vinChanged = (nextVin ?? "") !== (ownedVehicle.vin ?? "").trim().toUpperCase();
+  const factorySpec = vinChanged ? await decodeFactorySpec(nextVin) : await ensureFactorySpec(ownedVehicle);
+  const conflict = factoryConflictMessage(factorySpec, {
+    engine: parsed.data.engine === undefined ? ownedVehicle.engine : parsed.data.engine || null,
+    transmission: parsed.data.transmission === undefined ? ownedVehicle.transmission : parsed.data.transmission || null,
+    drivetrain: parsed.data.drivetrain === undefined ? ownedVehicle.drivetrain : parsed.data.drivetrain || null,
+    body_style: parsed.data.body_style === undefined ? ownedVehicle.body_style : parsed.data.body_style || null,
+    trim: parsed.data.trim === undefined ? ownedVehicle.trim : parsed.data.trim || null,
+    engine_original: effectiveOriginalEquipment[0],
+    transmission_original: effectiveOriginalEquipment[1],
+    drivetrain_original: effectiveOriginalEquipment[2],
+  });
+  if (conflict) return { error: conflict };
 
   const { notes, ...vehicleFields } = parsed.data;
   const updateData = {
@@ -255,6 +302,7 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
     return { error: "It looks like you already have a vehicle with this same VIN." };
   }
   if (error) return { error: "The vehicle could not be updated. Please try again." };
+  if (vinChanged) await storeFactorySpec(vehicleId, factorySpec);
 
   if (notes !== undefined) {
     const { error: notesError } = notes

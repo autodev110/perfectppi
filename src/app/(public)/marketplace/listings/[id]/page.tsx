@@ -17,6 +17,8 @@ import { NEUTRAL_SHARE_CARD, shareCardTitle, sharePath } from "@/lib/share/links
 import { LISTING_STATUS_LABELS, isListingPublic } from "@/lib/marketplace/listing-status";
 import { SELLER_TYPE_LABELS } from "@/lib/marketplace/filters";
 import { inspectionAge } from "@/lib/marketplace/inspection-report";
+import { parseFactorySpec } from "@/lib/vehicles/factory-spec";
+import { FactorySpecComparison } from "@/components/shared/factory-spec-comparison";
 import { recordProductEvent } from "@/features/analytics/product-events";
 import {
   ArrowLeft,
@@ -93,6 +95,11 @@ export default async function MarketplaceListingPage({ params, searchParams }: P
     ["Drivetrain", vehicle?.drivetrain ? `${vehicle.drivetrain}${vehicle.drivetrain_original === false ? " (converted)" : ""}` : vehicle?.drivetrain_original === false ? "Converted" : null],
     ["Body style", vehicle?.body_style],
   ].filter((row): row is [string, string | number] => row[1] != null && row[1] !== "");
+  // With a factory record the build fields move to the comparison table.
+  const factorySpec = vehicle ? parseFactorySpec(vehicle.factory_spec) : null;
+  const visibleSpecs = factorySpec
+    ? specs.filter(([key]) => !["Engine", "Transmission", "Drivetrain", "Body style", "Trim"].includes(key))
+    : specs;
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-32 pt-8 sm:px-6 lg:px-8 lg:pb-16">
@@ -178,15 +185,30 @@ export default async function MarketplaceListingPage({ params, searchParams }: P
             ) : (
               <p className="mt-3 text-sm text-on-surface-variant">The seller has not added a description yet.</p>
             )}
-            {specs.length > 0 ? (
+            {visibleSpecs.length > 0 ? (
               <dl className="mt-5 grid gap-x-6 gap-y-2 border-t border-outline-variant/40 pt-4 text-sm sm:grid-cols-2">
-                {specs.map(([key, value]) => (
+                {visibleSpecs.map(([key, value]) => (
                   <div key={key} className="flex justify-between gap-4">
                     <dt className="text-on-surface-variant">{key}</dt>
                     <dd className="text-right font-semibold">{value}</dd>
                   </div>
                 ))}
               </dl>
+            ) : null}
+            {vehicle && factorySpec ? (
+              <div className="mt-5 border-t border-outline-variant/40 pt-4">
+                <h3 className="mb-2 text-sm font-bold">Factory spec vs. current build</h3>
+                <FactorySpecComparison
+                  spec={factorySpec}
+                  current={{
+                    engine: vehicle.engine, transmission: vehicle.transmission, drivetrain: vehicle.drivetrain,
+                    body_style: vehicle.body_style, trim: vehicle.trim,
+                    engine_original: vehicle.engine_original, transmission_original: vehicle.transmission_original, drivetrain_original: vehicle.drivetrain_original,
+                  }}
+                  ownerView={isOwner}
+                  compact
+                />
+              </div>
             ) : null}
           </section>
 

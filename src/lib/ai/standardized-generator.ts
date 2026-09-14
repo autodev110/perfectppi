@@ -96,6 +96,7 @@ interface GeneratorInput {
     transmission_original: boolean;
     drivetrain_original: boolean;
     mileage_status: "actual" | "not_actual" | "unknown";
+    factory?: { engine: string | null; transmission: string | null; drivetrain: string | null; body_style: string | null; trim: string | null } | null;
   };
   request: {
     ppi_type: string;

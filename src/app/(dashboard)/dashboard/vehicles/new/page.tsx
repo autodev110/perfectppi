@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { VinScanButton } from "@/components/shared/vin-scan-button";
+import { CurrentBuildFields, type CurrentBuildValues } from "@/components/shared/current-build-fields";
+import type { FactorySummary } from "@/lib/vehicles/factory-spec";
 import { VehicleConfigurationFields } from "@/components/shared/vehicle-configuration-fields";
 import { VehicleMakeModelFields } from "@/components/shared/vehicle-make-model-fields";
 import Link from "next/link";
@@ -24,6 +26,8 @@ export default function NewVehiclePage() {
   const [model, setModel] = useState("");
   const [trim, setTrim] = useState("");
   const [nickname, setNickname] = useState("");
+  const [build, setBuild] = useState<CurrentBuildValues>({ engine: "", transmission: "", drivetrain: "", body_style: "" });
+  const [factory, setFactory] = useState<FactorySummary | null>(null);
   const [existingVehicle, setExistingVehicle] = useState<{
     id: string;
     year: number | null;
@@ -142,6 +146,18 @@ export default function NewVehiclePage() {
                     if (vehicle.make) setMake(vehicle.make);
                     if (vehicle.model) setModel(vehicle.model);
                     if (vehicle.trim) setTrim(vehicle.trim);
+                    // The factory layer only fills blanks; anything the
+                    // owner already typed stays as the current build.
+                    const summary = vehicle.factory_summary ?? null;
+                    setFactory(summary);
+                    if (summary) {
+                      setBuild((current) => ({
+                        engine: current.engine || summary.engine || "",
+                        transmission: current.transmission || summary.transmission || "",
+                        drivetrain: current.drivetrain || summary.drivetrain || "",
+                        body_style: current.body_style || summary.body_style || "",
+                      }));
+                    }
                   }}
                 />
               </div>
@@ -158,11 +174,17 @@ export default function NewVehiclePage() {
             </div>
             <VehicleConfigurationFields />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Current engine/motor" name="engine" placeholder="2.0L turbo or swapped engine" maxLength={100} />
-              <Field label="Current drivetrain" name="drivetrain" placeholder="FWD, RWD, AWD, or 4WD" maxLength={100} />
-              <Field label="Current transmission" name="transmission" placeholder="10-speed automatic" maxLength={100} />
-              <Field label="Body style" name="body_style" placeholder="Sedan" maxLength={100} />
+              <CurrentBuildFields
+                values={build}
+                onChange={(field, value) => setBuild((current) => ({ ...current, [field]: value }))}
+                factory={factory}
+              />
             </div>
+            {factory ? (
+              <p className="text-xs text-muted-foreground">
+                Factory values come from the VIN and are kept separately; what you enter above describes the car as it is now.
+              </p>
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="visibility">Visibility</Label>
               <select
@@ -213,15 +235,6 @@ export default function NewVehiclePage() {
           </form>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function Field({ label, name, ...props }: React.ComponentProps<typeof Input> & { label: string; name: string }) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} {...props} />
     </div>
   );
 }

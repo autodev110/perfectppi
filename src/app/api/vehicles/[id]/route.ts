@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { decodeFactorySpec, ensureFactorySpec, factoryConflictMessage, storeFactorySpec } from "@/features/vehicles/factory-spec";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { getOwnedVehicle } from "@/features/vehicles/queries";
@@ -76,6 +77,23 @@ export async function PATCH(
     );
   }
 
+  // The factory layer follows the VIN: decode a new VIN now, otherwise keep
+  // (or lazily establish) the stored record; refuse contradictions.
+  const nextVin = parsed.data.vin === undefined ? (existing.vin ?? null) : parsed.data.vin.trim().toUpperCase() || null;
+  const vinChanged = (nextVin ?? "") !== (existing.vin ?? "").trim().toUpperCase();
+  const factorySpec = vinChanged ? await decodeFactorySpec(nextVin) : await ensureFactorySpec(existing);
+  const conflict = factoryConflictMessage(factorySpec, {
+    engine: parsed.data.engine === undefined ? existing.engine : parsed.data.engine?.trim() || null,
+    transmission: parsed.data.transmission === undefined ? existing.transmission : parsed.data.transmission?.trim() || null,
+    drivetrain: parsed.data.drivetrain === undefined ? existing.drivetrain : parsed.data.drivetrain?.trim() || null,
+    body_style: parsed.data.body_style === undefined ? existing.body_style : parsed.data.body_style?.trim() || null,
+    trim: parsed.data.trim === undefined ? existing.trim : parsed.data.trim || null,
+    engine_original: effectiveOriginalEquipment[0],
+    transmission_original: effectiveOriginalEquipment[1],
+    drivetrain_original: effectiveOriginalEquipment[2],
+  });
+  if (conflict) return NextResponse.json({ error: conflict, code: "factory_conflict" }, { status: 400 });
+
   const { notes, ...vehicleFields } = parsed.data;
   const updateData = {
     ...vehicleFields,
@@ -104,6 +122,7 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: "The vehicle could not be updated. Please try again." }, { status: 500 });
   }
+  if (vinChanged) await storeFactorySpec(id, factorySpec);
 
   if (notes !== undefined) {
     const { error: notesError } = notes

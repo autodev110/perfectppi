@@ -2,11 +2,15 @@ import { notFound } from "next/navigation";
 import { getOwnedVehicle } from "@/features/vehicles/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EditVehicleForm } from "../edit-vehicle-form";
+import { ensureFactorySpec } from "@/features/vehicles/factory-spec";
+import { factorySpecSummary } from "@/lib/vehicles/factory-spec";
 
 export default async function EditVehiclePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const vehicle = await getOwnedVehicle(id);
   if (!vehicle) notFound();
+  const factorySpec = await ensureFactorySpec(vehicle);
+  const factory = factorySpec ? factorySpecSummary(factorySpec) : null;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -16,7 +20,7 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
       </div>
       <Card>
         <CardHeader><CardTitle>Vehicle Information</CardTitle></CardHeader>
-        <CardContent><EditVehicleForm vehicle={vehicle} /></CardContent>
+        <CardContent><EditVehicleForm vehicle={vehicle} factory={factory} /></CardContent>
       </Card>
     </div>
   );

@@ -26,6 +26,7 @@ type MarketplaceVehicle = Pick<
   "id" | "owner_id" | "year" | "make" | "model" | "trim" | "nickname" | "mileage" | "mileage_updated_at" | "visibility" | "created_at" | "updated_at"
   | "transmission" | "drivetrain" | "body_style" | "engine"
   | "configuration_type" | "engine_original" | "transmission_original" | "drivetrain_original" | "mileage_status"
+  | "factory_spec"
 > & {
   vehicle_media: MarketplaceVehicleMedia[];
 };
@@ -65,7 +66,7 @@ const LISTING_SELECT = `
   vehicle:vehicles!marketplace_listings_vehicle_id_fkey(
     id, owner_id, year, make, model, trim, nickname, mileage, mileage_updated_at, visibility, created_at, updated_at,
     transmission, drivetrain, body_style, engine,
-    configuration_type, engine_original, transmission_original, drivetrain_original, mileage_status,
+    configuration_type, engine_original, transmission_original, drivetrain_original, mileage_status, factory_spec,
     vehicle_media(id, vehicle_id, url, media_type, is_primary, sort_order, uploaded_at, moderation_status)
   ),
   seller:profiles!marketplace_listings_seller_id_fkey(id, display_name, username, avatar_url, is_public)
@@ -75,6 +76,7 @@ type ListingRow = Omit<MarketplaceListing, "inspection_summary" | "inspection_re
 
 import { cleanFilters, type MarketplaceFilters } from "@/lib/marketplace/filters";
 import type { InspectionReport } from "@/lib/marketplace/inspection-report";
+import { parseFactorySpec, redactFactorySpec } from "@/lib/vehicles/factory-spec";
 import { getInspectionReport } from "@/features/marketplace/inspection-sharing";
 export type { MarketplaceFilters } from "@/lib/marketplace/filters";
 
@@ -170,6 +172,8 @@ async function cleanListingMedia(listing: ListingRow, publicOnly = true): Promis
     ...listing,
     vehicle: {
       ...listing.vehicle,
+      // Factory layer is model information; the VIN inside it is not public.
+      factory_spec: redactFactorySpec(parseFactorySpec(listing.vehicle.factory_spec)) as unknown as Json,
       vehicle_media: await Promise.all(visible.map(async (item) => ({
         ...item,
         url: isPrivateStorageReference(item.url) ? await generatePresignedGetUrl(item.url, 900) : item.url,

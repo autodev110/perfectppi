@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getOwnedVehicle } from "@/features/vehicles/queries";
+import { ensureFactorySpec } from "@/features/vehicles/factory-spec";
+import { FactorySpecComparison } from "@/components/shared/factory-spec-comparison";
 import { getMyPpiRequests } from "@/features/ppi/queries";
 import { inspectionDisplayName } from "@/features/ppi/presentation";
 import { makeVehicleFriendsOnly, makeVehiclePrivate, makeVehiclePublic } from "@/features/vehicles/actions";
@@ -37,6 +39,14 @@ export default async function VehicleDetailPage({ params, searchParams }: {
     getOwnedVehicleTimelines(vehicle.owner_id!, id),
   ]);
   if (!timelines) notFound();
+  // Factory layer (Renditions doc): establish it lazily for vehicles created
+  // before it existed, then show it next to the owner's current build.
+  const factorySpec = await ensureFactorySpec(vehicle);
+  const currentBuild = {
+    engine: vehicle.engine, transmission: vehicle.transmission, drivetrain: vehicle.drivetrain,
+    body_style: vehicle.body_style, trim: vehicle.trim,
+    engine_original: vehicle.engine_original, transmission_original: vehicle.transmission_original, drivetrain_original: vehicle.drivetrain_original,
+  };
 
   const gallery = [...(vehicle.vehicle_media ?? [])].sort((a, b) => {
     if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
@@ -106,6 +116,14 @@ export default async function VehicleDetailPage({ params, searchParams }: {
           {vehicle.transmission && <div><p className="text-sm text-muted-foreground">Current transmission</p><p>{vehicle.transmission}</p><p className="text-xs text-muted-foreground">{vehicle.transmission_original ? "Reported original" : "Reported swapped"}</p></div>}
           {vehicle.body_style && <div><p className="text-sm text-muted-foreground">Body style</p><p>{vehicle.body_style}</p></div>}
           {vehicle.configuration_type === "custom_build" ? <div className="sm:col-span-2"><Button asChild variant="outline"><Link href={`/dashboard/vehicles/${vehicle.id}?tab=build`}><Wrench className="mr-2 h-4 w-4" />Open Build Progression</Link></Button></div> : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Factory spec vs. current build</CardTitle></CardHeader>
+        <CardContent>
+          <FactorySpecComparison spec={factorySpec} current={currentBuild} ownerView />
+          {!vehicle.vin ? <p className="mt-3 text-xs text-muted-foreground">Add the VIN to record the factory specification.</p> : null}
         </CardContent>
       </Card>
 

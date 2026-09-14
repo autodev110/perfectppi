@@ -60,6 +60,8 @@ struct Vehicle: Codable, Identifiable, Hashable {
     var transmissionOriginal: Bool? = nil
     var drivetrainOriginal: Bool? = nil
     var mileageStatus: VehicleMileageStatus? = nil
+    /// VIN-decoded factory layer (Renditions doc); never edited by owners.
+    var factorySpec: VehicleFactorySpec? = nil
     let nickname: String?
     let ownershipState: VehicleOwnershipState?
     let mileage: Int?
@@ -71,6 +73,147 @@ struct Vehicle: Codable, Identifiable, Hashable {
     let vehicleMedia: [VehicleMedia]?
     let ppiRequests: [GarageInspectionSummary]?
     let marketplaceListings: [GarageListingSummary]?
+}
+
+/// Factory (OEM) specification decoded from the VIN. Stored once on the
+/// server and never overwritten by the owner's current-build fields. The
+/// public projection carries an empty `vin`.
+struct VehicleFactorySpec: Codable, Hashable {
+    let source: String?
+    let vin: String?
+    let decodedAt: String?
+    let year: Int?
+    let make: String?
+    let model: String?
+    let trim: String?
+    let series: String?
+    let bodyClass: String?
+    let doors: Int?
+    let driveType: String?
+    let engineModel: String?
+    let displacementL: Double?
+    let cylinders: Int?
+    let engineHp: Double?
+    let fuelType: String?
+    let transmissionStyle: String?
+    let transmissionSpeeds: Int?
+    let plantCountry: String?
+    let plantCity: String?
+    let manufacturer: String?
+
+    /// Factory values in the shape of the current-build fields (mirrors
+    /// `factorySpecSummary` in `src/lib/vehicles/factory-spec.ts`).
+    var summary: VehicleFactorySummary {
+        var engineBits: [String] = []
+        if let displacementL { engineBits.append("\(displacementL.formatted(.number.precision(.fractionLength(0...1))))L") }
+        if let cylinders { engineBits.append("\(cylinders)-cyl") }
+        if engineBits.isEmpty, let fuelType, fuelType.localizedCaseInsensitiveContains("electric") { engineBits.append("Electric") }
+        if let engineHp { engineBits.append("\(Int(engineHp.rounded())) hp") }
+        var engine = engineBits.joined(separator: " ")
+        if let engineModel { engine = engine.isEmpty ? "(\(engineModel))" : "\(engine) (\(engineModel))" }
+        let style = VehicleFactorySpec.normalizeTransmissionStyle(transmissionStyle)
+        var transmission: String? = transmissionStyle
+        if let style {
+            transmission = [transmissionSpeeds.map { "\($0)-speed" }, style.label].compactMap { $0 }.joined(separator: " ")
+        }
+        return VehicleFactorySummary(
+            engine: engine.isEmpty ? nil : engine,
+            transmission: transmission,
+            drivetrain: VehicleFactorySpec.normalizeDrivetrain(driveType) ?? driveType,
+            bodyStyle: VehicleFactorySpec.normalizeBodyStyle(bodyClass) ?? bodyClass,
+            trim: trim ?? series
+        )
+    }
+
+    enum TransmissionStyle { case manual, automatic, cvt, dct, automatedManual
+        var label: String {
+            switch self {
+            case .manual: "Manual"; case .automatic: "Automatic"; case .cvt: "CVT"; case .dct: "Dual-clutch"; case .automatedManual: "Automated manual"
+            }
+        }
+    }
+
+    static func normalizeDrivetrain(_ value: String?) -> String? {
+        guard let text = value?.lowercased(), !text.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        if text.range(of: #"\bawd\b|all[- ]?wheel"#, options: .regularExpression) != nil { return "AWD" }
+        if text.range(of: #"\b4wd\b|4x4|four[- ]?wheel|part[- ]time|full[- ]time"#, options: .regularExpression) != nil { return "4WD" }
+        if text.range(of: #"\bfwd\b|front[- ]?wheel"#, options: .regularExpression) != nil { return "FWD" }
+        if text.range(of: #"\brwd\b|rear[- ]?wheel"#, options: .regularExpression) != nil { return "RWD" }
+        return nil
+    }
+
+    static func normalizeTransmissionStyle(_ value: String?) -> TransmissionStyle? {
+        guard let text = value?.lowercased(), !text.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        if text.range(of: #"cvt|continuously"#, options: .regularExpression) != nil { return .cvt }
+        if text.range(of: #"dct|dual[- ]clutch|pdk|dsg"#, options: .regularExpression) != nil { return .dct }
+        if text.range(of: #"automated manual|\bamt\b|sequential"#, options: .regularExpression) != nil { return .automatedManual }
+        if text.range(of: #"manual|\bmt\b|stick"#, options: .regularExpression) != nil { return .manual }
+        if text.range(of: #"auto|\bat\b|tiptronic|steptronic"#, options: .regularExpression) != nil { return .automatic }
+        return nil
+    }
+
+    static func normalizeBodyStyle(_ value: String?) -> String? {
+        guard let text = value?.lowercased(), !text.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        let rules: [(String, String)] = [
+            (#"convertible|cabriolet|roadster|spyder|spider"#, "Convertible"), (#"pickup|truck"#, "Truck"), (#"\bvan\b|minivan|cargo"#, "Van"),
+            (#"wagon|estate|touring"#, "Wagon"), (#"hatchback|liftback|5[- ]door"#, "Hatchback"),
+            (#"sport utility|suv|crossover|multipurpose|mpv"#, "SUV"), (#"coupe|2[- ]door"#, "Coupe"), (#"sedan|saloon|4[- ]door"#, "Sedan"),
+        ]
+        for (pattern, label) in rules where text.range(of: pattern, options: .regularExpression) != nil { return label }
+        return nil
+    }
+}
+
+struct VehicleFactorySummary: Codable, Hashable {
+    let engine: String?
+    let transmission: String?
+    let drivetrain: String?
+    let bodyStyle: String?
+    let trim: String?
+}
+
+/// One row of the Factory vs Current comparison (mirrors `compareToFactory`).
+struct FactoryComparisonRow: Identifiable {
+    enum Status { case match, declared, differs, unknown }
+    let id: String
+    let label: String
+    let factory: String?
+    let current: String?
+    let status: Status
+}
+
+extension Vehicle {
+    /// Compares the owner's current build with the factory layer, field by
+    /// field. A difference the owner has not declared as a swap/conversion
+    /// is `differs`; free-text engines and trims compare only when both
+    /// sides are comparable.
+    var factoryComparison: [FactoryComparisonRow] {
+        let summary = factorySpec?.summary
+        func row(_ id: String, _ label: String, _ factory: String?, _ current: String?, same: Bool?, declared: Bool) -> FactoryComparisonRow {
+            let status: FactoryComparisonRow.Status = declared ? .declared : (factory == nil || same == nil) ? .unknown : (same == true ? .match : .differs)
+            return FactoryComparisonRow(id: id, label: label, factory: factory, current: current, status: status)
+        }
+        let driveF = VehicleFactorySpec.normalizeDrivetrain(factorySpec?.driveType)
+        let driveC = VehicleFactorySpec.normalizeDrivetrain(drivetrain)
+        let transF = VehicleFactorySpec.normalizeTransmissionStyle(factorySpec?.transmissionStyle)
+        let transC = VehicleFactorySpec.normalizeTransmissionStyle(transmission)
+        let bodyF = VehicleFactorySpec.normalizeBodyStyle(factorySpec?.bodyClass)
+        let bodyC = VehicleFactorySpec.normalizeBodyStyle(bodyStyle)
+        let dispF = factorySpec?.displacementL
+        let dispC: Double? = {
+            guard let engine, let match = engine.range(of: #"(\d+(?:\.\d+)?)\s*[lL]\b"#, options: .regularExpression) else { return nil }
+            return Double(engine[match].filter { $0.isNumber || $0 == "." })
+        }()
+        let trimF = (summary?.trim ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        let trimC = (trim ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        return [
+            row("drivetrain", "Drivetrain", summary?.drivetrain, drivetrain, same: (driveF != nil && driveC != nil) ? driveF == driveC : (driveC == nil ? true : nil), declared: drivetrainOriginal == false),
+            row("transmission", "Transmission", summary?.transmission, transmission, same: (transF != nil && transC != nil) ? transF == transC : (transC == nil ? true : nil), declared: transmissionOriginal == false),
+            row("engine", "Engine", summary?.engine, engine, same: (dispF != nil && dispC != nil) ? abs(dispF! - dispC!) < 0.15 : ((engine ?? "").isEmpty ? true : nil), declared: engineOriginal == false),
+            row("body_style", "Body style", summary?.bodyStyle, bodyStyle, same: (bodyF != nil && bodyC != nil) ? bodyF == bodyC : (bodyC == nil ? true : nil), declared: false),
+            row("trim", "Trim", summary?.trim, trim, same: (!trimF.isEmpty && !trimC.isEmpty) ? trimF == trimC : (trimC.isEmpty ? true : nil), declared: false),
+        ]
+    }
 }
 
 struct GarageInspectionSummary: Codable, Identifiable, Hashable {

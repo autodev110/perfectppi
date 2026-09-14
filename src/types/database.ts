@@ -5362,6 +5362,8 @@ export type Database = {
           drivetrain_original: boolean
           engine: string | null
           engine_original: boolean
+          factory_spec: Json | null
+          factory_spec_decoded_at: string | null
           id: string
           make: string | null
           mileage: number | null
@@ -5389,6 +5391,8 @@ export type Database = {
           drivetrain_original?: boolean
           engine?: string | null
           engine_original?: boolean
+          factory_spec?: Json | null
+          factory_spec_decoded_at?: string | null
           id?: string
           make?: string | null
           mileage?: number | null
@@ -5416,6 +5420,8 @@ export type Database = {
           drivetrain_original?: boolean
           engine?: string | null
           engine_original?: boolean
+          factory_spec?: Json | null
+          factory_spec_decoded_at?: string | null
           id?: string
           make?: string | null
           mileage?: number | null

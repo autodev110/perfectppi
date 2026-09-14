@@ -1,3 +1,4 @@
+import { parseFactorySpec, redactFactorySpec } from "@/lib/vehicles/factory-spec";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
@@ -121,7 +122,7 @@ export async function getVisibleVehicle(id: string) {
       mileage, mileage_updated_at, visibility, engine, drivetrain,
       transmission, body_style, configuration_type, engine_original,
       transmission_original, drivetrain_original, mileage_status,
-      sold_at, created_at, updated_at,
+      factory_spec, sold_at, created_at, updated_at,
       vehicle_media(id, vehicle_id, url, media_type, is_primary, sort_order, uploaded_at, moderation_status),
       owner:profiles!vehicles_owner_id_fkey(id, display_name, username, avatar_url, is_public)
     `)
@@ -131,6 +132,9 @@ export async function getVisibleVehicle(id: string) {
   if (!vehicle) return null;
   return {
     ...vehicle,
+    // The factory layer is public information about the model; the
+    // identifier it was decoded from is redacted before it leaves the server.
+    factory_spec: redactFactorySpec(parseFactorySpec(vehicle.factory_spec)),
     viewer_is_owner: !!viewerId && vehicle.owner_id === viewerId,
     vehicle_media: await authorizeVehicleMedia(
       (vehicle.vehicle_media ?? []).filter((media) => media.moderation_status === "active"),

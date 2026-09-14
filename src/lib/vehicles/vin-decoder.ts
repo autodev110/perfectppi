@@ -1,4 +1,6 @@
 import { formatVin, isValidVin } from "@/lib/utils/vin";
+import { normalizeCatalogName } from "@/lib/vehicles/catalog";
+import { factorySpecSummary, type VehicleFactorySpec } from "@/lib/vehicles/factory-spec";
 
 export interface DecodedVehicleDetails {
   vin: string;
@@ -6,6 +8,10 @@ export interface DecodedVehicleDetails {
   make: string | null;
   model: string | null;
   trim: string | null;
+  /** The factory layer (Renditions doc): stored once, never overwritten by owner edits. */
+  factory_spec: VehicleFactorySpec;
+  /** Factory values in the shape of the owner-editable current fields, for prefill/hints. */
+  factory_summary: ReturnType<typeof factorySpecSummary>;
 }
 
 interface NhtsaDecodeResult {
@@ -14,6 +20,19 @@ interface NhtsaDecodeResult {
   ModelYear?: string;
   Trim?: string;
   Series?: string;
+  BodyClass?: string;
+  Doors?: string;
+  DriveType?: string;
+  EngineModel?: string;
+  DisplacementL?: string;
+  EngineCylinders?: string;
+  EngineHP?: string;
+  FuelTypePrimary?: string;
+  TransmissionStyle?: string;
+  TransmissionSpeeds?: string;
+  PlantCountry?: string;
+  PlantCity?: string;
+  Manufacturer?: string;
   ErrorCode?: string;
 }
 
@@ -71,12 +90,45 @@ export async function decodeVinDetails(
 
   const yearText = cleanValue(decoded.ModelYear);
   const year = yearText ? Number.parseInt(yearText, 10) : null;
+  const numeric = (value: string | undefined) => {
+    const cleaned = cleanValue(value);
+    const parsed = cleaned ? Number.parseFloat(cleaned) : Number.NaN;
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const make = cleanValue(decoded.Make);
+  const model = cleanValue(decoded.Model);
+
+  const factory_spec: VehicleFactorySpec = {
+    source: "nhtsa_vpic",
+    vin,
+    decoded_at: new Date().toISOString(),
+    year: Number.isFinite(year) ? year : null,
+    make: make ? normalizeCatalogName(make) : null,
+    model: model ? normalizeCatalogName(model) : null,
+    trim: cleanValue(decoded.Trim),
+    series: cleanValue(decoded.Series),
+    body_class: cleanValue(decoded.BodyClass),
+    doors: numeric(decoded.Doors),
+    drive_type: cleanValue(decoded.DriveType),
+    engine_model: cleanValue(decoded.EngineModel),
+    displacement_l: numeric(decoded.DisplacementL),
+    cylinders: numeric(decoded.EngineCylinders),
+    engine_hp: numeric(decoded.EngineHP),
+    fuel_type: cleanValue(decoded.FuelTypePrimary),
+    transmission_style: cleanValue(decoded.TransmissionStyle),
+    transmission_speeds: numeric(decoded.TransmissionSpeeds),
+    plant_country: cleanValue(decoded.PlantCountry),
+    plant_city: cleanValue(decoded.PlantCity),
+    manufacturer: cleanValue(decoded.Manufacturer),
+  };
 
   return {
     vin,
-    year: Number.isFinite(year) ? year : null,
-    make: cleanValue(decoded.Make),
-    model: cleanValue(decoded.Model),
-    trim: cleanValue(decoded.Trim) ?? cleanValue(decoded.Series),
+    year: factory_spec.year,
+    make: factory_spec.make,
+    model: factory_spec.model,
+    trim: factory_spec.trim ?? factory_spec.series,
+    factory_spec,
+    factory_summary: factorySpecSummary(factory_spec),
   };
 }

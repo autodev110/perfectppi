@@ -16,6 +16,8 @@ interface InspectionInput {
     transmission_original: boolean;
     drivetrain_original: boolean;
     mileage_status: "actual" | "not_actual" | "unknown";
+    /** VIN-decoded factory layer, when known (Renditions doc). */
+    factory?: { engine: string | null; transmission: string | null; drivetrain: string | null; body_style: string | null; trim: string | null } | null;
   };
   ppiType: string;
   inspectionScope: InspectionScope;
@@ -121,6 +123,9 @@ No photos were attached to this request.`;
 - Current engine/motor: ${input.vehicle.engine ?? "Not provided"} (${input.vehicle.engine_original ? "reported original" : "reported swapped"})
 - Current transmission: ${input.vehicle.transmission ?? "Not provided"} (${input.vehicle.transmission_original ? "reported original" : "reported swapped"})
 - Current drivetrain: ${input.vehicle.drivetrain ?? "Not provided"} (${input.vehicle.drivetrain_original ? "reported original" : "reported converted"})
+${input.vehicle.factory
+    ? `- Factory spec (VIN decode, never edited by the owner): engine ${input.vehicle.factory.engine ?? "unknown"}; transmission ${input.vehicle.factory.transmission ?? "unknown"}; drivetrain ${input.vehicle.factory.drivetrain ?? "unknown"}; body ${input.vehicle.factory.body_style ?? "unknown"}; trim ${input.vehicle.factory.trim ?? "unknown"}`
+    : "- Factory spec: not available (no VIN decode)"}
 
 ## INSPECTION METADATA
 - PPI Type: ${input.ppiType}
@@ -146,7 +151,7 @@ ${photosText}
 
 Analyze the raw inspection data and return a JSON object with this exact structure:
 
-Treat the configuration fields above as owner-reported current equipment. Do not substitute VIN-decoded factory equipment when a swap/conversion is reported. If mileage is not actual or unknown, clearly state that limitation in the overall summary and notable findings.
+Treat the configuration fields above as owner-reported current equipment. Do not substitute VIN-decoded factory equipment when a swap/conversion is reported. Where the current equipment differs from the factory spec, describe both ("factory 6-speed manual; currently automatic, reported swapped") and, if the difference is not explained by a reported swap or conversion, note it as an unconfirmed discrepancy rather than choosing one. If mileage is not actual or unknown, clearly state that limitation in the overall summary and notable findings.
 
 {
   "vehicle": {

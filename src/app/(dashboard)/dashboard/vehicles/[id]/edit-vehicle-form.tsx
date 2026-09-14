@@ -9,16 +9,21 @@ import { Label } from "@/components/ui/label";
 import type { Database } from "@/types/database";
 import { VehicleConfigurationFields } from "@/components/shared/vehicle-configuration-fields";
 import { VehicleMakeModelFields } from "@/components/shared/vehicle-make-model-fields";
+import { CurrentBuildFields, type CurrentBuildValues } from "@/components/shared/current-build-fields";
+import type { FactorySummary } from "@/lib/vehicles/factory-spec";
 
 type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 
-export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
+export function EditVehicleForm({ vehicle, factory }: { vehicle: Vehicle; factory: FactorySummary | null }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [year, setYear] = useState(vehicle.year?.toString() ?? "");
   const [make, setMake] = useState(vehicle.make ?? "");
   const [model, setModel] = useState(vehicle.model ?? "");
+  const [build, setBuild] = useState<CurrentBuildValues>({
+    engine: vehicle.engine ?? "", transmission: vehicle.transmission ?? "", drivetrain: vehicle.drivetrain ?? "", body_style: vehicle.body_style ?? "",
+  });
 
   async function save(formData: FormData) {
     setSaving(true);
@@ -56,11 +61,17 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
         <Field label="Year" name="year" type="number" value={year} onChange={(event) => setYear(event.target.value)} min={1900} max={2100} />
         <div />
         <VehicleMakeModelFields make={make} model={model} year={year} onMakeChange={(value) => { setMake(value); setModel(""); }} onModelChange={setModel} />
-        <Field label="Trim" name="trim" defaultValue={vehicle.trim ?? ""} />
-        <Field label="Engine" name="engine" defaultValue={vehicle.engine ?? ""} maxLength={100} />
-        <Field label="Drivetrain" name="drivetrain" defaultValue={vehicle.drivetrain ?? ""} maxLength={100} />
-        <Field label="Transmission" name="transmission" defaultValue={vehicle.transmission ?? ""} maxLength={100} />
-        <Field label="Body style" name="body_style" defaultValue={vehicle.body_style ?? ""} maxLength={100} />
+        <div className="space-y-2">
+          <Label htmlFor="trim">Trim</Label>
+          <Input id="trim" name="trim" defaultValue={vehicle.trim ?? ""} maxLength={100} />
+          {factory?.trim ? <p className="text-xs text-muted-foreground">Factory (VIN): <span className="font-semibold text-foreground">{factory.trim}</span></p> : null}
+        </div>
+        <CurrentBuildFields
+          values={build}
+          onChange={(field, value) => setBuild((current) => ({ ...current, [field]: value }))}
+          factory={factory}
+          originals={{ engine: vehicle.engine_original, transmission: vehicle.transmission_original, drivetrain: vehicle.drivetrain_original }}
+        />
         <Field label="VIN" name="vin" defaultValue={vehicle.vin ?? ""} maxLength={17} />
         <Field label="Mileage" name="mileage" type="number" defaultValue={vehicle.mileage ?? ""} />
         <VehicleConfigurationFields
