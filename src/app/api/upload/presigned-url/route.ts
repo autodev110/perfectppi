@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { browserFamily, logUploadEvent } from "@/features/uploads/diagnostics";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -28,6 +29,14 @@ const presignSchema = z.object({
 });
 
 const QUARANTINED = new Set(["community_post", "vehicle_media", "community_group"]);
+
+
+// Refusals are logged with metadata only (Renditions doc: diagnostics), so a
+// device- or browser-specific failure pattern is visible in the log stream.
+function refuse(request: Request, reason: string, status: number, meta: { entity?: string; contentType?: string; sizeBytes?: number }, body: Record<string, unknown> = { error: reason }) {
+  logUploadEvent({ source: "server", stage: "presign", outcome: "refused", status, reason, entity: meta.entity ?? "unknown", contentType: meta.contentType, sizeBytes: meta.sizeBytes, browser: browserFamily(request.headers.get("user-agent")) });
+  return NextResponse.json(body, { status });
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -67,10 +76,7 @@ export async function POST(request: Request) {
       : []),
   ];
   if (!(allowedTypes as string[]).includes(parsed.data.contentType)) {
-    return NextResponse.json(
-      { error: "File type not allowed" },
-      { status: 400 }
-    );
+    return refuse(request, "File type not allowed", 400, { entity: parsed.data.entity, contentType: parsed.data.contentType, sizeBytes: parsed.data.size });
   }
 
   const isImage = (UPLOAD_LIMITS.allowedImageTypes as readonly string[]).includes(parsed.data.contentType);
@@ -81,10 +87,7 @@ export async function POST(request: Request) {
     ? UPLOAD_LIMITS.maxImageSize
     : isVideo ? UPLOAD_LIMITS.maxVideoSize : UPLOAD_LIMITS.maxFileSize;
   if (parsed.data.size > maxBytes) {
-    return NextResponse.json(
-      { error: `File too large. Max size is ${Math.floor(maxBytes / (1024 * 1024))}MB` },
-      { status: 400 },
-    );
+    return refuse(request, `File too large. Max size is ${Math.floor(maxBytes / (1024 * 1024))}MB`, 400, { entity: parsed.data.entity, contentType: parsed.data.contentType, sizeBytes: parsed.data.size });
   }
 
   const canUpload = await canUploadToTarget(
@@ -94,10 +97,7 @@ export async function POST(request: Request) {
     parsed.data.recordId
   );
   if (!canUpload) {
-    return NextResponse.json(
-      { error: "Upload target not found" },
-      { status: 404 }
-    );
+    return refuse(request, "Upload target not found", 404, { entity: parsed.data.entity, contentType: parsed.data.contentType, sizeBytes: parsed.data.size });
   }
 
   const keyParams = {
@@ -170,9 +170,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: "Unsupported upload destination" }, { status: 400 });
   } catch {
-    return NextResponse.json(
-      { error: "Failed to generate upload URL" },
-      { status: 500 }
-    );
+    return refuse(request, "Failed to generate upload URL", 500, { entity: parsed.data.entity, contentType: parsed.data.contentType, sizeBytes: parsed.data.size });
   }
 }

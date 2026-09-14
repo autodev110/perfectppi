@@ -5,6 +5,14 @@ import { createPortal } from "react-dom";
 import { X, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { UPLOAD_HINT } from "@/lib/uploads/upload-photo";
+
+// The sheet is always black, regardless of theme, so its buttons carry
+// explicit colors: the app's primary token is near-black (invisible here)
+// and the outline variant paints a white background under white text.
+const OVERLAY_PRIMARY = "bg-white text-black hover:bg-white/90 hover:text-black";
+const OVERLAY_OUTLINE = "border-white/40 bg-transparent text-white hover:bg-white/10 hover:text-white dark:bg-transparent dark:border-white/40";
+const OVERLAY_GHOST = "text-white hover:bg-white/10 hover:text-white";
 
 interface CameraCaptureProps {
   onCapture: (file: File) => void;
@@ -216,7 +224,7 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
             <img
               src={previewUrl}
               alt="Captured preview"
-              className="h-full w-full rounded-2xl object-cover"
+              className="h-full w-full rounded-2xl object-contain"
             />
           </div>
         )}
@@ -257,6 +265,7 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
             <p className="text-sm text-white/70">
               Take a photo with your device camera or choose one from your library.
             </p>
+            <p className="text-xs text-white/50">{UPLOAD_HINT}</p>
           </div>
         )}
 
@@ -268,7 +277,7 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
             <Button
               variant="outline"
               onClick={() => startCamera(facingMode)}
-              className="border-white/30 text-white"
+              className={OVERLAY_OUTLINE}
             >
               Use Browser Camera
             </Button>
@@ -276,26 +285,29 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
         )}
       </div>
 
-      <div className="flex items-center justify-center gap-8 bg-black/60 px-8 pb-10 pt-6">
+      {/* Actions wrap and stack on narrow phones; a fixed row of three
+          no-wrap buttons overflowed and clipped its edges on iPhone. */}
+      <div className="flex flex-col items-stretch justify-center gap-3 bg-black/60 px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6 sm:px-8">
         {previewUrl ? (
-          <>
+          <div className="flex w-full items-center justify-center gap-4 sm:w-auto">
             <Button
               variant="outline"
               onClick={clearPreview}
-              className="border-white/30 text-white hover:bg-white/10 hover:text-white"
+              className={cn(OVERLAY_OUTLINE, "flex-1 sm:flex-none")}
             >
               Retake
             </Button>
-            <Button onClick={handleUsePhoto} className="px-8 py-3 text-base">
+            <Button onClick={handleUsePhoto} className={cn(OVERLAY_PRIMARY, "flex-1 px-8 py-3 text-base sm:flex-none")}>
               Use Photo
             </Button>
-          </>
+          </div>
         ) : mode === "camera" || mode === "loading" ? (
           <button
             onClick={captureFrame}
             disabled={capturing || !videoReady}
+            aria-label="Capture photo"
             className={cn(
-              "flex h-20 w-20 items-center justify-center rounded-full border-4 border-white transition",
+              "mx-auto flex h-20 w-20 items-center justify-center rounded-full border-4 border-white transition",
               capturing || !videoReady ? "opacity-50" : "active:scale-95 hover:scale-105"
             )}
           >
@@ -305,14 +317,14 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
           <>
             <Button
               onClick={() => cameraInputRef.current?.click()}
-              className="px-8 py-3 text-base"
+              className={cn(OVERLAY_PRIMARY, "w-full px-8 py-3 text-base sm:w-auto")}
             >
               Take Photo
             </Button>
             <Button
               variant="outline"
               onClick={() => libraryInputRef.current?.click()}
-              className="border-white/30 text-white hover:bg-white/10 hover:text-white"
+              className={cn(OVERLAY_OUTLINE, "w-full sm:w-auto")}
             >
               Choose from Library
             </Button>
@@ -320,7 +332,7 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
               <Button
                 variant="ghost"
                 onClick={() => startCamera(facingMode)}
-                className="text-white hover:bg-white/10 hover:text-white"
+                className={cn(OVERLAY_GHOST, "w-full sm:w-auto")}
               >
                 Use Browser Camera Instead
               </Button>

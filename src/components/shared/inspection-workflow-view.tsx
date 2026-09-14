@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { uploadFailureMessage } from "@/lib/uploads/prepare-image";
+import { UPLOAD_HINT, UploadError, uploadPhoto, type UploadStage } from "@/lib/uploads/upload-photo";
+import { PhotoUploadSlot, type PendingUpload } from "@/components/shared/photo-upload-slot";
 import { useRouter } from "next/navigation";
 import { InspectionStepCard } from "@/components/shared/inspection-step-card";
 import { AnswerInput } from "@/components/shared/answer-input";
@@ -40,10 +43,78 @@ export function InspectionWorkflowView({
   const [cameraPhotoPrompt, setCameraPhotoPrompt] = useState<string | undefined>();
   const [cameraAnswerId, setCameraAnswerId] = useState<string | undefined>();
   const [cameraSectionId, setCameraSectionId] = useState<string | undefined>();
-  const [uploadingMedia, setUploadingMedia] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  // In-flight and failed photos stay visible in place with progress, retry,
+  // and remove (Renditions doc: upload-state feedback, preserved context).
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
 
   const workflow = useInspectionWorkflow(submissionId);
+
+  function patchPending(id: string, patch: Partial<PendingUpload>) {
+    setPendingUploads((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function removePending(id: string) {
+    setPendingUploads((current) => {
+      const target = current.find((item) => item.id === id);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return current.filter((item) => item.id !== id);
+    });
+  }
+
+  async function runUpload(pending: PendingUpload) {
+    patchPending(pending.id, { stage: "preparing", percent: 0, error: null, retryable: true });
+    try {
+      const { publicUrl } = await uploadPhoto({
+        file: pending.file,
+        entity: "ppi_media",
+        recordId: submissionId,
+        onProgress: ({ stage, percent }) => patchPending(pending.id, { stage, percent }),
+      });
+      patchPending(pending.id, { stage: "processing", percent: 100 });
+      const attachRes = await fetch(`/api/ppi/submissions/${submissionId}/media`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ppi_section_id: pending.sectionId,
+          ppi_answer_id: pending.answerId ?? null,
+          url: publicUrl,
+          media_type: "image",
+          captured_at: new Date().toISOString(),
+        }),
+      });
+      if (!attachRes.ok) {
+        throw new UploadError(await uploadFailureMessage(attachRes, "Photo uploaded but could not be attached to the inspection."), "processing", attachRes.status, attachRes.status >= 500);
+      }
+      const { data } = await attachRes.json();
+      workflow.addMedia(pending.sectionId, data);
+      patchPending(pending.id, { stage: "done", percent: 100 });
+      window.setTimeout(() => removePending(pending.id), 1_200);
+    } catch (error) {
+      const stage: UploadStage = "failed";
+      patchPending(pending.id, {
+        stage,
+        error: error instanceof Error ? error.message : "Photo upload failed. Please try again.",
+        retryable: error instanceof UploadError ? error.retryable : true,
+      });
+    }
+  }
+
+  function queueUpload(file: File, sectionId: string, answerId: string | undefined) {
+    const pending: PendingUpload = {
+      id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      sectionId,
+      answerId,
+      stage: "preparing",
+      percent: 0,
+      error: null,
+      retryable: true,
+    };
+    setPendingUploads((current) => [...current, pending]);
+    void runUpload(pending);
+  }
 
   async function deleteCapturedPhoto(sectionId: string, mediaId: string) {
     setMediaError(null);
@@ -87,98 +158,11 @@ export function InspectionWorkflowView({
       <CameraCapture
         photoPrompt={cameraPhotoPrompt}
         onClose={() => setViewMode("workflow")}
-        onCapture={async (file) => {
+        onCapture={(captured) => {
           setViewMode("workflow");
           if (!cameraSectionId) return;
-          setUploadingMedia(true);
           setMediaError(null);
-
-          try {
-            const uploadViaServer = async (): Promise<string> => {
-              const fd = new FormData();
-              fd.append("file", file);
-              fd.append("entity", "ppi_media");
-              fd.append("recordId", submissionId);
-
-              const directRes = await fetch("/api/upload/direct", {
-                method: "POST",
-                body: fd,
-              });
-
-              if (!directRes.ok) {
-                const payload = await directRes.json().catch(() => null);
-                throw new Error(payload?.error ?? "Photo upload failed.");
-              }
-
-              const payload = await directRes.json();
-              return payload.publicUrl as string;
-            };
-
-            let finalPublicUrl: string | null = null;
-
-            // Preferred path: presigned direct upload
-            const presignRes = await fetch("/api/upload/presigned-url", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                filename: file.name,
-                contentType: file.type,
-                size: file.size,
-                entity: "ppi_media",
-                recordId: submissionId,
-              }),
-            });
-
-            if (presignRes.ok) {
-              const { uploadUrl, publicUrl } = await presignRes.json();
-              finalPublicUrl = publicUrl as string;
-
-              try {
-                const uploadRes = await fetch(uploadUrl, {
-                  method: "PUT",
-                  body: file,
-                  headers: { "Content-Type": file.type || "application/octet-stream" },
-                });
-
-                if (!uploadRes.ok) {
-                  finalPublicUrl = await uploadViaServer();
-                }
-              } catch {
-                // Common if R2 CORS is not configured for browser PUT.
-                finalPublicUrl = await uploadViaServer();
-              }
-            } else {
-              // If presign fails, fallback to server upload.
-              finalPublicUrl = await uploadViaServer();
-            }
-
-            // Attach media record
-            const attachRes = await fetch(`/api/ppi/submissions/${submissionId}/media`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                ppi_section_id: cameraSectionId,
-                ppi_answer_id: cameraAnswerId ?? null,
-                url: finalPublicUrl,
-                media_type: "image",
-                captured_at: new Date().toISOString(),
-              }),
-            });
-
-            if (!attachRes.ok) {
-              setMediaError("Photo uploaded but could not be attached to the inspection.");
-              return;
-            }
-
-            const { data } = await attachRes.json();
-            workflow.addMedia(cameraSectionId, data);
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : "Photo upload failed. Please try again.";
-            setMediaError(message);
-          } finally {
-            setUploadingMedia(false);
-          }
+          queueUpload(captured, cameraSectionId, cameraAnswerId);
         }}
       />
     );
@@ -292,6 +276,9 @@ export function InspectionWorkflowView({
     (media) =>
       media.ppi_answer_id === currentQuestion.id && media.media_type === "image",
   );
+  const currentQuestionPending = pendingUploads.filter(
+    (pending) => pending.sectionId === currentSection.id && pending.answerId === currentQuestion.id,
+  );
   const hasRequiredPhoto = !requiresPhoto || currentQuestionMedia.length > 0;
   const canGoNext = workflow.canGoNext && hasRequiredPhoto;
 
@@ -400,12 +387,18 @@ export function InspectionWorkflowView({
               {photoPrompt ?? "Capture Photo"}
             </button>
 
-          {uploadingMedia && (
-            <p className="text-xs text-muted-foreground text-center">Uploading photo…</p>
-          )}
+          <p className="text-center text-xs text-muted-foreground">{UPLOAD_HINT}</p>
 
-          {currentQuestionMedia.length > 0 && (
+          {(currentQuestionMedia.length > 0 || currentQuestionPending.length > 0) && (
             <div className="grid grid-cols-2 gap-3">
+              {currentQuestionPending.map((pending) => (
+                <PhotoUploadSlot
+                  key={pending.id}
+                  upload={pending}
+                  onRetry={() => void runUpload(pending)}
+                  onRemove={() => removePending(pending.id)}
+                />
+              ))}
               {currentQuestionMedia.map((media, index) => (
                 <div
                   key={media.id}

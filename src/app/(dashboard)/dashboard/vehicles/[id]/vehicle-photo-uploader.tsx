@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useRef, useState } from "react";
+import { UPLOAD_HINT, uploadPhoto, type UploadProgress } from "@/lib/uploads/upload-photo";
 import { useRouter } from "next/navigation";
 import { attachVehiclePhoto } from "@/features/vehicles/actions";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   function onPickFile(event: ChangeEvent<HTMLInputElement>) {
@@ -38,63 +40,6 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  async function uploadViaServer(selectedFile: File) {
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-    formData.append("entity", "vehicle_media");
-    formData.append("recordId", vehicleId);
-
-    const response = await fetch("/api/upload/direct", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null);
-      throw new Error(payload?.error ?? "Vehicle photo upload failed");
-    }
-
-    const payload = (await response.json()) as { publicUrl?: string };
-    if (!payload.publicUrl) throw new Error("Vehicle photo upload failed");
-    return payload.publicUrl;
-  }
-
-  async function uploadFile(selectedFile: File) {
-    const presignResponse = await fetch("/api/upload/presigned-url", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: selectedFile.name,
-        contentType: selectedFile.type,
-        size: selectedFile.size,
-        entity: "vehicle_media",
-        recordId: vehicleId,
-      }),
-    });
-
-    if (!presignResponse.ok) return uploadViaServer(selectedFile);
-
-    const payload = (await presignResponse.json()) as {
-      uploadUrl?: string;
-      publicUrl?: string;
-    };
-
-    if (!payload.uploadUrl || !payload.publicUrl) return uploadViaServer(selectedFile);
-
-    try {
-      const uploadResponse = await fetch(payload.uploadUrl, {
-        method: "PUT",
-        body: selectedFile,
-        headers: { "Content-Type": selectedFile.type || "application/octet-stream" },
-      });
-
-      if (!uploadResponse.ok) return uploadViaServer(selectedFile);
-      return payload.publicUrl;
-    } catch {
-      return uploadViaServer(selectedFile);
-    }
-  }
-
   async function onUpload() {
     if (!file) return;
 
@@ -102,12 +47,20 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
     setError(null);
 
     try {
-      const publicUrl = await uploadFile(file);
+      // Shared pipeline: device-side re-encode for photos, progress, server
+      // fallback, specific failure reasons, diagnostics.
+      const { publicUrl, file: prepared } = await uploadPhoto({
+        file,
+        entity: "vehicle_media",
+        recordId: vehicleId,
+        onProgress: setProgress,
+      });
+      setProgress({ stage: "processing", percent: 100 });
       const result = await attachVehiclePhoto({
         vehicleId,
         url: publicUrl,
-        mediaType: file.type.startsWith("video/") ? "video" : "image",
-        contentType: file.type,
+        mediaType: prepared.type.startsWith("video/") ? "video" : "image",
+        contentType: prepared.type,
       });
 
       if (result?.error) throw new Error(result.error);
@@ -118,6 +71,7 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
       setError(err instanceof Error ? err.message : "Vehicle photo upload failed");
     } finally {
       setUploading(false);
+      setProgress(null);
     }
   }
 
@@ -134,7 +88,7 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
           disabled={uploading}
         />
         <p className="text-xs text-muted-foreground">
-          Accepted media is reviewed, then added to this vehicle. The newest approved item becomes primary.
+          {UPLOAD_HINT} Videos up to 50 MB. Accepted media is reviewed, then added to this vehicle; the newest approved item becomes primary.
         </p>
       </div>
 
@@ -159,7 +113,22 @@ export function VehiclePhotoUploader({ vehicleId }: VehiclePhotoUploaderProps) {
         </div>
       )}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p className="text-sm text-destructive" role="alert">
+          {error} {file ? <button type="button" onClick={onUpload} className="font-semibold underline">Retry</button> : null}
+        </p>
+      )}
+
+      {uploading && progress ? (
+        <div className="space-y-1" aria-live="polite">
+          <p className="text-xs text-muted-foreground">
+            {progress.stage === "preparing" ? "Preparing…" : progress.stage === "uploading" ? `Uploading ${progress.percent}%` : progress.stage === "processing" ? "Processing…" : "Uploaded"}
+          </p>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
+            <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress.stage === "preparing" ? 5 : progress.percent}%` }} />
+          </div>
+        </div>
+      ) : null}
 
       <Button type="button" onClick={onUpload} disabled={!file || uploading}>
         {uploading ? (
