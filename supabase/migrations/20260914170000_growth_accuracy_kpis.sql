@@ -21,13 +21,19 @@ ALTER TABLE public.product_analytics_events
     'factory_spec_recorded', 'factory_conflict_refused', 'custom_build_declared', 'build_stage_created'
   ));
 
+-- plpgsql rather than sql so the body is resolved when called, not when
+-- created: the vehicles.factory_spec column and vehicle_build_stages table
+-- come from sibling migrations, and creating this function must not depend
+-- on the order in which a deployment applied them.
 CREATE OR REPLACE FUNCTION public.get_growth_accuracy_kpis(p_days integer DEFAULT 30)
 RETURNS jsonb
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = ''
 AS $$
+BEGIN
+  RETURN (
   WITH bounds AS (
     SELECT now() - make_interval(days => LEAST(GREATEST(p_days, 1), 90)) AS starts_at
   ),
@@ -109,7 +115,9 @@ AS $$
       'stagesCreated', c.build_stages_created, 'membersCreatingStages', c.build_stage_members, 'vehiclesWithStages', staged.vehicles_with_stages
     )
   )
-  FROM c, garage, staged, friend_activation;
+  FROM c, garage, staged, friend_activation
+  );
+END;
 $$;
 
 REVOKE ALL ON FUNCTION public.get_growth_accuracy_kpis(integer) FROM PUBLIC, anon, authenticated;
