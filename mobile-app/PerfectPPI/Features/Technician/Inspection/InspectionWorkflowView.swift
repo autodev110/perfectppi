@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Guided multi-section inspection screen, mirroring
 /// `src/components/shared/inspection-workflow-view.tsx`.
@@ -30,6 +31,7 @@ struct InspectionWorkflowView: View {
     }
 
     @StateObject private var model = InspectionWorkflowModel()
+    @ObservedObject private var offlineQueue = OfflineQueue.shared
     @State private var fullScreenDestination: FullScreenDestination?
     @State private var showOBDScanner = false
     @State private var submitting = false
@@ -38,6 +40,7 @@ struct InspectionWorkflowView: View {
     @State private var pendingPhotoDeletion: PpiMedia?
     @State private var deletingPhotoId: String?
     @State private var scannerEntryChoice: ScannerEntryChoice?
+    @State private var recentlyUploadedMediaIds: Set<String> = []
 
     var body: some View {
         Group {
@@ -64,6 +67,9 @@ struct InspectionWorkflowView: View {
         .navigationTitle("Inspection")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load(submissionId: submissionId) }
+        .onChange(of: offlineQueue.mediaSyncRevision) { _, _ in
+            Task { await model.refreshMedia() }
+        }
         .fullScreenCover(item: $fullScreenDestination) { destination in
             switch destination {
             case .inspectionPhoto:
@@ -364,11 +370,24 @@ struct InspectionWorkflowView: View {
     @ViewBuilder
     private var photosGrid: some View {
         let photos = model.media(for: model.currentAnswer?.id)
-        if !photos.isEmpty {
+        let pending = offlineQueue.pendingMedia.filter {
+            $0.submissionId == submissionId && $0.answerId == model.currentAnswer?.id
+        }
+        if !photos.isEmpty || !pending.isEmpty {
             LazyVGrid(columns: [
                 GridItem(.flexible()),
                 GridItem(.flexible()),
             ], spacing: 12) {
+                ForEach(pending) { upload in
+                    PendingInspectionPhotoTile(
+                        upload: upload,
+                        progress: offlineQueue.mediaUploadProgress[upload.id],
+                        error: offlineQueue.mediaUploadErrors[upload.id],
+                        isUploading: offlineQueue.isMediaUploading(id: upload.id),
+                        onRetry: { Task { await retryPhoto(upload) } },
+                        onRemove: { Task { await removePendingPhoto(upload) } }
+                    )
+                }
                 ForEach(photos) { media in
                     // Constrain each cell to a definite 4:3 box sized to the
                     // column width. Without this bounding frame the fill-mode
@@ -393,6 +412,18 @@ struct InspectionWorkflowView: View {
                             .padding(6)
                             .disabled(deletingPhotoId == media.id)
                             .accessibilityLabel("Delete photo")
+                        }
+                        .overlay(alignment: .bottomLeading) {
+                            if recentlyUploadedMediaIds.contains(media.id) {
+                                Label("Uploaded", systemImage: "checkmark.circle.fill")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .background(.black.opacity(0.7), in: Capsule())
+                                    .padding(6)
+                                    .transition(.opacity)
+                            }
                         }
                 }
             }
@@ -464,11 +495,12 @@ struct InspectionWorkflowView: View {
 
         let filename = "capture-\(Int(captured.timeIntervalSince1970)).jpg"
 
-        func queueForUpload() throws {
-            let stored = try OfflineQueue.shared.persistMedia(data, filename: filename)
+        let uploadId = UUID().uuidString
+        do {
+            let stored = try offlineQueue.persistMedia(data, filename: filename)
             do {
-                try OfflineQueue.shared.enqueueMedia(.init(
-                    id: UUID().uuidString,
+                try offlineQueue.enqueueMedia(.init(
+                    id: uploadId,
                     submissionId: submissionId,
                     sectionId: section.id,
                     answerId: answer.id,
@@ -482,43 +514,42 @@ struct InspectionWorkflowView: View {
                 throw error
             }
             model.markLocalPhoto(answerId: answer.id)
+            if offlineQueue.isOnline {
+                await retryPhoto(id: uploadId)
+            }
+        } catch {
+            errorMessage = "The photo could not be saved for upload. Please try again."
         }
+    }
 
-        // If online, upload now; if offline, save to disk and enqueue.
-        if OfflineQueue.shared.isOnline {
-            do {
-                let url = try await R2Uploader.upload(
-                    data: data,
-                    filename: filename,
-                    contentType: "image/jpeg",
-                    entity: "ppi_media",
-                    recordId: submissionId
-                )
-                let media = try await PpiAPI.attachMedia(
-                    submissionId: submissionId,
-                    payload: AttachMediaRequest(
-                        ppiSectionId: section.id,
-                        ppiAnswerId: answer.id,
-                        url: url,
-                        mediaType: "image",
-                        capturedAt: captured
-                    )
-                )
-                model.addMedia(media)
-            } catch {
-                do {
-                    try queueForUpload()
-                    errorMessage = "The upload was interrupted. Your photo is saved and will sync automatically."
-                } catch {
-                    errorMessage = "The photo could not be uploaded or saved offline. Please try again."
-                }
+    private func retryPhoto(_ upload: OfflineQueue.PendingMedia) async {
+        await retryPhoto(id: upload.id)
+    }
+
+    private func retryPhoto(id: String) async {
+        do {
+            let media = try await offlineQueue.retryMedia(id: id)
+            model.addMedia(media)
+            recentlyUploadedMediaIds.insert(media.id)
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                recentlyUploadedMediaIds.remove(media.id)
             }
-        } else {
-            do {
-                try queueForUpload()
-            } catch {
-                errorMessage = "The photo could not be saved for offline upload. Please try again."
+        } catch {
+            // The tile retains the exact safe error. Keep the section-level
+            // alert concise so the user knows where to act.
+            errorMessage = "Photo upload failed. Review the photo tile to retry or remove it."
+        }
+    }
+
+    private func removePendingPhoto(_ upload: OfflineQueue.PendingMedia) async {
+        do {
+            try await offlineQueue.removeMedia(id: upload.id)
+            if let answerId = upload.answerId {
+                model.clearLocalPhotoIfNeeded(answerId: answerId)
             }
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -558,6 +589,83 @@ struct InspectionWorkflowView: View {
         model.currentOBDSnapshot == nil &&
         !OfflineQueue.shared.pendingOBDSnapshots.contains(where: { $0.submissionId == submissionId }) &&
         scannerEntryChoice == nil
+    }
+}
+
+private struct PendingInspectionPhotoTile: View {
+    let upload: OfflineQueue.PendingMedia
+    let progress: Double?
+    let error: String?
+    let isUploading: Bool
+    let onRetry: () -> Void
+    let onRemove: () -> Void
+
+    @State private var image: UIImage?
+
+    private var status: String {
+        if let error, !error.isEmpty { return "Failed" }
+        guard let progress else { return "Saved for upload" }
+        return progress >= 0.999 ? "Processing…" : "Uploading… \(Int(progress * 100))%"
+    }
+
+    var body: some View {
+        Color.clear
+            .aspectRatio(4/3, contentMode: .fit)
+            .overlay {
+                ZStack {
+                    if let image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Theme.Palette.subtle
+                        Image(systemName: "photo")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                    }
+                    LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .center, endPoint: .bottom)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Spacer()
+                        HStack(spacing: 5) {
+                            if isUploading {
+                                ProgressView().tint(.white).controlSize(.small)
+                            } else if error != nil {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.yellow)
+                            } else {
+                                Image(systemName: "icloud.and.arrow.up")
+                            }
+                            Text(status).font(.caption.bold())
+                        }
+                        if let error, !error.isEmpty {
+                            Text(error)
+                                .font(.caption2)
+                                .lineLimit(3)
+                            HStack(spacing: 12) {
+                                Button("Retry", action: onRetry).font(.caption.bold())
+                                Button("Remove", role: .destructive, action: onRemove).font(.caption.bold())
+                            }
+                            .disabled(isUploading)
+                        } else if !isUploading {
+                            HStack(spacing: 12) {
+                                Button("Upload now", action: onRetry).font(.caption.bold())
+                                Button("Remove", role: .destructive, action: onRemove).font(.caption.bold())
+                            }
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .padding(10)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Inspection photo. \(status)")
+            .task(id: upload.localFileURL) {
+                let data = try? await Task.detached(priority: .utility) {
+                    try Data(contentsOf: upload.localFileURL)
+                }.value
+                image = data.flatMap(UIImage.init(data:))
+            }
     }
 }
 

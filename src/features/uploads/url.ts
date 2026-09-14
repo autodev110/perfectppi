@@ -19,6 +19,21 @@ export function isManagedPrivateUploadReference(value: string): boolean {
   return /^r2-private:\/\/\/(?:ppi_media|vehicle_media|media_package|message_attachment|vehicle_document)\/[0-9a-f-]+\/[0-9a-f-]+\/[a-zA-Z0-9._-]+$/.test(value);
 }
 
+/**
+ * Confirms that an opaque private reference was issued for this exact owner
+ * and record. Attachment endpoints must not rely on the broad schema alone:
+ * a valid reference for one inspection must never be attachable to another.
+ */
+export function isOwnedPrivateUploadReference(
+  value: string,
+  entity: "ppi_media" | "vehicle_media" | "media_package" | "message_attachment" | "vehicle_document",
+  ownerId: string,
+  recordId: string,
+): boolean {
+  if (!isManagedPrivateUploadReference(value)) return false;
+  return value.startsWith(`r2-private:///${entity}/${ownerId}/${recordId}/`);
+}
+
 export function isVehicleQuarantineReference(value: string): boolean {
   return /^r2-private:\/\/\/quarantine\/vehicle_media\/[0-9a-f-]+\/[0-9a-f-]+\/[a-zA-Z0-9._-]+$/.test(value);
 }

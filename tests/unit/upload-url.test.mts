@@ -1,9 +1,11 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 import {
   isManagedPrivateUploadReference,
   isManagedUploadUrl,
+  isOwnedPrivateUploadReference,
   isVehicleQuarantineReference,
 } from "../../src/features/uploads/url.ts";
 
@@ -53,6 +55,25 @@ describe("managed upload URLs", () => {
       false,
     );
     assert.equal(isManagedPrivateUploadReference("r2-private:///../../secret"), false);
+  });
+
+  test("binds private references to the exact owner and record", () => {
+    const owner = "11111111-1111-4111-8111-111111111111";
+    const record = "22222222-2222-4222-8222-222222222222";
+    const reference = `r2-private:///ppi_media/${owner}/${record}/capture.jpg`;
+    assert.equal(isOwnedPrivateUploadReference(reference, "ppi_media", owner, record), true);
+    assert.equal(isOwnedPrivateUploadReference(reference, "ppi_media", owner, "33333333-3333-4333-8333-333333333333"), false);
+    assert.equal(isOwnedPrivateUploadReference(reference, "vehicle_media", owner, record), false);
+  });
+
+  test("requires unattached inspection uploads to be discarded through the protected route", async () => {
+    const route = await readFile(
+      new URL("../../src/app/api/ppi/submissions/[id]/media/route.ts", import.meta.url),
+      "utf8",
+    );
+    assert.match(route, /isOwnedPrivateUploadReference/);
+    assert.match(route, /This photo is already attached to the inspection/);
+    assert.match(route, /unattached_inspection_media_discarded/);
   });
 
   test("accepts only vehicle media in the vehicle quarantine namespace", () => {

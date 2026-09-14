@@ -62,15 +62,35 @@ export function InspectionWorkflowView({
     });
   }
 
+  async function discardPending(upload: PendingUpload) {
+    if (upload.storageReference) {
+      const response = await fetch(`/api/ppi/submissions/${submissionId}/media`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storageReference: upload.storageReference }),
+      });
+      if (!response.ok) {
+        setMediaError(await uploadFailureMessage(response, "Could not remove the retained photo."));
+        return;
+      }
+    }
+    removePending(upload.id);
+  }
+
   async function runUpload(pending: PendingUpload) {
     patchPending(pending.id, { stage: "preparing", percent: 0, error: null, retryable: true });
     try {
-      const { publicUrl } = await uploadPhoto({
-        file: pending.file,
-        entity: "ppi_media",
-        recordId: submissionId,
-        onProgress: ({ stage, percent }) => patchPending(pending.id, { stage, percent }),
-      });
+      let publicUrl = pending.storageReference;
+      if (!publicUrl) {
+        const uploaded = await uploadPhoto({
+          file: pending.file,
+          entity: "ppi_media",
+          recordId: submissionId,
+          onProgress: ({ stage, percent }) => patchPending(pending.id, { stage, percent }),
+        });
+        publicUrl = uploaded.publicUrl;
+        patchPending(pending.id, { storageReference: publicUrl });
+      }
       patchPending(pending.id, { stage: "processing", percent: 100 });
       const attachRes = await fetch(`/api/ppi/submissions/${submissionId}/media`, {
         method: "POST",
@@ -396,7 +416,7 @@ export function InspectionWorkflowView({
                   key={pending.id}
                   upload={pending}
                   onRetry={() => void runUpload(pending)}
-                  onRemove={() => removePending(pending.id)}
+                  onRemove={() => void discardPending(pending)}
                 />
               ))}
               {currentQuestionMedia.map((media, index) => (

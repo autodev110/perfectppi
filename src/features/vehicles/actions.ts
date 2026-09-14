@@ -656,20 +656,25 @@ export async function deleteVehicle(vehicleId: string) {
     .maybeSingle();
   if (!vehicle) return { error: "Vehicle not found" };
 
-  const [mediaResult, requestsResult] = await Promise.all([
+  const [mediaResult, buildDocumentsResult, requestsResult] = await Promise.all([
     admin
       .from("vehicle_media")
       .select("url")
+      .eq("vehicle_id", vehicleId),
+    admin
+      .from("vehicle_build_documents")
+      .select("storage_reference")
       .eq("vehicle_id", vehicleId),
     admin
       .from("ppi_requests")
       .select("id")
       .eq("vehicle_id", vehicleId),
   ]);
-  if (mediaResult.error || requestsResult.error) {
+  if (mediaResult.error || buildDocumentsResult.error || requestsResult.error) {
     return { error: "The vehicle could not be prepared for deletion. Please try again." };
   }
   const media = mediaResult.data;
+  const buildDocuments = buildDocumentsResult.data;
   const requests = requestsResult.data;
   let inspectionReferences: string[];
   try {
@@ -690,6 +695,9 @@ export async function deleteVehicle(vehicleId: string) {
 
   await Promise.all([
     ...(media ?? []).map(({ url }) => deleteStoredObjectOrQueue(url, "vehicle_deleted")),
+    ...(buildDocuments ?? []).map(({ storage_reference }) =>
+      deleteStoredObjectOrQueue(storage_reference, "vehicle_build_document_deleted")
+    ),
     cleanupInspectionStorage(inspectionReferences, "vehicle_inspections_deleted"),
   ]);
 

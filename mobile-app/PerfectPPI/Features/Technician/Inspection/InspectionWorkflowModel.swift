@@ -230,7 +230,21 @@ final class InspectionWorkflowModel: ObservableObject {
     }
 
     func addMedia(_ media: PpiMedia) {
+        allMedia.removeAll { $0.id == media.id }
         allMedia.append(media)
+    }
+
+    func refreshMedia() async {
+        guard let submissionId else { return }
+        if let media = try? await PpiAPI.media(submissionId: submissionId) {
+            allMedia = media
+        }
+    }
+
+    func clearLocalPhotoIfNeeded(answerId: String) {
+        guard !allMedia.contains(where: { $0.ppiAnswerId == answerId && $0.mediaType == "image" }),
+              !OfflineQueue.shared.pendingMedia.contains(where: { $0.answerId == answerId }) else { return }
+        localPhotoAnswerIds.remove(answerId)
     }
 
     /// Deletes a captured photo server-side, then drops it locally. Also clears

@@ -13,6 +13,7 @@ export type PendingUpload = {
   percent: number;
   error: string | null;
   retryable: boolean;
+  storageReference?: string;
 };
 
 // One photo's upload state, in the same tile the finished photo will occupy:

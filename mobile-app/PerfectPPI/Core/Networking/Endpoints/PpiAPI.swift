@@ -199,4 +199,17 @@ enum PpiAPI {
     static func deleteMedia(mediaId: String) async throws -> DeleteMediaResult {
         try await APIClient.shared.delete("/api/ppi/media/\(mediaId)")
     }
+
+    private struct DiscardPendingMediaRequest: Encodable {
+        let storageReference: String
+    }
+
+    /// Removes private bytes from an upload that never reached a PPI media
+    /// row. The server verifies the current owner and submission namespace.
+    static func discardPendingMedia(submissionId: String, storageReference: String) async throws -> Empty {
+        try await APIClient.shared.delete(
+            "/api/ppi/submissions/\(submissionId)/media",
+            body: DiscardPendingMediaRequest(storageReference: storageReference)
+        )
+    }
 }

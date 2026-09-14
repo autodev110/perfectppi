@@ -218,9 +218,11 @@ export async function buildAccountDataExport(profileId: string, user: User) {
   const savedCollectionIds = ids(savedCollections);
   const organizedEventIds = ids(organizedEvents);
 
-  const [vehicleMedia, vehicleBuildEntries, vehicleMaintenanceEvents, marketplaceListings, savedCollectionItems, eventUpdates, sections, obdSnapshots, standardizedOutputs, vscOutputs] = await Promise.all([
+  const [vehicleMedia, vehicleBuildStages, vehicleBuildEntries, vehicleBuildDocuments, vehicleMaintenanceEvents, marketplaceListings, savedCollectionItems, eventUpdates, sections, obdSnapshots, standardizedOutputs, vscOutputs] = await Promise.all([
     rowsForIds("vehicle media", "vehicle_media", "vehicle_id", vehicleIds),
+    rowsForIds("vehicle build stages", "vehicle_build_stages", "vehicle_id", vehicleIds),
     rowsForIds("vehicle build entries", "vehicle_build_entries", "vehicle_id", vehicleIds),
+    rowsForIds("vehicle build documents", "vehicle_build_documents", "vehicle_id", vehicleIds),
     rowsForIds("vehicle maintenance events", "vehicle_maintenance_events", "vehicle_id", vehicleIds),
     rowsForIds("marketplace listings", "marketplace_listings", "vehicle_id", vehicleIds),
     rowsForIds("saved collection items", "saved_collection_items", "collection_id", savedCollectionIds),
@@ -230,6 +232,13 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     rowsForIds("standardized outputs", "standardized_outputs", "ppi_submission_id", submissionIds),
     rowsForIds("VSC outputs", "vsc_outputs", "ppi_submission_id", submissionIds),
   ]);
+
+  const vehicleBuildEntryPhotos = await rowsForIds(
+    "vehicle build entry photos",
+    "vehicle_build_entry_photos",
+    "entry_id",
+    ids(vehicleBuildEntries),
+  );
 
   const sectionIds = ids(sections);
   const [answers, inspectionMedia, integrationArtifacts, generationJobs] = await Promise.all([
@@ -333,7 +342,10 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     vehicles: {
       records: vehicles,
       media: vehicleMedia,
+      buildStages: vehicleBuildStages,
       buildEntries: vehicleBuildEntries,
+      buildEntryPhotos: vehicleBuildEntryPhotos,
+      buildDocuments: vehicleBuildDocuments,
       maintenanceEvents: vehicleMaintenanceEvents,
       listings: marketplaceListings,
       ownershipEvents: vehicleOwnershipEvents,

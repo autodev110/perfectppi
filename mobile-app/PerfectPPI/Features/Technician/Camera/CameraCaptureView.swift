@@ -12,6 +12,8 @@ struct CameraCaptureView: View {
     @StateObject private var camera = CameraController()
     @State private var preview: UIImage?
     @State private var pickerItem: PhotosPickerItem?
+    @State private var pickerError: String?
+    @State private var loadingLibraryPhoto = false
 
     var body: some View {
         ZStack {
@@ -36,6 +38,14 @@ struct CameraCaptureView: View {
             camera.stop()
         }
         .statusBarHidden()
+        .alert("Photo unavailable", isPresented: .init(
+            get: { pickerError != nil },
+            set: { if !$0 { pickerError = nil } }
+        )) {
+            Button("OK") { pickerError = nil }
+        } message: {
+            Text(pickerError ?? "")
+        }
     }
 
     // MARK: - Live camera UI
@@ -77,15 +87,21 @@ struct CameraCaptureView: View {
 
             Spacer()
 
-            HStack(spacing: 32) {
+            HStack(alignment: .bottom, spacing: 12) {
                 PhotosPicker(selection: $pickerItem, matching: .images) {
-                    Image(systemName: "photo.on.rectangle")
-                        .font(.title2)
-                        .frame(width: 56, height: 56)
-                        .foregroundStyle(.white)
-                        .background(.black.opacity(0.5))
-                        .clipShape(Circle())
+                    VStack(spacing: 6) {
+                        Image(systemName: "photo.on.rectangle")
+                            .font(.title2)
+                            .frame(width: 56, height: 56)
+                            .background(.black.opacity(0.5), in: Circle())
+                        Text("Choose from Library")
+                            .font(.caption2.bold())
+                            .multilineTextAlignment(.center)
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
                 }
+                .disabled(loadingLibraryPhoto)
                 .onChange(of: pickerItem) { _, item in
                     Task { await loadPickedImage(item) }
                 }
@@ -93,20 +109,36 @@ struct CameraCaptureView: View {
                 Button {
                     Task { await capture() }
                 } label: {
-                    Circle()
-                        .strokeBorder(.white, lineWidth: 4)
-                        .frame(width: 80, height: 80)
-                        .overlay {
-                            Circle()
-                                .fill(.white)
-                                .frame(width: 64, height: 64)
-                        }
+                    VStack(spacing: 6) {
+                        Circle()
+                            .strokeBorder(.white, lineWidth: 4)
+                            .frame(width: 80, height: 80)
+                            .overlay {
+                                Circle().fill(.white).frame(width: 64, height: 64)
+                            }
+                        Text("Take Photo").font(.caption.bold())
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
                 }
                 .disabled(!camera.isReady || camera.isCapturing)
                 .opacity(camera.isReady && !camera.isCapturing ? 1 : 0.5)
 
-                Color.clear.frame(width: 56, height: 56)
+                Button {
+                    camera.flip()
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "arrow.triangle.2.circlepath.camera")
+                            .font(.title2)
+                            .frame(width: 56, height: 56)
+                            .background(.black.opacity(0.5), in: Circle())
+                        Text("Switch Camera").font(.caption.bold())
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                }
             }
+            .padding(.horizontal, 12)
             .padding(.bottom, 36)
         }
     }
@@ -140,6 +172,7 @@ struct CameraCaptureView: View {
 
     @ViewBuilder
     private func fallback(reason: String) -> some View {
+        let libraryLabel = loadingLibraryPhoto ? "Loading…" : "Choose from Library"
         VStack(spacing: 16) {
             Image(systemName: "camera")
                 .font(.largeTitle)
@@ -147,9 +180,10 @@ struct CameraCaptureView: View {
             Text(reason)
                 .foregroundStyle(.white.opacity(0.7))
             PhotosPicker(selection: $pickerItem, matching: .images) {
-                Text("Choose Photo")
+                Label(libraryLabel, systemImage: "photo.on.rectangle")
             }
             .buttonStyle(PrimaryButtonStyle())
+            .disabled(loadingLibraryPhoto)
             .padding(.horizontal, 40)
             .onChange(of: pickerItem) { _, item in
                 Task { await loadPickedImage(item) }
@@ -167,9 +201,20 @@ struct CameraCaptureView: View {
 
     private func loadPickedImage(_ item: PhotosPickerItem?) async {
         guard let item else { return }
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let image = UIImage(data: data) else { return }
-        self.preview = image
+        loadingLibraryPhoto = true
+        defer {
+            loadingLibraryPhoto = false
+            pickerItem = nil
+        }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data) else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            self.preview = image
+        } catch {
+            pickerError = "That photo could not be read. Try another JPEG, PNG, or HEIC image."
+        }
     }
 }
 

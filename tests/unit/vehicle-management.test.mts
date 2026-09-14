@@ -25,9 +25,11 @@ describe("vehicle management hardening", () => {
 
   test("deleting inspections cleans managed media and report artifacts", async () => {
     const deletion = await source("src/features/ppi/deletion.ts");
+    const actions = await source("src/features/ppi/actions.ts");
     assert.match(deletion, /from\("ppi_media"\)/);
     assert.match(deletion, /from\("integration_artifacts"\)/);
     assert.match(deletion, /deleteStoredObjectOrQueue/);
+    assert.match(actions, /deleteStoredObjectOrQueue\(media\.url, "inspection_media_deleted"\)/);
   });
 
   test("keeps Vehicle Passport timeline secrets server-routed and exportable", async () => {
@@ -44,6 +46,12 @@ describe("vehicle management hardening", () => {
       /\.select\("[^\n]*(?:cost_cents|private_notes)/,
     );
     assert.match(accountExport, /vehicleBuildEntries/);
+    assert.match(accountExport, /vehicleBuildStages/);
+    assert.match(accountExport, /vehicleBuildEntryPhotos/);
+    assert.match(accountExport, /vehicleBuildDocuments/);
     assert.match(accountExport, /vehicleMaintenanceEvents/);
+    const vehicleActions = await source("src/features/vehicles/actions.ts");
+    assert.match(vehicleActions, /vehicle_build_documents/);
+    assert.match(vehicleActions, /vehicle_build_document_deleted/);
   });
 });

@@ -14,7 +14,8 @@ import {
 import type { InspectionScope, PpiRequestStatus, SectionType } from "@/types/enums";
 import type { Database, Json } from "@/types/database";
 import { syncPartnerLifecycle } from "@/features/partner/events";
-import { uploadedUrlSchema } from "@/features/uploads/url";
+import { isOwnedPrivateUploadReference, uploadedUrlSchema } from "@/features/uploads/url";
+import { deleteStoredObjectOrQueue } from "@/features/uploads/cleanup";
 import { inspectionAnswerValidationError } from "./answer-validation";
 import { hasActiveCertifiedCredential } from "@/features/technicians/credentials";
 
@@ -836,15 +837,10 @@ const attachMediaSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
-export async function attachMedia(data: {
-  ppi_section_id: string;
-  ppi_answer_id?: string;
-  url: string;
-  media_type: "image" | "video";
-  caption?: string;
-  captured_at?: string;
-  metadata?: Record<string, unknown>;
-}) {
+export async function attachMedia(submissionId: string, data: unknown) {
+  const parsedSubmissionId = z.string().uuid().safeParse(submissionId);
+  if (!parsedSubmissionId.success) return { error: "Invalid inspection" };
+
   const parsed = attachMediaSchema.safeParse(data);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
@@ -855,6 +851,7 @@ export async function attachMedia(data: {
     .from("ppi_sections")
     .select("ppi_submission_id")
     .eq("id", parsed.data.ppi_section_id)
+    .eq("ppi_submission_id", parsedSubmissionId.data)
     .maybeSingle();
   if (!section) return { error: "Inspection section not found" };
 
@@ -868,8 +865,30 @@ export async function attachMedia(data: {
     if (!answer) return { error: "Inspection answer does not belong to this section" };
   }
 
-  const expectedPrefix = `r2-private:///ppi_media/${ctx.id}/${section.ppi_submission_id}/`;
-  if (!parsed.data.url.startsWith(expectedPrefix)) return { error: "Inspection upload is invalid" };
+  if (!isOwnedPrivateUploadReference(
+    parsed.data.url,
+    "ppi_media",
+    ctx.id,
+    section.ppi_submission_id,
+  )) return { error: "Inspection upload is invalid" };
+
+  // Upload and attachment are separate requests. If the attachment committed
+  // but its response was lost, return that row when the retained client retries
+  // instead of inserting a duplicate inspection photo.
+  const { data: existing, error: existingError } = await supabase
+    .from("ppi_media")
+    .select("*")
+    .eq("url", parsed.data.url)
+    .limit(1)
+    .maybeSingle();
+  if (existingError) return { error: existingError.message };
+  if (existing) {
+    const sameAttachment = existing.ppi_section_id === parsed.data.ppi_section_id
+      && existing.ppi_answer_id === (parsed.data.ppi_answer_id ?? null)
+      && existing.media_type === parsed.data.media_type;
+    if (!sameAttachment) return { error: "This upload is already attached elsewhere" };
+    return { data: existing };
+  }
 
   const { data: media, error } = await supabase
     .from("ppi_media")
@@ -901,6 +920,14 @@ export async function deletePpiMedia(mediaId: string) {
 
   const supabase = await createClient();
 
+  const { data: media, error: lookupError } = await supabase
+    .from("ppi_media")
+    .select("id, url")
+    .eq("id", mediaId)
+    .maybeSingle();
+  if (lookupError) return { error: lookupError.message };
+  if (!media) return { error: "Photo not found or not yours to delete" };
+
   const { data: deleted, error } = await supabase
     .from("ppi_media")
     .delete()
@@ -910,6 +937,8 @@ export async function deletePpiMedia(mediaId: string) {
 
   if (error) return { error: error.message };
   if (!deleted) return { error: "Photo not found or not yours to delete" };
+
+  await deleteStoredObjectOrQueue(media.url, "inspection_media_deleted");
 
   return { data: { id: deleted.id } };
 }
