@@ -19,7 +19,8 @@ import { InspectionDeleteButton } from "@/components/shared/inspection-delete-bu
 import { VehicleSoldAction } from "./vehicle-sold-action";
 import { VehicleHandoffAction } from "./vehicle-handoff-action";
 import { getOwnedVehicleTimelines } from "@/features/vehicles/timelines";
-import { VehicleBuildManager, VehicleMaintenanceManager } from "./vehicle-timeline-manager";
+import { VehicleMaintenanceManager } from "./vehicle-timeline-manager";
+import { VehicleBuildProgression } from "./vehicle-build-progression";
 
 type VehicleTab = "overview" | "posts" | "build" | "maintenance" | "inspections";
 
@@ -245,7 +246,7 @@ export default async function VehicleDetailPage({ params, searchParams }: {
         </Card>
       )}
 
-      {activeTab === "build" && <VehicleBuildManager vehicleId={vehicle.id} entries={timelines.build} />}
+      {activeTab === "build" && <VehicleBuildProgression vehicleId={vehicle.id} timelines={timelines} media={vehicle.vehicle_media ?? []} />}
       {activeTab === "maintenance" && <VehicleMaintenanceManager vehicleId={vehicle.id} events={timelines.maintenance} />}
 
       {activeTab === "inspections" && <Card id="inspections">

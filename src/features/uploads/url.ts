@@ -16,7 +16,7 @@ export function isManagedUploadUrl(value: string, base = publicUploadBase()): bo
 }
 
 export function isManagedPrivateUploadReference(value: string): boolean {
-  return /^r2-private:\/\/\/(?:ppi_media|vehicle_media|media_package|message_attachment)\/[0-9a-f-]+\/[0-9a-f-]+\/[a-zA-Z0-9._-]+$/.test(value);
+  return /^r2-private:\/\/\/(?:ppi_media|vehicle_media|media_package|message_attachment|vehicle_document)\/[0-9a-f-]+\/[0-9a-f-]+\/[a-zA-Z0-9._-]+$/.test(value);
 }
 
 export function isVehicleQuarantineReference(value: string): boolean {
@@ -46,4 +46,12 @@ export const communityUploadReferenceSchema = z
   .refine(
     (value) => isQuarantineReference(value),
     "Community media must be uploaded to PerfectPPI quarantine storage",
+  );
+
+/** Owner-private build documents (receipts, invoices, dyno sheets). */
+export const vehicleDocumentReferenceSchema = z
+  .string()
+  .refine(
+    (value) => /^r2-private:\/\/\/vehicle_document\/[0-9a-f-]+\/[0-9a-f-]+\/[a-zA-Z0-9._-]+$/.test(value),
+    "Documents must be uploaded through PerfectPPI",
   );

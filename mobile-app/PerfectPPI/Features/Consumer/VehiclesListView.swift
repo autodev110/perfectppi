@@ -350,6 +350,10 @@ struct VehicleDetailView: View {
     @State private var inlineAlert: String?
     @State private var selectedTab: PassportTab = .overview
     @State private var buildEntries: [VehicleBuildEntry] = []
+    @State private var buildStages: [VehicleBuildStage] = []
+    @State private var buildDocuments: [VehicleBuildDocument] = []
+    @State private var buildTotals: [VehicleBuildStageTotals] = []
+    @State private var showingStageForm = false
     @State private var maintenanceEvents: [VehicleMaintenanceEvent] = []
     @State private var loadingTimeline = false
     @State private var showingBuildForm = false
@@ -610,17 +614,40 @@ struct VehicleDetailView: View {
                     } else if selectedTab == .build {
                         Section {
                             Button("Add Build Entry", systemImage: "plus") { showingBuildForm = true }
+                            Button("Add Stage", systemImage: "list.number") { showingStageForm = true }
                         } footer: {
-                            Text("Costs and private notes stay visible only to you, even when an entry is shared.")
+                            Text("Stages group your modifications. Costs, labor, documents, and private notes stay visible only to you.")
                         }
                         if loadingTimeline {
                             Section { ProgressView().frame(maxWidth: .infinity) }
-                        } else if buildEntries.isEmpty {
+                        } else if buildEntries.isEmpty && buildStages.isEmpty {
                             Section { Text("No build entries yet.").foregroundStyle(.secondary) }
                         } else {
-                            Section("Build Journal") {
-                                ForEach(buildEntries) { entry in
-                                    VehicleBuildEntryRow(entry: entry)
+                            if !buildStages.isEmpty {
+                                Section {
+                                    let done = buildStages.filter { $0.status == .complete }.count
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("\(done) of \(buildStages.count) stages complete").font(.caption.weight(.semibold))
+                                        ProgressView(value: Double(done), total: Double(max(buildStages.count, 1)))
+                                    }
+                                }
+                            }
+                            ForEach(buildGroups, id: \.key) { group in
+                                Section {
+                                    if let stage = group.stage {
+                                        VehicleBuildStageHeader(stage: stage, totals: buildTotals.first { $0.stageId == stage.id }) { update in
+                                            Task { await updateStage(stage, update: update) }
+                                        } onDelete: {
+                                            Task { await deleteStage(stage) }
+                                        }
+                                    }
+                                    if group.entries.isEmpty {
+                                        Text("No entries in this stage yet.").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    ForEach(group.entries) { entry in
+                                        VehicleBuildEntryRow(entry: entry, documents: buildDocuments.filter { $0.entryId == entry.id }, vehicleId: vehicleId) { document in
+                                            Task { await deleteDocument(document) }
+                                        }
                                         .contextMenu {
                                             Button("Add to Collection", systemImage: "folder.badge.plus") {
                                                 collectionTarget = VehicleCollectionTarget(entityType: "build", entityId: entry.id)
@@ -631,6 +658,14 @@ struct VehicleDetailView: View {
                                                 Task { await deleteBuildEntry(entry) }
                                             }
                                         }
+                                    }
+                                    ForEach(buildDocuments.filter { $0.stageId == group.stage?.id && $0.entryId == nil && group.stage != nil }) { document in
+                                        VehicleBuildDocumentRow(document: document, vehicleId: vehicleId) {
+                                            Task { await deleteDocument(document) }
+                                        }
+                                    }
+                                } header: {
+                                    Text(group.stage?.title ?? (buildStages.isEmpty ? "Build Journal" : "Unstaged entries"))
                                 }
                             }
                         }
@@ -727,8 +762,14 @@ struct VehicleDetailView: View {
             NewCommunityPostView(preselectedVehicleId: vehicleId) {}
         }
         .sheet(isPresented: $showingBuildForm) {
-            VehicleBuildEntryForm(vehicleId: vehicleId) {
+            VehicleBuildEntryForm(vehicleId: vehicleId, stages: buildStages) {
                 showingBuildForm = false
+                Task { await loadTimelines() }
+            }
+        }
+        .sheet(isPresented: $showingStageForm) {
+            VehicleBuildStageForm(vehicleId: vehicleId) {
+                showingStageForm = false
                 Task { await loadTimelines() }
             }
         }
@@ -859,10 +900,52 @@ struct VehicleDetailView: View {
         loadingTimeline = true
         defer { loadingTimeline = false }
         do {
-            async let build = VehiclesAPI.buildEntries(id: vehicleId)
+            async let progression = VehiclesAPI.buildProgression(id: vehicleId)
             async let maintenance = VehiclesAPI.maintenanceEvents(id: vehicleId)
-            buildEntries = try await build
+            let loaded = try await progression
+            buildEntries = loaded.entries
+            buildStages = loaded.stages.sorted { ($0.position, $0.id) < ($1.position, $1.id) }
+            buildDocuments = loaded.documents
+            buildTotals = loaded.totals
             maintenanceEvents = try await maintenance
+        } catch {
+            inlineAlert = error.localizedDescription
+        }
+    }
+
+    /// Entries under their stage (stage order), then unstaged entries.
+    private var buildGroups: [(key: String, stage: VehicleBuildStage?, entries: [VehicleBuildEntry])] {
+        var groups: [(key: String, stage: VehicleBuildStage?, entries: [VehicleBuildEntry])] = buildStages.map { stage in
+            (key: stage.id, stage: stage, entries: buildEntries.filter { $0.stageId == stage.id })
+        }
+        let staged = Set(buildStages.map(\.id))
+        let unstaged = buildEntries.filter { $0.stageId == nil || !staged.contains($0.stageId!) }
+        if !unstaged.isEmpty { groups.append((key: "unstaged", stage: nil, entries: unstaged)) }
+        return groups
+    }
+
+    private func updateStage(_ stage: VehicleBuildStage, update: VehiclesAPI.BuildStageUpdate) async {
+        do {
+            _ = try await VehiclesAPI.updateBuildStage(vehicleId: vehicleId, stageId: stage.id, update: update)
+            await loadTimelines()
+        } catch {
+            inlineAlert = error.localizedDescription
+        }
+    }
+
+    private func deleteStage(_ stage: VehicleBuildStage) async {
+        do {
+            _ = try await VehiclesAPI.deleteBuildStage(vehicleId: vehicleId, stageId: stage.id)
+            await loadTimelines()
+        } catch {
+            inlineAlert = error.localizedDescription
+        }
+    }
+
+    private func deleteDocument(_ document: VehicleBuildDocument) async {
+        do {
+            _ = try await VehiclesAPI.deleteBuildDocument(vehicleId: vehicleId, documentId: document.id)
+            await loadTimelines()
         } catch {
             inlineAlert = error.localizedDescription
         }
@@ -1084,6 +1167,9 @@ private struct VehicleMediaTile: View {
 
 private struct VehicleBuildEntryRow: View {
     let entry: VehicleBuildEntry
+    var documents: [VehicleBuildDocument] = []
+    var vehicleId: String = ""
+    var onDeleteDocument: (VehicleBuildDocument) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1106,12 +1192,177 @@ private struct VehicleBuildEntryRow: View {
                 Text(entry.fitmentConfidence.label)
             }
             .font(.caption).foregroundStyle(.secondary)
+            if entry.costCents != nil || entry.laborCents != nil || entry.laborHours != nil {
+                Text([
+                    entry.costCents.map { "$\(($0 / 100).formatted()) parts" },
+                    entry.laborCents.map { "$\(($0 / 100).formatted()) labor" },
+                    entry.laborHours.map { "\($0.formatted()) h" },
+                ].compactMap { $0 }.joined(separator: " · ") + " (private)")
+                .font(.caption).foregroundStyle(.secondary)
+            }
+            if entry.beforeSpec != nil || entry.afterSpec != nil {
+                HStack(spacing: 6) {
+                    Text(entry.beforeSpec ?? "—")
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(Theme.Palette.subtle).clipShape(RoundedRectangle(cornerRadius: 6))
+                    Image(systemName: "arrow.right").foregroundStyle(.secondary)
+                    Text(entry.afterSpec ?? "—").fontWeight(.medium)
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(Theme.Palette.primary.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .font(.caption)
+            }
             if let notes = entry.publicNotes, !notes.isEmpty { Text(notes).font(.subheadline) }
             if let notes = entry.privateNotes, !notes.isEmpty {
                 Text("Private: \(notes)").font(.caption).foregroundStyle(.secondary)
             }
+            if let photos = entry.photos, !photos.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(photos) { photo in
+                            AsyncImage(url: URL(string: photo.url)) { phase in
+                                if case .success(let image) = phase { image.resizable().scaledToFill() } else { Color.secondary.opacity(0.2) }
+                            }
+                            .frame(width: 84, height: 63)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                }
+            }
+            ForEach(documents) { document in
+                VehicleBuildDocumentRow(document: document, vehicleId: vehicleId) { onDeleteDocument(document) }
+            }
         }
         .padding(.vertical, 3)
+    }
+}
+
+/// Stage header with status, progress, and private totals.
+private struct VehicleBuildStageHeader: View {
+    let stage: VehicleBuildStage
+    let totals: VehicleBuildStageTotals?
+    let onUpdate: (VehiclesAPI.BuildStageUpdate) -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(stage.status.label + (stage.completedOn.map { " · \($0)" } ?? stage.targetDate.map { " · target \($0)" } ?? ""))
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    if let description = stage.description, !description.isEmpty {
+                        Text(description).font(.caption)
+                    }
+                }
+                Spacer()
+                Menu {
+                    ForEach(VehicleBuildStageStatus.allCases) { status in
+                        Button(status.label) { onUpdate(.init(status: status)) }
+                    }
+                    Divider()
+                    Button(stage.isPublic ? "Make private" : "Share on passport") { onUpdate(.init(isPublic: !stage.isPublic)) }
+                    Button("Delete stage (keeps entries)", role: .destructive, action: onDelete)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+            if let totals {
+                Text("\(totals.installedCount)/\(totals.entryCount) installed" + (totals.partsCents + totals.laborCents > 0 ? " · $\((totals.partsCents / 100).formatted()) parts + $\((totals.laborCents / 100).formatted()) labor (private)" : ""))
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// A private document row: opens through a short-lived signed URL.
+private struct VehicleBuildDocumentRow: View {
+    let document: VehicleBuildDocument
+    let vehicleId: String
+    let onDelete: () -> Void
+    @Environment(\.openURL) private var openURL
+    @State private var opening = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc.text").foregroundStyle(.secondary)
+            Button {
+                Task {
+                    opening = true
+                    defer { opening = false }
+                    if let url = try? await VehiclesAPI.buildDocumentURL(vehicleId: vehicleId, documentId: document.id) { openURL(url) }
+                }
+            } label: {
+                Text(document.title).font(.caption.weight(.medium)).lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            .disabled(opening)
+            Text("\(document.kind.label) · private").font(.caption2).foregroundStyle(.secondary)
+            Spacer()
+            Button(role: .destructive, action: onDelete) { Image(systemName: "trash") }
+                .buttonStyle(.borderless)
+                .font(.caption)
+        }
+    }
+}
+
+/// Create a stage (title, status, target date, sharing).
+private struct VehicleBuildStageForm: View {
+    let vehicleId: String
+    let onSaved: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var description = ""
+    @State private var status: VehicleBuildStageStatus = .planned
+    @State private var hasTarget = false
+    @State private var targetDate = Date()
+    @State private var isPublic = false
+    @State private var saving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Stage") {
+                    TextField("Title (e.g. Stage 1: Bolt-ons)", text: $title)
+                    TextField("Goal", text: $description, axis: .vertical).lineLimit(2...5)
+                    Picker("Status", selection: $status) {
+                        ForEach(VehicleBuildStageStatus.allCases) { Text($0.label).tag($0) }
+                    }
+                    Toggle("Target date", isOn: $hasTarget)
+                    if hasTarget { DatePicker("Target", selection: $targetDate, displayedComponents: .date) }
+                }
+                Section {
+                    Toggle("Show on public Vehicle Passport", isOn: $isPublic)
+                } footer: {
+                    Text("Only the stage name, goal, status, and its shared entries are visible. Never costs.")
+                }
+                if let error { Section { Text(error).foregroundStyle(Theme.Palette.danger) } }
+            }
+            .navigationTitle("Build Stage")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "Saving…" : "Save") { Task { await save() } }
+                        .disabled(saving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        error = nil
+        defer { saving = false }
+        do {
+            _ = try await VehiclesAPI.addBuildStage(id: vehicleId, payload: .init(
+                title: title.trimmed, description: description.nilIfBlank, status: status,
+                targetDate: hasTarget ? garageDateString(targetDate) : nil, isPublic: isPublic
+            ))
+            onSaved()
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 }
 
@@ -1149,10 +1400,16 @@ private struct VehicleMaintenanceEventRow: View {
 
 private struct VehicleBuildEntryForm: View {
     let vehicleId: String
+    var stages: [VehicleBuildStage] = []
     let onSaved: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var category = ""
+    @State private var stageId: String = ""
+    @State private var labor = ""
+    @State private var laborHours = ""
+    @State private var beforeSpec = ""
+    @State private var afterSpec = ""
     @State private var manufacturer = ""
     @State private var partNumber = ""
     @State private var status: VehicleBuildStatus = .installed
@@ -1186,7 +1443,21 @@ private struct VehicleBuildEntryForm: View {
                     if includeDate { DatePicker("Install date", selection: $installedOn, displayedComponents: .date) }
                     TextField("Mileage", text: $mileage).keyboardType(.numberPad)
                     TextField("Shop", text: $shopName)
-                    TextField("Cost in USD (private)", text: $cost).keyboardType(.decimalPad)
+                    TextField("Parts cost in USD (private)", text: $cost).keyboardType(.decimalPad)
+                    TextField("Labor cost in USD (private)", text: $labor).keyboardType(.decimalPad)
+                    TextField("Labor hours (private)", text: $laborHours).keyboardType(.decimalPad)
+                }
+                if !stages.isEmpty {
+                    Section("Stage") {
+                        Picker("Stage", selection: $stageId) {
+                            Text("No stage").tag("")
+                            ForEach(stages) { Text($0.title).tag($0.id) }
+                        }
+                    }
+                }
+                Section("Before / after") {
+                    TextField("Before (e.g. stock airbox, 200 hp)", text: $beforeSpec)
+                    TextField("After (e.g. cold-air intake, 212 hp)", text: $afterSpec)
                 }
                 Section("Notes") {
                     TextField("Public notes", text: $publicNotes, axis: .vertical).lineLimit(3...8)
@@ -1220,6 +1491,14 @@ private struct VehicleBuildEntryForm: View {
             error = "Enter a valid non-negative cost."
             return
         }
+        if !labor.trimmed.isEmpty && garageCostCents(labor) == nil {
+            error = "Enter a valid non-negative labor cost."
+            return
+        }
+        if !laborHours.trimmed.isEmpty && (Double(laborHours) == nil || Double(laborHours)! < 0) {
+            error = "Enter labor hours as a number."
+            return
+        }
         saving = true
         error = nil
         defer { saving = false }
@@ -1231,7 +1510,10 @@ private struct VehicleBuildEntryForm: View {
                 mileage: Int(mileage), installationKind: installationKind,
                 shopName: shopName.nilIfBlank, costCents: garageCostCents(cost),
                 publicNotes: publicNotes.nilIfBlank, privateNotes: privateNotes.nilIfBlank,
-                status: status, isPublic: isPublic
+                status: status, isPublic: isPublic,
+                stageId: stageId.isEmpty ? nil : stageId,
+                laborCents: garageCostCents(labor), laborHours: laborHours.trimmed.isEmpty ? nil : Double(laborHours),
+                beforeSpec: beforeSpec.nilIfBlank, afterSpec: afterSpec.nilIfBlank
             ))
             onSaved()
         } catch {

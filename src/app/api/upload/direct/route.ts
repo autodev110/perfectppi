@@ -21,6 +21,7 @@ const uploadSchema = z.object({
     "community_post",
     "community_group",
     "message_attachment",
+    "vehicle_document",
   ]),
   recordId: z.string().uuid(),
 });
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
   const allowedImageTypes = [...UPLOAD_LIMITS.allowedImageTypes] as string[];
   const allowedVideoTypes = [...UPLOAD_LIMITS.allowedVideoTypes] as string[];
   const allowedFileTypes =
-    parsed.data.entity === "media_package" || parsed.data.entity === "message_attachment"
+    parsed.data.entity === "media_package" || parsed.data.entity === "message_attachment" || parsed.data.entity === "vehicle_document"
       ? ([...UPLOAD_LIMITS.allowedFileTypes] as string[])
       : [];
   const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes, ...allowedFileTypes];
@@ -158,7 +159,7 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ publicUrl: storageReference }, { status: 201 });
     }
-    if (["ppi_media", "media_package", "message_attachment"].includes(parsed.data.entity)) {
+    if (["ppi_media", "media_package", "message_attachment", "vehicle_document"].includes(parsed.data.entity)) {
       const { storageReference } = await uploadPrivateObject({
         key: buildStorageKey(keyParams),
         body: Buffer.from(arrayBuffer),

@@ -4138,6 +4138,114 @@ export type Database = {
           },
         ]
       }
+      vehicle_build_stages: {
+        Row: {
+          completed_on: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_public: boolean
+          owner_id: string
+          position: number
+          status: Database["public"]["Enums"]["vehicle_build_stage_status"]
+          target_date: string | null
+          title: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          completed_on?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean
+          owner_id: string
+          position?: number
+          status?: Database["public"]["Enums"]["vehicle_build_stage_status"]
+          target_date?: string | null
+          title: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          completed_on?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean
+          owner_id?: string
+          position?: number
+          status?: Database["public"]["Enums"]["vehicle_build_stage_status"]
+          target_date?: string | null
+          title?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: []
+      }
+      vehicle_build_entry_photos: {
+        Row: {
+          created_at: string
+          entry_id: string
+          media_id: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          entry_id: string
+          media_id: string
+          position?: number
+        }
+        Update: {
+          created_at?: string
+          entry_id?: string
+          media_id?: string
+          position?: number
+        }
+        Relationships: []
+      }
+      vehicle_build_documents: {
+        Row: {
+          content_type: string
+          created_at: string
+          entry_id: string | null
+          id: string
+          kind: Database["public"]["Enums"]["vehicle_build_document_kind"]
+          owner_id: string
+          size_bytes: number
+          stage_id: string | null
+          storage_reference: string
+          title: string
+          vehicle_id: string
+        }
+        Insert: {
+          content_type: string
+          created_at?: string
+          entry_id?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["vehicle_build_document_kind"]
+          owner_id: string
+          size_bytes: number
+          stage_id?: string | null
+          storage_reference: string
+          title: string
+          vehicle_id: string
+        }
+        Update: {
+          content_type?: string
+          created_at?: string
+          entry_id?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["vehicle_build_document_kind"]
+          owner_id?: string
+          size_bytes?: number
+          stage_id?: string | null
+          storage_reference?: string
+          title?: string
+          vehicle_id?: string
+        }
+        Relationships: []
+      }
       vehicle_build_subscriptions: {
         Row: {
           created_at: string
@@ -4949,6 +5057,8 @@ export type Database = {
       }
       vehicle_build_entries: {
         Row: {
+          after_spec: string | null
+          before_spec: string | null
           category: string
           cost_cents: number | null
           created_at: string
@@ -4957,6 +5067,8 @@ export type Database = {
           installation_kind: Database["public"]["Enums"]["vehicle_installation_kind"]
           installed_on: string | null
           is_public: boolean
+          labor_cents: number | null
+          labor_hours: number | null
           manufacturer: string | null
           mileage: number | null
           owner_id: string
@@ -4965,6 +5077,7 @@ export type Database = {
           public_notes: string | null
           related_post_id: string | null
           shop_name: string | null
+          stage_id: string | null
           status: Database["public"]["Enums"]["vehicle_build_status"]
           suspension_drop: string | null
           tire_size: string | null
@@ -4977,6 +5090,8 @@ export type Database = {
           wheel_width: number | null
         }
         Insert: {
+          after_spec?: string | null
+          before_spec?: string | null
           category: string
           cost_cents?: number | null
           created_at?: string
@@ -4985,6 +5100,8 @@ export type Database = {
           installation_kind?: Database["public"]["Enums"]["vehicle_installation_kind"]
           installed_on?: string | null
           is_public?: boolean
+          labor_cents?: number | null
+          labor_hours?: number | null
           manufacturer?: string | null
           mileage?: number | null
           owner_id: string
@@ -4993,6 +5110,7 @@ export type Database = {
           public_notes?: string | null
           related_post_id?: string | null
           shop_name?: string | null
+          stage_id?: string | null
           status?: Database["public"]["Enums"]["vehicle_build_status"]
           suspension_drop?: string | null
           tire_size?: string | null
@@ -5005,6 +5123,8 @@ export type Database = {
           wheel_width?: number | null
         }
         Update: {
+          after_spec?: string | null
+          before_spec?: string | null
           category?: string
           cost_cents?: number | null
           created_at?: string
@@ -5013,6 +5133,8 @@ export type Database = {
           installation_kind?: Database["public"]["Enums"]["vehicle_installation_kind"]
           installed_on?: string | null
           is_public?: boolean
+          labor_cents?: number | null
+          labor_hours?: number | null
           manufacturer?: string | null
           mileage?: number | null
           owner_id?: string
@@ -5021,6 +5143,7 @@ export type Database = {
           public_notes?: string | null
           related_post_id?: string | null
           shop_name?: string | null
+          stage_id?: string | null
           status?: Database["public"]["Enums"]["vehicle_build_status"]
           suspension_drop?: string | null
           tire_size?: string | null
@@ -5657,6 +5780,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      vehicle_build_stage_totals: {
+        Args: { p_owner_profile_id: string; p_vehicle_id: string }
+        Returns: { stage_id: string | null; entry_count: number; installed_count: number; parts_cents: number; labor_cents: number; labor_hours: number }[]
+      }
       get_product_analytics_summary: {
         Args: { p_days?: number }
         Returns: Json
@@ -7339,6 +7466,8 @@ export type Database = {
       vehicle_configuration_type: "stock" | "modified" | "custom_build"
       vehicle_mileage_status: "actual" | "not_actual" | "unknown"
       vehicle_ownership_state: "owned" | "previously_owned" | "considering" | "project"
+      vehicle_build_document_kind: "receipt" | "invoice" | "warranty" | "dyno_sheet" | "alignment" | "other"
+      vehicle_build_stage_status: "planned" | "in_progress" | "complete" | "on_hold"
       vehicle_build_status: "planned" | "installed" | "removed" | "sold"
       vehicle_installation_kind: "unknown" | "self_installed" | "shop_installed"
       vehicle_fitment_confidence: "owner_reported" | "community_confirmed" | "manufacturer_verified"
@@ -7590,6 +7719,8 @@ export const Constants = {
       vehicle_configuration_type: ["stock", "modified", "custom_build"],
       vehicle_mileage_status: ["actual", "not_actual", "unknown"],
       vehicle_ownership_state: ["owned", "previously_owned", "considering", "project"],
+      vehicle_build_document_kind: ["receipt", "invoice", "warranty", "dyno_sheet", "alignment", "other"],
+      vehicle_build_stage_status: ["planned", "in_progress", "complete", "on_hold"],
       vehicle_build_status: ["planned", "installed", "removed", "sold"],
       vehicle_installation_kind: ["unknown", "self_installed", "shop_installed"],
       vehicle_fitment_confidence: ["owner_reported", "community_confirmed", "manufacturer_verified"],

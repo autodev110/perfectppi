@@ -265,6 +265,61 @@ struct VehicleBuildEntry: Codable, Identifiable, Hashable {
     let isPublic: Bool
     let createdAt: Date
     let updatedAt: Date
+    /// Build progression (Renditions doc): stage, labor, before/after, photos.
+    var stageId: String? = nil
+    var laborCents: Int? = nil
+    var laborHours: Double? = nil
+    var beforeSpec: String? = nil
+    var afterSpec: String? = nil
+    var photos: [VehicleBuildEntryPhoto]? = nil
+}
+
+struct VehicleBuildEntryPhoto: Codable, Hashable, Identifiable {
+    let mediaId: String
+    let url: String
+    let position: Int
+    var id: String { mediaId }
+}
+
+struct VehicleBuildStage: Codable, Identifiable, Hashable {
+    let id: String
+    let vehicleId: String
+    let title: String
+    let description: String?
+    let position: Int
+    let status: VehicleBuildStageStatus
+    let targetDate: String?
+    let completedOn: String?
+    let isPublic: Bool
+}
+
+/// Owner-private receipt / invoice / dyno sheet. Opened through a short-lived
+/// signed URL; never has a public address.
+struct VehicleBuildDocument: Codable, Identifiable, Hashable {
+    let id: String
+    let vehicleId: String
+    let entryId: String?
+    let stageId: String?
+    let kind: VehicleBuildDocumentKind
+    let title: String
+    let contentType: String
+    let sizeBytes: Int
+}
+
+struct VehicleBuildStageTotals: Codable, Hashable {
+    let stageId: String?
+    let entryCount: Int
+    let installedCount: Int
+    let partsCents: Int
+    let laborCents: Int
+    let laborHours: Double
+}
+
+struct VehicleBuildProgression: Codable {
+    let stages: [VehicleBuildStage]
+    let entries: [VehicleBuildEntry]
+    let documents: [VehicleBuildDocument]
+    let totals: [VehicleBuildStageTotals]
 }
 
 struct VehicleMaintenanceEvent: Codable, Identifiable, Hashable {

@@ -8,7 +8,8 @@ export type UploadEntity =
   | "media_package"
   | "community_post"
   | "community_group"
-  | "message_attachment";
+  | "message_attachment"
+  | "vehicle_document";
 
 export async function canUploadToTarget(
   supabase: SupabaseClient<Database>,
@@ -26,7 +27,8 @@ export async function canUploadToTarget(
         .maybeSingle();
       return Boolean(data);
     }
-    case "vehicle_media": {
+    case "vehicle_media":
+    case "vehicle_document": {
       const { data } = await supabase
         .from("vehicles")
         .select("id")

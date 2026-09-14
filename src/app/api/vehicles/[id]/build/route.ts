@@ -33,6 +33,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .insert({ ...parsed.data, vehicle_id: id, owner_id: auth.profile.id })
     .select()
     .single();
+  if (error?.code === "23503") return NextResponse.json({ error: "Choose one of this vehicle's build stages." }, { status: 400 });
   if (error) return NextResponse.json({ error: "The build entry could not be saved" }, { status: 500 });
   return NextResponse.json({ data }, { status: 201 });
 }

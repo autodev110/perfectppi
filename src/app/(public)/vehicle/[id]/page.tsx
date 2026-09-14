@@ -7,6 +7,7 @@ import {
 } from "@/features/vehicles/queries";
 import { getVehicleActiveListing } from "@/features/marketplace/queries";
 import { FactorySpecComparison } from "@/components/shared/factory-spec-comparison";
+import { BUILD_STAGE_STATUS_LABELS, buildProgress, groupBuildByStage } from "@/lib/vehicles/build-progression";
 import {
   contactSellerFromListing,
   requestMarketplaceInspectionFromListing,
@@ -814,7 +815,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
               <BuildSubscriptionButton vehicleId={vehicle.id} initialSubscribed={buildSubscribed} />
             </div>
           ) : null}
-          <PublicBuildTimeline entries={timelines.build} canSave={!!viewerId} />
+          <PublicBuildTimeline entries={timelines.build} stages={timelines.stages} canSave={!!viewerId} />
         </div>
       )}
 
@@ -914,13 +915,42 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
 
 type PublicTimelines = Awaited<ReturnType<typeof getPublicVehicleTimelines>>;
 
-function PublicBuildTimeline({ entries, canSave }: { entries: PublicTimelines["build"]; canSave: boolean }) {
-  if (entries.length === 0) {
+// Build progression (Renditions doc): shared stages group shared entries;
+// before/after specs and approved photos are public, costs never are.
+function PublicBuildTimeline({ entries, stages, canSave }: { entries: PublicTimelines["build"]; stages: PublicTimelines["stages"]; canSave: boolean }) {
+  if (entries.length === 0 && stages.length === 0) {
     return <TimelineEmpty icon={<Wrench className="h-10 w-10" />} title="No shared build entries" message="The owner has not shared any modifications for this vehicle." />;
   }
+  const groups = groupBuildByStage(stages, entries);
+  const progress = buildProgress(stages, entries);
   return (
-    <div className="space-y-4">
-      {entries.map((entry) => (
+    <div className="space-y-6">
+      {stages.length > 0 ? (
+        <div className="rounded-[1.25rem] bg-surface-container-lowest p-5 shadow-sm ghost-border">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <p className="font-bold">Build progression</p>
+            <p className="text-on-surface-variant">{progress.done} of {progress.total} stages complete</p>
+          </div>
+          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface-container" aria-hidden="true">
+            <div className="h-full rounded-full bg-primary" style={{ width: `${progress.percent}%` }} />
+          </div>
+        </div>
+      ) : null}
+      {groups.map((group) => (
+        <section key={group.stage?.id ?? "unstaged"} className="space-y-3">
+          {group.stage ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+              <div>
+                <h2 className="font-heading text-lg font-extrabold text-on-surface">{group.stage.title}</h2>
+                {group.stage.description ? <p className="text-sm text-on-surface-variant">{group.stage.description}</p> : null}
+              </div>
+              <Badge variant="outline">{BUILD_STAGE_STATUS_LABELS[group.stage.status]}{group.stage.completed_on ? ` · ${formatDate(group.stage.completed_on)}` : ""}</Badge>
+            </div>
+          ) : stages.length > 0 ? (
+            <h2 className="px-1 font-heading text-lg font-extrabold text-on-surface">Other modifications</h2>
+          ) : null}
+          {group.entries.length === 0 ? <p className="px-1 text-sm text-on-surface-variant">No shared entries in this stage yet.</p> : null}
+          {group.entries.map((entry) => (
         <article id={`build-${entry.id}`} key={entry.id} className="scroll-mt-24 rounded-[1.25rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">{entry.category}</p><h2 className="mt-1 font-heading text-lg font-extrabold text-on-surface">{entry.title}</h2></div>
@@ -935,10 +965,27 @@ function PublicBuildTimeline({ entries, canSave }: { entries: PublicTimelines["b
           {[entry.vehicle_configuration, entry.wheel_size && `Wheels: ${entry.wheel_size}`, entry.wheel_width != null && `Width: ${entry.wheel_width} in`, entry.wheel_offset_mm != null && `Offset: ${entry.wheel_offset_mm} mm`, entry.tire_size && `Tires: ${entry.tire_size}`, entry.suspension_drop && `Drop: ${entry.suspension_drop}`].filter(Boolean).length > 0 && (
             <p className="mt-4 text-sm text-on-surface-variant">{[entry.vehicle_configuration, entry.wheel_size && `Wheels: ${entry.wheel_size}`, entry.wheel_width != null && `Width: ${entry.wheel_width} in`, entry.wheel_offset_mm != null && `Offset: ${entry.wheel_offset_mm} mm`, entry.tire_size && `Tires: ${entry.tire_size}`, entry.suspension_drop && `Drop: ${entry.suspension_drop}`].filter(Boolean).join(" · ")}</p>
           )}
+          {(entry.before_spec || entry.after_spec) && (
+            <p className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+              <span className="rounded-lg bg-surface-container px-2 py-1 text-on-surface-variant">{entry.before_spec ?? "—"}</span>
+              <ArrowRight className="h-4 w-4 text-on-surface-variant" />
+              <span className="rounded-lg bg-primary/10 px-2 py-1 font-semibold">{entry.after_spec ?? "—"}</span>
+            </p>
+          )}
           {entry.public_notes && <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-on-surface">{entry.public_notes}</p>}
+          {entry.photos.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {entry.photos.map((photo) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={photo.media_id} src={photo.url} alt={`${entry.title} photo`} className="h-24 w-32 rounded-xl object-cover" loading="lazy" />
+              ))}
+            </div>
+          ) : null}
           {canSave ? <div className="mt-4"><SavedCollectionButton entityType="build" entityId={entry.id} /></div> : null}
           <p className="mt-4 text-[11px] text-on-surface-variant">Owner-reported unless a stronger source is shown. Fitment is not guaranteed.</p>
         </article>
+          ))}
+        </section>
       ))}
     </div>
   );

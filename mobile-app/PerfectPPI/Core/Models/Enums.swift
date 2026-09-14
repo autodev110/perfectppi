@@ -123,6 +123,39 @@ enum VehicleBuildStatus: String, Codable, CaseIterable, Identifiable {
     var label: String { rawValue.capitalized }
 }
 
+enum VehicleBuildStageStatus: String, Codable, CaseIterable, Identifiable {
+    case planned
+    case inProgress = "in_progress"
+    case complete
+    case onHold = "on_hold"
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .planned: "Planned"
+        case .inProgress: "In progress"
+        case .complete: "Complete"
+        case .onHold: "On hold"
+        }
+    }
+}
+
+enum VehicleBuildDocumentKind: String, Codable, CaseIterable, Identifiable {
+    case receipt, invoice, warranty
+    case dynoSheet = "dyno_sheet"
+    case alignment, other
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .receipt: "Receipt"
+        case .invoice: "Invoice"
+        case .warranty: "Warranty"
+        case .dynoSheet: "Dyno sheet"
+        case .alignment: "Alignment sheet"
+        case .other: "Document"
+        }
+    }
+}
+
 enum VehicleInstallationKind: String, Codable, CaseIterable, Identifiable {
     case unknown
     case selfInstalled = "self_installed"

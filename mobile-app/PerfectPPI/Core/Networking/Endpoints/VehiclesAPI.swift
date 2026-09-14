@@ -262,10 +262,58 @@ enum VehiclesAPI {
         let privateNotes: String?
         let status: VehicleBuildStatus
         let isPublic: Bool
+        var stageId: String? = nil
+        var laborCents: Int? = nil
+        var laborHours: Double? = nil
+        var beforeSpec: String? = nil
+        var afterSpec: String? = nil
     }
 
     static func buildEntries(id: String) async throws -> [VehicleBuildEntry] {
         try await APIClient.shared.get("/api/vehicles/\(id)/build")
+    }
+
+    /// Stages, entries with photos, private documents, and per-stage totals.
+    static func buildProgression(id: String) async throws -> VehicleBuildProgression {
+        try await APIClient.shared.get("/api/vehicles/\(id)/build/progression")
+    }
+
+    struct BuildStagePayload: Encodable {
+        let title: String
+        let description: String?
+        let status: VehicleBuildStageStatus
+        let targetDate: String?
+        let isPublic: Bool
+    }
+
+    static func addBuildStage(id: String, payload: BuildStagePayload) async throws -> VehicleBuildStage {
+        try await APIClient.shared.post("/api/vehicles/\(id)/build/stages", body: payload)
+    }
+
+    struct BuildStageUpdate: Encodable {
+        var status: VehicleBuildStageStatus? = nil
+        var isPublic: Bool? = nil
+    }
+
+    static func updateBuildStage(vehicleId: String, stageId: String, update: BuildStageUpdate) async throws -> VehicleBuildStage {
+        try await APIClient.shared.patch("/api/vehicles/\(vehicleId)/build/stages/\(stageId)", body: update)
+    }
+
+    static func deleteBuildStage(vehicleId: String, stageId: String) async throws -> Empty {
+        try await APIClient.shared.delete("/api/vehicles/\(vehicleId)/build/stages/\(stageId)")
+    }
+
+    struct SignedDocument: Decodable { let url: String }
+
+    /// Short-lived signed URL for one of the owner's private documents.
+    static func buildDocumentURL(vehicleId: String, documentId: String) async throws -> URL {
+        let signed: SignedDocument = try await APIClient.shared.get("/api/vehicles/\(vehicleId)/build/documents/\(documentId)")
+        guard let url = URL(string: signed.url) else { throw APIError.unknown(NSError(domain: "VehiclesAPI", code: 2)) }
+        return url
+    }
+
+    static func deleteBuildDocument(vehicleId: String, documentId: String) async throws -> Empty {
+        try await APIClient.shared.delete("/api/vehicles/\(vehicleId)/build/documents/\(documentId)")
     }
 
     static func addBuildEntry(id: String, payload: BuildEntryPayload) async throws -> VehicleBuildEntry {
