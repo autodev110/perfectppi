@@ -312,6 +312,54 @@ enum VehiclesAPI {
         return url
     }
 
+    private struct EntryPhotosPayload: Encodable { let mediaIds: [String] }
+    struct EntryPhotosResult: Decodable { let entryId: String; let mediaIds: [String] }
+
+    /// Replace an entry's photos with this vehicle's approved media, in order.
+    static func setBuildEntryPhotos(vehicleId: String, entryId: String, mediaIds: [String]) async throws -> EntryPhotosResult {
+        try await APIClient.shared.put(
+            "/api/vehicles/\(vehicleId)/build/\(entryId)/photos",
+            body: EntryPhotosPayload(mediaIds: mediaIds)
+        )
+    }
+
+    struct BuildDocumentPayload: Encodable {
+        let storageReference: String
+        let title: String
+        let kind: VehicleBuildDocumentKind
+        let entryId: String?
+        let stageId: String?
+        let contentType: String
+        let sizeBytes: Int
+    }
+
+    /// Upload a private document (receipt, invoice, dyno sheet) and attach it
+    /// to an entry or a stage. The bytes go to private storage; only the
+    /// owner can ever open it.
+    static func addBuildDocument(
+        vehicleId: String,
+        data: Data,
+        filename: String,
+        contentType: String,
+        kind: VehicleBuildDocumentKind,
+        entryId: String?,
+        stageId: String?,
+        onProgress: R2Uploader.ProgressHandler? = nil
+    ) async throws -> VehicleBuildDocument {
+        let reference = try await R2Uploader.upload(
+            data: data, filename: filename, contentType: contentType,
+            entity: "vehicle_document", recordId: vehicleId, onProgress: onProgress
+        )
+        let title = String((filename as NSString).deletingPathExtension.prefix(120))
+        return try await APIClient.shared.post(
+            "/api/vehicles/\(vehicleId)/build/documents",
+            body: BuildDocumentPayload(
+                storageReference: reference, title: title.isEmpty ? "Document" : title, kind: kind,
+                entryId: entryId, stageId: stageId, contentType: contentType, sizeBytes: data.count
+            )
+        )
+    }
+
     static func deleteBuildDocument(vehicleId: String, documentId: String) async throws -> Empty {
         try await APIClient.shared.delete("/api/vehicles/\(vehicleId)/build/documents/\(documentId)")
     }

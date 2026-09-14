@@ -354,6 +354,8 @@ struct VehicleDetailView: View {
     @State private var buildDocuments: [VehicleBuildDocument] = []
     @State private var buildTotals: [VehicleBuildStageTotals] = []
     @State private var showingStageForm = false
+    @State private var photoPickerEntry: VehicleBuildEntry?
+    @State private var documentTarget: BuildDocumentTarget?
     @State private var maintenanceEvents: [VehicleMaintenanceEvent] = []
     @State private var loadingTimeline = false
     @State private var showingBuildForm = false
@@ -639,6 +641,8 @@ struct VehicleDetailView: View {
                                             Task { await updateStage(stage, update: update) }
                                         } onDelete: {
                                             Task { await deleteStage(stage) }
+                                        } onAttachDocument: {
+                                            documentTarget = BuildDocumentTarget(entryId: nil, stageId: stage.id)
                                         }
                                     }
                                     if group.entries.isEmpty {
@@ -649,6 +653,10 @@ struct VehicleDetailView: View {
                                             Task { await deleteDocument(document) }
                                         }
                                         .contextMenu {
+                                            Button("Photos", systemImage: "photo.on.rectangle") { photoPickerEntry = entry }
+                                            Button("Attach receipt / document", systemImage: "paperclip") {
+                                                documentTarget = BuildDocumentTarget(entryId: entry.id, stageId: nil)
+                                            }
                                             Button("Add to Collection", systemImage: "folder.badge.plus") {
                                                 collectionTarget = VehicleCollectionTarget(entityType: "build", entityId: entry.id)
                                             }
@@ -657,6 +665,10 @@ struct VehicleDetailView: View {
                                             Button("Delete", role: .destructive) {
                                                 Task { await deleteBuildEntry(entry) }
                                             }
+                                        }
+                                        .swipeActions(edge: .leading) {
+                                            Button("Photos", systemImage: "photo.on.rectangle") { photoPickerEntry = entry }
+                                                .tint(Theme.Palette.primary)
                                         }
                                     }
                                     ForEach(buildDocuments.filter { $0.stageId == group.stage?.id && $0.entryId == nil && group.stage != nil }) { document in
@@ -770,6 +782,22 @@ struct VehicleDetailView: View {
         .sheet(isPresented: $showingStageForm) {
             VehicleBuildStageForm(vehicleId: vehicleId) {
                 showingStageForm = false
+                Task { await loadTimelines() }
+            }
+        }
+        .sheet(item: $photoPickerEntry) { entry in
+            BuildEntryPhotoPicker(
+                vehicleId: vehicleId,
+                entry: entry,
+                media: (vehicle?.vehicleMedia ?? []).filter { $0.mediaType == .image && $0.moderationStatus == "active" }
+            ) {
+                photoPickerEntry = nil
+                Task { await loadTimelines() }
+            }
+        }
+        .sheet(item: $documentTarget) { target in
+            BuildDocumentAttachSheet(vehicleId: vehicleId, target: target) {
+                documentTarget = nil
                 Task { await loadTimelines() }
             }
         }
@@ -1243,6 +1271,7 @@ private struct VehicleBuildStageHeader: View {
     let totals: VehicleBuildStageTotals?
     let onUpdate: (VehiclesAPI.BuildStageUpdate) -> Void
     let onDelete: () -> Void
+    var onAttachDocument: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1261,6 +1290,7 @@ private struct VehicleBuildStageHeader: View {
                     }
                     Divider()
                     Button(stage.isPublic ? "Make private" : "Share on passport") { onUpdate(.init(isPublic: !stage.isPublic)) }
+                    Button("Attach receipt / document", systemImage: "paperclip", action: onAttachDocument)
                     Button("Delete stage (keeps entries)", role: .destructive, action: onDelete)
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -2359,6 +2389,206 @@ private struct FactoryComparisonSection: View {
         case .match, .unknown: .secondary
         case .declared: Theme.Palette.warning
         case .differs: Theme.Palette.danger
+        }
+    }
+}
+
+
+struct BuildDocumentTarget: Identifiable {
+    let entryId: String?
+    let stageId: String?
+    var id: String { entryId ?? stageId ?? "none" }
+}
+
+/// Pick which of the vehicle's approved photos illustrate a build entry
+/// (Renditions doc: photos on build entries). Only approved media is
+/// offered, so nothing bypasses moderation; the order chosen is kept.
+private struct BuildEntryPhotoPicker: View {
+    let vehicleId: String
+    let entry: VehicleBuildEntry
+    let media: [VehicleMedia]
+    let onSaved: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var selected: [String]
+    @State private var saving = false
+    @State private var error: String?
+
+    init(vehicleId: String, entry: VehicleBuildEntry, media: [VehicleMedia], onSaved: @escaping () -> Void) {
+        self.vehicleId = vehicleId
+        self.entry = entry
+        self.media = media
+        self.onSaved = onSaved
+        _selected = State(initialValue: entry.photos?.map(\.mediaId) ?? [])
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if media.isEmpty {
+                    EmptyStateCard(
+                        title: "No approved photos yet",
+                        message: "Add photos to this vehicle from the Overview tab first. Once approved, they can be attached to build entries.",
+                        systemImage: "photo.on.rectangle"
+                    )
+                    .padding()
+                } else {
+                    ScrollView {
+                        Text("Choose from this vehicle's approved photos. Tap in the order you want them shown.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
+                            ForEach(media) { item in
+                                let index = selected.firstIndex(of: item.id)
+                                Button {
+                                    if let index { selected.remove(at: index) } else { selected.append(item.id) }
+                                } label: {
+                                    AsyncImage(url: URL(string: item.url)) { phase in
+                                        if case .success(let image) = phase { image.resizable().scaledToFill() } else { Color.secondary.opacity(0.2) }
+                                    }
+                                    .frame(height: 76)
+                                    .frame(maxWidth: .infinity)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .overlay(alignment: .topTrailing) {
+                                        if let index {
+                                            Text("\(index + 1)")
+                                                .font(.caption2.weight(.bold))
+                                                .foregroundStyle(.white)
+                                                .padding(5)
+                                                .background(Theme.Palette.primary, in: Circle())
+                                                .padding(4)
+                                        }
+                                    }
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(index == nil ? Color.clear : Theme.Palette.primary, lineWidth: 2))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(index == nil ? "Photo, not selected" : "Photo, position \(index! + 1)")
+                            }
+                        }
+                        .padding()
+                        if let error { Text(error).font(.footnote).foregroundStyle(Theme.Palette.danger).padding(.horizontal) }
+                    }
+                }
+            }
+            .navigationTitle(entry.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "Saving…" : "Save") { Task { await save() } }
+                        .disabled(saving || media.isEmpty)
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func save() async {
+        saving = true
+        error = nil
+        defer { saving = false }
+        do {
+            _ = try await VehiclesAPI.setBuildEntryPhotos(vehicleId: vehicleId, entryId: entry.id, mediaIds: selected)
+            onSaved()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// Attach a receipt, invoice, warranty, dyno or alignment sheet to an entry
+/// or stage. The file goes to private storage through the same uploader as
+/// the rest of the app and never gets a public address.
+private struct BuildDocumentAttachSheet: View {
+    let vehicleId: String
+    let target: BuildDocumentTarget
+    let onSaved: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var kind: VehicleBuildDocumentKind = .receipt
+    @State private var picked: PickedAttachment?
+    @State private var showingFilePicker = false
+    @State private var photoItem: PhotosPickerItem?
+    @State private var uploading = false
+    @State private var progress: Double = 0
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Document type") {
+                    Picker("Type", selection: $kind) {
+                        ForEach(VehicleBuildDocumentKind.allCases) { Text($0.label).tag($0) }
+                    }
+                }
+                Section {
+                    Button("Choose a file (PDF or image)", systemImage: "doc.badge.plus") { showingFilePicker = true }
+                    PhotosPicker(selection: $photoItem, matching: .images) {
+                        Label("Choose from Photos", systemImage: "photo")
+                    }
+                    if let picked {
+                        Label(picked.filename, systemImage: picked.kind == .file ? "doc.text" : "photo")
+                            .font(.footnote)
+                    }
+                } footer: {
+                    Text("Documents are private to you. They are never shown on the public passport or shared with a buyer.")
+                }
+                if uploading {
+                    Section { ProgressView(value: progress) { Text("Uploading…") } }
+                }
+                if let error { Section { Text(error).foregroundStyle(Theme.Palette.danger) } }
+            }
+            .navigationTitle("Attach document")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(uploading ? "Uploading…" : "Attach") { Task { await attach() } }
+                        .disabled(uploading || picked == nil)
+                }
+            }
+            .fileImporter(isPresented: $showingFilePicker, allowedContentTypes: [.pdf, .jpeg, .png, .webP, .heic, .heif], allowsMultipleSelection: false) { result in
+                do {
+                    guard let url = try result.get().first else { return }
+                    picked = try AttachmentPickerSupport.loadFile(url)
+                    error = nil
+                } catch {
+                    self.error = "That file could not be read."
+                }
+            }
+            .onChange(of: photoItem) { _, item in
+                guard let item else { return }
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self) {
+                        picked = PickedAttachment(data: data, filename: "photo-\(UUID().uuidString).jpg", contentType: "image/jpeg", kind: .image)
+                        error = nil
+                    } else {
+                        error = "That photo could not be loaded."
+                    }
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func attach() async {
+        guard let picked else { return }
+        if picked.data.count > 25 * 1024 * 1024 {
+            error = "Documents can be up to 25 MB."
+            return
+        }
+        uploading = true
+        progress = 0
+        error = nil
+        defer { uploading = false }
+        do {
+            _ = try await VehiclesAPI.addBuildDocument(
+                vehicleId: vehicleId, data: picked.data, filename: picked.filename, contentType: picked.contentType,
+                kind: kind, entryId: target.entryId, stageId: target.stageId,
+                onProgress: { value in Task { @MainActor in progress = value } }
+            )
+            onSaved()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

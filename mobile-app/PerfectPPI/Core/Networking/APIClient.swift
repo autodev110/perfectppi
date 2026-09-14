@@ -19,6 +19,10 @@ final class APIClient {
 
     /// Called when a 401 comes back — typically used to sign the user out.
     var onUnauthorized: (@MainActor () async -> Void) = {}
+    /// Called when the server answers 403 `account_unavailable` — the account
+    /// is suspended or closed. The store swaps the whole UI for the
+    /// enforcement notice instead of surfacing a generic error.
+    var onAccountUnavailable: (@MainActor () async -> Void) = {}
 
     init(baseURL: URL = AppConfig.apiBaseURL, session: URLSession = .shared) {
         self.baseURL = baseURL
@@ -55,6 +59,10 @@ final class APIClient {
 
     func patch<B: Encodable, T: Decodable>(_ path: String, body: B) async throws -> T {
         try await send(method: "PATCH", path: path, query: [], body: body, encoder: encoder)
+    }
+
+    func put<B: Encodable, T: Decodable>(_ path: String, body: B) async throws -> T {
+        try await send(method: "PUT", path: path, query: [], body: body, encoder: encoder)
     }
 
     func patchCamel<B: Encodable, T: Decodable>(_ path: String, body: B) async throws -> T {
@@ -190,6 +198,9 @@ final class APIClient {
         case 403:
             if parsed?.error == nil && parsed?.code == nil {
                 throw APIError.forbidden
+            }
+            if parsed?.code == "account_unavailable" {
+                Task { await onAccountUnavailable() }
             }
             throw APIError.serverResponse(
                 status: http.statusCode,

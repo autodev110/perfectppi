@@ -5780,6 +5780,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_growth_accuracy_kpis: {
+        Args: { p_days?: number }
+        Returns: Json
+      }
       vehicle_build_stage_totals: {
         Args: { p_owner_profile_id: string; p_vehicle_id: string }
         Returns: { stage_id: string | null; entry_count: number; installed_count: number; parts_cents: number; labor_cents: number; labor_hours: number }[]
@@ -6276,6 +6280,7 @@ export type Database = {
           p_reason_code: string
           p_reporter_id: string
           p_revision_id: string
+          p_auto_hide?: boolean
         }
         Returns: Json
       }

@@ -19,6 +19,16 @@ export const PRODUCT_EVENT_NAMES = [
   "build_update_published",
   "maintenance_update_published",
   "answer_accepted",
+  // Renditions-doc KPIs: search, network activation, invite conversion,
+  // vehicle-profile accuracy, custom-build adoption.
+  "search_performed",
+  "contact_match_found",
+  "invite_shared",
+  "signup_from_invite",
+  "factory_spec_recorded",
+  "factory_conflict_refused",
+  "custom_build_declared",
+  "build_stage_created",
 ] as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];

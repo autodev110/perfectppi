@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { decodeFactorySpec, ensureFactorySpec, factoryConflictMessage, storeFactorySpec } from "@/features/vehicles/factory-spec";
+import { decodeFactorySpec, ensureFactorySpec, factoryConflictMessage, recordCustomBuildDeclared, storeFactorySpec } from "@/features/vehicles/factory-spec";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { getOwnedVehicle } from "@/features/vehicles/queries";
@@ -91,7 +91,7 @@ export async function PATCH(
     engine_original: effectiveOriginalEquipment[0],
     transmission_original: effectiveOriginalEquipment[1],
     drivetrain_original: effectiveOriginalEquipment[2],
-  });
+  }, existing.owner_id ?? undefined);
   if (conflict) return NextResponse.json({ error: conflict, code: "factory_conflict" }, { status: 400 });
 
   const { notes, ...vehicleFields } = parsed.data;
@@ -122,7 +122,8 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: "The vehicle could not be updated. Please try again." }, { status: 500 });
   }
-  if (vinChanged) await storeFactorySpec(id, factorySpec);
+  if (vinChanged) await storeFactorySpec(id, factorySpec, existing.owner_id ?? undefined);
+  if (existing.owner_id) recordCustomBuildDeclared(existing.owner_id, id, effectiveConfigurationType);
 
   if (notes !== undefined) {
     const { error: notesError } = notes

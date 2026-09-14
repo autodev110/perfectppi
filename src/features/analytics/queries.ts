@@ -160,3 +160,51 @@ export async function getProductSafetyAnalyticsSummary(days = 30): Promise<Produ
   if (!parsed.success) throw new Error("product_safety_analytics_summary_invalid");
   return parsed.data;
 }
+
+// Renditions-doc KPIs: search, network activation, invite conversion,
+// vehicle-profile accuracy, custom-build adoption. Counts and rates only.
+const growthAccuracyKpisSchema = z.object({
+  windowDays: z.number().int().positive(),
+  search: z.object({ searches: z.number().int().nonnegative(), searchers: z.number().int().nonnegative() }),
+  network: z.object({
+    contactMatches: z.number().int().nonnegative(),
+    membersWithContactMatches: z.number().int().nonnegative(),
+    activatedAfterContactMatch: z.number().int().nonnegative(),
+    activationRatePercent: z.number().nonnegative(),
+  }),
+  invites: z.object({
+    shared: z.number().int().nonnegative(),
+    inviters: z.number().int().nonnegative(),
+    signups: z.number().int().nonnegative(),
+    conversionRatePercent: z.number().nonnegative(),
+  }),
+  accuracy: z.object({
+    vehicles: z.number().int().nonnegative(),
+    vehiclesWithVin: z.number().int().nonnegative(),
+    vehiclesWithFactorySpec: z.number().int().nonnegative(),
+    factoryCoveragePercent: z.number().nonnegative(),
+    factorySpecsRecorded: z.number().int().nonnegative(),
+    factoryConflictsRefused: z.number().int().nonnegative(),
+    membersWithRefusedConflicts: z.number().int().nonnegative(),
+  }),
+  customBuilds: z.object({
+    declared: z.number().int().nonnegative(),
+    customBuildVehicles: z.number().int().nonnegative(),
+    modifiedVehicles: z.number().int().nonnegative(),
+    stagesCreated: z.number().int().nonnegative(),
+    membersCreatingStages: z.number().int().nonnegative(),
+    vehiclesWithStages: z.number().int().nonnegative(),
+  }),
+});
+
+export type GrowthAccuracyKpis = z.infer<typeof growthAccuracyKpisSchema>;
+
+export async function getGrowthAccuracyKpis(days = 30): Promise<GrowthAccuracyKpis> {
+  const { data, error } = await createAdminClient().rpc("get_growth_accuracy_kpis", {
+    p_days: Math.min(Math.max(Math.trunc(days), 1), 90),
+  });
+  if (error) throw new Error(`growth_accuracy_kpis_${error.code ?? "failed"}`);
+  const parsed = growthAccuracyKpisSchema.safeParse(data);
+  if (!parsed.success) throw new Error("growth_accuracy_kpis_invalid");
+  return parsed.data;
+}

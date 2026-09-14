@@ -22,6 +22,8 @@ struct RootView: View {
                 Button("Try Again") { Task { await auth.retryProfileLoad() } }
                 Button("Sign Out", role: .destructive) { Task { await auth.signOut() } }
             }
+        case .accountUnavailable:
+            AccountUnavailableView()
         case .signedIn(let profile):
             SignedInContainer(profile: profile)
         }

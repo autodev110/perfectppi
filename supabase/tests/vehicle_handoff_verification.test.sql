@@ -32,6 +32,12 @@ SELECT
   'previously_owned', now(), 'public', 145000, 'not_actual', 'Seller nickname'
 FROM handoff_actors;
 
+-- The factory layer (VIN-decoded, server-written) travels with the VIN.
+UPDATE public.vehicles
+SET factory_spec = '{"source":"nhtsa_vpic","vin":"1HGCM82633A004352","drive_type":"FWD","engine_model":"K24A4"}'::jsonb,
+    factory_spec_decoded_at = now()
+WHERE id = '8a000000-0000-0000-0000-000000000010';
+
 DO $$
 BEGIN
   IF has_function_privilege(
@@ -120,6 +126,10 @@ BEGIN
      OR v_buyer.configuration_type <> v_source.configuration_type
      OR v_buyer.engine_original <> v_source.engine_original THEN
     RAISE EXCEPTION 'vehicle identity/configuration was not copied';
+  END IF;
+  IF v_buyer.factory_spec IS DISTINCT FROM v_source.factory_spec
+     OR v_buyer.factory_spec_decoded_at IS NULL THEN
+    RAISE EXCEPTION 'factory spec did not travel with the VIN';
   END IF;
 END
 $$;

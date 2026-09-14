@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
+import { recordProductEvent } from "@/features/analytics/product-events";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildStageSchema, getOwnedVehicleTimelines, ownerCanManageVehicle } from "@/features/vehicles/timelines";
 
@@ -33,5 +34,6 @@ export async function POST(request: Request, { params }: Params) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: "The stage could not be saved" }, { status: 500 });
+  void recordProductEvent({ profileId: auth.profile.id, eventName: "build_stage_created", surface: "garage" });
   return NextResponse.json({ data }, { status: 201 });
 }

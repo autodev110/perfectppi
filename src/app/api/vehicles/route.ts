@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { getMyVehicles } from "@/features/vehicles/queries";
 import { recordProductEvent } from "@/features/analytics/product-events";
-import { decodeFactorySpec, factoryConflictMessage, storeFactorySpec } from "@/features/vehicles/factory-spec";
+import { decodeFactorySpec, factoryConflictMessage, recordCustomBuildDeclared, storeFactorySpec } from "@/features/vehicles/factory-spec";
 import { prefillFromFactory } from "@/lib/vehicles/factory-spec";
 
 export async function GET() {
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
     engine_original: originalEquipment[0],
     transmission_original: originalEquipment[1],
     drivetrain_original: originalEquipment[2],
-  });
+  }, profile.id);
   if (conflict) return NextResponse.json({ error: conflict, code: "factory_conflict" }, { status: 400 });
 
   const { data, error } = await supabase
@@ -152,7 +152,8 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-  if (factorySpec) await storeFactorySpec(data.id, factorySpec);
+  if (factorySpec) await storeFactorySpec(data.id, factorySpec, profile.id);
+  recordCustomBuildDeclared(profile.id, data.id, configurationType);
 
   if (notes) {
     const { error: notesError } = await supabase

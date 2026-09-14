@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { usernameSchema } from "@/features/profiles/username";
 import { recordProductEvent } from "@/features/analytics/product-events";
+import { INVITE_COOKIE } from "@/lib/analytics/invite";
 
 // Availability must work before an account exists (email signup), so this GET
 // is anonymous. Enumeration is bounded per source address with the same
@@ -110,6 +112,12 @@ export async function POST(request: Request) {
       surface: "profile",
       dedupeId: data.id,
     });
+    // Invite conversion (Renditions KPIs): counted once, then forgotten.
+    const cookieStore = await cookies();
+    if (cookieStore.get(INVITE_COOKIE)?.value === "1") {
+      await recordProductEvent({ profileId: data.id, eventName: "signup_from_invite", surface: "profile", dedupeId: data.id });
+      cookieStore.set(INVITE_COOKIE, "", { path: "/", maxAge: 0 });
+    }
   }
 
   return NextResponse.json(data);

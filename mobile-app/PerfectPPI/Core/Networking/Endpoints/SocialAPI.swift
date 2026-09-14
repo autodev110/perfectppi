@@ -28,6 +28,13 @@ enum SocialAPI {
     }
 
     private struct ContactDiscoveryPayload: Encodable { let hashes: [String] }
+    private struct ClientEventPayload: Encodable { let event: String }
+
+    /// Product events only the client can observe (a share sheet was opened).
+    /// Best effort; never blocks the user.
+    static func recordClientEvent(_ event: String) async {
+        let _: Empty? = try? await APIClient.shared.post("/api/analytics/client-events", body: ClientEventPayload(event: event))
+    }
 
     static func discoverContacts(hashes: [String]) async throws -> [ContactDiscoveryResult] {
         try await APIClient.shared.postCamel(

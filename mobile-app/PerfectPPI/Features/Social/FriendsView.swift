@@ -156,7 +156,8 @@ struct ContactDiscoveryView: View {
     @State private var permissionDenied = false
     @State private var error: String?
 
-    private let inviteURL = URL(string: "https://perfectppi.com/signup")!
+    /// Invite links carry `via=invite` so signups can be attributed (count only).
+    private let inviteURL = AppConfig.apiBaseURL.appendingPathComponent("signup").appending(queryItems: [URLQueryItem(name: "via", value: "invite")])
     private var matchedHashes: Set<String> { Set(matches.map(\.contactHash)) }
     private var inviteContacts: [ContactCandidate] {
         contacts.filter { Set($0.hashes).isDisjoint(with: matchedHashes) }
@@ -206,6 +207,7 @@ struct ContactDiscoveryView: View {
                                 subject: Text("Join me on PerfectPPI"),
                                 message: Text("Join me on PerfectPPI to share vehicles, builds, and inspections.")
                             ) { Text("Invite") }
+                            .simultaneousGesture(TapGesture().onEnded { Task { await SocialAPI.recordClientEvent("invite_shared") } })
                         }
                     }
                 }
@@ -216,6 +218,7 @@ struct ContactDiscoveryView: View {
                     ShareLink(item: inviteURL, subject: Text("Join me on PerfectPPI"), message: Text("Join me on PerfectPPI to share vehicles, builds, and inspections.")) {
                         Label("Share an invite", systemImage: "square.and.arrow.up")
                     }
+                    .simultaneousGesture(TapGesture().onEnded { Task { await SocialAPI.recordClientEvent("invite_shared") } })
                 }
             }
         }

@@ -18,6 +18,8 @@ final class AuthStore: ObservableObject {
         case loading
         case lockedBiometric
         case profileUnavailable
+        /// Suspended or closed account: the session is valid, product access is not.
+        case accountUnavailable
         case signedOut
         case signedIn(Profile)
     }
@@ -56,6 +58,10 @@ final class AuthStore: ObservableObject {
         }
         APIClient.shared.onUnauthorized = { [weak self] in
             await self?.signOut()
+        }
+        APIClient.shared.onAccountUnavailable = { [weak self] in
+            guard let self, case .signedIn = self.state else { return }
+            self.state = .accountUnavailable
         }
     }
 
@@ -260,6 +266,12 @@ final class AuthStore: ObservableObject {
             state = .signedIn(profile)
             await refreshCapabilities(force: true)
         } catch {
+            // A suspended or closed account is not a transient failure: show the
+            // enforcement notice rather than "check your connection".
+            if case .serverResponse(403, "account_unavailable", _, _) = error as? APIError ?? .unknown(error) {
+                state = .accountUnavailable
+                return
+            }
             // Preserve the keychain session during transient API/network failures.
             // Let the user retry without creating a second authentication session.
             if case .signedIn = state { return }

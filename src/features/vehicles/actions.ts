@@ -26,7 +26,7 @@ import {
   collectInspectionStorageReferences,
 } from "@/features/ppi/deletion";
 import { recordProductEvent } from "@/features/analytics/product-events";
-import { decodeFactorySpec, ensureFactorySpec, factoryConflictMessage, storeFactorySpec } from "@/features/vehicles/factory-spec";
+import { decodeFactorySpec, ensureFactorySpec, factoryConflictMessage, recordCustomBuildDeclared, storeFactorySpec } from "@/features/vehicles/factory-spec";
 import { prefillFromFactory } from "@/lib/vehicles/factory-spec";
 
 const createVehicleSchema = z.object({
@@ -169,7 +169,7 @@ export async function createVehicle(formData: FormData) {
     engine_original: originalEquipment[0],
     transmission_original: originalEquipment[1],
     drivetrain_original: originalEquipment[2],
-  });
+  }, profile.id);
   if (conflict) return { error: conflict };
 
   const insertData = {
@@ -206,7 +206,8 @@ export async function createVehicle(formData: FormData) {
     };
   }
   if (error) return { error: "The vehicle could not be saved. Please try again." };
-  if (factorySpec) await storeFactorySpec(data.id, factorySpec);
+  if (factorySpec) await storeFactorySpec(data.id, factorySpec, profile.id);
+  recordCustomBuildDeclared(profile.id, data.id, configurationType);
 
   if (notes) {
     const { error: notesError } = await supabase
@@ -276,7 +277,7 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
     engine_original: effectiveOriginalEquipment[0],
     transmission_original: effectiveOriginalEquipment[1],
     drivetrain_original: effectiveOriginalEquipment[2],
-  });
+  }, profile.profileId);
   if (conflict) return { error: conflict };
 
   const { notes, ...vehicleFields } = parsed.data;
@@ -302,7 +303,8 @@ export async function updateVehicle(vehicleId: string, formData: FormData) {
     return { error: "It looks like you already have a vehicle with this same VIN." };
   }
   if (error) return { error: "The vehicle could not be updated. Please try again." };
-  if (vinChanged) await storeFactorySpec(vehicleId, factorySpec);
+  if (vinChanged) await storeFactorySpec(vehicleId, factorySpec, profile.profileId);
+  recordCustomBuildDeclared(profile.profileId, vehicleId, effectiveConfigurationType);
 
   if (notes !== undefined) {
     const { error: notesError } = notes

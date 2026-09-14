@@ -2,6 +2,7 @@ import { Activity, Clock, Gauge, ShieldCheck, Target, UserCheck, Users } from "l
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/guards";
 import {
+  getGrowthAccuracyKpis,
   getOperationalQueryMetrics,
   getProductAnalyticsSummary,
   getProductSafetyAnalyticsSummary,
@@ -18,6 +19,14 @@ const eventLabels: Record<string, string> = {
   listing_saved: "Listings saved",
   seller_message_started: "Seller conversations started",
   inspection_requested: "Inspections requested",
+  search_performed: "Searches",
+  contact_match_found: "Contacts matched to members",
+  invite_shared: "Invites shared",
+  signup_from_invite: "Signups from invites",
+  factory_spec_recorded: "Factory specs recorded",
+  factory_conflict_refused: "Factory conflicts refused",
+  custom_build_declared: "Custom builds declared",
+  build_stage_created: "Build stages created",
   inspection_completed: "Inspections completed",
   group_joined: "Groups joined",
   community_post_published: "Community posts published",
@@ -53,10 +62,11 @@ function hours(value: number | null) {
 
 export default async function ProductAnalyticsPage() {
   await requireRole(["admin"]);
-  const [summary, quality, queryMetrics] = await Promise.all([
+  const [summary, quality, queryMetrics, growth] = await Promise.all([
     getProductAnalyticsSummary(30),
     getProductSafetyAnalyticsSummary(30),
     getOperationalQueryMetrics(),
+    getGrowthAccuracyKpis(30),
   ]);
   const activationRate = summary.eligibleNewProfiles > 0
     ? Math.round((summary.activatedNewProfiles / summary.eligibleNewProfiles) * 100)
@@ -118,6 +128,21 @@ export default async function ProductAnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <section className="space-y-4" aria-labelledby="growth-kpis-heading">
+        <div>
+          <h2 id="growth-kpis-heading" className="font-heading text-2xl font-extrabold">Growth and Garage accuracy</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Search, network activation, invite conversion, vehicle-profile accuracy, and custom-build adoption. Garage coverage counts the Garage as it stands; everything else is the last {growth.windowDays} days.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Search</p><p className="mt-2 text-3xl font-black">{growth.search.searches.toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">searches by {growth.search.searchers.toLocaleString()} members</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Network activation</p><p className="mt-2 text-3xl font-black">{growth.network.activationRatePercent}%</p><p className="mt-1 text-xs text-muted-foreground">{growth.network.activatedAfterContactMatch} of {growth.network.membersWithContactMatches} members became friends within 7 days of a contact match ({growth.network.contactMatches} matches)</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Invite conversion</p><p className="mt-2 text-3xl font-black">{growth.invites.conversionRatePercent}%</p><p className="mt-1 text-xs text-muted-foreground">{growth.invites.signups} signups from {growth.invites.shared} invites shared by {growth.invites.inviters} members</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Factory-spec coverage</p><p className="mt-2 text-3xl font-black">{growth.accuracy.factoryCoveragePercent}%</p><p className="mt-1 text-xs text-muted-foreground">{growth.accuracy.vehiclesWithFactorySpec} of {growth.accuracy.vehiclesWithVin} vehicles with a VIN · {growth.accuracy.factoryConflictsRefused} contradicting saves refused ({growth.accuracy.membersWithRefusedConflicts} members)</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Custom builds</p><p className="mt-2 text-3xl font-black">{growth.customBuilds.customBuildVehicles.toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">custom-build vehicles · {growth.customBuilds.modifiedVehicles} modified · {growth.customBuilds.declared} declared in window</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Build progression</p><p className="mt-2 text-3xl font-black">{growth.customBuilds.vehiclesWithStages.toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">vehicles with stages · {growth.customBuilds.stagesCreated} stages created by {growth.customBuilds.membersCreatingStages} members</p></CardContent></Card>
+        </div>
+      </section>
 
       <section className="space-y-4" aria-labelledby="product-outcomes-heading">
         <div>

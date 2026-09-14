@@ -2,6 +2,7 @@
 // that matches text first and applies the canonical visibility rules before
 // returning ids; this module hydrates the ids into the same shapes the
 // existing screens use, so nothing here invents a second visibility policy.
+import { recordProductEvent } from "@/features/analytics/product-events";
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -105,6 +106,11 @@ export async function unifiedSearch(
   const empty = (): UnifiedSearchPage => ({ tab, items: [], query, page: safePage, hasMore: false, nextCursor: null, suggestions: [] } as UnifiedSearchPage);
   if (query.length < SEARCH_MIN_LENGTH) return empty();
   const viewerId = await getCommunityViewerId();
+  // First page only, so paging through results is not counted as new
+  // searches; the query text is never stored.
+  if (viewerId && safePage === 1 && !cursor) {
+    void recordProductEvent({ profileId: viewerId, eventName: "search_performed", surface: "community" });
+  }
   if (!viewerId) return empty();
 
   const admin = createAdminClient();

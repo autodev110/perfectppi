@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import type { Json } from "@/types/database";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { createClient } from "@/lib/supabase/server";
 import {
   buildStorageKey,
@@ -136,6 +137,9 @@ export async function reportCommunityContent(formData: FormData): Promise<Report
   }
 
   const admin = createAdminClient();
+  // report_auto_hide (plan 3.4 / 30.2): the flag is environment-scoped and
+  // resolved here, so the transaction takes the decision as a parameter.
+  const autoHide = await isFeatureEnabled("report_auto_hide");
   const { data, error } = await admin.rpc("submit_moderation_report", {
     p_reporter_id: profile.id,
     p_entity_type: parsed.data.entityType,
@@ -144,6 +148,7 @@ export async function reportCommunityContent(formData: FormData): Promise<Report
     p_reason_code: parsed.data.reasonCode,
     p_details: parsed.data.details ?? null,
     p_idempotency_key: createHash("sha256").update(parsed.data.contextToken).digest("hex"),
+    p_auto_hide: autoHide,
   });
   if (error) return classifyReportError(error.message);
 

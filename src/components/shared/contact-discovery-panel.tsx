@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FriendActionButton } from "@/components/shared/friend-action-button";
+import { inviteSignupPath } from "@/lib/analytics/invite";
 
 type PickedContact = { name?: string[]; email?: string[]; tel?: string[] };
 type ContactNavigator = Navigator & {
@@ -18,7 +19,7 @@ type Match = {
   contact_hash: string;
 };
 
-const inviteUrl = "https://perfectppi.com/signup";
+const inviteUrl = `https://www.perfectppi.com${inviteSignupPath()}`;
 
 export function ContactDiscoveryPanel() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -78,6 +79,8 @@ export function ContactDiscoveryPanel() {
       await navigator.clipboard.writeText(inviteUrl);
       setMessage("Invite link copied.");
     }
+    // KPI: an invite was shared (no recipient details are sent).
+    void fetch("/api/analytics/client-events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: "invite_shared" }), keepalive: true }).catch(() => undefined);
   }
 
   return (

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { INVITE_COOKIE, INVITE_QUERY_PARAM, INVITE_QUERY_VALUE } from "@/lib/analytics/invite";
 
 // Routes that don't require authentication
 const PUBLIC_ROUTES = [
@@ -57,6 +58,7 @@ const USERNAME_PENDING_ROUTES = [
 // routes remain unavailable for the duration of the enforcement action.
 const ACCOUNT_UNAVAILABLE_ROUTES = [
   "/account-unavailable",
+  "/api/me/enforcement",
   "/terms",
   "/privacy",
   "/privacy-choices",
@@ -163,6 +165,14 @@ export async function middleware(request: NextRequest) {
   if (AUTH_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"))) {
     if (user) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    // Invite attribution (Renditions KPIs): a signup opened from a shared
+    // invite link is remembered until the profile is completed. The cookie
+    // carries no inviter identity — only that an invite brought them here.
+    if (pathname === "/signup" && request.nextUrl.searchParams.get(INVITE_QUERY_PARAM) === INVITE_QUERY_VALUE) {
+      supabaseResponse.cookies.set(INVITE_COOKIE, "1", {
+        httpOnly: true, sameSite: "lax", secure: request.nextUrl.protocol === "https:", path: "/", maxAge: 60 * 60 * 24 * 7,
+      });
     }
     return supabaseResponse;
   }

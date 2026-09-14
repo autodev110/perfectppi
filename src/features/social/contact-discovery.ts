@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { friendsDiscoveryEnabled, type PeopleSearchResult } from "@/features/social/friends";
 import { getCurrentSocialProfileId } from "@/features/social/relationships";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 const requestSchema = z.object({
   hashes: z.array(z.string().regex(/^[0-9a-f]{64}$/)).min(1).max(500),
@@ -63,6 +64,11 @@ export async function discoverContacts(input: unknown): Promise<{
   if (error) {
     console.error("contact discovery failed", error.message);
     return { error: "Contact suggestions are temporarily unavailable." };
+  }
+
+  // KPI: one match event per matched member (deduped), no identifiers stored.
+  for (const row of data ?? []) {
+    void recordProductEvent({ profileId, eventName: "contact_match_found", surface: "profile", dedupeId: row.profile_id });
   }
 
   return {
