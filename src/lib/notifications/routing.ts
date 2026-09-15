@@ -2,6 +2,9 @@
 // to open (plan 22.1: each item deep-links to a permission-checked
 // destination). Permission checks live in features/notifications/destinations;
 // this module only reads the type and data payload, so it is unit-testable.
+// Category copy comes from the message catalog (plan 32.2); relative import
+// so the node test runner can load this module without path aliases.
+import { DEFAULT_LOCALE, translate, type Locale, type MessageKey } from "../i18n/index.ts";
 
 export type NotificationDestinationKind =
   | "post"
@@ -30,15 +33,23 @@ export type NotificationDestinationIntent = {
 export const NOTIFICATION_CATEGORIES = ["social", "groups", "messages", "marketplace", "inspections", "safety", "account"] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
-export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, { label: string; description: string; locked: boolean }> = {
-  social: { label: "Community", description: "Friend requests, comments, mentions, likes, accepted answers, and saved vehicle build updates.", locked: false },
-  groups: { label: "Groups & events", description: "Group invitations and decisions, moderator actions, and updates or cancellations for events you follow.", locked: false },
-  messages: { label: "Messages", description: "New direct messages.", locked: false },
-  marketplace: { label: "Marketplace", description: "Inquiries and inspection requests on your listings, changes to listings you saved, and new matches for saved searches.", locked: false },
-  inspections: { label: "Inspections", description: "Technician assignments and report updates.", locked: false },
-  safety: { label: "Safety & moderation", description: "Report receipts, decisions, warnings, and restrictions. Always delivered.", locked: true },
-  account: { label: "Account", description: "Payments, security, and privacy requests. Always delivered.", locked: true },
-};
+const LOCKED_CATEGORIES: ReadonlySet<NotificationCategory> = new Set(["safety", "account"]);
+
+export function notificationCategoryMeta(
+  category: NotificationCategory,
+  locale: Locale = DEFAULT_LOCALE,
+): { label: string; description: string; locked: boolean } {
+  return {
+    label: translate(locale, `notifications.category.${category}.label` as MessageKey),
+    description: translate(locale, `notifications.category.${category}.description` as MessageKey),
+    locked: LOCKED_CATEGORIES.has(category),
+  };
+}
+
+/** Default-locale view for existing callers; request-aware code uses notificationCategoryMeta. */
+export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, { label: string; description: string; locked: boolean }> =
+  Object.fromEntries(NOTIFICATION_CATEGORIES.map((category) => [category, notificationCategoryMeta(category)])) as
+    Record<NotificationCategory, { label: string; description: string; locked: boolean }>;
 
 function str(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;

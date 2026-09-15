@@ -1,5 +1,7 @@
 import Foundation
 
+// User-facing wording is resolved through the string catalog (plan 32.2);
+// server `code` values stay machine codes and the catalog supplies the copy.
 enum APIError: LocalizedError {
     case notAuthenticated
     case forbidden
@@ -14,10 +16,10 @@ enum APIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notAuthenticated: return "You must sign in to continue."
-        case .forbidden: return "You don't have permission for that."
-        case .notFound: return "We couldn't find that record."
-        case .duplicateVehicle: return "It looks like you already have a vehicle with this same VIN."
+        case .notAuthenticated: return String(localized: "You must sign in to continue.")
+        case .forbidden: return String(localized: "You don't have permission for that.")
+        case .notFound: return String(localized: "We couldn't find that record.")
+        case .duplicateVehicle: return String(localized: "It looks like you already have a vehicle with this same VIN.")
         case .server(let status, let message):
             return Self.userFacingServerMessage(status: status, serverMessage: message)
         case .serverResponse(let status, let code, let message, let retryAfterSeconds):
@@ -28,9 +30,9 @@ enum APIError: LocalizedError {
                 retryAfterSeconds: retryAfterSeconds
             )
         case .transport(let e): return e.localizedDescription
-        case .decoding: return "Couldn't read the server response."
-        case .encoding: return "Couldn't build the request."
-        case .unknown: return "Something went wrong. Please try again."
+        case .decoding: return String(localized: "Couldn't read the server response.")
+        case .encoding: return String(localized: "Couldn't build the request.")
+        case .unknown: return String(localized: "Something went wrong. Please try again.")
         }
     }
 
@@ -44,30 +46,34 @@ enum APIError: LocalizedError {
         // pending-upload backlog is not mistaken for the posting rate limit.
         if code == "upload_backlog" {
             let minutes = max(1, Int(ceil(Double(retryAfterSeconds ?? 600) / 60.0)))
-            return "Too many photo uploads are still pending from earlier attempts. Wait about \(minutes) minute\(minutes == 1 ? "" : "s") and try again, or post without photos."
+            return minutes == 1
+                ? String(localized: "Too many photo uploads are still pending from earlier attempts. Wait about a minute and try again, or post without photos.")
+                : String(localized: "Too many photo uploads are still pending from earlier attempts. Wait about \(minutes) minutes and try again, or post without photos.")
         }
         if code == "rate_limited" || status == 429 {
             if let retryAfterSeconds, retryAfterSeconds > 0 {
                 if retryAfterSeconds < 60 {
-                    return "You're doing that too quickly. Try again in less than a minute."
+                    return String(localized: "You're doing that too quickly. Try again in less than a minute.")
                 }
                 let minutes = Int(ceil(Double(retryAfterSeconds) / 60.0))
-                return "You're doing that too quickly. Try again in about \(minutes) minute\(minutes == 1 ? "" : "s")."
+                return minutes == 1
+                    ? String(localized: "You're doing that too quickly. Try again in about a minute.")
+                    : String(localized: "You're doing that too quickly. Try again in about \(minutes) minutes.")
             }
-            return "You're doing that too quickly. Please wait a few minutes and try again."
+            return String(localized: "You're doing that too quickly. Please wait a few minutes and try again.")
         }
 
         let knownCodes: [String: String] = [
-            "validation_failed": "Please check the information and try again.",
-            "unsafe_link": "That link cannot be used. Remove it or enter a standard web address.",
-            "duplicate_content": "You just submitted the same content. Edit it before trying again.",
-            "content_not_allowed": "This content cannot be published because it doesn't follow the Community Guidelines.",
-            "invalid_media": "One of the selected files could not be used. Try a different photo.",
-            "media_safety_unavailable": "Photo publishing is temporarily unavailable. You can still post text.",
-            "posting_restricted": "Community posting is currently unavailable for this account.",
-            "unauthorized_audience": "You cannot publish to the selected audience.",
-            "posting_unavailable": "Community posting is temporarily unavailable. Please try again later.",
-            "unsupported_media": "Video posts are not available yet. Please choose photos only."
+            "validation_failed": String(localized: "Please check the information and try again."),
+            "unsafe_link": String(localized: "That link cannot be used. Remove it or enter a standard web address."),
+            "duplicate_content": String(localized: "You just submitted the same content. Edit it before trying again."),
+            "content_not_allowed": String(localized: "This content cannot be published because it doesn't follow the Community Guidelines."),
+            "invalid_media": String(localized: "One of the selected files could not be used. Try a different photo."),
+            "media_safety_unavailable": String(localized: "Photo publishing is temporarily unavailable. You can still post text."),
+            "posting_restricted": String(localized: "Community posting is currently unavailable for this account."),
+            "unauthorized_audience": String(localized: "You cannot publish to the selected audience."),
+            "posting_unavailable": String(localized: "Community posting is temporarily unavailable. Please try again later."),
+            "unsupported_media": String(localized: "Video posts are not available yet. Please choose photos only.")
         ]
         if let code, let message = knownCodes[code] { return message }
 
@@ -80,9 +86,9 @@ enum APIError: LocalizedError {
 
         switch status {
         case 400..<500:
-            return "We couldn't complete that request. Check the information and try again."
+            return String(localized: "We couldn't complete that request. Check the information and try again.")
         default:
-            return "The service is temporarily unavailable. Please try again."
+            return String(localized: "The service is temporarily unavailable. Please try again.")
         }
     }
 

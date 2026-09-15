@@ -5,20 +5,22 @@
 //   * the reporter never learns the outcome, other reports, or enforcement;
 //   * push payloads carry no policy category, report reason, reporter
 //     identity, or content text — the in-app record holds the detail.
+// Copy comes from the message catalog (plan 32.2). Relative import so the
+// node test runner can load this module without path aliases.
+import { t, translate, DEFAULT_LOCALE, type Locale, type MessageKey } from "../../lib/i18n/index.ts";
 
-export const REPORT_REASON_LABELS_FOR_AUTHOR: Record<string, string> = {
-  spam: "Spam or misleading content",
-  harassment: "Harassment or bullying",
-  hate: "Hate or dehumanizing content",
-  violence: "Violence, threats, or encouragement of harm",
-  sexual_content: "Nudity or sexual content",
-  personal_information: "Personal or private information",
-  fraud: "Scam, fraud, or unsafe transaction",
-  illegal_content: "Illegal or dangerous activity",
-  dangerous_vehicle_advice: "Dangerous vehicle or repair advice",
-  intellectual_property: "Copyright or other intellectual-property issue",
-  other: "Community Guidelines",
-};
+const POLICY_CODES = new Set([
+  "spam", "harassment", "hate", "violence", "sexual_content", "personal_information",
+  "fraud", "illegal_content", "dangerous_vehicle_advice", "intellectual_property",
+]);
+
+/** The policy wording an author sees; unknown codes read as the general guidelines. */
+export function policyLabelForAuthor(policyCategory: string | null | undefined, locale: Locale = DEFAULT_LOCALE): string {
+  const code = policyCategory ?? "other";
+  return POLICY_CODES.has(code)
+    ? translate(locale, `report.reason.${code}` as MessageKey)
+    : translate(locale, "policy.community_guidelines");
+}
 
 export type NotificationDraft = {
   title: string;
@@ -27,19 +29,10 @@ export type NotificationDraft = {
   push: { title: string; body: string; data: Record<string, unknown> } | null;
 };
 
-const ENTITY_NOUNS: Record<string, string> = {
-  community_post: "post",
-  community_comment: "comment",
-  profile: "profile",
-  group: "group",
-  listing: "listing",
-  review: "review",
-  message: "message",
-  media: "photo",
-};
+const ENTITY_TYPES = new Set(["community_post", "community_comment", "profile", "group", "listing", "review", "message", "media"]);
 
-function entityNoun(entityType: string) {
-  return ENTITY_NOUNS[entityType] ?? "content";
+function entityNoun(entityType: string, locale: Locale) {
+  return translate(locale, (ENTITY_TYPES.has(entityType) ? `entity.${entityType}` : "entity.unknown") as MessageKey);
 }
 
 // Appeals exist only for Community posts (open_moderation_appeal); every other
@@ -48,8 +41,8 @@ function appealable(entityType: string) {
   return entityType === "community_post";
 }
 
-function removedScope(entityType: string) {
-  return entityType === "listing" ? "the Marketplace" : entityType === "message" ? "the conversation" : "the Community";
+function removedScope(entityType: string, locale: Locale) {
+  return translate(locale, entityType === "listing" ? "scope.marketplace" : entityType === "message" ? "scope.conversation" : "scope.community");
 }
 
 export function authorRestoredMessage(input: {
@@ -57,15 +50,17 @@ export function authorRestoredMessage(input: {
   caseId: string;
   entityType: string;
   entityId: string;
+  locale?: Locale;
 }): NotificationDraft {
-  const noun = entityNoun(input.entityType);
+  const locale = input.locale ?? DEFAULT_LOCALE;
+  const noun = entityNoun(input.entityType, locale);
   return {
-    title: `Your ${noun} is visible again`,
-    body: `Our team reviewed a report on your ${noun} and found no violation. It has been restored to its original audience.`,
+    title: translate(locale, "notice.author_restored.title", { noun }),
+    body: translate(locale, "notice.author_restored.body", { noun }),
     data: { kind: "author_restored", outboxId: input.outboxId, caseId: input.caseId, entityType: input.entityType, entityId: input.entityId },
     push: {
-      title: `Your ${noun} is visible again`,
-      body: "A moderation review is complete.",
+      title: translate(locale, "notice.author_restored.title", { noun }),
+      body: translate(locale, "notice.author_restored.push_body"),
       data: { kind: "moderation_decision", entityType: input.entityType, entityId: input.entityId },
     },
   };
@@ -78,42 +73,45 @@ export function authorRemovedMessage(input: {
   entityId: string;
   policyCategory: string | null;
   decidedAt: string;
+  locale?: Locale;
 }): NotificationDraft {
-  const noun = entityNoun(input.entityType);
-  const policy = REPORT_REASON_LABELS_FOR_AUTHOR[input.policyCategory ?? "other"] ?? "Community Guidelines";
+  const locale = input.locale ?? DEFAULT_LOCALE;
+  const noun = entityNoun(input.entityType, locale);
   const canAppeal = appealable(input.entityType);
   return {
-    title: `Your ${noun} was removed from ${removedScope(input.entityType)}`,
-    body: `Our team removed your ${noun} for: ${policy}. ${canAppeal
-      ? "You can appeal this decision from My Posts."
-      : "If you believe this was a mistake, contact support from Settings."}`,
+    title: translate(locale, "notice.author_removed.title", { noun, scope: removedScope(input.entityType, locale) }),
+    body: translate(locale, "notice.author_removed.body", {
+      noun,
+      policy: policyLabelForAuthor(input.policyCategory, locale),
+      next_step: translate(locale, canAppeal ? "notice.author_removed.appeal" : "notice.author_removed.support"),
+    }),
     data: {
       kind: "author_removed", outboxId: input.outboxId, caseId: input.caseId, entityType: input.entityType,
       entityId: input.entityId, policyCategory: input.policyCategory, decidedAt: input.decidedAt, appealable: canAppeal,
     },
     push: {
-      title: `A moderation decision was made on your ${noun}`,
-      body: "Open PerfectPPI to see the details and your options.",
+      title: translate(locale, "notice.author_removed.push_title", { noun }),
+      body: translate(locale, "notice.author_removed.push_body"),
       data: { kind: "moderation_decision", entityType: input.entityType, entityId: input.entityId },
     },
   };
 }
 
-export function reportReceivedMessage(input: { outboxId: string; caseId: string; hidden: boolean }): NotificationDraft {
+export function reportReceivedMessage(input: { outboxId: string; caseId: string; hidden: boolean; locale?: Locale }): NotificationDraft {
+  const locale = input.locale ?? DEFAULT_LOCALE;
   return {
-    title: "Report received",
-    body: input.hidden
-      ? "Thank you. The content is hidden while the PerfectPPI team reviews it."
-      : "Thank you. Your report has been recorded and will be reviewed.",
+    title: translate(locale, "notice.report_received.title"),
+    body: translate(locale, input.hidden ? "notice.report_received.hidden" : "notice.report_received.recorded"),
     data: { kind: "report_received", outboxId: input.outboxId, caseId: input.caseId },
     push: null,
   };
 }
 
-export function reporterReviewCompleteMessage(input: { outboxId: string; caseId: string }): NotificationDraft {
+export function reporterReviewCompleteMessage(input: { outboxId: string; caseId: string; locale?: Locale }): NotificationDraft {
+  const locale = input.locale ?? DEFAULT_LOCALE;
   return {
-    title: "Our review is complete",
-    body: "The PerfectPPI team has finished reviewing the content you reported. Thank you for helping keep the Community safe.",
+    title: translate(locale, "notice.reporter_review_complete.title"),
+    body: translate(locale, "notice.reporter_review_complete.body"),
     data: { kind: "reporter_review_complete", outboxId: input.outboxId, caseId: input.caseId },
     push: null,
   };
@@ -136,26 +134,26 @@ export function moderatorAlertMessage(input: {
   let body: string;
   switch (input.eventType) {
     case "case_escalated":
-      title = `Urgent: case ${short} needs immediate review`;
+      title = t("notice.moderator.escalated.title", { case: short });
       body = input.reason === "legal_hold"
-        ? "A case was escalated under legal hold and requires a designated reviewer."
-        : `Priority ${input.priority ?? "urgent"} case awaiting review.`;
+        ? t("notice.moderator.escalated.legal_hold")
+        : t("notice.moderator.escalated.priority", { priority: input.priority ?? "urgent" });
       break;
     case "sla_alert":
       title = input.stage === "overdue"
-        ? `Overdue: case ${short} passed its review target`
+        ? t("notice.moderator.sla.overdue", { case: short })
         : input.stage === "urgent_unacknowledged"
-          ? `Unacknowledged urgent case ${short}`
-          : `Case ${short} is due soon`;
-      body = input.slaDueAt ? `Review target: ${input.slaDueAt}.` : "Review target approaching.";
+          ? t("notice.moderator.sla.urgent_unacknowledged", { case: short })
+          : t("notice.moderator.sla.due_soon", { case: short });
+      body = input.slaDueAt ? t("notice.moderator.sla.target", { due: input.slaDueAt }) : t("notice.moderator.sla.approaching");
       break;
     case "queue_backlog":
-      title = input.sustained ? "Moderation backlog sustained for 2+ hours" : "Moderation backlog above guardrail";
-      body = `${input.openCases ?? 0} open cases, ${input.casesOver24h ?? 0} older than 24 hours. Pause beta expansion per plan 20.3 if this continues.`;
+      title = t(input.sustained ? "notice.moderator.backlog.sustained" : "notice.moderator.backlog.title");
+      body = t("notice.moderator.backlog.body", { open: input.openCases ?? 0, stale: input.casesOver24h ?? 0 });
       break;
     default:
-      title = input.reason === "appeal" ? `Appeal opened on case ${short}` : `New case ${short} in the queue`;
-      body = `Priority ${input.priority ?? "normal"}.`;
+      title = input.reason === "appeal" ? t("notice.moderator.appeal_opened", { case: short }) : t("notice.moderator.new_case", { case: short });
+      body = t("notice.moderator.priority", { priority: input.priority ?? "normal" });
   }
   return {
     title,

@@ -423,7 +423,8 @@ struct NotificationLinkView: View {
                 } else {
                     EmptyStateCard(
                         title: "This content is no longer available",
-                        message: destination.message ?? "It may have been removed, made private, or is not accessible to your account.",
+                        message: destination.message.map { LocalizedStringKey($0) }
+                            ?? "It may have been removed, made private, or is not accessible to your account.",
                         systemImage: "bell.slash"
                     )
                     .padding()

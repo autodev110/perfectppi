@@ -112,7 +112,10 @@ test("expanded UGC report controls ship on web and iOS", () => {
     "utf8",
   );
   assert.match(web, /\/api\/community\/reports\/extended/);
-  assert.match(web, /Report received\. This/);
+  // The confirmation copy is catalog-backed (plan 32.2); the control renders the key.
+  assert.match(web, /t\("report\.control\.received"/);
+  const catalog = readFileSync(new URL("../../src/lib/i18n/messages/en.ts", import.meta.url), "utf8");
+  assert.match(catalog, /"report\.control\.received": "Report received\. This \{entity\} is hidden/);
   assert.match(ios, /struct ExtendedReportButton/);
   assert.match(ios, /CommunityAPI\.reportExtended/);
 });

@@ -1,7 +1,9 @@
 // Author-facing wording for account enforcement (plan 17.4, 18.6, 31.4).
 // Pure so the privacy rules are testable: the member learns the action, the
 // policy category, and the duration — never who reported, how many did, or
-// the reporter's words.
+// the reporter's words. Copy comes from the message catalog (plan 32.2).
+// Relative so the node test runner can load this module without path aliases.
+import { DEFAULT_LOCALE, t, translate, type Locale, type MessageKey } from "../i18n/index.ts";
 
 export type EnforcementActionType =
   | "warning"
@@ -19,53 +21,54 @@ export type EnforcementAction = {
   ends_at: string | null;
 };
 
-const POLICY_LABELS: Record<string, string> = {
-  spam: "Spam or misleading content",
-  harassment: "Harassment or bullying",
-  hate: "Hate or dehumanizing content",
-  violence: "Violence, threats, or encouragement of harm",
-  sexual_content: "Nudity or sexual content",
-  personal_information: "Personal or private information",
-  fraud: "Scam, fraud, or unsafe transaction",
-  illegal_content: "Illegal or dangerous activity",
-  dangerous_vehicle_advice: "Dangerous vehicle or repair advice",
-  intellectual_property: "Copyright or other intellectual-property issue",
-  repeat_violations: "Repeated Community Guidelines violations",
-  other: "Community Guidelines",
-};
+const POLICY_CODES = new Set([
+  "spam", "harassment", "hate", "violence", "sexual_content", "personal_information",
+  "fraud", "illegal_content", "dangerous_vehicle_advice", "intellectual_property",
+]);
 
-export const ENFORCEMENT_ACTION_LABELS: Record<EnforcementActionType, string> = {
-  warning: "Warning",
-  temporary_posting_hold: "Posting paused",
-  media_upload_hold: "Photo uploads paused",
-  reporting_hold: "Reporting paused",
-  suspension: "Account suspended",
-  ban: "Account permanently closed",
-};
+export const ENFORCEMENT_ACTION_TYPES: readonly EnforcementActionType[] = [
+  "warning", "temporary_posting_hold", "media_upload_hold", "reporting_hold", "suspension", "ban",
+];
+
+/** Default-locale labels for existing callers; request-aware code passes a locale to actionLabel. */
+export const ENFORCEMENT_ACTION_LABELS: Record<EnforcementActionType, string> = Object.fromEntries(
+  ENFORCEMENT_ACTION_TYPES.map((type) => [type, t(`enforcement.action.${type}`)]),
+) as Record<EnforcementActionType, string>;
 
 /** Actions that make the whole product unavailable (everything else limits one feature). */
 export function blocksAccountAccess(actionType: string): boolean {
   return actionType === "suspension" || actionType === "ban";
 }
 
-export function policyLabel(reasonCode: string | null | undefined): string {
-  return POLICY_LABELS[reasonCode ?? "other"] ?? POLICY_LABELS.other;
+export function policyLabel(reasonCode: string | null | undefined, locale: Locale = DEFAULT_LOCALE): string {
+  const code = reasonCode ?? "other";
+  if (POLICY_CODES.has(code)) return translate(locale, `report.reason.${code}` as MessageKey);
+  if (code === "repeat_violations") return translate(locale, "policy.repeat_violations");
+  return translate(locale, "policy.community_guidelines");
 }
 
-export function actionLabel(actionType: string): string {
-  return (ENFORCEMENT_ACTION_LABELS as Record<string, string>)[actionType] ?? "Account restriction";
+export function actionLabel(actionType: string, locale: Locale = DEFAULT_LOCALE): string {
+  return (ENFORCEMENT_ACTION_TYPES as readonly string[]).includes(actionType)
+    ? translate(locale, `enforcement.action.${actionType}` as MessageKey)
+    : translate(locale, "enforcement.action.unknown");
 }
 
 /** "until Sep 20, 2026", "for the next 3 days", or "indefinitely". */
-export function durationLabel(action: Pick<EnforcementAction, "ends_at" | "action_type">, now: Date = new Date()): string {
-  if (!action.ends_at) return action.action_type === "ban" ? "permanently" : "until further notice";
+export function durationLabel(
+  action: Pick<EnforcementAction, "ends_at" | "action_type">,
+  now: Date = new Date(),
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  if (!action.ends_at) {
+    return translate(locale, action.action_type === "ban" ? "enforcement.duration.permanently" : "enforcement.duration.until_further_notice");
+  }
   const end = new Date(action.ends_at);
   const days = Math.ceil((end.getTime() - now.getTime()) / 86_400_000);
-  const date = end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  if (days <= 0) return "until it is reviewed";
-  if (days === 1) return `until tomorrow (${date})`;
-  if (days <= 14) return `for ${days} more days (until ${date})`;
-  return `until ${date}`;
+  const date = end.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" });
+  if (days <= 0) return translate(locale, "enforcement.duration.until_reviewed");
+  if (days === 1) return translate(locale, "enforcement.duration.until_tomorrow", { date });
+  if (days <= 14) return translate(locale, "enforcement.duration.for_days", { days, date });
+  return translate(locale, "enforcement.duration.until_date", { date });
 }
 
 export type EnforcementNotice = {
@@ -78,60 +81,29 @@ export type EnforcementNotice = {
 };
 
 /** The notice for the most severe active action; null when nothing is active. */
-export function enforcementNotice(actions: EnforcementAction[], now: Date = new Date()): EnforcementNotice | null {
+export function enforcementNotice(
+  actions: EnforcementAction[],
+  now: Date = new Date(),
+  locale: Locale = DEFAULT_LOCALE,
+): EnforcementNotice | null {
   const severity: Record<string, number> = { ban: 6, suspension: 5, temporary_posting_hold: 4, media_upload_hold: 3, reporting_hold: 2, warning: 1 };
   const active = actions
     .filter((action) => new Date(action.starts_at) <= now && (!action.ends_at || new Date(action.ends_at) > now))
     .sort((a, b) => (severity[b.action_type] ?? 0) - (severity[a.action_type] ?? 0));
   const top = active[0];
   if (!top) return null;
-  const policy = policyLabel(top.reason_code);
-  const duration = durationLabel(top, now);
-  const nextStep = top.action_type === "ban"
-    ? "If you believe this decision is wrong, contact support and ask for a review. Include the email on your account."
-    : "If you believe this decision is wrong, contact support and ask for a review.";
-  switch (top.action_type) {
-    case "ban":
-      return {
-        title: "Your account has been permanently closed",
-        body: `A review found content or behavior that violates our policy on ${policy.toLowerCase()}. Product access is closed ${duration}.`,
-        stillAvailable: "You can still read our policies, contact support, and exercise your privacy rights, including requesting your data.",
-        nextStep,
-      };
-    case "suspension":
-      return {
-        title: "Your account is suspended",
-        body: `A review found content or behavior that violates our policy on ${policy.toLowerCase()}. Product access is paused ${duration}.`,
-        stillAvailable: "You can still read our policies, contact support, and exercise your privacy rights. Your vehicles, posts, and messages are kept.",
-        nextStep,
-      };
-    case "temporary_posting_hold":
-      return {
-        title: "Posting is paused",
-        body: `Because of a decision about ${policy.toLowerCase()}, you can't publish posts or comments ${duration}.`,
-        stillAvailable: "You can still browse, read, message friends, and manage your Garage.",
-        nextStep,
-      };
-    case "media_upload_hold":
-      return {
-        title: "Photo uploads are paused",
-        body: `Because of a decision about ${policy.toLowerCase()}, you can't upload photos to Community ${duration}.`,
-        stillAvailable: "Text posts, comments, messages, and your Garage still work.",
-        nextStep,
-      };
-    case "reporting_hold":
-      return {
-        title: "Reporting is paused",
-        body: `Repeated reports that did not identify a violation have paused your ability to report content ${duration}.`,
-        stillAvailable: "Everything else works normally. Blocking and muting are always available.",
-        nextStep,
-      };
-    default:
-      return {
-        title: "A warning is on your account",
-        body: `A review found content that goes against our policy on ${policy.toLowerCase()}. Further violations can lead to restrictions.`,
-        stillAvailable: "Nothing is restricted right now.",
-        nextStep,
-      };
-  }
+  const params = { policy: policyLabel(top.reason_code, locale).toLowerCase(), duration: durationLabel(top, now, locale) };
+  const nextStep = translate(locale, top.action_type === "ban" ? "enforcement.next_step.ban" : "enforcement.next_step");
+  const kind = top.action_type === "ban" ? "ban"
+    : top.action_type === "suspension" ? "suspension"
+      : top.action_type === "temporary_posting_hold" ? "posting_hold"
+        : top.action_type === "media_upload_hold" ? "media_hold"
+          : top.action_type === "reporting_hold" ? "reporting_hold"
+            : "warning";
+  return {
+    title: translate(locale, `enforcement.${kind}.title` as MessageKey),
+    body: translate(locale, `enforcement.${kind}.body` as MessageKey, params),
+    stillAvailable: translate(locale, `enforcement.${kind}.still_available` as MessageKey),
+    nextStep,
+  };
 }

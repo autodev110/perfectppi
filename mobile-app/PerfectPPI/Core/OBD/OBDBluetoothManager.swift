@@ -522,11 +522,11 @@ enum OBDError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConnected: return "Adapter is not connected."
-        case .busy: return "Another command is still in flight."
-        case .encoding: return "Could not encode command."
-        case .timeout(let c): return "Adapter didn't respond to \(c) in time."
-        case .disconnected: return "Adapter disconnected mid-command."
+        case .notConnected: return String(localized: "Adapter is not connected.")
+        case .busy: return String(localized: "Another command is still in flight.")
+        case .encoding: return String(localized: "Could not encode command.")
+        case .timeout(let c): return String(localized: "Adapter didn't respond to \(c) in time.")
+        case .disconnected: return String(localized: "Adapter disconnected mid-command.")
         case .adapterError(let m): return m
         }
     }

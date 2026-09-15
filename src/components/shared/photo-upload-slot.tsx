@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, Loader2, RotateCw, X } from "lucide-react";
+import { useTranslator } from "@/lib/i18n/client";
 import type { UploadStage } from "@/lib/uploads/upload-photo";
 
 export type PendingUpload = {
@@ -22,18 +23,19 @@ export type PendingUpload = {
 export function PhotoUploadSlot({ upload, onRetry, onRemove }: { upload: PendingUpload; onRetry: () => void; onRemove: () => void }) {
   const failed = upload.stage === "failed";
   const done = upload.stage === "done";
+  const t = useTranslator();
   const label = upload.stage === "preparing"
-    ? "Preparing…"
+    ? t("upload.preparing")
     : upload.stage === "uploading"
-      ? `Uploading ${upload.percent}%`
+      ? t("upload.uploading", { percent: upload.percent })
       : upload.stage === "processing"
-        ? "Processing…"
-        : done ? "Uploaded" : "Failed";
+        ? t("upload.processing")
+        : done ? t("upload.uploaded") : t("upload.failed");
   return (
     <div
       className="relative aspect-[4/3] overflow-hidden rounded-xl border bg-secondary"
       role="group"
-      aria-label={failed ? `Photo upload failed: ${upload.error ?? ""}` : label}
+      aria-label={failed ? t("upload.failed_reason", { reason: upload.error ?? "" }) : label}
       aria-live="polite"
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -54,16 +56,16 @@ export function PhotoUploadSlot({ upload, onRetry, onRemove }: { upload: Pending
         <div className="absolute inset-0 flex flex-col justify-end gap-2 bg-black/60 p-3 text-white">
           <p className="flex items-start gap-1.5 text-xs font-medium leading-snug">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" />
-            <span>{upload.error ?? "Photo upload failed."}</span>
+            <span>{upload.error ?? t("upload.failed_generic")}</span>
           </p>
           <div className="flex gap-2">
             {upload.retryable ? (
               <button type="button" onClick={onRetry} className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-white px-2 py-1.5 text-xs font-bold text-black">
-                <RotateCw className="h-3 w-3" />Retry
+                <RotateCw className="h-3 w-3" />{t("upload.retry")}
               </button>
             ) : null}
             <button type="button" onClick={onRemove} className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-white/50 px-2 py-1.5 text-xs font-bold text-white">
-              <X className="h-3 w-3" />Remove
+              <X className="h-3 w-3" />{t("upload.remove")}
             </button>
           </div>
         </div>

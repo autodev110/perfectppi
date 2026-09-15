@@ -172,8 +172,11 @@ struct ErrorView: View {
 /// render a blank screen because the underlying API returned no rows.
 /// Lives in the design system so every feature can drop it in.
 struct EmptyStateCard: View {
-    let title: String
-    let message: String
+    // LocalizedStringKey so every call site's literal is extracted into the
+    // string catalog (plan 32.2); dynamic text is wrapped in
+    // LocalizedStringKey(_:) and falls back to itself when untranslated.
+    let title: LocalizedStringKey
+    let message: LocalizedStringKey
     let systemImage: String
 
     var body: some View {

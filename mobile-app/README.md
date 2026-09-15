@@ -134,6 +134,29 @@ xcodebuild \
    Keep the Push Notifications capability in `project.yml` and let Xcode apply
    the App Store provisioning profile during TestFlight export.
 
+## Localization
+
+UI copy is written as SwiftUI string literals (`Text`, `Button`, `Label`,
+`.navigationTitle`, `.accessibilityLabel`, …), which are `LocalizedStringKey`s.
+`SWIFT_EMIT_LOC_STRINGS` in `project.yml` makes the compiler extract every one
+of them, and `PerfectPPI/Resources/Localizable.xcstrings` is the string
+catalog that holds them. Copy the app produces as plain `String` values
+(error descriptions, report reason labels) goes through `String(localized:)`,
+and shared components such as `EmptyStateCard` take `LocalizedStringKey` so
+their call sites are extracted too.
+
+Xcode keeps the catalog in sync while you build in the IDE. From the command
+line, run the same sync after a build:
+
+```bash
+python3 scripts/sync-string-catalog.py           # add newly extracted strings
+python3 scripts/sync-string-catalog.py --check   # CI: fail if the catalog is behind
+```
+
+Adding a language is a catalog change (add the locale in Xcode's catalog
+editor or fill `localizations.<lang>.stringUnit.value` per key) — no code
+change. Untranslated keys fall back to the English source text.
+
 ## Testing
 
 - **Camera, Face ID, push:** real device only (simulator fakes the camera and

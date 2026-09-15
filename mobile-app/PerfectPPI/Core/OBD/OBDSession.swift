@@ -10,7 +10,7 @@ final class OBDSession: ObservableObject {
         case vinUnavailable
 
         var errorDescription: String? {
-            "The vehicle did not return a valid 17-character VIN. Check the ignition and try again."
+            String(localized: "The vehicle did not return a valid 17-character VIN. Check the ignition and try again.")
         }
     }
 

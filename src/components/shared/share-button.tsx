@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Link2, Share2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslator } from "@/lib/i18n/client";
 
 // Share (plan 15.4): the native share sheet where the browser has one,
 // otherwise copy the link. The link is the canonical page, so whoever opens
@@ -20,6 +21,7 @@ export function ShareButton({
   className?: string;
 }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const t = useTranslator();
 
   async function share() {
     const shareOrigin = process.env.NEXT_PUBLIC_SITE_URL || "https://perfectppi.com";
@@ -50,10 +52,10 @@ export function ShareButton({
         compact ? "px-1" : "",
         className,
       )}
-      aria-label="Share"
+      aria-label={t("share.action")}
     >
       <Icon className="h-4 w-4" />
-      {compact ? null : state === "copied" ? "Link copied" : state === "failed" ? "Copy failed" : "Share"}
+      {compact ? null : t(state === "copied" ? "share.copied" : state === "failed" ? "share.copy_failed" : "share.action")}
     </button>
   );
 }

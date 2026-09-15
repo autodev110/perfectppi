@@ -20,7 +20,7 @@ enum AppleSignIn {
         case missingIdentityToken
 
         var errorDescription: String? {
-            "Apple did not return a sign-in token. Please try again."
+            String(localized: "Apple did not return a sign-in token. Please try again.")
         }
     }
 

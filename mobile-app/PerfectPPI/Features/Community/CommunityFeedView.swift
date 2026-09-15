@@ -297,7 +297,7 @@ struct CommunityFeedView: View {
         }
     }
 
-    private var emptyTitle: String {
+    private var emptyTitle: LocalizedStringKey {
         switch feedFilter {
         case .all: "Community is quiet"
         case .friends: "No posts from friends yet"
@@ -305,7 +305,7 @@ struct CommunityFeedView: View {
         }
     }
 
-    private var emptyMessage: String {
+    private var emptyMessage: LocalizedStringKey {
         switch feedFilter {
         case .all: "Share a public vehicle, listing, or inspection thought to start the feed."
         case .friends: "Posts shared by people you are friends with will appear here."
@@ -1509,19 +1509,20 @@ struct CommunityReportSheet: View {
 
     let onSubmit: (String, String?) async -> Bool
 
-    // Stable machine codes shared with the API and database (plan 16.2).
-    private let reasons = [
-        ("spam", "Spam or misleading content"),
-        ("harassment", "Harassment or bullying"),
-        ("hate", "Hate or dehumanizing content"),
-        ("violence", "Violence, threats, or encouragement of harm"),
-        ("sexual_content", "Nudity or sexual content"),
-        ("personal_information", "Personal or private information"),
-        ("fraud", "Scam, fraud, or unsafe transaction"),
-        ("illegal_content", "Illegal or dangerous activity"),
-        ("dangerous_vehicle_advice", "Dangerous vehicle or repair advice"),
-        ("intellectual_property", "Copyright or other intellectual-property issue"),
-        ("other", "Other")
+    // Stable machine codes shared with the API and database (plan 16.2); the
+    // labels resolve through the string catalog (plan 32.2).
+    private let reasons: [(String, String)] = [
+        ("spam", String(localized: "Spam or misleading content")),
+        ("harassment", String(localized: "Harassment or bullying")),
+        ("hate", String(localized: "Hate or dehumanizing content")),
+        ("violence", String(localized: "Violence, threats, or encouragement of harm")),
+        ("sexual_content", String(localized: "Nudity or sexual content")),
+        ("personal_information", String(localized: "Personal or private information")),
+        ("fraud", String(localized: "Scam, fraud, or unsafe transaction")),
+        ("illegal_content", String(localized: "Illegal or dangerous activity")),
+        ("dangerous_vehicle_advice", String(localized: "Dangerous vehicle or repair advice")),
+        ("intellectual_property", String(localized: "Copyright or other intellectual-property issue")),
+        ("other", String(localized: "Other"))
     ]
     private static let reasonsRequiringDetails: Set<String> = ["other", "intellectual_property"]
     private static let detailsMinLength = 10

@@ -40,7 +40,8 @@ struct ReviewComposerView: View {
                     } else {
                         EmptyStateCard(
                             title: "Review unavailable",
-                            message: eligibility.eligibility?.unavailableReason ?? "Only completed technician-performed inspections can be reviewed.",
+                            message: eligibility.eligibility?.unavailableReason.map { LocalizedStringKey($0) }
+                                ?? "Only completed technician-performed inspections can be reviewed.",
                             systemImage: "star.slash"
                         )
                         .padding()

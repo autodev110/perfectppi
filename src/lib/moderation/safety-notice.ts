@@ -9,6 +9,9 @@
 //
 // The notice text is server-owned so the wording can change without an app
 // release; clients render `message` verbatim and may use `topics` for icons.
+// Copy comes from the message catalog (plan 32.2). Relative import so the
+// node test runner can load this module without path aliases.
+import { DEFAULT_LOCALE, translate, type Locale, type MessageKey } from "../i18n/index.ts";
 
 export const SAFETY_TOPIC_CODES = ["brakes", "airbags", "lifting", "fuel_system", "high_voltage"] as const;
 
@@ -19,13 +22,14 @@ export type SafetyNotice = {
   message: string;
 };
 
-export const SAFETY_TOPIC_LABELS: Record<SafetyTopicCode, string> = {
-  brakes: "brakes",
-  airbags: "airbags and restraint systems",
-  lifting: "lifting or working under a vehicle",
-  fuel_system: "fuel systems",
-  high_voltage: "high-voltage EV or hybrid systems",
-};
+export function safetyTopicLabel(topic: SafetyTopicCode, locale: Locale = DEFAULT_LOCALE): string {
+  return translate(locale, `safety.topic.${topic}` as MessageKey);
+}
+
+/** Default-locale labels for existing callers. */
+export const SAFETY_TOPIC_LABELS: Record<SafetyTopicCode, string> = Object.fromEntries(
+  SAFETY_TOPIC_CODES.map((topic) => [topic, safetyTopicLabel(topic)]),
+) as Record<SafetyTopicCode, string>;
 
 const SAFETY_TOPIC_PATTERNS: Record<SafetyTopicCode, RegExp[]> = {
   brakes: [
@@ -83,20 +87,19 @@ export function detectSafetyTopics(text: string | null | undefined): SafetyTopic
   );
 }
 
-function joinTopics(labels: string[]) {
+function joinTopics(labels: string[], locale: Locale) {
   if (labels.length <= 1) return labels[0] ?? "";
-  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
-  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+  if (labels.length === 2) return translate(locale, "list.two", { first: labels[0], second: labels[1] });
+  return labels.slice(0, -1).join(translate(locale, "list.many_separator"))
+    + translate(locale, "list.many_last", { last: labels[labels.length - 1] });
 }
 
-export function buildSafetyNotice(text: string | null | undefined): SafetyNotice | null {
+export function buildSafetyNotice(text: string | null | undefined, locale: Locale = DEFAULT_LOCALE): SafetyNotice | null {
   const topics = detectSafetyTopics(text);
   if (topics.length === 0) return null;
-  const subject = joinTopics(topics.map((topic) => SAFETY_TOPIC_LABELS[topic]));
+  const subject = joinTopics(topics.map((topic) => safetyTopicLabel(topic, locale)), locale);
   return {
     topics,
-    message:
-      `Safety notice: this post involves ${subject}. Community answers are not a professional diagnosis. ` +
-      "Mistakes here can cause serious injury or death. Have a qualified technician confirm anything before you rely on it.",
+    message: translate(locale, "safety.notice", { subject }),
   };
 }

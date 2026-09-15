@@ -4,9 +4,11 @@ import { requireApiRole } from "@/features/auth/api";
 import { EXTENDED_REPORT_ENTITY_TYPES } from "@/features/moderation/extended-reporting";
 import {
   REPORT_DETAILS_MAX_LENGTH,
+  REPORT_DETAILS_MIN_LENGTH,
   REPORT_REASON_CODES,
   reportReasonRequiresDetails,
 } from "@/features/moderation/report-reasons";
+import { t } from "@/lib/i18n";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -18,8 +20,8 @@ const inputSchema = z.object({
   details: z.string().trim().max(REPORT_DETAILS_MAX_LENGTH).optional(),
   idempotencyKey: z.string().min(16).max(200),
 }).superRefine((value, context) => {
-  if (reportReasonRequiresDetails(value.reasonCode) && (value.details?.length ?? 0) < 10) {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ["details"], message: "Add at least 10 characters of detail for this reason." });
+  if (reportReasonRequiresDetails(value.reasonCode) && (value.details?.length ?? 0) < REPORT_DETAILS_MIN_LENGTH) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["details"], message: t("report.control.details_short", { min: REPORT_DETAILS_MIN_LENGTH }) });
   }
 });
 

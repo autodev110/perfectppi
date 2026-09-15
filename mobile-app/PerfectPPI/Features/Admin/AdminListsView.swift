@@ -316,8 +316,8 @@ struct AdminListDetailView: View {
     @ViewBuilder
     private func emptyOrList<Content: View>(
         isEmpty: Bool,
-        title: String,
-        message: String,
+        title: LocalizedStringKey,
+        message: LocalizedStringKey,
         systemImage: String,
         @ViewBuilder content: () -> Content
     ) -> some View {

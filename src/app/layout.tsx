@@ -3,6 +3,8 @@ import { Inter, Manrope } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { siteConfig } from "@/config/site";
 import { CANONICAL_ORIGIN } from "@/lib/legal/constants";
+import { DEFAULT_LOCALE } from "@/lib/i18n";
+import { LocaleProvider } from "@/lib/i18n/client";
 import "./globals.css";
 
 const inter = Inter({
@@ -32,8 +34,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // One catalog ships today, so the document language is fixed and public
+  // pages stay statically renderable. When a second catalog lands, swap this
+  // for `await getRequestLocale()` (lib/i18n/server) — that is the one change
+  // that opts the site into per-request locale negotiation.
+  const locale = DEFAULT_LOCALE;
   return (
-    <html lang="en" className={`${inter.variable} ${manrope.variable}`}>
+    <html lang={locale} className={`${inter.variable} ${manrope.variable}`}>
       <body className="min-h-screen bg-background font-sans antialiased">
         <a
           href="#main-content"
@@ -41,7 +48,7 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
-        {children}
+        <LocaleProvider locale={locale}>{children}</LocaleProvider>
         <Toaster />
       </body>
     </html>

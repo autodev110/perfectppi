@@ -1,6 +1,9 @@
 // Stable machine reason codes for user reports (plan section 16.2). These are
 // policy keys shared by the web form, the API, and the database CHECK
-// constraint; localized labels live beside them but are never stored.
+// constraint; localized labels live in the message catalog and are never stored.
+// Relative so the node test runner can load this module without path aliases.
+import { DEFAULT_LOCALE, translate, type Locale } from "../../lib/i18n/index.ts";
+
 export const REPORT_REASON_CODES = [
   "spam",
   "harassment",
@@ -17,19 +20,16 @@ export const REPORT_REASON_CODES = [
 
 export type ReportReasonCode = (typeof REPORT_REASON_CODES)[number];
 
-export const REPORT_REASON_LABELS: Record<ReportReasonCode, string> = {
-  spam: "Spam or misleading content",
-  harassment: "Harassment or bullying",
-  hate: "Hate or dehumanizing content",
-  violence: "Violence, threats, or encouragement of harm",
-  sexual_content: "Nudity or sexual content",
-  personal_information: "Personal or private information",
-  fraud: "Scam, fraud, or unsafe transaction",
-  illegal_content: "Illegal or dangerous activity",
-  dangerous_vehicle_advice: "Dangerous vehicle or repair advice",
-  intellectual_property: "Copyright or other intellectual-property issue",
-  other: "Other",
-};
+// Labels come from the message catalog so a new language never touches the
+// codes (plan 32.2). The constant is the default-locale view for existing
+// callers; request-aware code should use reportReasonLabels(locale).
+export function reportReasonLabels(locale: Locale = DEFAULT_LOCALE): Record<ReportReasonCode, string> {
+  return Object.fromEntries(
+    REPORT_REASON_CODES.map((code) => [code, translate(locale, `report.reason.${code}`)]),
+  ) as Record<ReportReasonCode, string>;
+}
+
+export const REPORT_REASON_LABELS: Record<ReportReasonCode, string> = reportReasonLabels();
 
 /** Reasons whose report is rejected without a written explanation. */
 export const REPORT_REASONS_REQUIRING_DETAILS: ReadonlySet<ReportReasonCode> = new Set([

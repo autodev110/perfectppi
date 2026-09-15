@@ -143,9 +143,9 @@ final class AuthStore: ObservableObject {
         var errorDescription: String? {
             switch self {
             case .emailConfirmationRequired:
-                return "Check your email to confirm your account, then sign in."
+                return String(localized: "Check your email to confirm your account, then sign in.")
             case .usernameUnavailable:
-                return "That username was just taken. Try another one."
+                return String(localized: "That username was just taken. Try another one.")
             }
         }
     }
