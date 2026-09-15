@@ -1,5 +1,6 @@
 import "server-only";
 
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database, Json } from "@/types/database";
 import type { CapabilitySet } from "./capabilities";
@@ -13,6 +14,24 @@ type ProfileSummary = { id: string; display_name: string | null; username: strin
 
 export const QUEUE_TABS = ["new", "in_review", "escalated", "appeals", "closed"] as const;
 export type QueueTab = (typeof QUEUE_TABS)[number];
+export const MODERATION_CASE_ENTITY_TYPES = [
+  "community_post", "community_comment", "profile", "group", "listing", "review", "message", "media",
+] as const;
+export type ModerationCaseEntityType = (typeof MODERATION_CASE_ENTITY_TYPES)[number];
+
+export type ModerationQueueFilters = {
+  query?: string;
+  reason?: string;
+  entityType?: ModerationCaseEntityType;
+  groupId?: string;
+  age?: "over_24h" | "over_72h" | "over_7d";
+  media?: "yes" | "no";
+  repeated?: "yes" | "no";
+  enforced?: "yes" | "no";
+  assigneeId?: string;
+};
+
+const uuid = z.string().uuid();
 
 export const QUEUE_TAB_LABELS: Record<QueueTab, string> = {
   new: "New reports",
@@ -33,6 +52,8 @@ export type QueueCase = CaseRow & {
   claimLive: boolean;
   slaOverdue: boolean;
   contentPreview: string | null;
+  group: { id: string; name: string } | null;
+  authorHasActiveEnforcement: boolean;
 };
 
 async function profilesById(ids: Array<string | null | undefined>) {
@@ -45,7 +66,10 @@ async function profilesById(ids: Array<string | null | undefined>) {
   return new Map((data ?? []).map((row) => [row.id, row]));
 }
 
-export async function getModerationQueueCases(tab: QueueTab): Promise<QueueCase[]> {
+export async function getModerationQueueCases(
+  tab: QueueTab,
+  filters: ModerationQueueFilters = {},
+): Promise<QueueCase[]> {
   const admin = createAdminClient();
   const now = new Date().toISOString();
   let query = admin.from("moderation_cases").select("*");
@@ -69,10 +93,19 @@ export async function getModerationQueueCases(tab: QueueTab): Promise<QueueCase[
       break;
   }
 
+  if (filters.entityType) query = query.eq("entity_type", filters.entityType);
+  if (filters.assigneeId && uuid.safeParse(filters.assigneeId).success) {
+    query = query.eq("assigned_moderator_id", filters.assigneeId);
+  }
+  if (filters.age) {
+    const hours = filters.age === "over_24h" ? 24 : filters.age === "over_72h" ? 72 : 24 * 7;
+    query = query.lte("created_at", new Date(Date.now() - hours * 60 * 60 * 1000).toISOString());
+  }
+
   const { data: fetched, error } = await (tab === "closed"
     ? query.order("closed_at", { ascending: false })
     : query.order("sla_due_at", { ascending: true }).order("created_at", { ascending: true })
-  ).limit(100);
+  ).limit(500);
   if (error) throw new Error(error.message);
   if (!fetched?.length) return [];
   // Plan 18.2: risk priority first, then oldest first. `priority` is text, so
@@ -94,7 +127,14 @@ export async function getModerationQueueCases(tab: QueueTab): Promise<QueueCase[
   ]);
   const itemById = new Map((items ?? []).map((item) => [item.id, item]));
   const authorIds = [...new Set((items ?? []).map((item) => item.author_id).filter(Boolean))] as string[];
-  const [{ data: violations }, { data: mediaCounts }, profiles] = await Promise.all([
+  const postEntityIds = cases.filter((row) => row.entity_type === "community_post").map((row) => row.entity_id);
+  const commentEntityIds = cases.filter((row) => row.entity_type === "community_comment").map((row) => row.entity_id);
+  const { data: comments } = commentEntityIds.length
+    ? await admin.from("community_comments").select("id, post_id").in("id", commentEntityIds)
+    : { data: [] as Array<{ id: string; post_id: string }> };
+  const commentPostById = new Map((comments ?? []).map((comment) => [comment.id, comment.post_id]));
+  const relevantPostIds = [...new Set([...postEntityIds, ...(comments ?? []).map((comment) => comment.post_id)])];
+  const [{ data: violations }, { data: mediaCounts }, { data: posts }, { data: enforcement }, profiles] = await Promise.all([
     authorIds.length
       ? admin.from("moderation_cases")
         .select("id, moderation_items!inner(author_id)")
@@ -102,8 +142,16 @@ export async function getModerationQueueCases(tab: QueueTab): Promise<QueueCase[
         .in("moderation_items.author_id", authorIds)
         .not("id", "in", `(${caseIds.join(",")})`)
       : Promise.resolve({ data: [] as Array<{ id: string; moderation_items: { author_id: string | null } | { author_id: string | null }[] }> }),
-    admin.from("community_post_media").select("post_id")
-      .in("post_id", cases.filter((row) => row.entity_type === "community_post").map((row) => row.entity_id)),
+    relevantPostIds.length
+      ? admin.from("community_post_media").select("post_id").in("post_id", relevantPostIds)
+      : Promise.resolve({ data: [] as Array<{ post_id: string }> }),
+    relevantPostIds.length
+      ? admin.from("community_posts").select("id, group_id").in("id", relevantPostIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; group_id: string | null }> }),
+    authorIds.length
+      ? admin.from("user_enforcement_actions").select("profile_id")
+        .in("profile_id", authorIds).lte("starts_at", now).or(`ends_at.is.null,ends_at.gt.${now}`)
+      : Promise.resolve({ data: [] as Array<{ profile_id: string }> }),
     profilesById([...authorIds, ...cases.map((row) => row.assigned_moderator_id)]),
   ]);
   const priorViolationsByAuthor = new Map<string, number>();
@@ -114,25 +162,74 @@ export async function getModerationQueueCases(tab: QueueTab): Promise<QueueCase[
   }
   const mediaPosts = new Set((mediaCounts ?? []).map((row) => row.post_id));
   const appealCases = new Set((appeals ?? []).map((row) => row.case_id));
+  const enforcedAuthors = new Set((enforcement ?? []).map((row) => row.profile_id));
+  const postById = new Map((posts ?? []).map((post) => [post.id, post]));
+  const groupIds = [...new Set([
+    ...(posts ?? []).map((post) => post.group_id).filter((id): id is string => Boolean(id)),
+    ...cases.filter((row) => row.entity_type === "group").map((row) => row.entity_id),
+  ])];
+  const { data: groups } = groupIds.length
+    ? await admin.from("community_groups").select("id, name").in("id", groupIds)
+    : { data: [] as Array<{ id: string; name: string }> };
+  const groupById = new Map((groups ?? []).map((group) => [group.id, group]));
 
-  return cases.map((row) => {
+  const mapped = cases.map((row) => {
     const item = itemById.get(row.moderation_item_id);
     const caseReports = (reports ?? []).filter((report) => report.case_id === row.id);
     const claimLive = Boolean(row.claim_expires_at && row.claim_expires_at > now);
+    const postId = row.entity_type === "community_post" ? row.entity_id : commentPostById.get(row.entity_id);
+    const groupId = postId ? postById.get(postId)?.group_id : null;
     return {
       ...row,
       author: item?.author_id ? profiles.get(item.author_id) ?? null : null,
       assignee: row.assigned_moderator_id && claimLive ? profiles.get(row.assigned_moderator_id) ?? null : null,
       reportCount: caseReports.length,
       reasonCodes: [...new Set(caseReports.map((report) => report.reason_code))],
-      hasMedia: row.entity_type === "community_post" && mediaPosts.has(row.entity_id),
+      hasMedia: row.entity_type === "media" || Boolean(postId && mediaPosts.has(postId)),
       priorViolations: item?.author_id ? priorViolationsByAuthor.get(item.author_id) ?? 0 : 0,
       hasAppeal: appealCases.has(row.id),
       claimLive,
       slaOverdue: row.state !== "closed" && row.sla_due_at < now,
       contentPreview: item?.content_preview ?? null,
+      group: row.entity_type === "group"
+        ? groupById.get(row.entity_id) ?? null
+        : groupId ? groupById.get(groupId) ?? null : null,
+      authorHasActiveEnforcement: Boolean(item?.author_id && enforcedAuthors.has(item.author_id)),
     };
   });
+
+  const normalizedQuery = filters.query?.trim().toLowerCase();
+  return mapped.filter((entry) => {
+    if (filters.reason && !entry.reasonCodes.includes(filters.reason)) return false;
+    if (filters.groupId && (!uuid.safeParse(filters.groupId).success || entry.group?.id !== filters.groupId)) return false;
+    if (filters.media && entry.hasMedia !== (filters.media === "yes")) return false;
+    if (filters.repeated && (entry.reportCount > 1) !== (filters.repeated === "yes")) return false;
+    if (filters.enforced && entry.authorHasActiveEnforcement !== (filters.enforced === "yes")) return false;
+    if (normalizedQuery) {
+      const exactUsername = entry.author?.username?.toLowerCase() === normalizedQuery.replace(/^@/, "");
+      if (entry.id.toLowerCase() !== normalizedQuery
+          && entry.entity_id.toLowerCase() !== normalizedQuery
+          && !exactUsername) return false;
+    }
+    return true;
+  }).slice(0, 100);
+}
+
+export async function getModerationQueueFilterOptions() {
+  const admin = createAdminClient();
+  const [{ data: groups }, { data: grants }] = await Promise.all([
+    admin.from("community_groups").select("id, name").eq("status", "active").order("name").limit(250),
+    admin.from("moderation_role_grants").select("profile_id").eq("capability", "queue_read").is("revoked_at", null),
+  ]);
+  const moderatorIds = [...new Set((grants ?? []).map((grant) => grant.profile_id))];
+  const moderators = moderatorIds.length
+    ? await profilesById(moderatorIds)
+    : new Map<string, ProfileSummary>();
+  return {
+    groups: groups ?? [],
+    moderators: [...moderators.values()].sort((a, b) =>
+      (a.username ?? a.display_name ?? "").localeCompare(b.username ?? b.display_name ?? "")),
+  };
 }
 
 export type CaseDetail = {
@@ -182,11 +279,12 @@ export async function getModerationCase(caseId: string, capabilities: Capability
         .order("created_at", { ascending: false }),
     ]);
 
-  const contentTable = row.entity_type === "community_post" ? "community_posts" : "community_comments";
   const [{ data: currentContent }, { data: media }, { data: authorCases }, { data: enforcement }] = await Promise.all([
     row.entity_type === "community_post"
       ? admin.from("community_posts").select("content, status, moderation_status, audience").eq("id", row.entity_id).maybeSingle()
-      : admin.from(contentTable).select("content, status, moderation_status").eq("id", row.entity_id).maybeSingle(),
+      : row.entity_type === "community_comment"
+        ? admin.from("community_comments").select("content, status, moderation_status").eq("id", row.entity_id).maybeSingle()
+        : Promise.resolve({ data: null }),
     row.entity_type === "community_post"
       ? admin.from("community_post_media").select("id, media_type, moderation_status").eq("post_id", row.entity_id).order("sort_order")
       : Promise.resolve({ data: [] }),

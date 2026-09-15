@@ -6,18 +6,27 @@ import {
   QUEUE_TAB_LABELS,
   QUEUE_TABS,
   getModerationQueueCases,
+  getModerationQueueFilterOptions,
+  MODERATION_CASE_ENTITY_TYPES,
+  type ModerationQueueFilters,
   type QueueTab,
 } from "@/features/moderation/case-queries";
+import { REPORT_REASON_CODES, REPORT_REASON_LABELS } from "@/features/moderation/report-reasons";
 import { getModerationOperationsStatus } from "@/features/moderation/outbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/utils/formatting";
 
 export const dynamic = "force-dynamic";
 
-type PageProps = { searchParams: Promise<{ tab?: string; error?: string; reviewed?: string }> };
+type PageProps = { searchParams: Promise<{
+  tab?: string; error?: string; reviewed?: string; q?: string; reason?: string;
+  entity?: string; group?: string; age?: string; media?: string; repeated?: string;
+  enforced?: string; assigned?: string;
+}> };
 
 const SCANNER_HELP =
   "The specialist image safeguard is on but no scanner is configured (CHILD_SAFETY_SCANNER_URL / CHILD_SAFETY_SCANNER_TOKEN). "
@@ -31,13 +40,27 @@ export default async function ModerationPage({ searchParams }: PageProps) {
   const tab = (QUEUE_TABS as readonly string[]).includes(params.tab ?? "")
     ? (params.tab as QueueTab)
     : params.tab === MEDIA_TAB ? MEDIA_TAB : "new";
+  const filters: ModerationQueueFilters = {
+    query: params.q,
+    reason: REPORT_REASON_CODES.includes(params.reason as (typeof REPORT_REASON_CODES)[number]) ? params.reason : undefined,
+    entityType: MODERATION_CASE_ENTITY_TYPES.includes(params.entity as (typeof MODERATION_CASE_ENTITY_TYPES)[number])
+      ? params.entity as (typeof MODERATION_CASE_ENTITY_TYPES)[number]
+      : undefined,
+    groupId: params.group,
+    age: params.age === "over_24h" || params.age === "over_72h" || params.age === "over_7d" ? params.age : undefined,
+    media: params.media === "yes" || params.media === "no" ? params.media : undefined,
+    repeated: params.repeated === "yes" || params.repeated === "no" ? params.repeated : undefined,
+    enforced: params.enforced === "yes" || params.enforced === "no" ? params.enforced : undefined,
+    assigneeId: params.assigned,
+  };
 
   // The media queue is loaded for every tab so its count and the scanner
   // warning are visible wherever a moderator lands.
-  const [cases, mediaItems, ops] = await Promise.all([
-    tab === MEDIA_TAB ? Promise.resolve([]) : getModerationQueueCases(tab as QueueTab),
+  const [cases, mediaItems, ops, filterOptions] = await Promise.all([
+    tab === MEDIA_TAB ? Promise.resolve([]) : getModerationQueueCases(tab as QueueTab, filters),
     getModerationQueue("pending_review"),
     getModerationOperationsStatus(),
+    getModerationQueueFilterOptions(),
   ]);
   const heldMedia = mediaItems.filter((item) => item.entity_type === "community_post_media" || item.entity_type === "vehicle_media");
   const scannerMissing = heldMedia.some((item) => item.reason_codes.includes("specialist_scan_not_configured"));
@@ -104,6 +127,63 @@ export default async function ModerationPage({ searchParams }: PageProps) {
       </div>
 
       {tab !== MEDIA_TAB ? (
+        <form method="get" action="/admin/moderation" className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 xl:grid-cols-4">
+          <input type="hidden" name="tab" value={tab} />
+          <label className="text-xs font-semibold xl:col-span-2">Case ID, content ID, or exact username
+            <Input name="q" defaultValue={params.q ?? ""} placeholder="UUID or @username" className="mt-1" />
+          </label>
+          <label className="text-xs font-semibold">Reason
+            <select name="reason" defaultValue={params.reason ?? ""} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <option value="">Any reason</option>
+              {REPORT_REASON_CODES.map((code) => <option key={code} value={code}>{REPORT_REASON_LABELS[code]}</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-semibold">Content
+            <select name="entity" defaultValue={params.entity ?? ""} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <option value="">All content</option>
+              {MODERATION_CASE_ENTITY_TYPES.map((type) => <option key={type} value={type}>{type.replace(/^community_/, "").replaceAll("_", " ")}</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-semibold">Group
+            <select name="group" defaultValue={params.group ?? ""} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <option value="">Any group</option>
+              {filterOptions.groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-semibold">Age
+            <select name="age" defaultValue={params.age ?? ""} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <option value="">Any age</option><option value="over_24h">Over 24 hours</option><option value="over_72h">Over 72 hours</option><option value="over_7d">Over 7 days</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold">Media
+            <select name="media" defaultValue={params.media ?? ""} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <option value="">With or without media</option><option value="yes">Has media</option><option value="no">No media</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold">Repeat reports
+            <select name="repeated" defaultValue={params.repeated ?? ""} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <option value="">Any report count</option><option value="yes">More than one</option><option value="no">One report</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold">Author enforcement
+            <select name="enforced" defaultValue={params.enforced ?? ""} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <option value="">Any state</option><option value="yes">Active restriction</option><option value="no">No active restriction</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold">Assigned moderator
+            <select name="assigned" defaultValue={params.assigned ?? ""} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <option value="">Anyone or unassigned</option>
+              {filterOptions.moderators.map((moderator) => <option key={moderator.id} value={moderator.id}>@{moderator.username ?? moderator.display_name ?? "moderator"}</option>)}
+            </select>
+          </label>
+          <div className="flex items-end gap-2 xl:col-span-3">
+            <Button type="submit">Apply filters</Button>
+            <Button variant="outline" asChild><Link href={`/admin/moderation?tab=${tab}`}>Clear</Link></Button>
+          </div>
+        </form>
+      ) : null}
+
+      {tab !== MEDIA_TAB ? (
         cases.length === 0 ? (
           <Card><CardContent className="py-12 text-center text-muted-foreground">No cases in this queue.</CardContent></Card>
         ) : (
@@ -131,6 +211,7 @@ export default async function ModerationPage({ searchParams }: PageProps) {
                         {entry.slaOverdue ? <Badge variant="destructive">SLA overdue</Badge> : null}
                         {entry.hasMedia ? <Badge variant="outline">media</Badge> : null}
                         {entry.hasAppeal ? <Badge variant="outline">appeal</Badge> : null}
+                        {entry.authorHasActiveEnforcement ? <Badge variant="destructive">author restricted</Badge> : null}
                         {entry.priorViolations > 0 ? <Badge variant="destructive">repeat ({entry.priorViolations})</Badge> : null}
                         {entry.legal_hold ? <Badge variant="destructive">legal hold</Badge> : null}
                       </div>
@@ -143,6 +224,7 @@ export default async function ModerationPage({ searchParams }: PageProps) {
                       <span>{entry.reasonCodes.map((code) => code.replaceAll("_", " ")).join(", ") || "no reasons"}</span>
                       <span>SLA due {formatDate(entry.sla_due_at)}</span>
                       <span>revision {entry.revision_id.slice(0, 8)} · v{entry.decision_version}</span>
+                      {entry.group ? <span>group {entry.group.name}</span> : null}
                       {entry.assignee ? <span>assigned to @{entry.assignee.username ?? entry.assignee.display_name}</span> : null}
                       {entry.resolution ? <span>{entry.resolution.replaceAll("_", " ")}</span> : null}
                     </div>

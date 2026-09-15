@@ -4,6 +4,7 @@ import type { Database } from "@/types/database";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 import { canProfilesInteract, getBlockedProfileIds } from "@/features/social/relationships";
 import { resolveMessageEligibility } from "@/features/messages/eligibility";
+import { unavailableEntityIds } from "@/features/moderation/extended-reporting";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -172,6 +173,8 @@ async function getConversationBox(
   ]);
 
   if (!conversations || conversations.length === 0) return [];
+  const hiddenMessages = await unavailableEntityIds(profileId, "message", (messages ?? []).map((message) => message.id));
+  const visibleMessages = (messages ?? []).filter((message) => !hiddenMessages.has(message.id));
   const visibleConversations = conversations.filter((conversation) => (
     box === "requests"
       ? conversation.request_status === "pending" && conversation.requested_by !== profileId
@@ -222,7 +225,7 @@ async function getConversationBox(
 
   const unreadCountByConversation = new Map<string, number>();
 
-  for (const message of messages ?? []) {
+  for (const message of visibleMessages) {
     if (!firstMessageByConversation.has(message.conversation_id)) {
       firstMessageByConversation.set(message.conversation_id, {
         id: message.id,
@@ -493,6 +496,9 @@ export async function getConversation(conversationId: string): Promise<Conversat
 
   if (!conversation || conversation.request_status === "declined") return null;
 
+  const hiddenMessages = await unavailableEntityIds(profileId, "message", (messages ?? []).map((message) => message.id));
+  const visibleMessages = (messages ?? []).filter((message) => !hiddenMessages.has(message.id));
+
   const participantIds = Array.from(new Set((participants ?? []).map((p) => p.profile_id)));
   const [{ data: profiles }, listingContexts] = await Promise.all([
     participantIds.length
@@ -510,7 +516,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
   let sendUnavailableReason: string | null = null;
   const otherProfileId = participantIds.find((id) => id !== profileId);
   if (conversation.request_status === "pending") {
-    canSend = conversation.requested_by === profileId && (messages?.length ?? 0) === 0;
+    canSend = conversation.requested_by === profileId && visibleMessages.length === 0;
     let requestStillEligible = canSend;
     if (canSend && otherProfileId) {
       const eligibility = await resolveMessageEligibility(profileId, otherProfileId);
@@ -521,7 +527,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
     }
     sendUnavailableReason = canSend
       ? null
-      : conversation.requested_by === profileId && (messages?.length ?? 0) === 0 && !requestStillEligible
+      : conversation.requested_by === profileId && visibleMessages.length === 0 && !requestStillEligible
         ? "This message request is no longer available."
       : conversation.requested_by === profileId
         ? "Waiting for this member to accept your request."
@@ -541,7 +547,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
     listing_context: conversation.marketplace_listing_id
       ? listingContexts.get(conversation.marketplace_listing_id) ?? null
       : null,
-    messages: await Promise.all(((messages ?? []) as MessageRow[]).map(authorizeAttachment)),
+    messages: await Promise.all((visibleMessages as MessageRow[]).map(authorizeAttachment)),
     request_status: conversation.request_status as "pending" | "accepted",
     requested_by: conversation.requested_by,
     can_send: canSend,

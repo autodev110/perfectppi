@@ -1945,6 +1945,45 @@ export type Database = {
         }
         Relationships: []
       }
+      moderation_reporter_hidden_entities: {
+        Row: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          report_id: string
+          reporter_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          report_id: string
+          reporter_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          report_id?: string
+          reporter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moderation_reporter_hidden_entities_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "moderation_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_reporter_hidden_entities_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       moderation_reports: {
         Row: {
           case_id: string
@@ -6281,6 +6320,17 @@ export type Database = {
           p_reporter_id: string
           p_revision_id: string
           p_auto_hide?: boolean
+        }
+        Returns: Json
+      }
+      submit_extended_moderation_report: {
+        Args: {
+          p_details: string | null
+          p_entity_id: string
+          p_entity_type: string
+          p_idempotency_key: string
+          p_reason_code: string
+          p_reporter_id: string
         }
         Returns: Json
       }

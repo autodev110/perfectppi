@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
+import { unavailableEntityIds } from "@/features/moderation/extended-reporting";
 
 type Profile = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -58,6 +59,7 @@ async function getCurrentProfile() {
 
 export async function getPublicTechnicianReviews(technicianProfileId: string, limit = 20) {
   const admin = createAdminClient();
+  const viewer = await getCurrentProfile();
 
   const { data: reviews } = await admin
     .from("technician_reviews")
@@ -67,7 +69,9 @@ export async function getPublicTechnicianReviews(technicianProfileId: string, li
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  return (reviews ?? []) as TechnicianReview[];
+  const rows = (reviews ?? []) as TechnicianReview[];
+  const hidden = await unavailableEntityIds(viewer?.id ?? null, "review", rows.map((review) => review.id));
+  return rows.filter((review) => !hidden.has(review.id));
 }
 
 export async function getTechnicianReviewSummary(

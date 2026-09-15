@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { getCommunityPostsPage } from "@/features/community/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { CommunityPostArticle } from "@/components/shared/community-post-article
 import { getFeatureFlags, toClientCapabilities } from "@/lib/feature-flags";
 import type { CommunityFeedFilter } from "@/features/social/relationships";
 import { decodeCommunityFeedCursor } from "@/features/community/feed-cursor";
+import { getCommunityGroups } from "@/features/social/groups";
 
 export const metadata = {
   title: "Community — PerfectPPI",
@@ -36,6 +38,32 @@ function feedHref(filter: CommunityFeedFilter, cursor?: string | null) {
   return query ? `/community?${query}` : "/community";
 }
 
+async function SuggestedGroupCard() {
+  try {
+    const groups = await getCommunityGroups();
+    const group = groups.find((candidate) =>
+      candidate.is_suggested && !candidate.is_member && candidate.visibility === "public",
+    );
+    if (!group) return null;
+    return (
+      <aside aria-label="Suggested group" className="rounded-[1.75rem] bg-secondary-container/55 p-6 ghost-border">
+        <Badge variant="outline" className="mb-3 bg-background/70">Suggested from your Garage</Badge>
+        <h2 className="font-heading text-xl font-extrabold tracking-tight text-on-surface">{group.name}</h2>
+        <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-on-surface-variant">{group.description}</p>
+        <div className="mt-4 flex items-center justify-between gap-4">
+          <span className="text-xs font-semibold text-on-surface-variant">{group.member_count.toLocaleString()} members</span>
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/community/groups/${group.slug}`}>View group</Link>
+          </Button>
+        </div>
+      </aside>
+    );
+  } catch (error) {
+    console.error("community feed suggestion failed", error);
+    return null;
+  }
+}
+
 export default async function CommunityPage({ searchParams }: { searchParams: Promise<{ filter?: string; cursor?: string }> }) {
   const viewer = await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const params = await searchParams;
@@ -46,6 +74,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
     getFeatureFlags().then(toClientCapabilities),
   ]);
   const posts = feedPage.items;
+  const showSuggestion = !params.cursor && filter === "all" && capabilities.capabilities.groups;
 
   const emptyCopy = filter === "friends"
     ? {
@@ -163,7 +192,12 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
               </Button>
             </div>
           ) : (
-            posts.map((post) => <CommunityPostArticle key={post.id} post={post} viewerId={viewer.id} />)
+            posts.map((post, index) => (
+              <div key={post.id} className="contents">
+                <CommunityPostArticle post={post} viewerId={viewer.id} />
+                {index === 2 && showSuggestion ? <Suspense fallback={null}><SuggestedGroupCard /></Suspense> : null}
+              </div>
+            ))
           )}
           <nav className="flex items-center justify-between pt-3" aria-label="Community pagination">
             {params.cursor ? <Button asChild variant="outline"><Link href={feedHref(filter)}>Back to latest</Link></Button> : <span />}

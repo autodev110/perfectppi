@@ -60,6 +60,8 @@ private struct MemberProfileContent: View {
     @State private var relationship: FriendRelationshipState
     @State private var section: MemberProfileSection = .posts
     @State private var confirmingBlock = false
+    @State private var reportingProfile = false
+    @State private var profileReported = false
     @State private var muted: Bool
     @State private var openConversationId: String?
     @State private var messaging = false
@@ -131,6 +133,11 @@ private struct MemberProfileContent: View {
                         Button(muted ? "Unmute Member" : "Mute Member", systemImage: muted ? "speaker.wave.2" : "speaker.slash") {
                             Task { await setRelationship(kind: "mute", enabled: !muted) }
                         }
+                        // Presentation state lives on this view: a sheet attached to a
+                        // Menu item is torn down with the menu and never presents.
+                        Button("Report Profile", systemImage: "flag") {
+                            reportingProfile = true
+                        }
                         Button("Block Member", systemImage: "hand.raised", role: .destructive) {
                             confirmingBlock = true
                         }
@@ -149,6 +156,29 @@ private struct MemberProfileContent: View {
         }
         .navigationDestination(item: $openConversationId) { conversationId in
             MessageThreadView(conversationId: conversationId, currentProfileId: auth.profile?.id)
+        }
+        .sheet(isPresented: $reportingProfile, onDismiss: {
+            // The server now hides this profile from the reporter; leave the
+            // screen once the sheet is gone.
+            guard profileReported else { return }
+            profileReported = false
+            dismiss()
+        }) {
+            CommunityReportSheet { reasonCode, details in
+                do {
+                    let _: Empty = try await CommunityAPI.reportExtended(
+                        entityType: "profile",
+                        entityId: identity.id,
+                        reasonCode: reasonCode,
+                        details: details
+                    )
+                    profileReported = true
+                    return true
+                } catch {
+                    self.error = error.localizedDescription
+                    return false
+                }
+            }
         }
         .alert("Something went wrong", isPresented: .constant(error != nil)) {
             Button("OK") { error = nil }

@@ -20,6 +20,7 @@ import { inspectionAge } from "@/lib/marketplace/inspection-report";
 import { parseFactorySpec } from "@/lib/vehicles/factory-spec";
 import { FactorySpecComparison } from "@/components/shared/factory-spec-comparison";
 import { recordProductEvent } from "@/features/analytics/product-events";
+import { ExtendedReportControl } from "@/components/shared/extended-report-control";
 import {
   ArrowLeft,
   ArrowRight,
@@ -116,7 +117,7 @@ export default async function MarketplaceListingPage({ params, searchParams }: P
       <div className="grid gap-8 lg:grid-cols-[1.35fr_0.85fr] lg:items-start">
         <div className="min-w-0 space-y-6">
           {/* 1. Gallery */}
-          <ListingGallery photos={listing.photos} alt={label || listing.title} />
+          <ListingGallery photos={listing.photos} alt={label || listing.title} canReport={Boolean(viewerId && !isOwner)} />
 
           {/* 2. Price, vehicle, mileage, region, seller type */}
           <section className="rounded-[1.5rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
@@ -144,6 +145,7 @@ export default async function MarketplaceListingPage({ params, searchParams }: P
               {!isOwner && viewerId ? <ListingSaveButton listingId={listing.id} initialSaved={listing.saved_by_viewer} variant="inline" /> : null}
               {viewerId ? <SavedCollectionButton entityType="listing" entityId={listing.id} /> : null}
               {isPublic ? <ShareButton path={path} title={`${listing.title} · PerfectPPI Marketplace`} /> : null}
+              {!isOwner && viewerId ? <ExtendedReportControl entityType="listing" entityId={listing.id} label="Listing" /> : null}
             </div>
           </section>
 

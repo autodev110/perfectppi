@@ -381,6 +381,32 @@ enum CommunityAPI {
         )
     }
 
+    struct ExtendedReportPayload: Encodable {
+        let entityType: String
+        let entityId: String
+        let reasonCode: String
+        let details: String?
+        let idempotencyKey: String
+    }
+
+    static func reportExtended(
+        entityType: String,
+        entityId: String,
+        reasonCode: String,
+        details: String?
+    ) async throws -> Empty {
+        try await APIClient.shared.postCamel(
+            "/api/community/reports/extended",
+            body: ExtendedReportPayload(
+                entityType: entityType,
+                entityId: entityId,
+                reasonCode: reasonCode,
+                details: details,
+                idempotencyKey: UUID().uuidString.lowercased()
+            )
+        )
+    }
+
     struct AppealPayload: Encodable {
         let entityId: String
         let statement: String

@@ -13,6 +13,7 @@ import { createReportContext } from "@/features/moderation/report-context";
 import { communityMediaDeliveryPath } from "@/lib/storage/community-media";
 import { buildSafetyNotice, type SafetyNotice } from "@/lib/moderation/safety-notice";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import { unavailableEntityIds } from "@/features/moderation/extended-reporting";
 import {
   encodeCommunityFeedCursor,
   type CommunityFeedCursor,
@@ -263,6 +264,8 @@ function toCommunityFeedPost(
   viewerId: string,
   memberGroupIds: ReadonlyMap<string, GroupRole> = new Map(),
   collapsedRepostCount = 0,
+  unavailableListings: ReadonlySet<string> = new Set(),
+  unavailableMedia: ReadonlySet<string> = new Set(),
 ): CommunityFeedPost {
   const visibleComments = (post.comments ?? [])
     .filter((comment) => comment.status === "active" && comment.moderation_status === "active");
@@ -279,7 +282,7 @@ function toCommunityFeedPost(
         mileage: post.vehicle.mileage,
         visibility: post.vehicle.visibility,
         vehicle_media: (post.vehicle.vehicle_media ?? [])
-          .filter((item) => item.moderation_status === "active")
+          .filter((item) => item.moderation_status === "active" && !unavailableMedia.has(item.id))
           .map((item) => ({
             id: item.id,
             vehicle_id: item.vehicle_id,
@@ -298,6 +301,7 @@ function toCommunityFeedPost(
     vehicle_id: vehicle ? post.vehicle_id : null,
     marketplace_listing_id:
       vehicle && post.marketplace_listing?.status === "active"
+        && !unavailableListings.has(post.marketplace_listing.id)
         ? post.marketplace_listing_id
         : null,
     group_id: post.group_id,
@@ -340,6 +344,7 @@ function toCommunityFeedPost(
     vehicle,
     marketplace_listing:
       vehicle && post.marketplace_listing?.status === "active"
+        && !unavailableListings.has(post.marketplace_listing.id)
         ? {
             id: post.marketplace_listing.id,
             vehicle_id: post.marketplace_listing.vehicle_id,
@@ -398,6 +403,36 @@ function toCommunityFeedPost(
         } : null,
       })),
   };
+}
+
+async function unavailablePostAttachmentIds(viewerId: string, posts: CommunityPost[]) {
+  return Promise.all([
+    unavailableEntityIds(
+      viewerId,
+      "listing",
+      posts.flatMap((post) => post.marketplace_listing_id ? [post.marketplace_listing_id] : []),
+    ),
+    unavailableEntityIds(
+      viewerId,
+      "media",
+      posts.flatMap((post) => post.vehicle?.vehicle_media.map((media) => media.id) ?? []),
+    ),
+  ]);
+}
+
+async function redactUnavailablePostAttachments(viewerId: string, posts: CommunityPost[]) {
+  const [unavailableListings, unavailableMedia] = await unavailablePostAttachmentIds(viewerId, posts);
+  return posts.map((post) => ({
+    ...post,
+    marketplace_listing_id: post.marketplace_listing_id
+      && unavailableListings.has(post.marketplace_listing_id) ? null : post.marketplace_listing_id,
+    marketplace_listing: post.marketplace_listing
+      && unavailableListings.has(post.marketplace_listing.id) ? null : post.marketplace_listing,
+    vehicle: post.vehicle ? {
+      ...post.vehicle,
+      vehicle_media: post.vehicle.vehicle_media.filter((media) => !unavailableMedia.has(media.id)),
+    } : null,
+  }));
 }
 
 // Viewer-specific reaction state (likes, private saves) layered onto posts
@@ -553,7 +588,7 @@ async function hydrateSavedCommunityPosts(viewerId: string, postIds: string[]) {
     console.error("saved community post hydration failed", error);
     throw new Error("Could not load saved posts.");
   }
-  const posts = (data ?? []) as unknown as CommunityPost[];
+  const posts = await redactUnavailablePostAttachments(viewerId, (data ?? []) as unknown as CommunityPost[]);
   const [blockedCommentAuthors, memberGroupIds] = await Promise.all([
     getBlockedProfileIds(viewerId, posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id))),
     activeMembershipGroupIds(viewerId, posts),
@@ -622,7 +657,7 @@ export async function getCommunityPosts(
     .order("created_at", { ascending: true, referencedTable: "community_comments" })
     .limit(perPage);
 
-  const posts = (data ?? []) as unknown as CommunityPost[];
+  const posts = await redactUnavailablePostAttachments(viewerId, (data ?? []) as unknown as CommunityPost[]);
   const blockedCommentAuthors = await getBlockedProfileIds(
     viewerId,
     posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id)),
@@ -696,7 +731,8 @@ export async function getCommunityPostById(id: string) {
     .eq("moderation_status", "active")
     .maybeSingle();
 
-  const post = data as unknown as CommunityPost | null;
+  const postRow = data as unknown as CommunityPost | null;
+  const post = postRow ? (await redactUnavailablePostAttachments(viewerId, [postRow]))[0] ?? null : null;
   if (post?.group_id && !(await getFeatureFlags()).flags.groups) return null;
   // Vehicle visibility (public / friends / private) was already applied by
   // social_can_view_community_post for this viewer.
@@ -797,7 +833,7 @@ export async function getMemberCommunityPosts(profileId: string, page = 1, perPa
     .select(COMMUNITY_FEED_SELECT)
     .in("id", postIds)
     .order("created_at", { ascending: true, referencedTable: "community_comments" });
-  const posts = (data ?? []) as unknown as CommunityPost[];
+  const posts = await redactUnavailablePostAttachments(viewerId, (data ?? []) as unknown as CommunityPost[]);
   const blockedCommentAuthors = await getBlockedProfileIds(
     viewerId,
     posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id)),
@@ -991,7 +1027,7 @@ async function hydrateGroupPostIds(viewerId: string, postIds: string[]) {
     .eq("status", "active")
     .eq("moderation_status", "active")
     .order("created_at", { ascending: true, referencedTable: "community_comments" });
-  const posts = (data ?? []) as unknown as CommunityPost[];
+  const posts = await redactUnavailablePostAttachments(viewerId, (data ?? []) as unknown as CommunityPost[]);
   const [blockedAuthors, memberGroupIds] = await Promise.all([
     getBlockedProfileIds(viewerId, posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id))),
     activeMembershipGroupIds(viewerId, posts),
@@ -1093,7 +1129,7 @@ export async function getCommunityGroupPosts(groupId: string, page = 1, perPage 
     .select(COMMUNITY_FEED_SELECT)
     .in("id", postIds)
     .order("created_at", { ascending: true, referencedTable: "community_comments" });
-  const posts = (data ?? []) as unknown as CommunityPost[];
+  const posts = await redactUnavailablePostAttachments(viewerId, (data ?? []) as unknown as CommunityPost[]);
   const blockedAuthors = await getBlockedProfileIds(
     viewerId,
     posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id)),
@@ -1157,7 +1193,7 @@ export async function getVehicleDiscussionPosts(vehicleId: string) {
     .order("created_at", { ascending: false })
     .order("created_at", { ascending: true, referencedTable: "community_comments" });
 
-  const posts = (data ?? []) as unknown as CommunityPost[];
+  const posts = await redactUnavailablePostAttachments(viewerId, (data ?? []) as unknown as CommunityPost[]);
   const blockedAuthors = await getBlockedProfileIds(
     viewerId,
     posts.flatMap((post) => (post.comments ?? []).map((comment) => comment.author_id)),

@@ -29,6 +29,7 @@ import { sharePath } from "@/lib/share/links";
 import { TechnicianCredentialFacts } from "@/components/shared/technician-credential-facts";
 import { MemberContributionSummaryCard } from "@/components/shared/member-contribution-summary";
 import { getMemberContributionSummary } from "@/features/profiles/reputation";
+import { ExtendedReportControl } from "@/components/shared/extended-report-control";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -207,6 +208,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
               </Link>
             </Button>
             {relationship ? <MemberSafetyActions profileId={profile.id} muted={relationship.mutedByMe} /> : null}
+            {profile.id !== viewer.id ? <ExtendedReportControl entityType="profile" entityId={profile.id} label="Profile" /> : null}
             {profile.username ? <ShareButton path={sharePath({ kind: "profile", username: profile.username })} title={`${profile.display_name ?? profile.username} · PerfectPPI`} compact className="self-center px-2" /> : null}
           </div>
         </div>

@@ -231,6 +231,7 @@ private struct TechnicianDirectoryDetailView: View {
 
 struct ReviewRow: View {
     let review: TechnicianReview
+    @EnvironmentObject private var auth: AuthStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -257,6 +258,10 @@ struct ReviewRow: View {
                 Text(content)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            if review.reviewerId != auth.profile?.id {
+                ExtendedReportButton(entityType: "review", entityId: review.id, label: "Review")
+                    .font(.caption)
             }
         }
         .padding(.vertical, 4)

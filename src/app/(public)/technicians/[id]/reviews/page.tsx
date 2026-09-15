@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { getInitials } from "@/lib/utils/formatting";
 import { ChevronLeft, MessageSquare, Star, TrendingUp } from "lucide-react";
+import { getOptionalProfile } from "@/features/auth/guards";
+import { ExtendedReportControl } from "@/components/shared/extended-report-control";
 
 function vehicleLabel(vehicle: {
   year: number | null;
@@ -29,10 +31,11 @@ export default async function TechnicianReviewsPublicPage({
 }) {
   const { id } = await params;
 
-  const [tech, summary, reviews] = await Promise.all([
+  const [tech, summary, reviews, viewer] = await Promise.all([
     getTechProfile(id),
     getTechnicianReviewSummary(id),
     getPublicTechnicianReviews(id, 50),
+    getOptionalProfile(["consumer", "technician", "org_manager", "admin"]),
   ]);
 
   if (!tech) notFound();
@@ -133,6 +136,8 @@ export default async function TechnicianReviewsPublicPage({
                       {review.rating}/5
                     </Badge>
                   </div>
+
+                  {viewer && review.reviewer_id !== viewer.id ? <ExtendedReportControl entityType="review" entityId={review.id} label="Review" /> : null}
 
                   {review.title && <p className="font-semibold text-on-surface">{review.title}</p>}
                   {review.content && (

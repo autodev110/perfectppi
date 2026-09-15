@@ -842,6 +842,8 @@ App Store safety coverage cannot stop at posts. Profiles, group names/descriptio
 
 The one-valid-report global-hide requirement is specifically mandatory for Community posts and comments. Other entity types use this table so a single malicious report cannot erase an account, group, transaction, or conversation without an explicit high-risk rule.
 
+**Implementation status (September 15, 2026):** report paths now cover profiles, group metadata, Marketplace listings, technician reviews, direct messages, and vehicle/listing media on web and iOS. A successful report creates evidence in the same capability-gated case system and immediately hides only the selected entity for that reporter; an authorized Remove or legal-hold decision suppresses it from every ordinary read path. Restore clears reporter-only hides, account exports include the member's private hide records, and retention purging dispatches expanded UGC separately so it cannot delete an unrelated post or comment with a colliding UUID. The expanded report API is service-mediated, idempotent, rate-limited, and backed by a fresh-database SQL regression test.
+
 ## 17. Moderation state machine and report transaction
 
 ### 17.1 Canonical state transitions
@@ -950,6 +952,8 @@ Each row should show enough context to triage without exposing more sensitive ev
 - Assigned moderator and SLA indicator.
 
 Filters should include reason, content type, group, status, age, media presence, repeat reports, author enforcement state, and assigned moderator. Search should accept case ID, post ID, and exact username; it must not expose this index to ordinary admin roles that lack moderation permission.
+
+**Implementation status (September 15, 2026):** all queue tabs and listed filters are implemented, including exact case/content ID or username search, group, age, media, repeat-report, enforcement, and assignee filters. Queue access remains capability-gated. Case detail supports an independently capability-gated JSON evidence export; legal-hold exports require the additional hold capability, reporter identity remains redacted without its separate grant, and the export event is recorded before bytes are released.
 
 ### 18.3 Case detail
 
@@ -1422,6 +1426,8 @@ Feed quality controls:
 - Preserve scroll position when returning from post detail.
 - Support pull-to-refresh, cursor pagination, skeletons, retry, and clear empty/end states.
 
+**Implementation status (September 15, 2026):** All/Friends/My Cars remain recency-first and now include author/group/post-type/vehicle-topic mutes, near-duplicate suppression, stable cursor pagination, loading/retry/end states, and a single clearly labeled Garage-derived public-group suggestion after the third first-page post on web and iOS. Suggestions are optional and cannot block the chronological feed. Normal detail navigation preserves the existing feed state and scroll position; only a confirmed content mutation requests a refresh.
+
 ### 27.2 Unified search
 
 One Community search entry point should search, with separate result tabs:
@@ -1745,6 +1751,8 @@ Specific requirements:
 
 Do not claim WCAG conformance until the manual and automated audit in the compliance open-questions register is complete.
 
+**Implementation status (September 15, 2026):** shared web and iOS controls provide labeled icon targets, text-based states, reduced-motion handling, keyboard-accessible carousels, author-supplied media descriptions, and scalable native layouts. Automated accessibility assertions are part of the unit suite. The manual VoiceOver, largest Dynamic Type, contrast/transparency, iPad pointer/keyboard, landscape, and localization review remains a release-owner checklist item; no conformance claim is made.
+
 ### 32.2 Localization readiness
 
 All user-facing text, reason labels, policies, notifications, and accessibility strings must be localized resources rather than embedded literals. Backend moderation categories use stable codes; the client supplies localized labels. Text expansion must not break card layouts, and username rules remain explicit regardless of device language.
@@ -2010,6 +2018,8 @@ Before the social beta flag is enabled in production, the responsible owners mus
 - A rollback/kill-switch runbook exists and has been practiced.
 
 **Definition of done:** a normal user can safely complete the intended social loop, an abusive user cannot bypass server rules with an old/custom client, one valid report removes the exact content from every ordinary surface, an authorized moderator can make and audit the final decision, removed evidence remains restricted and recoverable for its approved purpose, and the product can later dispose of it through an approved retention process.
+
+**Repository status (September 15, 2026):** the planned implementation scope is represented in web, iOS, migrations, workers, and automated tests, including the deferred-by-policy switches for Community video and explainable ranking. Remaining work in this document is release validation or external ownership rather than an unimplemented product flow: apply the latest migration, complete the production-shaped load/accessibility/old-client matrix, configure approved provider and blocklist values, provision moderator capabilities and staffing, set the approved retention period, verify production alerts/AASA/Apple credentials, practice rollback, and obtain the listed policy/counsel approvals. Community video and algorithmic ranking remain deliberately disabled until their separate re-approval criteria are met.
 
 ## 40. Implementation references
 

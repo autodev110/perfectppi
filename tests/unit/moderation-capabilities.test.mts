@@ -52,3 +52,67 @@ describe("moderation capabilities", () => {
     assert.match(sql, /comment_case_retention_active/);
   });
 });
+
+test("evidence exports require independent capabilities, preserve reporter redaction, and audit before release", async () => {
+  const route = readFileSync(
+    new URL("../../src/app/api/admin/moderation/cases/[id]/export/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(route, /capabilities\.has\("queue_read"\)/);
+  assert.match(route, /capabilities\.has\("evidence_export"\)/);
+  assert.match(route, /detail\.case\.legal_hold[\s\S]*legal_hold_review/);
+  assert.match(route, /event_type: "evidence_exported"/);
+  assert.match(route, /if \(auditError\)[\s\S]*status: 503/);
+  assert.match(route, /capabilities\.has\("reporter_identity_read"\)/);
+  assert.match(route, /Cache-Control": "private, no-store"/);
+
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/20260915130000_expanded_ugc_reporting.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /'evidence_accessed', 'evidence_exported'/);
+});
+
+test("moderation queue filters validate UUID-backed selectors", () => {
+  const source = readFileSync(
+    new URL("../../src/features/moderation/case-queries.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /uuid\.safeParse\(filters\.assigneeId\)\.success/);
+  assert.match(source, /uuid\.safeParse\(filters\.groupId\)\.success/);
+});
+
+test("expanded UGC reports are reporter-private until a moderator decides them", () => {
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/20260915130000_expanded_ugc_reporting.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /'profile', 'group', 'listing', 'review', 'message', 'media'/);
+  assert.match(migration, /CREATE TABLE public\.moderation_reporter_hidden_entities/);
+  assert.match(migration, /REVOKE ALL ON public\.moderation_reporter_hidden_entities FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /item\.status IN \('rejected', 'legal_hold'\)/);
+  assert.match(migration, /purge_community_moderation_case_internal/);
+  assert.match(migration, /v_case\.entity_type IN \('community_post', 'community_comment'\)/);
+
+  const helper = readFileSync(
+    new URL("../../src/features/moderation/extended-reporting.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(helper, /\.in\("status", \["rejected", "legal_hold"\]\)/);
+  assert.match(helper, /return new Set\(ids\)/);
+});
+
+test("expanded UGC report controls ship on web and iOS", () => {
+  const web = readFileSync(
+    new URL("../../src/components/shared/extended-report-control.tsx", import.meta.url),
+    "utf8",
+  );
+  const ios = readFileSync(
+    new URL("../../mobile-app/PerfectPPI/Features/Community/CommunityFeedView.swift", import.meta.url),
+    "utf8",
+  );
+  assert.match(web, /\/api\/community\/reports\/extended/);
+  assert.match(web, /Report received\. This/);
+  assert.match(ios, /struct ExtendedReportButton/);
+  assert.match(ios, /CommunityAPI\.reportExtended/);
+});

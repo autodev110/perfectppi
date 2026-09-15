@@ -14,6 +14,7 @@ import { getPublicCredentialMap } from "@/features/technicians/credentials";
 import type { PublicTechnicianCredential } from "@/features/technicians/credential-types";
 import { searchCommunityEvents, type CommunityEventSummary } from "@/features/social/events";
 import { encodeSearchCursor, type SearchCursor } from "@/features/search/cursor";
+import { unavailableEntityIds } from "@/features/moderation/extended-reporting";
 
 export const SEARCH_TABS = ["posts", "people", "groups", "vehicles", "listings", "technicians", "events"] as const;
 export type SearchTab = (typeof SEARCH_TABS)[number];
@@ -230,12 +231,20 @@ export async function unifiedSearch(
         ? await Promise.all([
           admin
             .from("vehicles")
-            .select("id, year, make, model, trim, nickname, visibility, owner:profiles!vehicles_owner_id_fkey(id, username, display_name, avatar_url), vehicle_media(url, is_primary, moderation_status)")
+            .select("id, year, make, model, trim, nickname, visibility, owner:profiles!vehicles_owner_id_fkey(id, username, display_name, avatar_url), vehicle_media(id, url, is_primary, moderation_status)")
             .in("id", pageIds),
           admin.from("marketplace_listings").select("id, vehicle_id").in("vehicle_id", pageIds).eq("status", "active"),
         ])
         : [{ data: [] }, { data: [] }];
-      const listingByVehicle = new Map((listings ?? []).map((listing) => [listing.vehicle_id, listing.id]));
+      const mediaIds = (vehicles ?? []).flatMap((vehicle) => vehicle.vehicle_media.map((media) => media.id));
+      const listingIds = (listings ?? []).map((listing) => listing.id);
+      const [hiddenMedia, hiddenListings] = await Promise.all([
+        unavailableEntityIds(viewerId, "media", mediaIds),
+        unavailableEntityIds(viewerId, "listing", listingIds),
+      ]);
+      const listingByVehicle = new Map((listings ?? [])
+        .filter((listing) => !hiddenListings.has(listing.id))
+        .map((listing) => [listing.vehicle_id, listing.id]));
       const byId = new Map((vehicles ?? []).map((vehicle) => [vehicle.id, vehicle]));
       result = {
         tab,
@@ -253,7 +262,7 @@ export async function unifiedSearch(
             nickname: vehicle.nickname,
             visibility: vehicle.visibility,
             owner: owner ? { id: owner.id, username: owner.username, display_name: owner.display_name, avatar_url: owner.avatar_url } : null,
-            photo_url: primaryPhoto(vehicle.vehicle_media),
+            photo_url: primaryPhoto(vehicle.vehicle_media.filter((media) => !hiddenMedia.has(media.id))),
             listing_id: listingByVehicle.get(vehicle.id) ?? null,
           }];
         }),
@@ -287,13 +296,26 @@ export async function unifiedSearch(
       if (cursor !== undefined && hasMore && boundary?.sort_at) {
         nextCursor = encodeSearchCursor({ v: 1, tab, q: query, rank: boundary.rank, sortAt: boundary.sort_at, id: boundary.listing_id });
       }
-      const pageIds = pageRows.map((row) => row.listing_id);
+      const unavailableListings = await unavailableEntityIds(
+        viewerId,
+        "listing",
+        pageRows.map((row) => row.listing_id),
+      );
+      const pageIds = pageRows.map((row) => row.listing_id).filter((id) => !unavailableListings.has(id));
       const { data: listings } = pageIds.length
         ? await admin
           .from("marketplace_listings")
-          .select("id, title, asking_price_cents, location, vehicle_id, vehicle:vehicles!marketplace_listings_vehicle_id_fkey(year, make, model, trim, vehicle_media(url, is_primary, moderation_status))")
+          .select("id, title, asking_price_cents, location, vehicle_id, vehicle:vehicles!marketplace_listings_vehicle_id_fkey(year, make, model, trim, vehicle_media(id, url, is_primary, moderation_status))")
           .in("id", pageIds)
         : { data: [] };
+      const hiddenMedia = await unavailableEntityIds(
+        viewerId,
+        "media",
+        (listings ?? []).flatMap((listing) => {
+          const vehicle = Array.isArray(listing.vehicle) ? listing.vehicle[0] : listing.vehicle;
+          return vehicle?.vehicle_media.map((media: { id: string }) => media.id) ?? [];
+        }),
+      );
       const byId = new Map((listings ?? []).map((listing) => [listing.id, listing]));
       result = {
         tab,
@@ -308,7 +330,7 @@ export async function unifiedSearch(
             location: listing.location,
             vehicle_id: listing.vehicle_id,
             vehicle_label: vehicle ? vehicleLabel(vehicle) : "",
-            photo_url: primaryPhoto(vehicle?.vehicle_media),
+            photo_url: primaryPhoto(vehicle?.vehicle_media.filter((media: { id: string }) => !hiddenMedia.has(media.id))),
           }];
         }),
       };

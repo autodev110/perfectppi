@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { FEATURE_UNAVAILABLE_MESSAGE, isFeatureEnabled } from "@/lib/feature-flags";
 import type { Database } from "@/types/database";
 import { recordProductEvent } from "@/features/analytics/product-events";
+import { unavailableEntityIds } from "@/features/moderation/extended-reporting";
 
 export type GroupVisibility = Database["public"]["Enums"]["community_group_visibility"];
 export type GroupJoinPolicy = Database["public"]["Enums"]["community_group_join_policy"];
@@ -104,7 +105,9 @@ export async function getCommunityGroups(): Promise<CommunityGroupSummary[]> {
     console.error("community group directory failed", visibleError.message);
     return [];
   }
-  const visibleIds = (visible ?? []).map((row) => row.group_id);
+  const candidateIds = (visible ?? []).map((row) => row.group_id);
+  const hiddenIds = await unavailableEntityIds(profileId, "group", candidateIds);
+  const visibleIds = candidateIds.filter((id) => !hiddenIds.has(id));
   if (visibleIds.length === 0) return [];
 
   const { data: groups, error } = await admin
@@ -203,6 +206,8 @@ export async function getCommunityGroup(slug: string) {
     .eq("status", "active")
     .maybeSingle();
   if (error || !group) return null;
+
+  if ((await unavailableEntityIds(profileId, "group", [group.id])).has(group.id)) return null;
 
   const { data: shellVisible } = await admin.rpc("community_group_shell_visible", {
     p_viewer_id: profileId,

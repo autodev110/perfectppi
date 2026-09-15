@@ -570,6 +570,7 @@ private struct MarketplaceListingDetailView: View {
     @State private var buildSubscribed = false
     @State private var updatingBuildSubscription = false
     @State private var galleryIndex = 0
+    @State private var hiddenPhotoIds: Set<String> = []
     @State private var editing = false
     @State private var sharingInspection = false
     @State private var confirmingRemove = false
@@ -590,11 +591,12 @@ private struct MarketplaceListingDetailView: View {
     private var canContact: Bool { !isOwner && listing.status.isPublic }
 
     private var photos: [MarketplaceListingPhoto] {
-        if let photos = listing.photos { return photos }
+        if let photos = listing.photos { return photos.filter { !hiddenPhotoIds.contains($0.id) } }
         let media = listing.vehicle?.vehicleMedia ?? []
         return media
             .sorted { ($0.isPrimary == true ? 0 : 1, $0.sortOrder ?? 0) < ($1.isPrimary == true ? 0 : 1, $1.sortOrder ?? 0) }
             .map { MarketplaceListingPhoto(id: $0.id, url: $0.url) }
+            .filter { !hiddenPhotoIds.contains($0.id) }
     }
 
     /// Optimistic private save (plan 25.2); reconciled to the server answer.
@@ -695,6 +697,14 @@ private struct MarketplaceListingDetailView: View {
                     if listing.status.isPublic {
                         ShareLink(item: ShareLinks.listing(id: listing.id), subject: Text(listing.title)) {
                             Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                        .buttonStyle(OutlineButtonStyle())
+                    }
+                    if !isOwner, currentProfileId != nil {
+                        ExtendedReportButton(entityType: "listing", entityId: listing.id, label: "Listing") {
+                            removed = true
+                            onChanged()
+                            dismiss()
                         }
                         .buttonStyle(OutlineButtonStyle())
                     }
@@ -930,6 +940,21 @@ private struct MarketplaceListingDetailView: View {
                     .background(Color.black.opacity(0.6))
                     .clipShape(Capsule())
                     .padding(10)
+                if !isOwner, currentProfileId != nil, items.indices.contains(galleryIndex) {
+                    ExtendedReportButton(
+                        entityType: "media",
+                        entityId: items[galleryIndex].id,
+                        label: "Photo",
+                        iconOnly: true
+                    ) {
+                        hiddenPhotoIds.insert(items[galleryIndex].id)
+                        galleryIndex = max(0, min(galleryIndex, items.count - 2))
+                    }
+                    .buttonStyle(.bordered)
+                    .background(.regularMaterial, in: Circle())
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(8)
+                }
             }
         }
     }

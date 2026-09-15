@@ -4,6 +4,7 @@ import type { Database, Json } from "@/types/database";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 import { getCurrentSocialProfileId } from "@/features/social/relationships";
 import { encodeSavedCursor, type SavedCursor } from "@/features/saved/cursor";
+import { unavailableEntityIds } from "@/features/moderation/extended-reporting";
 import {
   encodeMarketplaceCursor,
   marketplaceFilterFingerprint,
@@ -180,6 +181,19 @@ async function cleanListingMedia(listing: ListingRow, publicOnly = true): Promis
       }))),
     },
   };
+}
+
+async function removeUnavailableMedia(listings: ListingRow[], viewerId: string | null) {
+  const ids = listings.flatMap((listing) => listing.vehicle?.vehicle_media.map((item) => item.id) ?? []);
+  const hidden = await unavailableEntityIds(viewerId, "media", ids);
+  if (hidden.size === 0) return listings;
+  return listings.map((listing) => listing.vehicle ? {
+    ...listing,
+    vehicle: {
+      ...listing.vehicle,
+      vehicle_media: listing.vehicle.vehicle_media.filter((item) => !hidden.has(item.id)),
+    },
+  } : listing);
 }
 
 async function addInspectionTrust(
@@ -366,7 +380,8 @@ async function hydrateSavedMarketplaceListings(viewerId: string, ids: string[]) 
     const row = byId.get(id);
     return row ? [row] : [];
   });
-  const cleaned = await Promise.all(ordered.map((item) => cleanListingMedia(item)));
+  const visible = await filterVisibleListings(ordered, viewerId);
+  const cleaned = await removeUnavailableMedia(await Promise.all(visible.map((item) => cleanListingMedia(item))), viewerId);
   return addInspectionTrust(cleaned, viewerId);
 }
 
@@ -381,7 +396,10 @@ async function filterVisibleListings(listings: ListingRow[], viewerId: string | 
     return [];
   }
   const visibleIds = new Set((data ?? []).map((row) => row.listing_id));
-  return listings.filter((listing) => visibleIds.has(listing.id));
+  const reporterHidden = viewerId
+    ? await unavailableEntityIds(viewerId, "listing", listings.map((listing) => listing.id))
+    : await unavailableEntityIds(null, "listing", listings.map((listing) => listing.id));
+  return listings.filter((listing) => visibleIds.has(listing.id) && !reporterHidden.has(listing.id));
 }
 
 export async function getMarketplaceListings(filters?: MarketplaceFilters) {
@@ -397,7 +415,7 @@ export async function getMarketplaceListings(filters?: MarketplaceFilters) {
   const rows = (data ?? []) as unknown as ListingRow[];
   const publicListings = await filterVisibleListings(rows, viewerId);
 
-  const cleaned = await Promise.all(publicListings.map((item) => cleanListingMedia(item)));
+  const cleaned = await removeUnavailableMedia(await Promise.all(publicListings.map((item) => cleanListingMedia(item))), viewerId);
   return applyFilters(await addInspectionTrust(cleaned, viewerId), filters ?? {});
 }
 
@@ -450,7 +468,8 @@ async function hydrateMarketplaceListingIds(viewerId: string | null, ids: string
     const row = byId.get(id);
     return row ? [row] : [];
   });
-  const cleaned = await Promise.all(ordered.map((item) => cleanListingMedia(item)));
+  const visible = await filterVisibleListings(ordered, viewerId);
+  const cleaned = await removeUnavailableMedia(await Promise.all(visible.map((item) => cleanListingMedia(item))), viewerId);
   return addInspectionTrust(cleaned, viewerId);
 }
 
@@ -521,7 +540,8 @@ export async function getVehicleActiveListing(vehicleId: string) {
   if (!listing) return null;
   const [visible] = await filterVisibleListings([listing], viewerId);
   if (!visible) return null;
-  const [trusted] = await addInspectionTrust([await cleanListingMedia(visible)], viewerId);
+  const cleaned = await removeUnavailableMedia([await cleanListingMedia(visible)], viewerId);
+  const [trusted] = await addInspectionTrust(cleaned, viewerId);
   return trusted ?? null;
 }
 
@@ -544,7 +564,10 @@ export async function getMarketplaceListing(listingId: string) {
     const [visible] = await filterVisibleListings([listing], viewerId);
     if (!visible) return null;
   }
-  const [trusted] = await addInspectionTrust([await cleanListingMedia(listing, !ownerView)], viewerId);
+  const cleaned = ownerView
+    ? [await cleanListingMedia(listing, false)]
+    : await removeUnavailableMedia([await cleanListingMedia(listing)], viewerId);
+  const [trusted] = await addInspectionTrust(cleaned, viewerId);
   return trusted ?? null;
 }
 

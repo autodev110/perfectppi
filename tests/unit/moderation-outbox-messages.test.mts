@@ -32,6 +32,19 @@ describe("moderation notification privacy (plan 17.4 / 22.1 / 22.2)", () => {
     }
   });
 
+  test("removal notices for expanded UGC name the entity and never promise a post appeal", () => {
+    for (const [entityType, noun] of [["listing", "listing"], ["profile", "profile"], ["review", "review"], ["media", "photo"], ["message", "message"], ["group", "group"]] as const) {
+      const draft = authorRemovedMessage({
+        ...ids, entityType, entityId: "33333333-3333-4333-8333-333333333333",
+        policyCategory: "fraud", decidedAt: "2026-09-15T12:00:00Z",
+      });
+      assert.match(draft.title, new RegExp(`Your ${noun} was removed`), entityType);
+      assert.ok(!/My Posts/.test(draft.body), `${entityType} pointed at the post appeal path`);
+      assert.equal(draft.data.appealable, false);
+      assert.ok(!/\bpost\b/i.test(draft.title), `${entityType} notice called the content a post`);
+    }
+  });
+
   test("author restoration notice carries no allegation details", () => {
     const draft = authorRestoredMessage({ ...ids, entityType: "community_comment", entityId: "33333333-3333-4333-8333-333333333333" });
     assert.match(draft.title, /comment/);

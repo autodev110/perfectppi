@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime, formatRelativeTime, getInitials } from "@/lib/utils/formatting";
 import { ArrowLeft, Car, Radio, SendHorizontal, CheckCheck, Check, FileText, Paperclip, X } from "lucide-react";
+import { ExtendedReportControl } from "@/components/shared/extended-report-control";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 
@@ -524,6 +525,14 @@ export function ConversationThread({
                                     )
                                   ) : null}
                                 </div>
+                              ) : null}
+                              {!mine && !isTemp ? (
+                                <ExtendedReportControl
+                                  entityType="message"
+                                  entityId={message.id}
+                                  label="Message"
+                                  onReported={() => setMessages((current) => current.filter((item) => item.id !== message.id))}
+                                />
                               ) : null}
                             </div>
                           </div>

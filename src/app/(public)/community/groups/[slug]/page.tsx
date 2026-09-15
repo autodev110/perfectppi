@@ -38,6 +38,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDate, getInitials } from "@/lib/utils/formatting";
 import { ArrowLeft, BookOpen, Clock3, Lock, MessageSquare, Pin, Plus, Search, ShieldCheck, Users } from "lucide-react";
 import { decodeGroupDirectoryCursor } from "@/features/community/group-cursor";
+import { ExtendedReportControl } from "@/components/shared/extended-report-control";
 
 export const dynamic = "force-dynamic";
 
@@ -173,6 +174,7 @@ export default async function CommunityGroupPage({
               <div className="flex flex-col items-end gap-2">
                 <GroupMembershipButton groupId={group.id} status={group.membership_status} joinPolicy={group.join_policy} owner={group.membership_role === "owner"} />
                 {group.visibility !== "unlisted" ? <ShareButton path={sharePath({ kind: "group", slug: group.slug })} title={`${group.name} · PerfectPPI Groups`} /> : null}
+                {group.created_by !== viewer.id ? <ExtendedReportControl entityType="group" entityId={group.id} label="Group" /> : null}
                 {viewerRole === "owner" || viewerRole === "admin" ? (
                   <div className="flex flex-wrap justify-end gap-2">
                     <Button asChild size="sm" variant="outline"><Link href={`/community/groups/${group.slug}/settings`}>Group settings</Link></Button>

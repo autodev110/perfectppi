@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBlockedProfileIds } from "@/features/social/relationships";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { unavailableEntityIds } from "@/features/moderation/extended-reporting";
 
 async function getViewerProfileId() {
   const supabase = await createClient();
@@ -95,21 +96,21 @@ export async function getProfilePublicContent(profileId: string) {
   ] = await Promise.all([
     admin
       .from("vehicles")
-      .select("id, year, make, model, trim, mileage, visibility, created_at, vehicle_media(url, is_primary, sort_order, moderation_status)")
+      .select("id, year, make, model, trim, mileage, visibility, created_at, vehicle_media(id, url, is_primary, sort_order, moderation_status)")
       .eq("owner_id", profileId)
       .eq("visibility", "public")
       .order("created_at", { ascending: false }),
 
     admin
       .from("marketplace_listings")
-      .select("id, title, asking_price_cents, location, vehicle_id, created_at, vehicle:vehicles!marketplace_listings_vehicle_id_fkey(id, year, make, model, trim, mileage, vehicle_media(url, is_primary, moderation_status))")
+      .select("id, title, asking_price_cents, location, vehicle_id, created_at, vehicle:vehicles!marketplace_listings_vehicle_id_fkey(id, year, make, model, trim, mileage, vehicle_media(id, url, is_primary, moderation_status))")
       .eq("seller_id", profileId)
       .eq("status", "active")
       .order("created_at", { ascending: false }),
 
     admin
       .from("community_posts")
-      .select("id, content, audience, created_at, moderation_status, vehicle:vehicles!community_posts_vehicle_id_fkey(id, year, make, model, trim, vehicle_media(url, is_primary, moderation_status))")
+      .select("id, content, audience, created_at, moderation_status, vehicle:vehicles!community_posts_vehicle_id_fkey(id, year, make, model, trim, vehicle_media(id, url, is_primary, moderation_status))")
       .eq("author_id", profileId)
       .eq("status", "active")
       .eq("moderation_status", "active")
@@ -118,7 +119,7 @@ export async function getProfilePublicContent(profileId: string) {
 
     admin
       .from("ppi_requests")
-      .select("id, ppi_type, status, created_at, vehicle:vehicles!ppi_requests_vehicle_id_fkey(id, year, make, model, trim, visibility, vehicle_media(url, is_primary, moderation_status))")
+      .select("id, ppi_type, status, created_at, vehicle:vehicles!ppi_requests_vehicle_id_fkey(id, year, make, model, trim, visibility, vehicle_media(id, url, is_primary, moderation_status))")
       .eq("requester_id", profileId)
       .eq("status", "completed")
       .order("created_at", { ascending: false }),
@@ -129,8 +130,31 @@ export async function getProfilePublicContent(profileId: string) {
     (p) => (p.vehicle as { visibility?: string } | null)?.visibility === "public",
   );
 
-  const cleanVehicle = <T extends { vehicle_media?: Array<{ moderation_status: string }> } | null>(vehicle: T) =>
-    vehicle ? { ...vehicle, vehicle_media: (vehicle.vehicle_media ?? []).filter((m) => m.moderation_status === "active") } : vehicle;
+  const mediaIds = [
+    ...(vehicles ?? []).flatMap((vehicle) => vehicle.vehicle_media.map((media) => media.id)),
+    ...(listings ?? []).flatMap((listing) => {
+      const vehicle = Array.isArray(listing.vehicle) ? listing.vehicle[0] : listing.vehicle;
+      return vehicle?.vehicle_media.map((media: { id: string }) => media.id) ?? [];
+    }),
+    ...(posts ?? []).flatMap((post) => {
+      const vehicle = Array.isArray(post.vehicle) ? post.vehicle[0] : post.vehicle;
+      return vehicle?.vehicle_media.map((media: { id: string }) => media.id) ?? [];
+    }),
+    ...(ppis ?? []).flatMap((ppi) => {
+      const vehicle = Array.isArray(ppi.vehicle) ? ppi.vehicle[0] : ppi.vehicle;
+      return vehicle?.vehicle_media.map((media: { id: string }) => media.id) ?? [];
+    }),
+  ];
+  const [hiddenMedia, hiddenListings] = await Promise.all([
+    unavailableEntityIds(viewerId, "media", mediaIds),
+    unavailableEntityIds(viewerId, "listing", (listings ?? []).map((listing) => listing.id)),
+  ]);
+  const cleanVehicle = <T extends { vehicle_media?: Array<{ id: string; moderation_status: string }> } | null>(vehicle: T) =>
+    vehicle ? {
+      ...vehicle,
+      vehicle_media: (vehicle.vehicle_media ?? []).filter((media) =>
+        media.moderation_status === "active" && !hiddenMedia.has(media.id)),
+    } : vehicle;
   const visiblePostChecks = await Promise.all((posts ?? []).map(async (post) => {
     const { data: visible } = await admin.rpc("social_can_view_community_post", {
       p_viewer_id: viewerId,
@@ -142,7 +166,9 @@ export async function getProfilePublicContent(profileId: string) {
 
   return {
     vehicles: (vehicles ?? []).map(cleanVehicle),
-    listings: (listings ?? []).map((item) => ({ ...item, vehicle: cleanVehicle(item.vehicle) })),
+    listings: (listings ?? [])
+      .filter((item) => !hiddenListings.has(item.id))
+      .map((item) => ({ ...item, vehicle: cleanVehicle(item.vehicle) })),
     posts: visiblePostChecks.filter((item) => item !== null).map((item) => ({ ...item, vehicle: cleanVehicle(item.vehicle) })),
     ppis: publicPpis.map((item) => ({ ...item, vehicle: cleanVehicle(item.vehicle) })),
   };

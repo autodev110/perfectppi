@@ -39,6 +39,7 @@ export default async function ModerationCasePage({ params, searchParams }: PageP
   const canDecide = capabilities.has("content_decide");
   const canEnforce = capabilities.has("account_enforce");
   const canLegalHold = capabilities.has("legal_hold_review");
+  const canExport = capabilities.has("evidence_export") && (!moderationCase.legal_hold || canLegalHold);
   const isMine = moderationCase.assigned_moderator_id === profile.id;
   const claimedByOther = detail.claimLive && !isMine;
   const isOpen = moderationCase.state !== "closed";
@@ -59,6 +60,11 @@ export default async function ModerationCasePage({ params, searchParams }: PageP
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
+          {canExport ? (
+            <Button size="sm" variant="outline" asChild>
+              <a href={`/api/admin/moderation/cases/${moderationCase.id}/export`} download>Export evidence</a>
+            </Button>
+          ) : null}
           {moderationCase.legal_hold ? <Badge variant="destructive">legal hold</Badge> : null}
           {detail.claimLive && detail.assignee ? (
             <Badge variant={isMine ? "default" : "outline"}>

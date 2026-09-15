@@ -89,6 +89,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
     privacyRequests,
     moderationItems,
     moderationReports,
+    moderationReporterHides,
     moderationAppeals,
     enforcementActions,
     partnerUserLinks,
@@ -170,6 +171,12 @@ export async function buildAccountDataExport(profileId: string, user: User) {
         .eq("author_id", profileId),
     ),
     rows("moderation reports", admin.from("moderation_reports").select("*").eq("reporter_id", profileId)),
+    rows(
+      "moderation reporter hides",
+      admin.from("moderation_reporter_hidden_entities")
+        .select("entity_type, entity_id, created_at")
+        .eq("reporter_id", profileId),
+    ),
     rows("moderation appeals", admin.from("moderation_appeals").select("*").eq("appellant_id", profileId)),
     rows("enforcement actions", admin.from("user_enforcement_actions").select("*").eq("profile_id", profileId)),
     rows(
@@ -381,6 +388,7 @@ export async function buildAccountDataExport(profileId: string, user: User) {
       moderationItems,
       moderationEvents,
       reports: moderationReports,
+      reporterHiddenItems: moderationReporterHides,
       appeals: moderationAppeals,
       enforcementActions,
       feedMutes: communityFeedMutes,

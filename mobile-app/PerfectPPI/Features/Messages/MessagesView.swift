@@ -251,6 +251,7 @@ struct MessageThreadView: View {
     @State private var showingFilePicker = false
     @State private var composerError: String?
     @State private var photoAccessBlocked = false
+    @State private var hiddenMessageIds: Set<String> = []
     @StateObject private var uploadProgress = UploadProgressModel()
 
     private var incomingRequest: Bool {
@@ -305,10 +306,11 @@ struct MessageThreadView: View {
                         ScrollViewReader { proxy in
                             ScrollView {
                                 LazyVStack(alignment: .leading, spacing: 10) {
-                                    ForEach(thread.messages) { message in
+                                    ForEach(thread.messages.filter { !hiddenMessageIds.contains($0.id) }) { message in
                                         MessageBubble(
                                             message: message,
-                                            isMine: message.senderId == currentProfileId
+                                            isMine: message.senderId == currentProfileId,
+                                            onReported: { hiddenMessageIds.insert(message.id) }
                                         )
                                         .id(message.id)
                                     }
@@ -562,6 +564,7 @@ struct MessageThreadView: View {
 private struct MessageBubble: View {
     let message: ConversationMessage
     let isMine: Bool
+    let onReported: () -> Void
 
     var body: some View {
         HStack {
@@ -579,6 +582,10 @@ private struct MessageBubble: View {
                     Text(created, style: .time)
                         .font(.caption2)
                         .foregroundStyle(isMine ? .white.opacity(0.75) : .secondary)
+                }
+                if !isMine {
+                    ExtendedReportButton(entityType: "message", entityId: message.id, label: "Message", onReported: onReported)
+                        .font(.caption2)
                 }
             }
             .padding(10)

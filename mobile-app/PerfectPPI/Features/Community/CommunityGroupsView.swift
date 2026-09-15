@@ -733,6 +733,11 @@ struct CommunityGroupDetailView: View {
                         Label("Share group", systemImage: "square.and.arrow.up")
                     }
                 }
+                if detail.group.membershipRole != "owner" {
+                    ExtendedReportButton(entityType: "group", entityId: detail.group.id, label: "Group", iconOnly: true) {
+                        onMembershipChanged()
+                    }
+                }
                 if detail.group.isMember && detail.group.hasAcknowledgedRules && !detail.group.postingIsRestricted
                     && (detail.group.postingPolicy != "moderators" || canModerate) {
                     Button { showingComposer = true } label: {

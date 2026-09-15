@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 import { getCurrentSocialProfileId } from "@/features/social/relationships";
+import { unavailableEntityIds } from "@/features/moderation/extended-reporting";
 
 async function authorizeVehicleMedia<T extends { url: string }>(media: T[]): Promise<T[]> {
   return Promise.all(media.map(async (item) => ({
@@ -130,6 +131,11 @@ export async function getVisibleVehicle(id: string) {
     .single();
 
   if (!vehicle) return null;
+  const unavailableMedia = await unavailableEntityIds(
+    viewerId,
+    "media",
+    (vehicle.vehicle_media ?? []).map((media) => media.id),
+  );
   return {
     ...vehicle,
     // The factory layer is public information about the model; the
@@ -137,7 +143,8 @@ export async function getVisibleVehicle(id: string) {
     factory_spec: redactFactorySpec(parseFactorySpec(vehicle.factory_spec)),
     viewer_is_owner: !!viewerId && vehicle.owner_id === viewerId,
     vehicle_media: await authorizeVehicleMedia(
-      (vehicle.vehicle_media ?? []).filter((media) => media.moderation_status === "active"),
+      (vehicle.vehicle_media ?? []).filter((media) =>
+        media.moderation_status === "active" && !unavailableMedia.has(media.id)),
     ),
   };
 }

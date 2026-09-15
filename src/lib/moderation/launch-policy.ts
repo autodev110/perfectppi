@@ -8,10 +8,8 @@ import { createHash } from "node:crypto";
 // lets everything else publish immediately. Ambiguous profanity is not
 // treated as a proven violation here.
 //
-// The policy is versioned. Bump LAUNCH_POLICY_VERSION whenever a rule changes
-// so moderation records identify which rule set evaluated a piece of content.
-
-export const LAUNCH_POLICY_VERSION = "perfectppi-launch-policy-v1";
+// The policy version includes a fingerprint of deployment-owned lists so a
+// moderation record always identifies the exact effective rule set.
 
 // Stable user-facing outcome codes (plan 21.1). Clients map these to recovery
 // copy; they never receive the private pattern or rule that matched.
@@ -130,10 +128,17 @@ const SCHEME_PATTERN = /\b([a-z][a-z0-9+.-]{1,15}):(?:\/\/|[^\s/]{2})/giu;
 const WEB_LINK_PATTERN = /\b(?:https?:\/\/[^\s<>"']+|www\.[a-z0-9-]+(?:\.[a-z0-9-]+)+[^\s<>"']*)/giu;
 const ALLOWED_SCHEMES = new Set(["http", "https", "mailto", "tel"]);
 
+function configuredTerms(value: string | undefined, normalize: (entry: string) => string) {
+  return [...new Set((value ?? "").split(",").map((entry) => normalize(entry.trim())).filter(Boolean))];
+}
+
 // Versioned blocklist of hosts that may never appear in Community content.
 // Entries match the host and any subdomain. Trust & Safety owns this list;
 // keep it in this module so a change bumps LAUNCH_POLICY_VERSION.
-export const BLOCKED_LINK_HOSTS: readonly string[] = [];
+export const BLOCKED_LINK_HOSTS: readonly string[] = configuredTerms(
+  process.env.COMMUNITY_BLOCKED_LINK_HOSTS,
+  (entry) => entry.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, ""),
+).filter((entry) => /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(entry));
 
 function hostOf(link: string): string | null {
   try {
@@ -198,7 +203,16 @@ function luhnValid(digits: string): boolean {
 // pattern list is a Trust & Safety policy decision (plan 21.1, "high-confidence
 // ... approved by policy") and must be populated before the public beta.
 // Each entry is matched as a whole word, case-insensitively.
-export const TARGETED_SLUR_TERMS: readonly string[] = [];
+export const TARGETED_SLUR_TERMS: readonly string[] = configuredTerms(
+  process.env.COMMUNITY_TARGETED_SLUR_TERMS,
+  (entry) => normalizeForComparison(entry),
+).filter((entry) => entry.length >= 2 && entry.length <= 80);
+
+const configuredPolicyFingerprint = createHash("sha256")
+  .update(JSON.stringify({ blockedHosts: BLOCKED_LINK_HOSTS, targetedTerms: TARGETED_SLUR_TERMS }))
+  .digest("hex")
+  .slice(0, 12);
+export const LAUNCH_POLICY_VERSION = `perfectppi-launch-policy-v1-${configuredPolicyFingerprint}`;
 
 const CONTENT_RULES: readonly ContentRule[] = [
   {

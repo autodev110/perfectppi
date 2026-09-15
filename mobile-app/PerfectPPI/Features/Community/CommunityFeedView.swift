@@ -21,6 +21,7 @@ struct CommunityFeedView: View {
     @State private var initialError: String?
     @State private var loadingMore = false
     @State private var loadMoreError: String?
+    @State private var suggestedGroup: CommunityGroupSummary?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -95,7 +96,7 @@ struct CommunityFeedView: View {
                 Spacer()
             } else {
                 List {
-                    ForEach(posts) { post in
+                    ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
                         NavigationLink {
                             CommunityPostDetailView(post: post) {
                                 refresh()
@@ -104,6 +105,16 @@ struct CommunityFeedView: View {
                             CommunityPostRow(post: post) {
                                 refresh()
                             }
+                        }
+                        if index == 2, let suggestedGroup {
+                            NavigationLink {
+                                CommunityGroupDetailView(slug: suggestedGroup.slug) {
+                                    self.suggestedGroup = nil
+                                }
+                            } label: {
+                                SuggestedFeedGroupCard(group: suggestedGroup)
+                            }
+                            .accessibilityHint("Opens this suggested group")
                         }
                     }
                     Section {
@@ -153,6 +164,7 @@ struct CommunityFeedView: View {
         nextCursor = nil
         initialError = nil
         loadMoreError = nil
+        suggestedGroup = nil
         reloadToken = UUID()
     }
 
@@ -166,11 +178,26 @@ struct CommunityFeedView: View {
             nextCursor = page.nextCursor
             initialError = nil
             loadMoreError = nil
+            suggestedGroup = await loadSuggestedGroup()
         } catch is CancellationError {
             return
         } catch {
             guard !Task.isCancelled else { return }
             initialError = error.localizedDescription
+        }
+    }
+
+    private func loadSuggestedGroup() async -> CommunityGroupSummary? {
+        guard feedFilter == .all, auth.capabilities.capabilities.groups else { return nil }
+        do {
+            let directory = try await CommunityAPI.groups()
+            return directory.groups.first {
+                $0.isSuggested && !$0.isMember && ($0.visibility ?? "public") == "public"
+            }
+        } catch {
+            // Suggestions are optional and must never make the chronological
+            // feed unavailable.
+            return nil
         }
     }
 
@@ -284,6 +311,31 @@ struct CommunityFeedView: View {
         case .friends: "Posts shared by people you are friends with will appear here."
         case .myCars: "Posts about the makes and models in your Garage will appear here."
         }
+    }
+}
+
+private struct SuggestedFeedGroupCard: View {
+    let group: CommunityGroupSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("SUGGESTED FROM YOUR GARAGE")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(Theme.Palette.primary)
+            Text(group.name)
+                .font(.headline)
+                .foregroundStyle(.primary)
+            Text(group.description)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Text("\(group.memberCount) members")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Suggested group, \(group.name), \(group.memberCount) members")
     }
 }
 
@@ -645,7 +697,10 @@ struct CommunityPostRow: View {
         .sheet(isPresented: $showingCollectionPicker) {
             NavigationStack { SavedCollectionPickerView(entityType: "post", entityId: post.id) }
         }
-        .alert("Report not submitted", isPresented: .constant(error != nil)) {
+        .alert("Report not submitted", isPresented: Binding(
+            get: { error != nil },
+            set: { if !$0 { error = nil } }
+        )) {
             Button("OK") { error = nil }
         } message: {
             Text(error ?? "Please try again.")
@@ -1446,7 +1501,7 @@ private struct ReportMenu: View {
     }
 }
 
-private struct CommunityReportSheet: View {
+struct CommunityReportSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var reasonCode = ""
     @State private var details = ""
@@ -1539,6 +1594,63 @@ private struct CommunityReportSheet: View {
                     .disabled(submitting || !canSubmit)
                 }
             }
+        }
+    }
+}
+
+/// Shared report affordance for non-post UGC. The server verifies current
+/// visibility and applies reporter-only hiding before this callback fires.
+struct ExtendedReportButton: View {
+    let entityType: String
+    let entityId: String
+    let label: String
+    var iconOnly = false
+    var onReported: () -> Void = {}
+
+    @State private var showingSheet = false
+    @State private var accepted = false
+    @State private var error: String?
+
+    var body: some View {
+        Button {
+            showingSheet = true
+        } label: {
+            if iconOnly {
+                Image(systemName: "flag")
+                    .foregroundStyle(Theme.Palette.danger)
+                    .frame(minWidth: 44, minHeight: 44)
+            } else {
+                Label("Report \(label.lowercased())", systemImage: "flag")
+                    .foregroundStyle(Theme.Palette.danger)
+            }
+        }
+        .accessibilityLabel("Report this \(label.lowercased())")
+        .accessibilityHint("Opens reporting options. A submitted report hides this item from you while it is reviewed.")
+        .sheet(isPresented: $showingSheet, onDismiss: {
+            guard accepted else { return }
+            accepted = false
+            onReported()
+        }) {
+            CommunityReportSheet { reasonCode, details in
+                do {
+                    let _: Empty = try await CommunityAPI.reportExtended(
+                        entityType: entityType,
+                        entityId: entityId,
+                        reasonCode: reasonCode,
+                        details: details
+                    )
+                    accepted = true
+                    return true
+                } catch {
+                    self.error = error.localizedDescription
+                    return false
+                }
+            }
+        }
+        .alert("Report not submitted", isPresented: .constant(error != nil)) {
+            Button("OK") { error = nil }
+        } message: {
+            Text(error ?? "Please try again.")
         }
     }
 }

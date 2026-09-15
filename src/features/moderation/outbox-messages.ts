@@ -27,8 +27,29 @@ export type NotificationDraft = {
   push: { title: string; body: string; data: Record<string, unknown> } | null;
 };
 
+const ENTITY_NOUNS: Record<string, string> = {
+  community_post: "post",
+  community_comment: "comment",
+  profile: "profile",
+  group: "group",
+  listing: "listing",
+  review: "review",
+  message: "message",
+  media: "photo",
+};
+
 function entityNoun(entityType: string) {
-  return entityType === "community_comment" ? "comment" : "post";
+  return ENTITY_NOUNS[entityType] ?? "content";
+}
+
+// Appeals exist only for Community posts (open_moderation_appeal); every other
+// removal points the author at support instead of a path that does not exist.
+function appealable(entityType: string) {
+  return entityType === "community_post";
+}
+
+function removedScope(entityType: string) {
+  return entityType === "listing" ? "the Marketplace" : entityType === "message" ? "the conversation" : "the Community";
 }
 
 export function authorRestoredMessage(input: {
@@ -60,12 +81,15 @@ export function authorRemovedMessage(input: {
 }): NotificationDraft {
   const noun = entityNoun(input.entityType);
   const policy = REPORT_REASON_LABELS_FOR_AUTHOR[input.policyCategory ?? "other"] ?? "Community Guidelines";
+  const canAppeal = appealable(input.entityType);
   return {
-    title: `Your ${noun} was removed from the Community`,
-    body: `Our team removed your ${noun} for: ${policy}. You can appeal this decision from My Posts.`,
+    title: `Your ${noun} was removed from ${removedScope(input.entityType)}`,
+    body: `Our team removed your ${noun} for: ${policy}. ${canAppeal
+      ? "You can appeal this decision from My Posts."
+      : "If you believe this was a mistake, contact support from Settings."}`,
     data: {
       kind: "author_removed", outboxId: input.outboxId, caseId: input.caseId, entityType: input.entityType,
-      entityId: input.entityId, policyCategory: input.policyCategory, decidedAt: input.decidedAt, appealable: true,
+      entityId: input.entityId, policyCategory: input.policyCategory, decidedAt: input.decidedAt, appealable: canAppeal,
     },
     push: {
       title: `A moderation decision was made on your ${noun}`,
