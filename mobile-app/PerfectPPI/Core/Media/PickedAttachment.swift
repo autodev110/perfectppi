@@ -73,7 +73,10 @@ enum AttachmentPickerSupport {
 
         // Re-encoding selected still images removes EXIF, GPS, camera serial,
         // and other source metadata that is not needed for the attachment.
-        if kind == .image, let image = UIImage(data: data), let sanitized = image.jpegData(compressionQuality: 0.9) {
+        // Orientation is baked into the pixels first: jpegData() would
+        // otherwise keep it as an EXIF tag that not every viewer honours.
+        if kind == .image, let image = UIImage(data: data),
+           let sanitized = image.orientedUp().jpegData(compressionQuality: 0.9) {
             return PickedAttachment(
                 data: sanitized,
                 filename: "attachment-\(UUID().uuidString).jpg",
@@ -96,11 +99,37 @@ enum AttachmentPickerSupport {
 
         let data = try Data(contentsOf: url)
         let type = UTType(filenameExtension: url.pathExtension) ?? .data
+        // Image files get the same upright-JPEG treatment as library photos
+        // so a HEIC receipt photo is viewable everywhere it is served.
+        if type.conforms(to: .image), let image = UIImage(data: data),
+           let sanitized = image.orientedUp().jpegData(compressionQuality: 0.9) {
+            return PickedAttachment(
+                data: sanitized,
+                filename: "\(url.deletingPathExtension().lastPathComponent).jpg",
+                contentType: "image/jpeg",
+                kind: .file
+            )
+        }
         return PickedAttachment(
             data: data,
             filename: url.lastPathComponent,
             contentType: type.preferredMIMEType ?? "application/octet-stream",
             kind: .file
         )
+    }
+}
+
+extension UIImage {
+    /// The same picture with `.up` orientation and the rotation applied to
+    /// the pixel data, so encoders that drop or viewers that ignore the EXIF
+    /// orientation tag still show it the right way round.
+    func orientedUp() -> UIImage {
+        guard imageOrientation != .up else { return self }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = scale
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            draw(in: CGRect(origin: .zero, size: size))
+        }
     }
 }

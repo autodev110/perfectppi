@@ -2558,8 +2558,11 @@ private struct BuildDocumentAttachSheet: View {
             .onChange(of: photoItem) { _, item in
                 guard let item else { return }
                 Task {
-                    if let data = try? await item.loadTransferable(type: Data.self) {
-                        picked = PickedAttachment(data: data, filename: "photo-\(UUID().uuidString).jpg", contentType: "image/jpeg", kind: .image)
+                    // The shared loader re-encodes to an upright JPEG; raw
+                    // library bytes can be HEIC with an orientation tag,
+                    // which the web cannot display.
+                    if let attachment = try? await AttachmentPickerSupport.load(item), attachment.kind == .image {
+                        picked = attachment
                         error = nil
                     } else {
                         error = "That photo could not be loaded."

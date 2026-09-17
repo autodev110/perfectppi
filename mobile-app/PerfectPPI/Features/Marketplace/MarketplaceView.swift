@@ -577,6 +577,9 @@ private struct MarketplaceListingDetailView: View {
     @State private var managing = false
     @State private var removed = false
     @Environment(\.dismiss) private var dismiss
+    /// Narrowest an action button may get before the row wraps; scales with
+    /// Dynamic Type so large text collapses to one column instead of squeezing.
+    @ScaledMetric(relativeTo: .headline) private var actionMinWidth: CGFloat = 156
 
     init(listing: MarketplaceListing, currentProfileId: String?, onChanged: @escaping () -> Void = {}) {
         self.initial = listing
@@ -669,8 +672,9 @@ private struct MarketplaceListingDetailView: View {
                     .lineLimit(1)
                 }
 
-                // Save and Share.
-                HStack(spacing: 10) {
+                // Save / Collection / Build updates / Share / Report. Wraps into
+                // rows (2-up on phones) so five buttons never scrunch into one.
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: actionMinWidth), spacing: 10)], spacing: 10) {
                     if !isOwner {
                         Button {
                             Task { await toggleSaved() }
@@ -709,6 +713,8 @@ private struct MarketplaceListingDetailView: View {
                         .buttonStyle(OutlineButtonStyle())
                     }
                 }
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
 
                 section("Inspection") {
                     if isOwner {

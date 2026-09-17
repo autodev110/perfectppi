@@ -26,7 +26,7 @@ struct CameraCaptureView: View {
                          ? "Camera permission denied."
                          : "No camera available on this device.")
             } else {
-                CameraPreviewLayerView(session: camera.session)
+                CameraPreviewLayerView(camera: camera)
                     .ignoresSafeArea()
                 cameraOverlay
             }
@@ -160,7 +160,11 @@ struct CameraCaptureView: View {
                 .tint(.white)
 
                 Button("Use Photo") {
-                    if let data = image.jpegData(compressionQuality: 0.9) {
+                    // Bake the orientation into the pixels so every consumer —
+                    // browsers, the server's derivatives, PDFs, other clients —
+                    // shows the same upright photo instead of depending on
+                    // whether it honours the EXIF orientation tag.
+                    if let data = image.orientedUp().jpegData(compressionQuality: 0.9) {
                         onCapture(data)
                     }
                 }
@@ -221,17 +225,20 @@ struct CameraCaptureView: View {
 // MARK: - UIKit bridge
 
 private struct CameraPreviewLayerView: UIViewRepresentable {
-    let session: AVCaptureSession
+    let camera: CameraController
 
     func makeUIView(context: Context) -> PreviewView {
         let v = PreviewView()
-        v.videoPreviewLayer.session = session
+        v.videoPreviewLayer.session = camera.session
         v.videoPreviewLayer.videoGravity = .resizeAspectFill
+        // The controller keeps the preview and the captured photo level with
+        // the horizon as the phone rotates (AVCaptureDevice.RotationCoordinator).
+        camera.attachPreviewLayer(v.videoPreviewLayer)
         return v
     }
 
     func updateUIView(_ uiView: PreviewView, context: Context) {
-        uiView.videoPreviewLayer.session = session
+        uiView.videoPreviewLayer.session = camera.session
     }
 }
 
@@ -263,6 +270,41 @@ final class CameraController: NSObject, ObservableObject, AVCapturePhotoCaptureD
 
     private var position: AVCaptureDevice.Position = .back
     private var captureContinuation: CheckedContinuation<UIImage?, Never>?
+
+    // Orientation. Without this, the photo output's connection keeps whatever
+    // rotation it started with, so a photo taken with the phone in landscape
+    // (or upside down, under a car) carries the wrong orientation and shows
+    // up rotated on some surfaces. The coordinator tracks the physical
+    // device orientation for capture and the interface orientation for the
+    // preview layer (plan: Renditions doc, camera UX).
+    private weak var previewLayer: AVCaptureVideoPreviewLayer?
+    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+    private var previewRotationObservation: NSKeyValueObservation?
+
+    func attachPreviewLayer(_ layer: AVCaptureVideoPreviewLayer) {
+        previewLayer = layer
+        if let device = currentInput?.device {
+            installRotationCoordinator(for: device)
+        }
+    }
+
+    private func installRotationCoordinator(for device: AVCaptureDevice) {
+        let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
+        rotationCoordinator = coordinator
+        applyPreviewRotation(coordinator.videoRotationAngleForHorizonLevelPreview)
+        previewRotationObservation = coordinator.observe(
+            \.videoRotationAngleForHorizonLevelPreview, options: [.new]
+        ) { [weak self] coordinator, _ in
+            let angle = coordinator.videoRotationAngleForHorizonLevelPreview
+            Task { @MainActor [weak self] in self?.applyPreviewRotation(angle) }
+        }
+    }
+
+    private func applyPreviewRotation(_ angle: CGFloat) {
+        guard let connection = previewLayer?.connection,
+              connection.isVideoRotationAngleSupported(angle) else { return }
+        connection.videoRotationAngle = angle
+    }
 
     func start() async {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
@@ -300,9 +342,17 @@ final class CameraController: NSObject, ObservableObject, AVCapturePhotoCaptureD
     func capturePhoto() async -> UIImage? {
         guard captureContinuation == nil, !isCapturing else { return nil }
         isCapturing = true
+        // Read on the main actor; the coordinator follows the physical
+        // device orientation even when the interface is locked to portrait.
+        let captureAngle = rotationCoordinator?.videoRotationAngleForHorizonLevelCapture
         return await withCheckedContinuation { cont in
             captureContinuation = cont
             sessionQueue.async { [photoOutput] in
+                if let captureAngle,
+                   let connection = photoOutput.connection(with: .video),
+                   connection.isVideoRotationAngleSupported(captureAngle) {
+                    connection.videoRotationAngle = captureAngle
+                }
                 let settings = AVCapturePhotoSettings()
                 photoOutput.capturePhoto(with: settings, delegate: self)
             }
@@ -372,7 +422,10 @@ final class CameraController: NSObject, ObservableObject, AVCapturePhotoCaptureD
                     session.startRunning()
                 }
 
-                Task { @MainActor in self.isReady = true }
+                Task { @MainActor in
+                    self.installRotationCoordinator(for: device)
+                    self.isReady = true
+                }
                 continuation.resume()
             }
         }
