@@ -109,7 +109,36 @@ const removePostMediaSchema = z.object({
 const commentSchema = z.object({
   postId: z.string().uuid(),
   content: z.string().trim().min(1, "Write a comment first").max(600),
+  /** Plan 15.1: one level of threading; the parent must be a live top-level comment on this post. */
+  parentCommentId: z.string().uuid().optional().nullable(),
 });
+
+const editPostSchema = z.object({
+  postId: z.string().uuid(),
+  content: z.string().trim().min(1, "Write something before saving").max(1200),
+});
+
+const editCommentSchema = z.object({
+  commentId: z.string().uuid(),
+  content: z.string().trim().min(1, "Write a comment first").max(600),
+});
+
+// Error names raised by the author-edit RPCs → recovery copy (plan 14.6, 15.1).
+const AUTHOR_EDIT_MESSAGES: Record<string, string> = {
+  post_under_review: "This post has been reported and cannot be edited while the report is reviewed.",
+  post_not_editable: "This post can no longer be edited.",
+  post_not_found: "This post is no longer available.",
+  post_content_invalid: "Write something before saving.",
+  comment_under_review: "This comment has been reported and cannot be changed while the report is reviewed.",
+  comment_not_editable: "This comment can no longer be edited.",
+  comment_not_found: "This comment is no longer available.",
+  comment_content_invalid: "Write a comment first.",
+};
+
+function authorEditError(error: { message?: string } | null | undefined, fallback: string) {
+  const name = error?.message?.trim() ?? "";
+  return AUTHOR_EDIT_MESSAGES[name] ?? friendlyDatabaseError(error, fallback, "author edit");
+}
 
 const statusSchema = z.enum(["active", "archived"]);
 
@@ -1021,6 +1050,13 @@ export async function addCommunityPostMedia(input: unknown) {
     }
     claimedReservationIds.push(claimed.id);
   }
+  // Plan 34.2 upload completion: the reservation was claimed by a media row.
+  await Promise.all((reservations ?? []).map((reservation) => recordProductEvent({
+    profileId: profile.profileId,
+    eventName: "media_upload_attached",
+    surface: "community",
+    dedupeId: reservation.storage_reference,
+  })));
 
   // `sort_order` is unique per post, so derive the slot server-side instead
   // of trusting client indexes, which would collide on a second call.
@@ -1280,38 +1316,60 @@ export async function removeCommunityPostMedia(input: unknown) {
 // trigger decides whether a notice exists at all (self, mute, block,
 // in-app preference); a push goes out only when it did, the push preference
 // allows it, and never carries the comment text.
-async function pushCommentNotice(postId: string, commenterId: string) {
+// Push mirrors the in-app notice the database trigger just wrote: the post
+// author's aggregated post_comment, and for a reply the parent author's
+// aggregated comment_reply (plan 15.1). Either is pushed only when this
+// commenter is the latest actor, so a burst does not fan out.
+async function pushCommentNotice(postId: string, commenterId: string, parentCommentId: string | null = null) {
   const admin = createAdminClient();
-  const { data: post } = await admin
-    .from("community_posts")
-    .select("author_id")
-    .eq("id", postId)
-    .maybeSingle();
-  if (!post || post.author_id === commenterId) return;
-  const { data: notice } = await admin
-    .from("notifications")
-    .select("id, data")
-    .eq("user_id", post.author_id)
-    .eq("type", "post_comment")
-    .is("read_at", null)
-    .contains("data", { post_id: postId })
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const latest = (notice?.data as { latest_actor_id?: string } | null)?.latest_actor_id;
-  if (!notice || latest !== commenterId) return;
-  if (!(await pushAllowed(post.author_id, "post_comment"))) return;
-  await pushToProfile(post.author_id, {
-    title: "New comment on your post",
-    body: "Open PerfectPPI to read it.",
-    data: { type: "post_comment", post_id: postId, notification_id: notice.id, link: notificationLink(notice.id) },
-  }).catch((error) => console.warn("[community] comment push failed", error instanceof Error ? error.message : error));
+  const [{ data: post }, { data: parent }] = await Promise.all([
+    admin.from("community_posts").select("author_id").eq("id", postId).maybeSingle(),
+    parentCommentId
+      ? admin.from("community_comments").select("author_id").eq("id", parentCommentId).maybeSingle()
+      : Promise.resolve({ data: null as { author_id: string } | null }),
+  ]);
+  if (!post) return;
+
+  const targets: Array<{ recipient: string; type: "post_comment" | "comment_reply"; match: Record<string, string>; title: string }> = [];
+  if (parent && parent.author_id !== commenterId) {
+    targets.push({
+      recipient: parent.author_id,
+      type: "comment_reply",
+      match: { parent_comment_id: parentCommentId as string },
+      title: "New reply to your comment",
+    });
+  }
+  if (post.author_id !== commenterId && post.author_id !== parent?.author_id) {
+    targets.push({ recipient: post.author_id, type: "post_comment", match: { post_id: postId }, title: "New comment on your post" });
+  }
+
+  for (const target of targets) {
+    const { data: notice } = await admin
+      .from("notifications")
+      .select("id, data")
+      .eq("user_id", target.recipient)
+      .eq("type", target.type)
+      .is("read_at", null)
+      .contains("data", target.match)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const latest = (notice?.data as { latest_actor_id?: string } | null)?.latest_actor_id;
+    if (!notice || latest !== commenterId) continue;
+    if (!(await pushAllowed(target.recipient, target.type))) continue;
+    await pushToProfile(target.recipient, {
+      title: target.title,
+      body: "Open PerfectPPI to read it.",
+      data: { type: target.type, post_id: postId, notification_id: notice.id, link: notificationLink(notice.id) },
+    }).catch((error) => console.warn("[community] comment push failed", error instanceof Error ? error.message : error));
+  }
 }
 
 export async function createCommunityComment(formData: FormData) {
   const result = await createCommunityCommentFromInput({
     postId: formData.get("post_id"),
     content: formData.get("content"),
+    parentCommentId: nullableUuid(formData.get("parent_comment_id")),
   });
 
   if ("error" in result && result.error === "Not authenticated") {
@@ -1383,10 +1441,28 @@ export async function createCommunityCommentFromInput(
     if (!group || group.status !== "active") return { error: "Join this group before commenting." };
   }
 
+  if (parsed.data.parentCommentId) {
+    const { data: parent } = await admin
+      .from("community_comments")
+      .select("id, post_id, author_id, parent_comment_id, status, moderation_status")
+      .eq("id", parsed.data.parentCommentId)
+      .maybeSingle();
+    if (!parent || parent.post_id !== post.id || parent.parent_comment_id
+        || parent.status !== "active" || parent.moderation_status !== "active") {
+      return { error: "That comment is no longer available to reply to." };
+    }
+    const { data: blocked } = await admin.rpc("social_profiles_are_blocked", {
+      p_first_id: profile.profileId,
+      p_second_id: parent.author_id,
+    });
+    if (blocked) return { error: "That comment is no longer available to reply to." };
+  }
+
   const launchMode = !flags.flags.automated_post_moderation;
   const { data, error } = await admin.from("community_comments").insert({
     post_id: post.id,
     author_id: profile.profileId,
+    parent_comment_id: parsed.data.parentCommentId ?? null,
     content: evaluated.text,
     status: launchMode ? "active" : "hidden",
     moderation_status: launchMode ? "active" : "pending_scan",
@@ -1407,7 +1483,7 @@ export async function createCommunityCommentFromInput(
       contentPreview: evaluated.text,
       result: launchAllowResult({ linkCount: evaluated.linkCount, fingerprint: evaluated.fingerprint }),
     }).catch((recordError) => console.error("launch moderation record failed", recordError));
-    await pushCommentNotice(post.id, profile.profileId);
+    await pushCommentNotice(post.id, profile.profileId, parsed.data.parentCommentId ?? null);
 
     revalidatePath("/community");
     revalidatePath("/admin/community");
@@ -1436,7 +1512,7 @@ export async function createCommunityCommentFromInput(
     return { error: "Your comment could not be checked yet. Please try again." };
   }
   if (statusForDecision(moderation.decision) === "active") {
-    await pushCommentNotice(post.id, profile.profileId);
+    await pushCommentNotice(post.id, profile.profileId, parsed.data.parentCommentId ?? null);
   }
 
   revalidatePath("/community");
@@ -1449,6 +1525,130 @@ export async function createCommunityCommentFromInput(
       moderationMessage: moderationUserMessage(moderation.decision),
     },
   };
+}
+
+export type CommunityEditData = { id: string; content: string; editedAt: string | null };
+
+/**
+ * Author edit (plan 14.6): the text passes the same launch policy as a new
+ * post, the RPC enforces author/live/unreported, and the revision trigger
+ * preserves the previous wording for any report already bound to it.
+ */
+export async function editCommunityPostFromInput(
+  input: unknown,
+): Promise<CommunityActionResult<CommunityEditData>> {
+  const parsed = editPostSchema.safeParse(input);
+  if (!parsed.success) return rejected("validation_failed", parsed.error.issues[0]?.message ?? "Invalid post");
+
+  const profile = await getCurrentProfileId();
+  if (profile.error !== undefined) return { error: profile.error };
+
+  const flags = await getFeatureFlags();
+  if (!flags.flags.community_text_posts) {
+    return rejected("posting_unavailable", FEATURE_UNAVAILABLE_MESSAGE.community_text_posts);
+  }
+  if (await getActivePostingRestriction(profile.profileId)) {
+    return rejected("posting_restricted", "Community posting is unavailable for this account");
+  }
+  const evaluated = evaluateTextForPublication(parsed.data.content, "post");
+  if (!evaluated.ok) {
+    console.warn("community post edit rejected by launch policy", { ruleId: evaluated.ruleId });
+    return rejected(evaluated.outcome);
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("edit_community_post", {
+    p_actor_profile_id: profile.profileId,
+    p_post_id: parsed.data.postId,
+    p_content: evaluated.text,
+  });
+  if (error || !data) return { error: authorEditError(error, "Your changes could not be saved. Please try again.") };
+
+  if (data.edited_at) {
+    await recordModeration({
+      entityType: "community_post",
+      entityId: data.id,
+      authorId: profile.profileId,
+      contentPreview: evaluated.text,
+      result: launchAllowResult({ linkCount: evaluated.linkCount, fingerprint: evaluated.fingerprint, edit: true }),
+    }).catch((recordError) => console.error("launch moderation record failed", recordError));
+  }
+  revalidatePath("/community");
+  revalidatePath(`/community/posts/${data.id}`);
+  revalidatePath("/dashboard/posts");
+  return { data: { id: data.id, content: data.content, editedAt: data.edited_at } };
+}
+
+export async function editCommunityCommentFromInput(
+  input: unknown,
+): Promise<CommunityActionResult<CommunityEditData>> {
+  const parsed = editCommentSchema.safeParse(input);
+  if (!parsed.success) return rejected("validation_failed", parsed.error.issues[0]?.message ?? "Invalid comment");
+
+  const profile = await getCurrentProfileId();
+  if (profile.error !== undefined) return { error: profile.error };
+
+  const flags = await getFeatureFlags();
+  if (!flags.flags.community_text_posts) {
+    return rejected("posting_unavailable", FEATURE_UNAVAILABLE_MESSAGE.community_text_posts);
+  }
+  if (await getActivePostingRestriction(profile.profileId)) {
+    return rejected("posting_restricted", "Community commenting is unavailable for this account");
+  }
+  const evaluated = evaluateTextForPublication(parsed.data.content, "comment");
+  if (!evaluated.ok) {
+    console.warn("community comment edit rejected by launch policy", { ruleId: evaluated.ruleId });
+    return rejected(evaluated.outcome);
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("edit_community_comment", {
+    p_actor_profile_id: profile.profileId,
+    p_comment_id: parsed.data.commentId,
+    p_content: evaluated.text,
+  });
+  if (error || !data) return { error: authorEditError(error, "Your changes could not be saved. Please try again.") };
+
+  if (data.edited_at) {
+    await recordModeration({
+      entityType: "community_comment",
+      entityId: data.id,
+      authorId: profile.profileId,
+      contentPreview: evaluated.text,
+      result: launchAllowResult({ linkCount: evaluated.linkCount, fingerprint: evaluated.fingerprint, edit: true }),
+    }).catch((recordError) => console.error("launch moderation record failed", recordError));
+  }
+  revalidatePath("/community");
+  revalidatePath(`/community/posts/${data.post_id}`);
+  return { data: { id: data.id, content: data.content, editedAt: data.edited_at } };
+}
+
+/** Soft author removal (plan 15.1); the row, revisions, and any case stay. */
+export async function removeMyCommunityCommentById(
+  commentId: string,
+): Promise<CommunityActionResult<{ id: string; status: string }>> {
+  const parsedId = z.string().uuid().safeParse(commentId);
+  if (!parsedId.success) return { error: "Invalid comment" };
+
+  const profile = await getCurrentProfileId();
+  if (profile.error !== undefined) return { error: profile.error };
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("remove_own_community_comment", {
+    p_actor_profile_id: profile.profileId,
+    p_comment_id: parsedId.data,
+  });
+  if (error || !data) return { error: authorEditError(error, "Your comment could not be removed. Please try again.") };
+  revalidatePath("/community");
+  revalidatePath(`/community/posts/${data.post_id}`);
+  return { data: { id: data.id, status: data.status } };
+}
+
+export async function removeMyCommunityComment(formData: FormData) {
+  const result = await removeMyCommunityCommentById(String(formData.get("comment_id") ?? ""));
+  if ("error" in result && result.error === "Not authenticated") {
+    redirect("/login?redirect=/community");
+  }
 }
 
 const acceptedAnswerSchema = z.object({

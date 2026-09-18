@@ -391,6 +391,14 @@ struct MessageThreadView: View {
                             .disabled(sending || (draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachment == nil))
                         }
 
+                        if ContactDetailsDetector.containsContactDetails(draft) {
+                            // Plan 22.3: a caution before contact details leave the platform, not a block.
+                            Label(ContactDetailsDetector.warning, systemImage: "exclamationmark.triangle")
+                                .font(.caption)
+                                .foregroundStyle(Theme.Palette.warning)
+                                .accessibilityLabel(ContactDetailsDetector.warning)
+                        }
+
                         if let composerError {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(composerError)

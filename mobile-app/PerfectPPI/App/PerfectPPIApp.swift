@@ -17,11 +17,18 @@ struct PerfectPPIApp: App {
                 .environmentObject(router)
                 .environmentObject(offline)
                 .task {
+                    AppHealthReporter.shared.start()
                     await auth.bootstrap()
                 }
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active else { return }
                     Task { await auth.refreshCapabilities() }
+                    AppHealthReporter.shared.sceneBecameActive(signedIn: auth.profile != nil)
+                }
+                .onChange(of: auth.profile?.id) { _, id in
+                    // A sign-in after launch is the start of that member's session.
+                    guard id != nil, scenePhase == .active else { return }
+                    AppHealthReporter.shared.sceneBecameActive(signedIn: true)
                 }
                 .onOpenURL { url in
                     Task { await router.handle(url, authStore: auth) }

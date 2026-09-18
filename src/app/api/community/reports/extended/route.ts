@@ -10,6 +10,7 @@ import {
 } from "@/features/moderation/report-reasons";
 import { t } from "@/lib/i18n";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 export const runtime = "nodejs";
 
@@ -54,5 +55,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: mapped.error, code: mapped.code }, { status: mapped.status });
   }
   const duplicate = Boolean(data && typeof data === "object" && !Array.isArray(data) && data.duplicate);
+  // Plan 34.2 "reports caused by unwanted contact": a report about a person or
+  // a message, counted once per report and never with the reason or target.
+  if (!duplicate && (parsed.data.entityType === "message" || parsed.data.entityType === "profile")) {
+    const reportId = data && typeof data === "object" && !Array.isArray(data) && typeof data.reportId === "string"
+      ? data.reportId
+      : parsed.data.idempotencyKey;
+    await recordProductEvent({
+      profileId: auth.profile.id,
+      eventName: "unwanted_contact_reported",
+      surface: "profile",
+      dedupeId: reportId,
+    });
+  }
   return NextResponse.json(data, { status: duplicate ? 200 : 201, headers: { "Cache-Control": "no-store" } });
 }

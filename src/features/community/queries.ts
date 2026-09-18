@@ -12,6 +12,7 @@ import type { CommunityFeedFilter } from "@/features/social/relationships";
 import { createReportContext } from "@/features/moderation/report-context";
 import { communityMediaDeliveryPath } from "@/lib/storage/community-media";
 import { buildSafetyNotice, type SafetyNotice } from "@/lib/moderation/safety-notice";
+import { projectCommentThread } from "@/lib/community/comment-thread";
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { unavailableEntityIds } from "@/features/moderation/extended-reporting";
 import {
@@ -64,13 +65,22 @@ type CommunityFeedMedia = Pick<
 >;
 type CommunityFeedComment = Pick<
   CommunityCommentRow,
-  "id" | "post_id" | "author_id" | "content" | "status" | "created_at" | "updated_at"
+  "id" | "post_id" | "author_id" | "content" | "status" | "created_at" | "updated_at" | "parent_comment_id" | "edited_at"
 > & {
   author: CommunityFeedProfile | null;
   report_context: string | null;
   helpful_count: number;
   helpful_by_viewer: boolean;
   can_mark_helpful: boolean;
+  /**
+   * Plan 15.1: an author-removed (or otherwise unavailable) top-level comment
+   * that still has visible replies. Content is blank; the card renders a
+   * neutral "Comment removed" placeholder and no actions.
+   */
+  removed: boolean;
+  /** Viewer authored it, it is live, and no report is bound to its current revision. */
+  can_edit: boolean;
+  can_remove: boolean;
 };
 type CommunityFeedCommentWithMentions = CommunityFeedComment & { mentions: CommunityMention[] };
 type CommunityFeedGroup = Pick<CommunityGroupRow, "id" | "slug" | "name" | "avatar_url">;
@@ -103,8 +113,10 @@ export type CommunityInspectionSummary = {
 
 export type CommunityFeedPost = Pick<
   CommunityPostRow,
-  "id" | "author_id" | "vehicle_id" | "marketplace_listing_id" | "group_id" | "content" | "audience" | "post_type" | "accepted_answer_comment_id" | "question_outcome" | "question_outcome_updated_at" | "status" | "created_at" | "updated_at"
+  "id" | "author_id" | "vehicle_id" | "marketplace_listing_id" | "group_id" | "content" | "audience" | "post_type" | "accepted_answer_comment_id" | "question_outcome" | "question_outcome_updated_at" | "status" | "created_at" | "updated_at" | "edited_at"
 > & {
+  /** Plan 14.6: viewer authored it, it is live, and no report is bound to its current revision. */
+  can_edit: boolean;
   /** Structured fields for the post type (plan 14.2). */
   details: Record<string, unknown>;
   poll: CommunityPollView | null;
@@ -198,7 +210,7 @@ const COMMUNITY_POST_SELECT = `
 // are selected only where the server needs them to filter nested rows, then
 // removed before serialization.
 const COMMUNITY_FEED_SELECT = `
-  id, author_id, vehicle_id, marketplace_listing_id, group_id, group_status, group_pinned_at, active_revision_id, content, audience, post_type, details, accepted_answer_comment_id, question_outcome, question_outcome_updated_at, status, created_at, updated_at,
+  id, author_id, vehicle_id, marketplace_listing_id, group_id, group_status, group_pinned_at, active_revision_id, content, audience, post_type, details, accepted_answer_comment_id, question_outcome, question_outcome_updated_at, status, created_at, updated_at, edited_at,
   author:profiles!community_posts_author_id_fkey(id, display_name, username, avatar_url, is_public),
   vehicle:vehicles!community_posts_vehicle_id_fkey(
     id, year, make, model, trim, mileage, visibility,
@@ -216,7 +228,7 @@ const COMMUNITY_FEED_SELECT = `
     id, post_id, url, media_type, content_type, sort_order, created_at, moderation_status
   ),
   comments:community_comments!community_comments_post_id_fkey(
-    id, post_id, author_id, active_revision_id, content, status, created_at, updated_at, moderation_status,
+    id, post_id, author_id, active_revision_id, content, status, created_at, updated_at, moderation_status, parent_comment_id, edited_at,
     author:profiles!community_comments_author_id_fkey(id, display_name, username, avatar_url, is_public),
     mentions:community_mentions!community_mentions_comment_id_fkey(
       id, mentioned_profile_id, rendered_username,
@@ -267,8 +279,8 @@ function toCommunityFeedPost(
   unavailableListings: ReadonlySet<string> = new Set(),
   unavailableMedia: ReadonlySet<string> = new Set(),
 ): CommunityFeedPost {
-  const visibleComments = (post.comments ?? [])
-    .filter((comment) => comment.status === "active" && comment.moderation_status === "active");
+  const projectedComments = projectCommentThread(post.comments ?? []);
+  const visibleComments = projectedComments.filter((comment) => !comment.removed);
   const acceptedAnswerCommentId = visibleComments.some(
     (comment) => comment.id === post.accepted_answer_comment_id,
   ) ? post.accepted_answer_comment_id : null;
@@ -314,6 +326,10 @@ function toCommunityFeedPost(
     status: post.status,
     created_at: post.created_at,
     updated_at: post.updated_at,
+    edited_at: post.edited_at,
+    // Refined by withPostLikeState, which knows about open cases.
+    can_edit: post.author_id === viewerId && post.status === "active" && post.moderation_status === "active"
+      && post.group_status === "active",
     group_pinned: post.group_pinned_at !== null && post.group_status === "active",
     can_moderate_group: Boolean(post.group_id)
       && ["owner", "moderator"].includes(memberGroupIds.get(post.group_id ?? "") ?? ""),
@@ -376,16 +392,21 @@ function toCommunityFeedPost(
         alt_text: item.alt_text,
         created_at: item.created_at,
       })),
-    comments: visibleComments
+    comments: projectedComments
       .map((comment) => ({
         id: comment.id,
         post_id: comment.post_id,
         author_id: comment.author_id,
-        content: comment.content,
+        content: comment.removed ? "" : comment.content,
         status: comment.status,
         created_at: comment.created_at,
         updated_at: comment.updated_at,
-        report_context: comment.author_id === viewerId ? null : createReportContext({
+        parent_comment_id: comment.parent_comment_id,
+        edited_at: comment.removed ? null : comment.edited_at,
+        removed: comment.removed,
+        can_edit: !comment.removed && comment.author_id === viewerId,
+        can_remove: !comment.removed && comment.author_id === viewerId,
+        report_context: comment.removed || comment.author_id === viewerId ? null : createReportContext({
           viewerId,
           entityType: "community_comment",
           entityId: comment.id,
@@ -393,9 +414,11 @@ function toCommunityFeedPost(
         }),
         helpful_count: 0,
         helpful_by_viewer: false,
-        can_mark_helpful: post.post_type === "question" && comment.author_id !== viewerId,
-        mentions: comment.mentions ?? [],
-        author: comment.author ? {
+        // Helpful is for answers (top-level responses), not replies.
+        can_mark_helpful: !comment.removed && post.post_type === "question"
+          && comment.parent_comment_id === null && comment.author_id !== viewerId,
+        mentions: comment.removed ? [] : (comment.mentions ?? []),
+        author: !comment.removed && comment.author ? {
           id: comment.author.id,
           display_name: comment.author.display_name,
           username: comment.author.username,
@@ -404,6 +427,7 @@ function toCommunityFeedPost(
       })),
   };
 }
+
 
 async function unavailablePostAttachmentIds(viewerId: string, posts: CommunityPost[]) {
   return Promise.all([
@@ -464,13 +488,18 @@ async function withPostLikeState(posts: CommunityFeedPost[], viewerId: string) {
     .filter(Boolean);
   const answerIds = posts
     .filter((post) => post.post_type === "question")
-    .flatMap((post) => post.comments.map((comment) => comment.id));
+    .flatMap((post) => post.comments.filter((comment) => !comment.removed).map((comment) => comment.id));
+  // Plan 14.6/15.1: Edit is hidden while a report is bound to the item.
+  const ownPostIds = posts.filter((post) => post.can_edit).map((post) => post.id);
+  const ownCommentIds = posts.flatMap((post) => post.comments.filter((comment) => comment.can_edit).map((comment) => comment.id));
   const [
     { data, error },
     { data: saves, error: saveError },
     { data: polls, error: pollError },
     { data: inspections },
     { data: helpful, error: helpfulError },
+    { data: reportedPosts, error: reportedPostsError },
+    { data: reportedComments, error: reportedCommentsError },
   ] = await Promise.all([
     admin.rpc("community_post_like_summaries", { p_viewer_id: viewerId, p_post_ids: postIds }),
     admin.rpc("community_post_save_states", { p_viewer_id: viewerId, p_post_ids: postIds }),
@@ -483,11 +512,22 @@ async function withPostLikeState(posts: CommunityFeedPost[], viewerId: string) {
     answerIds.length
       ? admin.rpc("community_comment_helpful_summaries", { p_viewer_id: viewerId, p_comment_ids: answerIds })
       : Promise.resolve({ data: [], error: null }),
+    ownPostIds.length
+      ? admin.rpc("community_entities_with_open_cases", { p_entity_type: "community_post", p_entity_ids: ownPostIds })
+      : Promise.resolve({ data: [] as string[], error: null }),
+    ownCommentIds.length
+      ? admin.rpc("community_entities_with_open_cases", { p_entity_type: "community_comment", p_entity_ids: ownCommentIds })
+      : Promise.resolve({ data: [] as string[], error: null }),
   ]);
   if (error) console.error("community_post_like_summaries failed", error);
   if (saveError) console.error("community_post_save_states failed", saveError);
   if (pollError) console.error("community_poll_results failed", pollError);
   if (helpfulError) console.error("community_comment_helpful_summaries failed", helpfulError);
+  if (reportedPostsError) console.error("community_entities_with_open_cases failed", reportedPostsError);
+  if (reportedCommentsError) console.error("community_entities_with_open_cases failed", reportedCommentsError);
+  // On lookup failure, fail closed: no Edit rather than an edit the RPC will refuse.
+  const reportedPostIds = new Set(reportedPostsError ? ownPostIds : (reportedPosts ?? []));
+  const reportedCommentIds = new Set(reportedCommentsError ? ownCommentIds : (reportedComments ?? []));
   const summaries = new Map((data ?? []).map((summary) => [summary.post_id, summary]));
   const saved = new Set((saves ?? []).filter((row) => row.saved).map((row) => row.post_id));
   const pollByPost = new Map((polls ?? []).map((row) => [row.post_id, toPollView(row)]));
@@ -503,7 +543,10 @@ async function withPostLikeState(posts: CommunityFeedPost[], viewerId: string) {
         ...comment,
         helpful_count: Number(helpfulByComment.get(comment.id)?.helpful_count ?? 0),
         helpful_by_viewer: helpfulByComment.get(comment.id)?.helpful_by_viewer ?? false,
+        can_edit: comment.can_edit && !reportedCommentIds.has(comment.id),
+        can_remove: comment.can_remove && !reportedCommentIds.has(comment.id),
       })),
+      can_edit: post.can_edit && !reportedPostIds.has(post.id),
       like_count: Number(summaries.get(post.id)?.like_count ?? post.like_count),
       liked_by_viewer: summaries.get(post.id)?.liked_by_viewer ?? post.liked_by_viewer,
       saved_by_viewer: saved.has(post.id),

@@ -24,6 +24,8 @@ import { CommunityHelpfulButton } from "@/components/shared/community-helpful-bu
 import { QuestionOutcomeControl } from "@/components/shared/question-outcome-control";
 import { SavedCollectionButton } from "@/components/shared/saved-collection-button";
 import { CommunityFeedMuteMenu } from "@/components/shared/community-feed-mute-menu";
+import { CommunityAuthorEditor } from "@/components/shared/community-author-editor";
+import { CommunityReplyForm } from "@/components/shared/community-reply-form";
 
 function getVehicleName(vehicle: { year: number | null; make: string | null; model: string | null; trim: string | null } | null) {
   return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ");
@@ -35,6 +37,7 @@ function getVehicleName(vehicle: { year: number | null; make: string | null; mod
 export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { post: CommunityFeedPost; viewerId: string; linkToPost?: boolean }) {
   const vehicleName = getVehicleName(post.vehicle);
   const primaryMedia = post.vehicle?.vehicle_media?.find((media) => media.is_primary) ?? post.vehicle?.vehicle_media?.[0];
+  const liveCommentCount = post.comments.filter((comment) => !comment.removed).length;
 
   return (
     <article key={post.id} id={`post-${post.id}`} className="overflow-hidden rounded-[1.5rem] bg-surface-container-lowest shadow-sm ghost-border">
@@ -53,6 +56,7 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
               </p>
               <p className="text-xs text-on-surface-variant">
                 {linkToPost ? <Link href={sharePath({ kind: "post", id: post.id })} className="hover:underline">{formatDate(post.created_at)}</Link> : formatDate(post.created_at)}
+                {post.edited_at ? <span title={`Edited ${formatDate(post.edited_at)}`}> · Edited</span> : null}
               </p>
               {post.group ? (
                 <Link href={`/community/groups/${post.group.slug}`} className="text-xs font-semibold text-primary hover:underline">
@@ -84,11 +88,21 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
           </div>
         </div>
 
-        <CommunityMentionText
-          content={post.content}
-          mentions={post.mentions}
-          className="block whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant"
-        />
+        {post.can_edit ? (
+          <CommunityAuthorEditor entityType="post" entityId={post.id} initialContent={post.content}>
+            <CommunityMentionText
+              content={post.content}
+              mentions={post.mentions}
+              className="block whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant"
+            />
+          </CommunityAuthorEditor>
+        ) : (
+          <CommunityMentionText
+            content={post.content}
+            mentions={post.mentions}
+            className="block whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant"
+          />
+        )}
         <PostDetailsCard postType={post.post_type as PostType} details={post.details} inspection={post.inspection} />
         {post.post_type === "question" ? (
           <QuestionOutcomeControl
@@ -172,47 +186,73 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
           <ShareButton path={sharePath({ kind: "post", id: post.id })} title={`${post.author?.display_name ?? post.author?.username ?? "A member"} on PerfectPPI Community`} />
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-on-surface-variant" />
-            {post.comments.length} comment{post.comments.length === 1 ? "" : "s"}
+            {liveCommentCount} comment{liveCommentCount === 1 ? "" : "s"}
           </div>
         </div>
 
         {post.comments.length > 0 && (
           <div className="mb-5 space-y-3">
-            {post.comments.map((comment) => (
-              <div key={comment.id} className={`rounded-xl bg-surface-container-lowest px-4 py-3 ghost-border ${post.accepted_answer_comment_id === comment.id ? "ring-2 ring-teal/30" : ""}`}>
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold text-on-surface">
-                      {comment.author?.display_name ?? comment.author?.username ?? "PerfectPPI user"}
-                    </p>
-                    {post.post_type === "question" ? (
-                      <AcceptedAnswerControl
-                        postId={post.id}
-                        commentId={comment.id}
-                        accepted={post.accepted_answer_comment_id === comment.id}
-                        canManage={post.can_manage_accepted_answer}
-                        ownResponse={comment.author_id === post.author_id}
-                      />
-                    ) : null}
+            {post.comments.map((comment) => {
+              const isReply = Boolean(comment.parent_comment_id);
+              const authorName = comment.author?.display_name ?? comment.author?.username ?? "PerfectPPI user";
+              if (comment.removed) {
+                // Plan 15.1: neutral placeholder keeps the replies below it readable.
+                return (
+                  <div key={comment.id} className="rounded-xl bg-surface-container px-4 py-3 text-xs italic text-on-surface-variant ghost-border">
+                    Comment removed
                   </div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-[10px] text-on-surface-variant">{formatDate(comment.created_at)}</p>
-                    {comment.report_context ? (
-                      <CommunityReportControl entityType="community_comment" entityId={comment.id} reportContext={comment.report_context} compact />
-                    ) : null}
-                  </div>
-                </div>
+                );
+              }
+              const text = (
                 <CommunityMentionText content={comment.content} mentions={comment.mentions} className="block whitespace-pre-wrap text-sm text-on-surface-variant" />
-                {post.post_type === "question" ? (
-                  <CommunityHelpfulButton
-                    commentId={comment.id}
-                    initialHelpful={comment.helpful_by_viewer}
-                    initialCount={comment.helpful_count}
-                    disabled={!comment.can_mark_helpful}
-                  />
-                ) : null}
-              </div>
-            ))}
+              );
+              return (
+                <div
+                  key={comment.id}
+                  className={`rounded-xl bg-surface-container-lowest px-4 py-3 ghost-border ${post.accepted_answer_comment_id === comment.id ? "ring-2 ring-teal/30" : ""} ${isReply ? "ml-6 border-l-2 border-outline-variant/40 sm:ml-10" : ""}`}
+                >
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-on-surface">{authorName}</p>
+                      {post.post_type === "question" && !isReply ? (
+                        <AcceptedAnswerControl
+                          postId={post.id}
+                          commentId={comment.id}
+                          accepted={post.accepted_answer_comment_id === comment.id}
+                          canManage={post.can_manage_accepted_answer}
+                          ownResponse={comment.author_id === post.author_id}
+                        />
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[10px] text-on-surface-variant">
+                        {formatDate(comment.created_at)}
+                        {comment.edited_at ? <span title={`Edited ${formatDate(comment.edited_at)}`}> · Edited</span> : null}
+                      </p>
+                      {comment.report_context ? (
+                        <CommunityReportControl entityType="community_comment" entityId={comment.id} reportContext={comment.report_context} compact />
+                      ) : null}
+                    </div>
+                  </div>
+                  {comment.can_edit ? (
+                    <CommunityAuthorEditor entityType="comment" entityId={comment.id} initialContent={comment.content} canRemove={comment.can_remove}>
+                      {text}
+                    </CommunityAuthorEditor>
+                  ) : text}
+                  {post.post_type === "question" && !isReply ? (
+                    <CommunityHelpfulButton
+                      commentId={comment.id}
+                      initialHelpful={comment.helpful_by_viewer}
+                      initialCount={comment.helpful_count}
+                      disabled={!comment.can_mark_helpful}
+                    />
+                  ) : null}
+                  {post.can_interact && !isReply ? (
+                    <CommunityReplyForm postId={post.id} parentCommentId={comment.id} replyingTo={authorName} />
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
 

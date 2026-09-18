@@ -4,6 +4,7 @@ import { updateCommunityGroupSettings, type GroupCreateOutcome } from "@/feature
 import { getCommunityGroupPinnedPosts, getCommunityGroupPosts, getCommunityGroupPostsPage } from "@/features/community/queries";
 import { getCommunityGroup } from "@/features/social/groups";
 import { decodeGroupDirectoryCursor } from "@/features/community/group-cursor";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 const ROLES = ["consumer", "technician", "org_manager", "admin"] as const;
 
@@ -18,6 +19,11 @@ export async function GET(
   if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 });
 
   const searchParams = new URL(request.url).searchParams;
+  // Plan 34.1 discovery-to-join: a non-member opening the group counts once
+  // per group; the later group_joined event closes the funnel.
+  if (!group.is_member && !searchParams.get("cursor") && (searchParams.get("page") ?? "1") === "1") {
+    await recordProductEvent({ profileId: auth.profile.id, eventName: "group_detail_viewed", surface: "community", dedupeId: group.id });
+  }
   const requestedPage = Number(searchParams.get("page") ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const cursorMode = searchParams.get("pagination") === "cursor";

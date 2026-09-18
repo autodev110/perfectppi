@@ -4,6 +4,7 @@
 // a held object is deleted (or preserved as evidence on a legal hold) and
 // the member is told why in plain words.
 import "server-only";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -83,6 +84,7 @@ export async function setCommunityGroupImage(input: unknown): Promise<GroupImage
     .select("id")
     .maybeSingle();
   if (!claimed) return fail("upload_invalid", "This upload was already used. Please select the image again.");
+  await recordProductEvent({ profileId: actorId, eventName: "media_upload_attached", surface: "community", dedupeId: url });
 
   let bytes: Uint8Array;
   try {

@@ -792,6 +792,10 @@ struct CommunityPost: Codable, Identifiable, Hashable {
     let canModerateGroup: Bool?
     /// Same-author copies hidden behind this representative in the feed.
     var collapsedRepostCount: Int? = 0
+    /// Plan 14.6: set when the author published a new revision ("Edited").
+    var editedAt: Date? = nil
+    /// Plan 14.6: viewer authored it, it is live, and no report is bound to it.
+    var canEdit: Bool? = nil
 }
 
 /// Counts behind navigation badges (plan 7.1 / 22.2), from /api/me/badges.
@@ -876,6 +880,18 @@ struct CommunityComment: Codable, Identifiable, Hashable {
     var helpfulCount: Int? = nil
     var helpfulByViewer: Bool? = nil
     var canMarkHelpful: Bool? = nil
+    /// Plan 15.1: one level of threading; nil for a top-level comment.
+    var parentCommentId: String? = nil
+    /// Plan 15.1: set when the author published a new revision ("Edited").
+    var editedAt: Date? = nil
+    /// Plan 15.1: a removed top-level comment kept only so its replies keep
+    /// their structure; content is blank and no actions apply.
+    var removed: Bool? = nil
+    var canEdit: Bool? = nil
+    var canRemove: Bool? = nil
+
+    var isReply: Bool { parentCommentId != nil }
+    var isRemovedPlaceholder: Bool { removed == true }
 }
 
 struct CommunityMention: Codable, Identifiable, Hashable {

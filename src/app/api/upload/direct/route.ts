@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordProductEvent } from "@/features/analytics/product-events";
 import { browserFamily, logUploadEvent } from "@/features/uploads/diagnostics";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -157,6 +158,12 @@ export async function POST(request: Request) {
         }
         throw reservationError;
       }
+      await recordProductEvent({
+        profileId: profile.id,
+        eventName: "media_upload_reserved",
+        surface: parsed.data.entity === "vehicle_media" ? "garage" : "community",
+        dedupeId: storageReference,
+      });
       return NextResponse.json({ publicUrl: storageReference }, { status: 201 });
     }
     if (["ppi_media", "media_package", "message_attachment", "vehicle_document"].includes(parsed.data.entity)) {

@@ -23,6 +23,8 @@ import { ListingSaveButton } from "@/components/shared/listing-save-button";
 import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-control";
 import { CommunityLikeButton } from "@/components/shared/community-like-button";
 import { CommunityHelpfulButton } from "@/components/shared/community-helpful-button";
+import { CommunityAuthorEditor } from "@/components/shared/community-author-editor";
+import { CommunityReplyForm } from "@/components/shared/community-reply-form";
 import { QuestionOutcomeControl } from "@/components/shared/question-outcome-control";
 import { SavedCollectionButton } from "@/components/shared/saved-collection-button";
 import { BuildSubscriptionButton } from "@/components/shared/build-subscription-button";
@@ -711,6 +713,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                       </div>
                       <p className="text-[10px] text-on-surface-variant">
                         {formatDate(post.created_at)}
+                        {post.edited_at ? <span title={`Edited ${formatDate(post.edited_at)}`}> · Edited</span> : null}
                       </p>
                     </div>
                   </div>
@@ -750,20 +753,34 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
 
                 {post.comments.length > 0 && (
                   <div className="space-y-2.5 mb-4">
-                    {post.comments.map((comment) => (
+                    {post.comments.map((comment) => {
+                      const isReply = Boolean(comment.parent_comment_id);
+                      const authorName = comment.author?.display_name ?? comment.author?.username ?? "PerfectPPI user";
+                      if (comment.removed) {
+                        return (
+                          <div key={comment.id} className="rounded-xl bg-surface-container p-3 text-xs italic text-on-surface-variant ghost-border">
+                            Comment removed
+                          </div>
+                        );
+                      }
+                      const text = (
+                        <p className="text-xs text-on-surface-variant whitespace-pre-wrap">
+                          {comment.content}
+                        </p>
+                      );
+                      return (
                       <div
                         key={comment.id}
-                        className={`rounded-xl bg-surface-container p-3 ghost-border ${post.accepted_answer_comment_id === comment.id ? "ring-2 ring-teal/30" : ""}`}
+                        className={`rounded-xl bg-surface-container p-3 ghost-border ${post.accepted_answer_comment_id === comment.id ? "ring-2 ring-teal/30" : ""} ${isReply ? "ml-5 border-l-2 border-outline-variant/40 sm:ml-8" : ""}`}
                       >
                         <div className="flex items-center justify-between gap-3 mb-1">
-                          <p className="text-[11px] font-bold text-on-surface">
-                            {comment.author?.display_name ?? comment.author?.username ?? "PerfectPPI user"}
-                          </p>
+                          <p className="text-[11px] font-bold text-on-surface">{authorName}</p>
                           <p className="text-[10px] text-on-surface-variant">
                             {formatDate(comment.created_at)}
+                            {comment.edited_at ? <span title={`Edited ${formatDate(comment.edited_at)}`}> · Edited</span> : null}
                           </p>
                         </div>
-                        {post.post_type === "question" ? (
+                        {post.post_type === "question" && !isReply ? (
                           <AcceptedAnswerControl
                             postId={post.id}
                             commentId={comment.id}
@@ -772,10 +789,12 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                             ownResponse={comment.author_id === post.author_id}
                           />
                         ) : null}
-                        <p className="text-xs text-on-surface-variant whitespace-pre-wrap">
-                          {comment.content}
-                        </p>
-                        {post.post_type === "question" ? (
+                        {comment.can_edit ? (
+                          <CommunityAuthorEditor entityType="comment" entityId={comment.id} initialContent={comment.content} canRemove={comment.can_remove}>
+                            {text}
+                          </CommunityAuthorEditor>
+                        ) : text}
+                        {post.post_type === "question" && !isReply ? (
                           <CommunityHelpfulButton
                             commentId={comment.id}
                             initialHelpful={comment.helpful_by_viewer}
@@ -783,8 +802,12 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                             disabled={!comment.can_mark_helpful}
                           />
                         ) : null}
+                        {post.can_interact && !isReply ? (
+                          <CommunityReplyForm postId={post.id} parentCommentId={comment.id} replyingTo={authorName} />
+                        ) : null}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 

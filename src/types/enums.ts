@@ -127,6 +127,7 @@ export type OrgMemberRole = "technician" | "manager";
 export type NotificationType =
   | "friend_request"
   | "friend_request_accepted"
+  | "comment_reply"
   | "post_comment"
   | "post_likes"
   | "post_mention"

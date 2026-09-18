@@ -7,6 +7,7 @@ import { z } from "zod";
 import { uploadedUrlSchema } from "@/features/uploads/url";
 import { generatePresignedGetUrl, isPrivateStorageReference } from "@/lib/storage/r2";
 import { canProfilesInteract } from "@/features/social/relationships";
+import { recordProductEvent } from "@/features/analytics/product-events";
 import { resolveMessageEligibility } from "@/features/messages/eligibility";
 
 const createConversationSchema = z.object({
@@ -85,6 +86,8 @@ export async function createConversation(input: {
   }
 
   if (!await canProfilesInteract(profile.id, participantId)) {
+    // Plan 34.2 "repeated-contact failures": counted, never who or with whom.
+    await recordProductEvent({ profileId: profile.id, eventName: "blocked_contact_attempt", surface: "profile" });
     return { error: "Profile unavailable" };
   }
 
@@ -341,7 +344,10 @@ export async function sendMessage(input: {
   const allowed = await Promise.all(
     participants.map((participant) => canProfilesInteract(profile.id, participant.profile_id)),
   );
-  if (allowed.some((value) => !value)) return { error: "Conversation unavailable" };
+  if (allowed.some((value) => !value)) {
+    await recordProductEvent({ profileId: profile.id, eventName: "blocked_contact_attempt", surface: "profile" });
+    return { error: "Conversation unavailable" };
+  }
 
   if (conversation.request_status === "pending") {
     const eligibility = await resolveMessageEligibility(

@@ -16,6 +16,8 @@ import { pushToProfile } from "@/lib/push/dispatch";
 import { notificationLink, pushAllowed } from "@/features/notifications/preferences";
 import type { Json } from "@/types/database";
 import { encodeSearchCursor, type SearchCursor } from "@/features/search/cursor";
+import { canProfilesInteract } from "@/features/social/relationships";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 export const FRIEND_RELATIONSHIP_STATES = [
   "self",
@@ -183,7 +185,16 @@ export async function mutateFriendship(input: unknown): Promise<FriendMutationRe
     }
   })();
   const { data, error } = await call;
-  if (error) return rejected(classifyError(error));
+  if (error) {
+    const outcome = classifyError(error);
+    // The RPC hides *why* a profile is unavailable; the server may still
+    // count a request that a block refused (plan 34.2), without exposing it.
+    if (action === "request" && outcome === "profile_unavailable"
+        && !(await canProfilesInteract(auth.profileId, profileId))) {
+      await recordProductEvent({ profileId: auth.profileId, eventName: "blocked_contact_attempt", surface: "profile" });
+    }
+    return rejected(outcome);
+  }
 
   const result = (data ?? {}) as { state?: Json; changed?: Json };
   const state = toState(result.state);

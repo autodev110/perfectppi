@@ -441,6 +441,12 @@ export async function attachVehiclePhoto(input: {
   if (!claimedReservation) {
     return { error: "This vehicle upload was already attached. Please select the file again." };
   }
+  await recordProductEvent({
+    profileId: profile.profileId,
+    eventName: "media_upload_attached",
+    surface: "garage",
+    dedupeId: parsed.data.url,
+  });
 
   let bytes: Uint8Array;
   try {

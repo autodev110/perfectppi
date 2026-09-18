@@ -202,6 +202,8 @@ enum CommunityAPI {
 
     struct CommentPayload: Encodable {
         let content: String
+        /// Plan 15.1: reply to a top-level comment on this post.
+        var parentCommentId: String? = nil
     }
 
     struct CommentResponse: Decodable {
@@ -210,11 +212,38 @@ enum CommunityAPI {
         let moderationMessage: String?
     }
 
-    static func comment(postId: String, content: String) async throws -> CommentResponse {
+    static func comment(postId: String, content: String, parentCommentId: String? = nil) async throws -> CommentResponse {
         try await APIClient.shared.post(
             "/api/community/posts/\(postId)/comments",
-            body: CommentPayload(content: content)
+            body: CommentPayload(content: content, parentCommentId: parentCommentId)
         )
+    }
+
+    // Author edits (plan 14.6 / 15.1): a new immutable revision; the server
+    // refuses while a report is bound to the current one.
+    struct EditPayload: Encodable { let content: String }
+    struct EditResult: Decodable {
+        let id: String
+        let content: String
+        let editedAt: Date?
+    }
+
+    static func editPost(id: String, content: String) async throws -> EditResult {
+        try await APIClient.shared.patch("/api/community/posts/\(id)", body: EditPayload(content: content))
+    }
+
+    static func editComment(id: String, content: String) async throws -> EditResult {
+        try await APIClient.shared.patch("/api/community/comments/\(id)", body: EditPayload(content: content))
+    }
+
+    struct RemoveCommentResult: Decodable {
+        let id: String
+        let status: String
+    }
+
+    /// Soft author removal; replies stay under a "Comment removed" placeholder.
+    static func removeComment(id: String) async throws -> RemoveCommentResult {
+        try await APIClient.shared.delete("/api/community/comments/\(id)")
     }
 
     struct AcceptedAnswerPayload: Encodable { let commentId: String? }

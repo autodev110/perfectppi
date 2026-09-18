@@ -534,9 +534,14 @@ struct CommunityPostRow: View {
                     Text(authorName)
                         .font(.subheadline.weight(.semibold))
                     if let created = post.createdAt {
-                        Text(created, style: .relative)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Text(created, style: .relative)
+                            if post.editedAt != nil {
+                                Text("· Edited")
+                            }
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                     }
                     if let group = post.group {
                         Text(group.name)
@@ -667,7 +672,7 @@ struct CommunityPostRow: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Add post to collection")
 
-                if let count = post.comments?.count, count > 0 {
+                if let count = post.comments?.filter({ !$0.isRemovedPlaceholder }).count, count > 0 {
                     Label("\(count) comment\(count == 1 ? "" : "s")", systemImage: "bubble.left")
                         .foregroundStyle(.secondary)
                 }
@@ -839,10 +844,20 @@ struct CommunityPostDetailView: View {
     @State private var reportSubmitted = false
     @State private var reportTarget: ReportTarget?
     @State private var confirmingBlock = false
+    // Author editing (plan 14.6 / 15.1). The post is immutable input; its
+    // editable text and "Edited" state live here after a successful save.
+    @State private var content: String
+    @State private var editedAt: Date?
+    @State private var editingPost = false
+    @State private var editingComment: CommunityComment?
+    @State private var removingComment: CommunityComment?
+    @State private var replyingTo: CommunityComment?
 
     init(post: CommunityPost, onChanged: @escaping () -> Void) {
         self.post = post
         self.onChanged = onChanged
+        _content = State(initialValue: post.content)
+        _editedAt = State(initialValue: post.editedAt)
         _comments = State(initialValue: post.comments ?? [])
         _media = State(initialValue: (post.media ?? []).sorted { $0.sortOrder < $1.sortOrder })
         _acceptedAnswerCommentId = State(initialValue: post.acceptedAnswerCommentId)
@@ -884,6 +899,33 @@ struct CommunityPostDetailView: View {
             NavigationStack {
                 QuestionOutcomeHistoryView(postId: post.id)
             }
+        }
+        .sheet(isPresented: $editingPost) {
+            CommunityTextEditSheet(title: "Edit Post", initialText: content, limit: 1200) { text in
+                let result = try await CommunityAPI.editPost(id: post.id, content: text)
+                content = result.content
+                editedAt = result.editedAt ?? editedAt
+                onChanged()
+            }
+        }
+        .sheet(item: $editingComment) { target in
+            CommunityTextEditSheet(title: "Edit Comment", initialText: target.content, limit: 600) { text in
+                _ = try await CommunityAPI.editComment(id: target.id, content: text)
+                await reloadComments()
+                onChanged()
+            }
+        }
+        .confirmationDialog(
+            "Remove this comment?",
+            isPresented: Binding(get: { removingComment != nil }, set: { if !$0 { removingComment = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Remove Comment", role: .destructive) {
+                if let target = removingComment { Task { await removeComment(target) } }
+            }
+            Button("Cancel", role: .cancel) { removingComment = nil }
+        } message: {
+            Text("Replies to it stay visible under a \u{201C}Comment removed\u{201D} placeholder.")
         }
         .sheet(item: $reportTarget) { target in
             CommunityReportSheet { reasonCode, details in
@@ -953,8 +995,27 @@ struct CommunityPostDetailView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Theme.Palette.primary)
                 }
-                CommunityMentionText(content: post.content, mentions: post.mentions)
+                CommunityMentionText(content: content, mentions: post.mentions)
                     .font(.body)
+                if editedAt != nil || post.canEdit == true {
+                    HStack(spacing: 12) {
+                        if let editedAt {
+                            Text("Edited \(editedAt.formatted(.relative(presentation: .named)))")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        if post.canEdit == true {
+                            Button {
+                                editingPost = true
+                            } label: {
+                                Label("Edit post", systemImage: "pencil")
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Theme.Palette.primary)
+                        }
+                    }
+                }
                 CommunityPostDetailsView(post: post)
                 if post.postType == .question {
                     questionOutcomeControl
@@ -1069,73 +1130,44 @@ struct CommunityPostDetailView: View {
         }
     }
 
+    private var liveCommentCount: Int {
+        comments.filter { !$0.isRemovedPlaceholder }.count
+    }
+
     private var commentsSection: some View {
-        Section(comments.isEmpty ? "Comments" : "Comments (\(comments.count))") {
+        Section(liveCommentCount == 0 ? "Comments" : "Comments (\(liveCommentCount))") {
             ForEach(comments) { item in
-                let commentAuthor = item.author?.displayName ?? item.author?.username ?? "Member"
-                HStack(alignment: .top, spacing: 10) {
-                    Avatar(name: commentAuthor, size: 32)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(commentAuthor)
-                            .font(.caption.weight(.semibold))
-                        if acceptedAnswerCommentId == item.id {
-                            Label("Accepted answer", systemImage: "checkmark.circle.fill")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(Theme.Palette.primary)
-                        }
-                        CommunityMentionText(content: item.content, mentions: item.mentions)
-                            .font(.subheadline)
-                        if post.postType == .question,
-                           post.canManageAcceptedAnswer == true,
-                           item.authorId != post.authorId {
-                            Button(acceptedAnswerCommentId == item.id ? "Clear accepted answer" : "Accept answer") {
-                                Task {
-                                    await setAcceptedAnswer(
-                                        acceptedAnswerCommentId == item.id ? nil : item.id,
-                                        busyId: item.id
-                                    )
-                                }
-                            }
-                            .font(.caption.weight(.semibold))
-                            .disabled(acceptedAnswerBusyId != nil)
-                        }
-                        if post.postType == .question {
-                            Button {
-                                Task { await toggleHelpful(item.id) }
-                            } label: {
-                                Label(
-                                    item.helpfulCount.map { $0 > 0 ? "Helpful \($0)" : "Helpful" } ?? "Helpful",
-                                    systemImage: item.helpfulByViewer == true ? "wrench.and.screwdriver.fill" : "wrench.and.screwdriver"
-                                )
-                            }
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(item.helpfulByViewer == true ? Theme.Palette.primary : .secondary)
-                            .disabled(item.canMarkHelpful != true || helpfulBusyIds.contains(item.id))
-                            .accessibilityLabel(item.canMarkHelpful == true
-                                                ? (item.helpfulByViewer == true ? "Remove Helpful mark" : "Mark answer Helpful")
-                                                : "\(item.helpfulCount ?? 0) Helpful marks")
-                        }
-                    }
-                    Spacer()
-                    if let reportContext = item.reportContext {
-                        ReportMenu(entityLabel: "comment") {
-                            reportTarget = ReportTarget(
-                                entityType: "community_comment",
-                                entityId: item.id,
-                                contextToken: reportContext
-                            )
-                        }
-                    }
+                if item.isRemovedPlaceholder {
+                    // Plan 15.1: neutral placeholder keeps the replies below readable.
+                    Text("Comment removed")
+                        .font(.caption.italic())
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 4)
+                        .accessibilityLabel("Comment removed")
+                } else {
+                    commentRow(item)
                 }
-                .padding(.vertical, 4)
             }
 
             if post.canInteract != false {
                 VStack(alignment: .leading, spacing: 8) {
-                    TextField("Add a comment", text: $comment, axis: .vertical)
+                    if let replyingTo {
+                        HStack {
+                            Label(
+                                "Replying to \(replyingTo.author?.displayName ?? replyingTo.author?.username ?? "member")",
+                                systemImage: "arrow.turn.down.right"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Cancel") { self.replyingTo = nil }
+                                .font(.caption.weight(.semibold))
+                        }
+                    }
+                    TextField(replyingTo == nil ? "Add a comment" : "Write a reply", text: $comment, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(1...4)
-                    Button(submitting ? "Posting..." : "Post Comment") {
+                    Button(submitting ? "Posting..." : (replyingTo == nil ? "Post Comment" : "Post Reply")) {
                         Task { await submitComment() }
                     }
                     .buttonStyle(PrimaryButtonStyle(isLoading: submitting))
@@ -1147,6 +1179,129 @@ struct CommunityPostDetailView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func commentRow(_ item: CommunityComment) -> some View {
+        let commentAuthor = item.author?.displayName ?? item.author?.username ?? "Member"
+        HStack(alignment: .top, spacing: 10) {
+            if item.isReply {
+                // One level of threading (plan 15.1): indent under the parent.
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.25))
+                    .frame(width: 2)
+                    .padding(.leading, 14)
+            }
+            Avatar(name: commentAuthor, size: item.isReply ? 26 : 32)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    Text(commentAuthor)
+                        .font(.caption.weight(.semibold))
+                    if item.editedAt != nil {
+                        Text("· Edited")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if acceptedAnswerCommentId == item.id {
+                    Label("Accepted answer", systemImage: "checkmark.circle.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Theme.Palette.primary)
+                }
+                CommunityMentionText(content: item.content, mentions: item.mentions)
+                    .font(.subheadline)
+                if post.postType == .question,
+                   post.canManageAcceptedAnswer == true,
+                   !item.isReply,
+                   item.authorId != post.authorId {
+                    Button(acceptedAnswerCommentId == item.id ? "Clear accepted answer" : "Accept answer") {
+                        Task {
+                            await setAcceptedAnswer(
+                                acceptedAnswerCommentId == item.id ? nil : item.id,
+                                busyId: item.id
+                            )
+                        }
+                    }
+                    .font(.caption.weight(.semibold))
+                    .disabled(acceptedAnswerBusyId != nil)
+                }
+                if post.postType == .question, !item.isReply {
+                    Button {
+                        Task { await toggleHelpful(item.id) }
+                    } label: {
+                        Label(
+                            item.helpfulCount.map { $0 > 0 ? "Helpful \($0)" : "Helpful" } ?? "Helpful",
+                            systemImage: item.helpfulByViewer == true ? "wrench.and.screwdriver.fill" : "wrench.and.screwdriver"
+                        )
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(item.helpfulByViewer == true ? Theme.Palette.primary : .secondary)
+                    .disabled(item.canMarkHelpful != true || helpfulBusyIds.contains(item.id))
+                    .accessibilityLabel(item.canMarkHelpful == true
+                                        ? (item.helpfulByViewer == true ? "Remove Helpful mark" : "Mark answer Helpful")
+                                        : "\(item.helpfulCount ?? 0) Helpful marks")
+                }
+                if post.canInteract != false, !item.isReply {
+                    Button {
+                        replyingTo = item
+                    } label: {
+                        Label("Reply", systemImage: "arrow.turn.down.right")
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(replyingTo?.id == item.id ? Theme.Palette.primary : .secondary)
+                    .accessibilityLabel("Reply to \(commentAuthor)")
+                }
+            }
+            Spacer()
+            if item.canEdit == true || item.canRemove == true {
+                Menu {
+                    if item.canEdit == true {
+                        Button("Edit", systemImage: "pencil") { editingComment = item }
+                    }
+                    if item.canRemove == true {
+                        Button("Remove", systemImage: "trash", role: .destructive) { removingComment = item }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel("Your comment options")
+            } else if let reportContext = item.reportContext {
+                ReportMenu(entityLabel: "comment") {
+                    reportTarget = ReportTarget(
+                        entityType: "community_comment",
+                        entityId: item.id,
+                        contextToken: reportContext
+                    )
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// Canonical thread after a write: the server projects placeholders,
+    /// ordering, and the viewer's edit rights.
+    @MainActor
+    private func reloadComments() async {
+        if let fresh = try? await CommunityAPI.post(id: post.id), let freshComments = fresh.comments {
+            comments = freshComments
+            acceptedAnswerCommentId = fresh.acceptedAnswerCommentId
+        }
+    }
+
+    @MainActor
+    private func removeComment(_ target: CommunityComment) async {
+        removingComment = nil
+        do {
+            _ = try await CommunityAPI.removeComment(id: target.id)
+            await reloadComments()
+            onChanged()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 
@@ -1315,8 +1470,9 @@ struct CommunityPostDetailView: View {
         submitting = true
         defer { submitting = false }
 
+        let parent = replyingTo
         // Show the comment immediately, then reconcile with the server.
-        let optimistic = CommunityComment(
+        var optimistic = CommunityComment(
             id: "optimistic-\(UUID().uuidString)",
             postId: post.id,
             authorId: auth.profile?.id ?? "",
@@ -1329,26 +1485,30 @@ struct CommunityPostDetailView: View {
             author: auth.profile,
             reportContext: nil
         )
-        comments.append(optimistic)
+        optimistic.parentCommentId = parent?.id
+        if let parent, let index = comments.lastIndex(where: { $0.id == parent.id || $0.parentCommentId == parent.id }) {
+            comments.insert(optimistic, at: index + 1)
+        } else {
+            comments.append(optimistic)
+        }
         comment = ""
+        replyingTo = nil
 
         do {
-            let response = try await CommunityAPI.comment(postId: post.id, content: text)
+            let response = try await CommunityAPI.comment(postId: post.id, content: text, parentCommentId: parent?.id)
             if response.moderationStatus != "active" {
                 comments.removeAll { $0.id == optimistic.id }
                 self.error = response.moderationMessage ?? "Your comment is being reviewed and is not public yet."
                 return
             }
             onChanged()
-            // Replace the optimistic placeholder with the canonical rows so the
-            // count and author details match the server.
-            if let fresh = try? await CommunityAPI.feed().first(where: { $0.id == post.id }),
-               let freshComments = fresh.comments {
-                comments = freshComments
-            }
+            // Replace the optimistic placeholder with the canonical thread so
+            // ordering, counts, and author details match the server.
+            await reloadComments()
         } catch {
             comments.removeAll { $0.id == optimistic.id }
             comment = text
+            replyingTo = parent
             self.error = error.localizedDescription
         }
     }
@@ -1412,6 +1572,81 @@ struct CommunityPostDetailView: View {
         do {
             try await ProfilesAPI.setRelationship(profileId: post.authorId, kind: kind, enabled: true)
             onChanged()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// Author edit sheet for a post or comment (plan 14.6 / 15.1). The server
+/// publishes a new immutable revision; the previous wording stays bound to
+/// any report already filed against it.
+struct CommunityTextEditSheet: View {
+    let title: LocalizedStringKey
+    let initialText: String
+    let limit: Int
+    let onSave: (String) async throws -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var text: String
+    @State private var saving = false
+    @State private var error: String?
+
+    init(title: LocalizedStringKey, initialText: String, limit: Int, onSave: @escaping (String) async throws -> Void) {
+        self.title = title
+        self.initialText = initialText
+        self.limit = limit
+        self.onSave = onSave
+        _text = State(initialValue: initialText)
+    }
+
+    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canSave: Bool { !saving && !trimmed.isEmpty && trimmed != initialText && text.count <= limit }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextEditor(text: $text)
+                        .frame(minHeight: 140)
+                        .accessibilityLabel(title)
+                } footer: {
+                    HStack {
+                        Text("Saving publishes a new version; the earlier wording is kept for any report already filed.")
+                        Spacer()
+                        if text.count > limit - 100 {
+                            Text("\(text.count)/\(limit)")
+                                .foregroundStyle(text.count > limit ? Theme.Palette.danger : .secondary)
+                        }
+                    }
+                }
+                if let error {
+                    Section { Text(error).foregroundStyle(Theme.Palette.danger) }
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.disabled(saving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "Saving…" : "Save") { Task { await save() } }
+                        .disabled(!canSave)
+                }
+            }
+            .interactiveDismissDisabled(saving)
+        }
+    }
+
+    @MainActor
+    private func save() async {
+        guard canSave else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            try await onSave(trimmed)
             dismiss()
         } catch {
             self.error = error.localizedDescription

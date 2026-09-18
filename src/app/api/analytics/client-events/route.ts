@@ -4,9 +4,11 @@ import { requireApiRole } from "@/features/auth/api";
 import { recordProductEvent } from "@/features/analytics/product-events";
 
 // The few product events that only the client can observe (a share sheet
-// was used). Closed allowlist; nothing else about the action is accepted.
+// was used, the app came to the foreground, the OS delivered a crash
+// report). Closed allowlist; nothing else about the action is accepted —
+// no stack traces, device details, or timings.
 const bodySchema = z.object({
-  event: z.enum(["invite_shared"]),
+  event: z.enum(["invite_shared", "app_session_started", "app_crash_detected"]),
 }).strict();
 
 export async function POST(request: Request) {

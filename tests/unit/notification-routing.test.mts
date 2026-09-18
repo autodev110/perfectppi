@@ -14,6 +14,10 @@ describe("notification deep links (plan 22.1)", () => {
       kind: "post", id: "p1", secondaryId: "c2",
     });
     assert.equal(notificationDestinationIntent("post_mention", { post_id: "p1", comment_id: "c1" }).kind, "post");
+    // A reply opens the post at the reply, not at the parent comment (plan 15.1).
+    assert.deepEqual(notificationDestinationIntent("comment_reply", { post_id: "p1", parent_comment_id: "c1", comment_id: "c9" }), {
+      kind: "post", id: "p1", secondaryId: "c9",
+    });
     assert.equal(notificationDestinationIntent("friend_request", { requester_id: "x" }).kind, "friends");
     assert.deepEqual(notificationDestinationIntent("friend_request_accepted", { username: "Bea" }), {
       kind: "profile", id: "Bea", secondaryId: null,

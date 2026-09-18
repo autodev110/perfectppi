@@ -12,6 +12,8 @@ import { PostMediaCarousel } from "@/components/shared/post-media-carousel";
 import { AcceptedAnswerControl } from "@/components/shared/accepted-answer-control";
 import { CommunityLikeButton } from "@/components/shared/community-like-button";
 import { CommunityMentionText } from "@/components/shared/community-mention-text";
+import { CommunityAuthorEditor } from "@/components/shared/community-author-editor";
+import { CommunityReplyForm } from "@/components/shared/community-reply-form";
 import { createCommunityComment } from "@/features/community/actions";
 import {
   getCommunityGroupPinnedPosts,
@@ -39,6 +41,7 @@ import { formatDate, getInitials } from "@/lib/utils/formatting";
 import { ArrowLeft, BookOpen, Clock3, Lock, MessageSquare, Pin, Plus, Search, ShieldCheck, Users } from "lucide-react";
 import { decodeGroupDirectoryCursor } from "@/features/community/group-cursor";
 import { ExtendedReportControl } from "@/components/shared/extended-report-control";
+import { recordProductEvent } from "@/features/analytics/product-events";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +103,10 @@ export default async function CommunityGroupPage({
   const group = await getCommunityGroup(slug);
   if (!group) notFound();
   const query = await searchParams;
+  // Plan 34.1 discovery-to-join: once per group for a non-member.
+  if (!group.is_member && !query.cursor && !query.tab) {
+    await recordProductEvent({ profileId: viewer.id, eventName: "group_detail_viewed", surface: "community", dedupeId: group.id });
+  }
   const search = (query.q ?? "").trim();
   const locked = !group.can_view_content;
   const showMembers = !locked && query.tab === "members";
@@ -334,7 +341,7 @@ export default async function CommunityGroupPage({
           ) : posts.map((post) => (
             <article key={post.id} className="rounded-[1.5rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
               <div className="flex items-start justify-between gap-4">
-                <div><div className="flex flex-wrap items-center gap-2"><p className="font-bold">{post.author?.display_name ?? post.author?.username ?? "PerfectPPI member"}</p>{post.post_type === "question" ? <Badge className="bg-teal/10 text-teal hover:bg-teal/10">{post.accepted_answer_comment_id ? "Solved" : "Question"}</Badge> : post.post_type !== "general" && POST_TYPE_LABELS[post.post_type as PostType] ? <Badge className="bg-teal/10 text-teal hover:bg-teal/10">{POST_TYPE_LABELS[post.post_type as PostType].chip}</Badge> : null}</div><p className="text-xs text-on-surface-variant"><Link href={sharePath({ kind: "post", id: post.id })} className="hover:underline">{formatDate(post.created_at)}</Link></p></div>
+                <div><div className="flex flex-wrap items-center gap-2"><p className="font-bold">{post.author?.display_name ?? post.author?.username ?? "PerfectPPI member"}</p>{post.post_type === "question" ? <Badge className="bg-teal/10 text-teal hover:bg-teal/10">{post.accepted_answer_comment_id ? "Solved" : "Question"}</Badge> : post.post_type !== "general" && POST_TYPE_LABELS[post.post_type as PostType] ? <Badge className="bg-teal/10 text-teal hover:bg-teal/10">{POST_TYPE_LABELS[post.post_type as PostType].chip}</Badge> : null}</div><p className="text-xs text-on-surface-variant"><Link href={sharePath({ kind: "post", id: post.id })} className="hover:underline">{formatDate(post.created_at)}</Link>{post.edited_at ? <span title={`Edited ${formatDate(post.edited_at)}`}> · Edited</span> : null}</p></div>
                 <div className="flex items-center gap-1">{post.author_id === viewer.id ? <Badge variant="outline">Your post</Badge> : <MemberSafetyActions profileId={post.author_id} compact />}{post.report_context ? <CommunityReportControl entityType="community_post" entityId={post.id} reportContext={post.report_context} /> : null}{post.can_moderate_group ? <GroupPostModerationMenu slug={group.slug} postId={post.id} pinned={post.group_pinned} removed={false} /> : null}</div>
               </div>
               <CommunityMentionText content={post.content} mentions={post.mentions} className="mt-4 block whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant" />
@@ -347,7 +354,33 @@ export default async function CommunityGroupPage({
               <div className="mt-4">
                 <CommunityLikeButton postId={post.id} initialLiked={post.liked_by_viewer} initialCount={post.like_count} disabled={!post.can_like} />
               </div>
-              {post.comments.length ? <div className="mt-5 space-y-2 border-t pt-4">{post.comments.map((comment) => <div key={comment.id} className={`flex items-start justify-between gap-3 rounded-xl bg-surface-container px-4 py-3 ${post.accepted_answer_comment_id === comment.id ? "ring-2 ring-teal/30" : ""}`}><div><p className="text-xs font-bold">{comment.author?.display_name ?? comment.author?.username ?? "Member"}</p>{post.post_type === "question" ? <AcceptedAnswerControl postId={post.id} commentId={comment.id} accepted={post.accepted_answer_comment_id === comment.id} canManage={post.can_manage_accepted_answer} ownResponse={comment.author_id === post.author_id} /> : null}<CommunityMentionText content={comment.content} mentions={comment.mentions} className="mt-1 block text-sm text-on-surface-variant" />{post.post_type === "question" ? <CommunityHelpfulButton commentId={comment.id} initialHelpful={comment.helpful_by_viewer} initialCount={comment.helpful_count} disabled={!comment.can_mark_helpful} /> : null}</div>{comment.report_context ? <CommunityReportControl entityType="community_comment" entityId={comment.id} reportContext={comment.report_context} compact /> : null}</div>)}</div> : null}
+              {post.comments.length ? (
+                <div className="mt-5 space-y-2 border-t pt-4">
+                  {post.comments.map((comment) => {
+                    const isReply = Boolean(comment.parent_comment_id);
+                    const authorName = comment.author?.display_name ?? comment.author?.username ?? "Member";
+                    if (comment.removed) {
+                      return <div key={comment.id} className="rounded-xl bg-surface-container px-4 py-3 text-xs italic text-on-surface-variant">Comment removed</div>;
+                    }
+                    const text = <CommunityMentionText content={comment.content} mentions={comment.mentions} className="mt-1 block text-sm text-on-surface-variant" />;
+                    return (
+                      <div key={comment.id} className={`flex items-start justify-between gap-3 rounded-xl bg-surface-container px-4 py-3 ${post.accepted_answer_comment_id === comment.id ? "ring-2 ring-teal/30" : ""} ${isReply ? "ml-6 border-l-2 border-outline-variant/40 sm:ml-10" : ""}`}>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold">
+                            {authorName}
+                            {comment.edited_at ? <span className="font-normal text-on-surface-variant" title={`Edited ${formatDate(comment.edited_at)}`}> · Edited</span> : null}
+                          </p>
+                          {post.post_type === "question" && !isReply ? <AcceptedAnswerControl postId={post.id} commentId={comment.id} accepted={post.accepted_answer_comment_id === comment.id} canManage={post.can_manage_accepted_answer} ownResponse={comment.author_id === post.author_id} /> : null}
+                          {comment.can_edit ? <CommunityAuthorEditor entityType="comment" entityId={comment.id} initialContent={comment.content} canRemove={comment.can_remove}>{text}</CommunityAuthorEditor> : text}
+                          {post.post_type === "question" && !isReply ? <CommunityHelpfulButton commentId={comment.id} initialHelpful={comment.helpful_by_viewer} initialCount={comment.helpful_count} disabled={!comment.can_mark_helpful} /> : null}
+                          {group.is_member && !isReply ? <CommunityReplyForm postId={post.id} parentCommentId={comment.id} replyingTo={authorName} /> : null}
+                        </div>
+                        {comment.report_context ? <CommunityReportControl entityType="community_comment" entityId={comment.id} reportContext={comment.report_context} compact /> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
               {group.is_member ? <form action={createCommunityComment} className="mt-4 flex flex-col gap-2 sm:flex-row"><input type="hidden" name="post_id" value={post.id} /><Textarea name="content" required maxLength={600} rows={2} placeholder="Add a comment..." /><Button type="submit" className="sm:self-end">Comment</Button></form> : null}
             </article>
           ))}

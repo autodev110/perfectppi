@@ -29,6 +29,15 @@ export const PRODUCT_EVENT_NAMES = [
   "factory_conflict_refused",
   "custom_build_declared",
   "build_stage_created",
+  // Plan 34 signals: discovery-to-join, upload completion, unwanted contact,
+  // crash-free sessions. Client-observed ones arrive via /api/analytics/client-events.
+  "group_detail_viewed",
+  "media_upload_reserved",
+  "media_upload_attached",
+  "unwanted_contact_reported",
+  "blocked_contact_attempt",
+  "app_session_started",
+  "app_crash_detected",
 ] as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];

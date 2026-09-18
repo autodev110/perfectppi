@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordProductEvent } from "@/features/analytics/product-events";
 import { browserFamily, logUploadEvent } from "@/features/uploads/diagnostics";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -156,6 +157,15 @@ export async function POST(request: Request) {
         content_type: parsed.data.contentType,
       });
       if (reservationError) throw reservationError;
+      // Plan 34.2 upload completion: reserved now, attached when the media
+      // row claims the reservation. Keyed by the storage reference so a
+      // retried request does not count twice.
+      await recordProductEvent({
+        profileId: profile.id,
+        eventName: "media_upload_reserved",
+        surface: parsed.data.entity === "vehicle_media" ? "garage" : "community",
+        dedupeId: result.storageReference,
+      });
       // Keep the response shape compatible with existing web/iOS uploaders.
       return NextResponse.json({ uploadUrl: result.uploadUrl, publicUrl: result.storageReference });
     }

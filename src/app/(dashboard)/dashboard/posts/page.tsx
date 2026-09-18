@@ -189,6 +189,7 @@ export default async function DashboardPostsPage({ searchParams }: PageProps) {
                       ) : null}
                       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                         <span>Created {formatDate(post.created_at)}</span>
+                        {post.edited_at ? <span>Edited {formatDate(post.edited_at)}</span> : null}
                         {tab === "archived" && (
                           <span>Archived {formatDate(post.updated_at)}</span>
                         )}

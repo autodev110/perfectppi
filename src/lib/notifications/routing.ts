@@ -62,6 +62,7 @@ export function notificationDestinationIntent(
   const d = data ?? {};
   switch (type) {
     case "post_comment":
+    case "comment_reply":
     case "post_likes":
     case "post_mention":
     case "answer_accepted":

@@ -111,4 +111,10 @@ union all
   select '20260915120000', '20260915120000_core_vehicle_ppi_table_privileges.sql', has_column_privilege('authenticated', 'public.ppi_answers', 'answer_value', 'UPDATE') and not has_table_privilege('authenticated', 'public.ppi_answers', 'UPDATE')
 union all
   select '20260915130000', '20260915130000_expanded_ugc_reporting.sql', to_regclass('public.moderation_reporter_hidden_entities') is not null
+union all
+  select '20260918100000', '20260918100000_comment_reply_notification_enum.sql', exists (select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='notification_type' and e.enumlabel='comment_reply')
+union all
+  select '20260918101000', '20260918101000_author_edits_and_comment_replies.sql', to_regprocedure('public.edit_community_post(uuid, uuid, text)') is not null
+union all
+  select '20260918110000', '20260918110000_engagement_signal_analytics.sql', to_regprocedure('public.get_product_engagement_signals(integer)') is not null
 ) m order by version;

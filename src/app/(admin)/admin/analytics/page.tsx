@@ -5,6 +5,7 @@ import {
   getGrowthAccuracyKpis,
   getOperationalQueryMetrics,
   getProductAnalyticsSummary,
+  getProductEngagementSignals,
   getProductSafetyAnalyticsSummary,
 } from "@/features/analytics/queries";
 
@@ -34,7 +35,26 @@ const eventLabels: Record<string, string> = {
   build_update_published: "Build updates published",
   maintenance_update_published: "Maintenance updates published",
   answer_accepted: "Answers accepted",
+  group_detail_viewed: "Groups opened by non-members",
+  media_upload_reserved: "Uploads started",
+  media_upload_attached: "Uploads attached",
+  unwanted_contact_reported: "Unwanted-contact reports",
+  blocked_contact_attempt: "Contact attempts stopped by a block",
+  app_session_started: "App sessions",
+  app_crash_detected: "App crash reports",
 };
+
+const intentLabels: Record<string, string> = {
+  shopper: "Shopper",
+  owner: "Owner",
+  enthusiast: "Enthusiast",
+  technician: "Technician",
+  undetermined: "Undetermined",
+};
+
+function percent(value: number | null, suffix = "") {
+  return value === null ? "No data" : `${value.toLocaleString()}%${suffix}`;
+}
 
 const operationLabels: Record<string, string> = {
   community_feed: "Community feed",
@@ -62,11 +82,12 @@ function hours(value: number | null) {
 
 export default async function ProductAnalyticsPage() {
   await requireRole(["admin"]);
-  const [summary, quality, queryMetrics, growth] = await Promise.all([
+  const [summary, quality, queryMetrics, growth, signals] = await Promise.all([
     getProductAnalyticsSummary(30),
     getProductSafetyAnalyticsSummary(30),
     getOperationalQueryMetrics(),
     getGrowthAccuracyKpis(30),
+    getProductEngagementSignals(30),
   ]);
   const activationRate = summary.eligibleNewProfiles > 0
     ? Math.round((summary.activatedNewProfiles / summary.eligibleNewProfiles) * 100)
@@ -142,6 +163,32 @@ export default async function ProductAnalyticsPage() {
           <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Custom builds</p><p className="mt-2 text-3xl font-black">{growth.customBuilds.customBuildVehicles.toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">custom-build vehicles · {growth.customBuilds.modifiedVehicles} modified · {growth.customBuilds.declared} declared in window</p></CardContent></Card>
           <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Build progression</p><p className="mt-2 text-3xl font-black">{growth.customBuilds.vehiclesWithStages.toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">vehicles with stages · {growth.customBuilds.stagesCreated} stages created by {growth.customBuilds.membersCreatingStages} members</p></CardContent></Card>
         </div>
+      </section>
+
+      <section className="space-y-4" aria-labelledby="engagement-signals-heading">
+        <div>
+          <h2 id="engagement-signals-heading" className="font-heading text-2xl font-extrabold">Discovery, uploads, contact, and reliability</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Group discovery-to-join, upload completion, unwanted-contact attribution, and crash-free sessions over the last {signals.windowDays} days. Sessions and crash reports are client-observed counts; nothing about the device or the crash is collected.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Group discovery → join</p><p className="mt-2 text-3xl font-black">{percent(signals.groupDiscovery.ratePercent)}</p><p className="mt-1 text-xs text-muted-foreground">{signals.groupDiscovery.joiners} of {signals.groupDiscovery.viewers} non-members who opened a group joined one afterwards</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Upload completion</p><p className="mt-2 text-3xl font-black">{percent(signals.uploadCompletion.ratePercent)}</p><p className="mt-1 text-xs text-muted-foreground">{signals.uploadCompletion.attached} of {signals.uploadCompletion.reserved} started uploads were attached</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Unwanted contact</p><p className="mt-2 text-3xl font-black">{signals.unwantedContact.reports}</p><p className="mt-1 text-xs text-muted-foreground">profile/message reports by {signals.unwantedContact.reportingUsers} members · {signals.unwantedContact.reportsPerThousandMessages === null ? "no messages sent" : `${signals.unwantedContact.reportsPerThousandMessages} per 1,000 messages`} · {signals.unwantedContact.blockedAttempts} contact attempts stopped by a block ({signals.unwantedContact.blockedAttemptUsers} members)</p></CardContent></Card>
+          <Card><CardContent><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Crash-free sessions</p><p className="mt-2 text-3xl font-black">{percent(signals.sessions.crashFreePercent)}</p><p className="mt-1 text-xs text-muted-foreground">{signals.sessions.crashes} crash reports across {signals.sessions.sessions.toLocaleString()} sessions from {signals.sessions.sessionUsers} members</p></CardContent></Card>
+        </div>
+
+        <Card>
+          <CardHeader><CardTitle>Meaningful return by observed intent</CardTitle></CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead><tr className="border-b text-xs uppercase tracking-wide text-muted-foreground"><th className="pb-3">Segment</th><th className="pb-3 text-right">D7 eligible</th><th className="pb-3 text-right">D7 return</th><th className="pb-3 text-right">D30 eligible</th><th className="pb-3 text-right">D30 return</th></tr></thead>
+                <tbody>{signals.intentRetention.map((row) => <tr key={row.segment} className="border-b last:border-0"><td className="py-3 font-medium">{intentLabels[row.segment] ?? row.segment}</td><td className="py-3 text-right tabular-nums">{row.d7Eligible.toLocaleString()}</td><td className="py-3 text-right tabular-nums">{percent(row.d7RatePercent)}</td><td className="py-3 text-right tabular-nums">{row.d30Eligible.toLocaleString()}</td><td className="py-3 text-right tabular-nums">{percent(row.d30RatePercent)}</td></tr>)}</tbody>
+              </table>
+            </div>
+            <p className="pt-4 text-xs text-muted-foreground">Intent is observed, not declared: technician by account role, owner by a Garage action, shopper by Marketplace or search activity, enthusiast by Community activity, all within the first seven days. Rates are withheld for segments under five accounts.</p>
+          </CardContent>
+        </Card>
       </section>
 
       <section className="space-y-4" aria-labelledby="product-outcomes-heading">

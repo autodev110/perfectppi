@@ -6,6 +6,8 @@ import { PUBLICATION_OUTCOME_STATUS } from "@/lib/moderation/launch-policy";
 
 const commentSchema = z.object({
   content: z.string().trim().min(1).max(600),
+  /** Plan 15.1: reply to a top-level comment on this post. */
+  parentCommentId: z.string().uuid().optional().nullable(),
 });
 
 export async function POST(
@@ -25,6 +27,7 @@ export async function POST(
   const result = await createCommunityCommentFromInput({
     postId: id,
     content: parsed.data.content,
+    parentCommentId: parsed.data.parentCommentId ?? null,
   });
 
   if (result.error !== undefined) {

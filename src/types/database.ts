@@ -213,6 +213,8 @@ export type Database = {
       }
       community_comments: {
         Row: {
+          edited_at: string | null
+          parent_comment_id: string | null
           active_revision_id: string
           author_id: string
           content: string
@@ -227,6 +229,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          edited_at?: string | null
+          parent_comment_id?: string | null
           active_revision_id?: string
           author_id: string
           content: string
@@ -241,6 +245,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          edited_at?: string | null
+          parent_comment_id?: string | null
           active_revision_id?: string
           author_id?: string
           content?: string
@@ -255,6 +261,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "community_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "community_comments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "community_comments_author_id_fkey"
             columns: ["author_id"]
@@ -1046,6 +1059,7 @@ export type Database = {
       }
       community_posts: {
         Row: {
+          edited_at: string | null
           accepted_answer_comment_id: string | null
           active_revision_id: string
           audience: Database["public"]["Enums"]["community_post_audience"]
@@ -1073,6 +1087,7 @@ export type Database = {
           vehicle_id: string | null
         }
         Insert: {
+          edited_at?: string | null
           accepted_answer_comment_id?: string | null
           active_revision_id?: string
           audience?: Database["public"]["Enums"]["community_post_audience"]
@@ -1100,6 +1115,7 @@ export type Database = {
           vehicle_id?: string | null
         }
         Update: {
+          edited_at?: string | null
           accepted_answer_comment_id?: string | null
           active_revision_id?: string
           audience?: Database["public"]["Enums"]["community_post_audience"]
@@ -6115,6 +6131,26 @@ export type Database = {
         }
         Returns: Json
       }
+      get_product_engagement_signals: {
+        Args: { p_days?: number }
+        Returns: Json
+      }
+      edit_community_post: {
+        Args: { p_actor_profile_id: string; p_post_id: string; p_content: string }
+        Returns: Database["public"]["Tables"]["community_posts"]["Row"]
+      }
+      edit_community_comment: {
+        Args: { p_actor_profile_id: string; p_comment_id: string; p_content: string }
+        Returns: Database["public"]["Tables"]["community_comments"]["Row"]
+      }
+      remove_own_community_comment: {
+        Args: { p_actor_profile_id: string; p_comment_id: string }
+        Returns: Database["public"]["Tables"]["community_comments"]["Row"]
+      }
+      community_entities_with_open_cases: {
+        Args: { p_entity_type: string; p_entity_ids: string[] }
+        Returns: string[]
+      }
       admin_correct_username: {
         Args: { p_profile_id: string; p_reason: string; p_username: string }
         Returns: Database["public"]["Tables"]["profiles"]["Row"]
@@ -7446,6 +7482,7 @@ export type Database = {
         | "friend_request"
         | "friend_request_accepted"
         | "listing_inspection_requested"
+        | "comment_reply"
         | "post_comment"
         | "post_likes"
         | "post_mention"
@@ -7708,6 +7745,7 @@ export const Constants = {
         "answer_accepted",
         "accepted_answer_unavailable",
         "answer_helpful",
+        "comment_reply",
         "post_comment",
         "post_likes",
         "post_mention",

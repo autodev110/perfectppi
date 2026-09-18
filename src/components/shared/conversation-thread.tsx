@@ -16,6 +16,7 @@ import type { Database } from "@/types/database";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { CONTACT_SHARING_WARNING, containsContactDetails } from "@/lib/messages/contact-warning";
 import { formatDateTime, formatRelativeTime, getInitials } from "@/lib/utils/formatting";
 import { ArrowLeft, Car, Radio, SendHorizontal, CheckCheck, Check, FileText, Paperclip, X } from "lucide-react";
 import { ExtendedReportControl } from "@/components/shared/extended-report-control";
@@ -628,6 +629,12 @@ export function ConversationThread({
               </p>
               <p className="text-[10px] text-muted-foreground">{draft.trim().length}/4000</p>
             </div> : null}
+            {canCompose && containsContactDetails(draft) ? (
+              // Plan 22.3: a caution before contact details leave the platform, not a block.
+              <p role="status" className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-200">
+                {CONTACT_SHARING_WARNING}
+              </p>
+            ) : null}
           </div>
         </CardContent>
       </Card>

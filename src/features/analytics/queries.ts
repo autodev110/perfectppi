@@ -199,6 +199,61 @@ const growthAccuracyKpisSchema = z.object({
 
 export type GrowthAccuracyKpis = z.infer<typeof growthAccuracyKpisSchema>;
 
+// Plan 34 signals that had no source data before: discovery-to-join, upload
+// completion, unwanted-contact attribution, crash-free sessions, and D7/D30
+// retention by observed intent. Rates are null when the cohort is empty or
+// under the privacy threshold.
+const engagementRetentionSegmentSchema = z.object({
+  segment: z.enum(["shopper", "owner", "enthusiast", "technician", "undetermined"]),
+  d7Eligible: z.number().int().nonnegative(),
+  d7Retained: z.number().int().nonnegative(),
+  d7RatePercent: z.number().nonnegative().nullable(),
+  d30Eligible: z.number().int().nonnegative(),
+  d30Retained: z.number().int().nonnegative(),
+  d30RatePercent: z.number().nonnegative().nullable(),
+});
+
+const engagementSignalsSchema = z.object({
+  windowDays: z.number().int().positive(),
+  groupDiscovery: z.object({
+    viewers: z.number().int().nonnegative(),
+    joiners: z.number().int().nonnegative(),
+    ratePercent: z.number().nonnegative().nullable(),
+  }),
+  uploadCompletion: z.object({
+    reserved: z.number().int().nonnegative(),
+    attached: z.number().int().nonnegative(),
+    ratePercent: z.number().nonnegative().nullable(),
+  }),
+  unwantedContact: z.object({
+    reports: z.number().int().nonnegative(),
+    reportingUsers: z.number().int().nonnegative(),
+    blockedAttempts: z.number().int().nonnegative(),
+    blockedAttemptUsers: z.number().int().nonnegative(),
+    messagesSent: z.number().int().nonnegative(),
+    reportsPerThousandMessages: z.number().nonnegative().nullable(),
+  }),
+  sessions: z.object({
+    sessions: z.number().int().nonnegative(),
+    sessionUsers: z.number().int().nonnegative(),
+    crashes: z.number().int().nonnegative(),
+    crashFreePercent: z.number().nonnegative().nullable(),
+  }),
+  intentRetention: z.array(engagementRetentionSegmentSchema),
+});
+
+export type ProductEngagementSignals = z.infer<typeof engagementSignalsSchema>;
+
+export async function getProductEngagementSignals(days = 30): Promise<ProductEngagementSignals> {
+  const { data, error } = await createAdminClient().rpc("get_product_engagement_signals", {
+    p_days: Math.min(Math.max(Math.trunc(days), 1), 90),
+  });
+  if (error) throw new Error(`product_engagement_signals_${error.code ?? "failed"}`);
+  const parsed = engagementSignalsSchema.safeParse(data);
+  if (!parsed.success) throw new Error("product_engagement_signals_invalid");
+  return parsed.data;
+}
+
 export async function getGrowthAccuracyKpis(days = 30): Promise<GrowthAccuracyKpis> {
   const { data, error } = await createAdminClient().rpc("get_growth_accuracy_kpis", {
     p_days: Math.min(Math.max(Math.trunc(days), 1), 90),
