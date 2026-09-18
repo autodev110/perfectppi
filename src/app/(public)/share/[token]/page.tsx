@@ -4,9 +4,11 @@ import { notFound } from "next/navigation";
 import { resolveShareLink } from "@/features/media/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { t as uiText } from "@/lib/i18n";
+import { getRequestTranslator } from "@/lib/i18n/server";
 
 export const metadata: Metadata = {
-  title: "Shared Content",
+  title: uiText("ui.shared_content_71dcb79381"),
 };
 
 function vehicleLabel(vehicle: {
@@ -19,7 +21,7 @@ function vehicleLabel(vehicle: {
     .filter(Boolean)
     .join(" ");
 
-  return label || "Vehicle";
+  return label || uiText("ui.vehicle_a62394ba4a");
 }
 
 export default async function SharePage({
@@ -27,6 +29,7 @@ export default async function SharePage({
 }: {
   params: Promise<{ token: string }>;
 }) {
+  const uiText = await getRequestTranslator();
   const { token } = await params;
   const resolved = await resolveShareLink(token);
 
@@ -35,10 +38,8 @@ export default async function SharePage({
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8 space-y-6">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
-          Shared Content
-        </p>
-        <h1 className="text-2xl font-bold">PerfectPPI Share Link</h1>
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">{uiText("ui.shared_content_71dcb79381")}</p>
+        <h1 className="text-2xl font-bold">{uiText("ui.perfectppi_share_link_b7d614d140")}</h1>
       </div>
 
       {resolved.target.type === "media_package" ? (
@@ -80,29 +81,25 @@ export default async function SharePage({
       {resolved.target.type === "inspection_result" ? (
         <Card>
           <CardHeader>
-            <CardTitle>Inspection Result</CardTitle>
+            <CardTitle>{uiText("ui.inspection_result_00131bfbae")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <p>
-              Status: <span className="font-semibold">{resolved.target.submission.status}</span>
+            <p>{uiText("ui.status_4889951f61")}<span className="font-semibold">{resolved.target.submission.status}</span>
             </p>
-            <p>
-              Submitted:{" "}
+            <p>{uiText("ui.submitted_f1bd0eb561")}{" "}
               <span className="font-semibold">
                 {resolved.target.submission.submitted_at
                   ? new Date(resolved.target.submission.submitted_at).toLocaleString()
-                  : "Not submitted"}
+                  : uiText("ui.not_submitted_d3289e6252")}
               </span>
             </p>
             {resolved.target.request ? (
-              <p>
-                Inspection Type:{" "}
+              <p>{uiText("ui.inspection_type_dec0e02265")}{" "}
                 <span className="font-semibold">{resolved.target.request.ppi_type}</span>
               </p>
             ) : null}
             {resolved.target.vehicle ? (
-              <p>
-                Vehicle:{" "}
+              <p>{uiText("ui.vehicle_b2dc3b5dae")}{" "}
                 <span className="font-semibold">
                   {vehicleLabel(resolved.target.vehicle)}
                 </span>
@@ -115,20 +112,18 @@ export default async function SharePage({
       {resolved.target.type === "standardized_output" ? (
         <Card>
           <CardHeader>
-            <CardTitle>Standardized Inspection Output</CardTitle>
+            <CardTitle>{uiText("ui.standardized_inspection_output_5bb9cdb2b2")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             {resolved.target.vehicle ? (
-              <p>
-                Vehicle:{" "}
+              <p>{uiText("ui.vehicle_b2dc3b5dae")}{" "}
                 <span className="font-semibold">
                   {vehicleLabel(resolved.target.vehicle)}
                 </span>
               </p>
             ) : null}
 
-            <p>
-              Generated:{" "}
+            <p>{uiText("ui.generated_c710717519")}{" "}
               <span className="font-semibold">
                 {new Date(resolved.target.standardized_output.generated_at).toLocaleString()}
               </span>
@@ -140,21 +135,17 @@ export default async function SharePage({
                   href={resolved.target.standardized_output.document_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                >
-                  Open Document
-                </a>
+                >{uiText("ui.open_document_ec4bc99aad")}</a>
               </Button>
             ) : (
-              <p className="text-muted-foreground">Document URL is not available.</p>
+              <p className="text-muted-foreground">{uiText("ui.document_url_is_not_available_dfb826428c")}</p>
             )}
           </CardContent>
         </Card>
       ) : null}
 
       <div>
-        <Link href="/" className="text-sm font-medium text-primary hover:underline">
-          Back to PerfectPPI
-        </Link>
+        <Link href="/" className="text-sm font-medium text-primary hover:underline">{uiText("ui.back_to_perfectppi_d9084b0fa4")}</Link>
       </div>
     </div>
   );

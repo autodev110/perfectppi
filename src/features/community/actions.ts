@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { t } from "@/lib/i18n";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createHash } from "node:crypto";
@@ -1335,11 +1336,11 @@ async function pushCommentNotice(postId: string, commenterId: string, parentComm
       recipient: parent.author_id,
       type: "comment_reply",
       match: { parent_comment_id: parentCommentId as string },
-      title: "New reply to your comment",
+      title: t("notifications.comment_reply.title"),
     });
   }
   if (post.author_id !== commenterId && post.author_id !== parent?.author_id) {
-    targets.push({ recipient: post.author_id, type: "post_comment", match: { post_id: postId }, title: "New comment on your post" });
+    targets.push({ recipient: post.author_id, type: "post_comment", match: { post_id: postId }, title: t("notifications.post_comment.title") });
   }
 
   for (const target of targets) {

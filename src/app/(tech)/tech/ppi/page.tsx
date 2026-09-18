@@ -6,13 +6,15 @@ import { SourceBadge } from "@/components/shared/source-badge";
 import type { InspectionScope, PpiRequestStatus } from "@/types/enums";
 import { inspectionDisplayName } from "@/features/ppi/presentation";
 import { INSPECTION_SCOPE_LABELS } from "@/features/ppi/constants";
+import { t as uiText } from "@/lib/i18n";
+import { getRequestTranslator } from "@/lib/i18n/server";
 
 const QUEUE_TABS: { label: string; value: PpiRequestStatus | "active" }[] = [
-  { label: "Active", value: "active" },
-  { label: "Assigned", value: "assigned" },
-  { label: "Accepted", value: "accepted" },
-  { label: "In Progress", value: "in_progress" },
-  { label: "Submitted", value: "submitted" },
+  { label: uiText("ui.active_9234069589"), value: "active" },
+  { label: uiText("ui.assigned_8191888dd9"), value: "assigned" },
+  { label: uiText("ui.accepted_a00fb0c507"), value: "accepted" },
+  { label: uiText("ui.in_progress_b4cc4b07c3"), value: "in_progress" },
+  { label: uiText("ui.submitted_64900440a8"), value: "submitted" },
 ];
 
 interface PageProps {
@@ -20,6 +22,7 @@ interface PageProps {
 }
 
 export default async function InspectionQueuePage({ searchParams }: PageProps) {
+  const uiText = await getRequestTranslator();
   const { status } = await searchParams;
   const activeStatus = status as PpiRequestStatus | undefined;
 
@@ -28,10 +31,8 @@ export default async function InspectionQueuePage({ searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-bold">Inspection Queue</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Your assigned inspection requests
-        </p>
+        <h1 className="font-heading text-2xl font-bold">{uiText("ui.inspection_queue_fcf0951787")}</h1>
+        <p className="text-muted-foreground text-sm mt-1">{uiText("ui.your_assigned_inspection_requests_d68863e3f9")}</p>
       </div>
 
       {/* Status filter tabs */}
@@ -57,10 +58,8 @@ export default async function InspectionQueuePage({ searchParams }: PageProps) {
           <div className="mb-6 rounded-full bg-primary/10 p-6">
             <ClipboardCheck className="h-12 w-12 text-primary" />
           </div>
-          <h3 className="text-lg font-semibold mb-2">Queue is empty</h3>
-          <p className="text-muted-foreground text-sm max-w-sm">
-            No inspections in this queue. Check back later or update your profile to receive assignments.
-          </p>
+          <h3 className="text-lg font-semibold mb-2">{uiText("ui.queue_is_empty_c501c69515")}</h3>
+          <p className="text-muted-foreground text-sm max-w-sm">{uiText("ui.no_inspections_in_this_queue_check_back_late_5417dde427")}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -75,15 +74,15 @@ export default async function InspectionQueuePage({ searchParams }: PageProps) {
             const requester = req.requester as { display_name: string | null } | null;
             // Organization-requested inspections have no consumer requester.
             const sourceLabel =
-              req.source_system === "dealerspace" ? "DealerSpace" : "Consumer";
+              req.source_system === "dealerspace" ? "DealerSpace" : uiText("ui.consumer_3fdb185870");
 
             const canAction = ["assigned", "accepted"].includes(req.status);
             const actionLabel =
               req.status === "assigned"
-                ? "Accept & Start"
+                ? uiText("ui.accept_start_ba8f8dd28a")
                 : req.status === "accepted"
-                ? "Begin Inspection"
-                : "View";
+                ? uiText("ui.begin_inspection_48623433af")
+                : uiText("ui.view_dcc839a401");
 
             return (
               <div
@@ -95,9 +94,8 @@ export default async function InspectionQueuePage({ searchParams }: PageProps) {
                     <p className="font-semibold truncate">{inspectionName}</p>
                     <SourceBadge sourceSystem={req.source_system} />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    From {requester?.display_name ?? sourceLabel} ·{" "}
-                    {new Date(req.created_at).toLocaleDateString("en-US", {
+                  <p className="text-xs text-muted-foreground mt-0.5">{uiText("ui.from_e484a95dcc")}{requester?.display_name ?? sourceLabel} ·{" "}
+                    {new Date(req.created_at).toLocaleDateString(uiText("ui.en_us_5c49f88daf"), {
                       month: "short",
                       day: "numeric",
                     })}
@@ -106,7 +104,7 @@ export default async function InspectionQueuePage({ searchParams }: PageProps) {
                     <PpiStatusBadge status={req.status} />
                     <span className="rounded-full bg-secondary px-2 py-1 text-xs font-medium">
                       {INSPECTION_SCOPE_LABELS[
-                        (req.inspection_scope ?? "complete") as InspectionScope
+                        (req.inspection_scope ?? uiText("ui.complete_eebbf6457e")) as InspectionScope
                       ]}
                     </span>
                   </div>

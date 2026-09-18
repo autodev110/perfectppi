@@ -1,5 +1,7 @@
 export const LEGAL_VERSION = "1.0.0";
 export const TERMS_VERSION = `terms-${LEGAL_VERSION}`;
+// Hash of snapshots/terms-1.0.0.tsx.txt: the immutable document accepted by users.
+// Localization-only refactors must preserve its English copy and assent version.
 export const TERMS_SHA256 =
   "cf8a34e90e0dfce3065a6d90110e98c708d890f0033e224c13a284aa1c16d026";
 export const PRIVACY_VERSION = `privacy-${LEGAL_VERSION}`;

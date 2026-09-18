@@ -1,9 +1,10 @@
+import { resolveSourceCopy } from "../helpers/localized-source.mts";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
 
 const root = process.cwd();
-const source = (path: string) => readFile(`${root}/${path}`, "utf8");
+const source = (path: string) => readFile(`${root}/${path}`, "utf8").then(resolveSourceCopy);
 
 describe("question outcome history display (plan 15.5)", () => {
   test("uses canonical post visibility and returns a bounded redacted timeline", async () => {

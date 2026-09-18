@@ -1,24 +1,26 @@
-export function formatMileage(mileage: number): string {
-  return new Intl.NumberFormat("en-US").format(mileage);
+import { DEFAULT_LOCALE, t } from "../i18n/index.ts";
+
+export function formatMileage(mileage: number, locale: string = DEFAULT_LOCALE): string {
+  return new Intl.NumberFormat(locale).format(mileage);
 }
 
-export function formatCurrency(cents: number): string {
-  return new Intl.NumberFormat("en-US", {
+export function formatCurrency(cents: number, locale: string = DEFAULT_LOCALE): string {
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: "USD",
   }).format(cents / 100);
 }
 
-export function formatDate(date: string | Date): string {
-  return new Intl.DateTimeFormat("en-US", {
+export function formatDate(date: string | Date, locale: string = DEFAULT_LOCALE): string {
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
   }).format(new Date(date));
 }
 
-export function formatDateTime(date: string | Date): string {
-  return new Intl.DateTimeFormat("en-US", {
+export function formatDateTime(date: string | Date, locale: string = DEFAULT_LOCALE): string {
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -34,16 +36,18 @@ export function slugify(text: string): string {
     .replace(/(^-|-$)/g, "");
 }
 
-export function formatRelativeTime(date: string | Date): string {
+export function formatRelativeTime(date: string | Date, locale: string = DEFAULT_LOCALE): string {
   const now = Date.now();
   const then = new Date(date).getTime();
   const diff = Math.floor((now - then) / 1000);
 
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  return formatDate(date);
+  if (diff >= 0 && diff < 60 && locale === DEFAULT_LOCALE) return t("format.just_now");
+  const relative = new Intl.RelativeTimeFormat(locale, { style: "narrow", numeric: "auto" });
+  if (Math.abs(diff) < 60) return relative.format(-diff, "second");
+  if (Math.abs(diff) < 3600) return relative.format(-Math.trunc(diff / 60), "minute");
+  if (Math.abs(diff) < 86400) return relative.format(-Math.trunc(diff / 3600), "hour");
+  if (Math.abs(diff) < 604800) return relative.format(-Math.trunc(diff / 86400), "day");
+  return formatDate(date, locale);
 }
 
 export function getInitials(name: string): string {

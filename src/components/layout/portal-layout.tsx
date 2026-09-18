@@ -15,6 +15,8 @@ import Link from "next/link";
 import { NotificationBell } from "@/components/shared/notification-bell";
 import { PageReveal } from "@/components/shared/page-reveal";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 interface PortalLayoutProps {
   children: React.ReactNode;
   sidebar: React.ReactNode;
@@ -28,6 +30,7 @@ export function PortalLayout({
   settingsHref,
   profileHref,
 }: PortalLayoutProps) {
+  const uiText = useTranslator();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -38,12 +41,12 @@ export function PortalLayout({
         <header className="flex h-14 items-center justify-between px-4 lg:px-8">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild className="lg:hidden">
-              <Button variant="ghost" size="icon" aria-label="Open navigation">
+              <Button variant="ghost" size="icon" aria-label={uiText("ui.open_navigation_0ed77fd261")}>
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-64 p-0">
-              <SheetTitle className="sr-only">Navigation</SheetTitle>
+              <SheetTitle className="sr-only">{uiText("ui.navigation_3db65f8c2a")}</SheetTitle>
               {sidebar}
             </SheetContent>
           </Sheet>
@@ -54,9 +57,9 @@ export function PortalLayout({
             <div className="relative hidden md:block">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
               <input
-                aria-label="Search"
+                aria-label={uiText("ui.search_49c266baaa")}
                 type="text"
-                placeholder="Search..."
+                placeholder={uiText("ui.search_7f55382219")}
                 className="h-9 w-56 rounded-xl bg-surface-container-lowest pl-9 pr-4 text-sm ring-1 ring-outline-variant/20 placeholder:text-outline-variant focus:outline-none focus:ring-2 focus:ring-on-tertiary-container/30 transition-all"
               />
             </div>
@@ -65,7 +68,7 @@ export function PortalLayout({
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full" aria-label="Open profile menu">
+                <Button variant="ghost" size="icon" className="rounded-full" aria-label={uiText("ui.open_profile_menu_4a239d3d29")}>
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-container text-xs font-bold text-white">
                     <User className="h-4 w-4" />
                   </div>
@@ -74,15 +77,11 @@ export function PortalLayout({
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem asChild>
                   <Link href={profileHref}>
-                    <User className="mr-2 h-4 w-4" />
-                    Profile
-                  </Link>
+                    <User className="mr-2 h-4 w-4" />{uiText("ui.profile_d696a35bdd")}</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href={settingsHref}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Settings
-                  </Link>
+                    <Settings className="mr-2 h-4 w-4" />{uiText("ui.settings_74a883a037")}</Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
               </DropdownMenuContent>

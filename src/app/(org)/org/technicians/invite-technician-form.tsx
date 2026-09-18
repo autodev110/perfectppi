@@ -9,6 +9,8 @@ import { createClient } from "@/lib/supabase/client";
 import { getInitials } from "@/lib/utils/formatting";
 import { Search, UserPlus } from "lucide-react";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type TechResult = {
   id: string;
   total_inspections: number;
@@ -21,6 +23,7 @@ type TechResult = {
 };
 
 export function InviteTechnicianForm() {
+  const uiText = useTranslator();
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<TechResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -54,7 +57,7 @@ export function InviteTechnicianForm() {
     const { data, error } = await query;
 
     if (error) {
-      setSearchMessage("Search failed. Try again, and make sure the technician profile is public.");
+      setSearchMessage(uiText("ui.search_failed_try_again_and_make_sure_the_te_5b9073a079"));
       setSearching(false);
       return;
     }
@@ -62,7 +65,7 @@ export function InviteTechnicianForm() {
     setResults((data as TechResult[]) ?? []);
     if (!data || data.length === 0) {
       setSearchMessage(
-        "No matching independent technicians found. The account must already have technician access and a public profile."
+        uiText("ui.no_matching_independent_technicians_found_th_278819261c")
       );
     }
     setSearching(false);
@@ -77,20 +80,18 @@ export function InviteTechnicianForm() {
     if (result.error) {
       setMessage({ id: techId, type: "error", text: result.error });
     } else {
-      setMessage({ id: techId, type: "success", text: "Technician added to your organization." });
+      setMessage({ id: techId, type: "success", text: uiText("ui.technician_added_to_your_organization_1f3ef2ef2c") });
       setResults((prev) => prev.filter((t) => t.id !== techId));
     }
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Search only finds independent technician accounts. A person will not appear here unless they have already enabled technician access and made their profile public.
-      </p>
+      <p className="text-sm text-muted-foreground">{uiText("ui.search_only_finds_independent_technician_acc_a05a91d58e")}</p>
 
       <div className="flex gap-2">
         <Input
-          placeholder="Search technicians by name or username…"
+          placeholder={uiText("ui.search_technicians_by_name_or_username_51b690b71e")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -98,7 +99,7 @@ export function InviteTechnicianForm() {
         />
         <Button variant="outline" onClick={handleSearch} disabled={searching}>
           <Search className="mr-2 h-4 w-4" />
-          {searching ? "Searching…" : "Search"}
+          {searching ? uiText("ui.searching_c31723ab33") : uiText("ui.search_49c266baaa")}
         </Button>
       </div>
 
@@ -119,18 +120,17 @@ export function InviteTechnicianForm() {
                   <Avatar className="h-9 w-9">
                     <AvatarImage src={profile?.avatar_url ?? ""} />
                     <AvatarFallback className="text-xs">
-                      {getInitials(profile?.display_name ?? "T")}
+                      {getInitials(profile?.display_name ?? uiText("ui.t_e632b7095b"))}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{profile?.display_name ?? "Unknown"}</p>
+                    <p className="font-medium">{profile?.display_name ?? uiText("ui.unknown_b764cdc0ea")}</p>
                     <div className="flex items-center gap-2">
                       {profile?.username && (
                         <span className="text-xs text-muted-foreground">@{profile.username}</span>
                       )}
                       <span className="text-xs text-muted-foreground">
-                        {tech.total_inspections} inspections
-                      </span>
+                        {tech.total_inspections}{uiText("ui.inspections_72d3585c34")}</span>
                     </div>
                   </div>
                 </div>
@@ -146,7 +146,7 @@ export function InviteTechnicianForm() {
                     disabled={isInviting || msg?.type === "success"}
                   >
                     <UserPlus className="mr-2 h-4 w-4" />
-                    {isInviting ? "Adding…" : "Add"}
+                    {isInviting ? uiText("ui.adding_c6de6f45c8") : uiText("ui.add_9fd728c66c")}
                   </Button>
                 </div>
               </div>
@@ -156,7 +156,7 @@ export function InviteTechnicianForm() {
       )}
 
       {!searching && search && results.length === 0 && !searchMessage && (
-        <p className="text-sm text-muted-foreground">No independent technicians found for &quot;{search}&quot;</p>
+        <p className="text-sm text-muted-foreground">{uiText("ui.no_independent_technicians_found_for_859c0f0de6")}{search}&quot;</p>
       )}
     </div>
   );

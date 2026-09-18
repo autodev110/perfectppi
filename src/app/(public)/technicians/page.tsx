@@ -10,9 +10,11 @@ import Link from "next/link";
 import { MapPin, Search, Star, X } from "lucide-react";
 import { TechnicianCredentialFacts } from "@/components/shared/technician-credential-facts";
 import { credentialTypeLabel } from "@/features/technicians/credential-types";
+import { t as uiText } from "@/lib/i18n";
+import { getRequestTranslator } from "@/lib/i18n/server";
 
 export const metadata: Metadata = {
-  title: "Find a Technician",
+  title: uiText("ui.find_a_technician_8f8aff766b"),
 };
 
 type PageProps = {
@@ -23,6 +25,7 @@ type PageProps = {
 };
 
 export default async function TechniciansDirectoryPage({ searchParams }: PageProps) {
+  const uiText = await getRequestTranslator();
   const { q, cert } = await searchParams;
 
   const allTechnicians = await getDirectory({
@@ -59,12 +62,8 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mb-8">
-        <h1 className="font-heading text-3xl font-bold">
-          Technician Directory
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          Browse technician profiles, service details, and factual credentials reviewed by PerfectPPI.
-        </p>
+        <h1 className="font-heading text-3xl font-bold">{uiText("ui.technician_directory_5143ce2890")}</h1>
+        <p className="mt-2 text-muted-foreground">{uiText("ui.browse_technician_profiles_service_details_a_07c498900f")}</p>
       </div>
 
       {/* Search & Filter Bar */}
@@ -72,29 +71,29 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            aria-label="Search technicians"
+            aria-label={uiText("ui.search_technicians_95dec95047")}
             name="q"
             defaultValue={q ?? ""}
-            placeholder="Search by name, specialty, or area…"
+            placeholder={uiText("ui.search_by_name_specialty_or_area_11f97f9c20")}
             className="pl-9"
           />
         </div>
         <select
-          aria-label="Filter by reviewed credential"
+          aria-label={uiText("ui.filter_by_reviewed_credential_e063e49e18")}
           name="cert"
           defaultValue={cert ?? "all"}
           className="h-10 rounded-md border border-input bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/40 min-w-[180px]"
         >
-          <option value="all">All credential statuses</option>
-          <option value="ase">Reviewed ASE credential</option>
-          <option value="master">Reviewed ASE Master credential</option>
-          <option value="oem_qualified">Reviewed OEM training credential</option>
-          <option value="none">No reviewed credential</option>
+          <option value="all">{uiText("ui.all_credential_statuses_e37a983c16")}</option>
+          <option value="ase">{uiText("ui.reviewed_ase_credential_25cd09ebfd")}</option>
+          <option value="master">{uiText("ui.reviewed_ase_master_credential_064e6596e5")}</option>
+          <option value="oem_qualified">{uiText("ui.reviewed_oem_training_credential_cad69c7bdf")}</option>
+          <option value="none">{uiText("ui.no_reviewed_credential_01e61be243")}</option>
         </select>
-        <Button type="submit">Search</Button>
+        <Button type="submit">{uiText("ui.search_49c266baaa")}</Button>
         {hasFilters && (
           <Button asChild variant="outline" size="icon">
-            <Link href="/technicians" aria-label="Clear technician filters">
+            <Link href="/technicians" aria-label={uiText("ui.clear_technician_filters_f32ff8055a")}>
               <X className="h-4 w-4" />
             </Link>
           </Button>
@@ -103,19 +102,19 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
 
       <p className="text-sm text-muted-foreground mb-4">
         {technicians.length === 0
-          ? "No technicians found"
-          : `${technicians.length} technician${technicians.length !== 1 ? "s" : ""} found`}
+          ? uiText("ui.no_technicians_found_af9864a2d8")
+          : uiText("ui.technician_found_9a131b9438", { arg0: String(technicians.length), arg1: String(technicians.length !== 1 ? "s" : "") })}
         {hasFilters && " · Filtered"}
       </p>
 
       {technicians.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-muted-foreground mb-4">
-            {hasFilters ? "No technicians match your search." : "No technicians available yet."}
+            {hasFilters ? uiText("ui.no_technicians_match_your_search_88971f327b") : uiText("ui.no_technicians_available_yet_d34a4fbf0a")}
           </p>
           {hasFilters && (
             <Button asChild variant="outline">
-              <Link href="/technicians">Clear filters</Link>
+              <Link href="/technicians">{uiText("ui.clear_filters_7179ea0035")}</Link>
             </Button>
           )}
         </div>
@@ -132,12 +131,12 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
                     <Avatar className="h-12 w-12">
                       <AvatarImage src={profile?.avatar_url ?? ""} />
                       <AvatarFallback>
-                        {getInitials(profile?.display_name ?? "T")}
+                        {getInitials(profile?.display_name ?? uiText("ui.t_e632b7095b"))}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1">
                       <p className="font-semibold">
-                        {profile?.display_name ?? "Technician"}
+                        {profile?.display_name ?? uiText("ui.technician_9041ccc417")}
                       </p>
                       {org && (
                         <p className="text-sm text-muted-foreground">
@@ -147,8 +146,7 @@ export default async function TechniciansDirectoryPage({ searchParams }: PagePro
                       <div className="mt-2 flex flex-wrap gap-1">
                         <TechnicianCredentialFacts credentials={tech.credentials} compact />
                         <Badge variant="outline" className="text-xs">
-                          {tech.total_inspections} inspections
-                        </Badge>
+                          {tech.total_inspections}{uiText("ui.inspections_72d3585c34")}</Badge>
                         <Badge variant="outline" className="text-xs">
                           <Star className="mr-1 h-3 w-3 text-amber-500" />
                           {Number(tech.avg_rating ?? 0).toFixed(1)} ({tech.total_reviews ?? 0})

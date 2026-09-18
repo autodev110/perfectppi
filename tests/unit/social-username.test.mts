@@ -1,10 +1,11 @@
+import { resolveSourceCopy } from "../helpers/localized-source.mts";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
 import { normalizeUsername, usernameSchema } from "../../src/features/profiles/username.ts";
 
 const root = process.cwd();
-const source = (path: string) => readFile(`${root}/${path}`, "utf8");
+const source = (path: string) => readFile(`${root}/${path}`, "utf8").then(resolveSourceCopy);
 
 describe("social username foundation", () => {
   test("uses the same 4-16 ASCII username rules", () => {

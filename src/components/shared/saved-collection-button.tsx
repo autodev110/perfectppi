@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import type { SavedCollectionEntityType, SavedCollectionSummary } from "@/features/saved/collections";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 export function SavedCollectionButton({
   entityType,
   entityId,
@@ -16,6 +18,7 @@ export function SavedCollectionButton({
   entityId: string;
   compact?: boolean;
 }) {
+  const uiText = useTranslator();
   const [open, setOpen] = useState(false);
   const [collections, setCollections] = useState<SavedCollectionSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,10 +32,10 @@ export function SavedCollectionButton({
     try {
       const response = await fetch("/api/saved/collections", { cache: "no-store" });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? "Could not load collections");
+      if (!response.ok) throw new Error(payload.error ?? uiText("ui.could_not_load_collections_0757d76883"));
       setCollections(payload.data);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not load collections");
+      setMessage(error instanceof Error ? error.message : uiText("ui.could_not_load_collections_0757d76883"));
     } finally {
       setLoading(false);
     }
@@ -48,10 +51,10 @@ export function SavedCollectionButton({
         body: JSON.stringify({ entityType, entityId, saved: true }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? "Could not add this item");
-      setMessage("Added to collection");
+      if (!response.ok) throw new Error(payload.error ?? uiText("ui.could_not_add_this_item_1320ae3a10"));
+      setMessage(uiText("ui.added_to_collection_5c9cabec2f"));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not add this item");
+      setMessage(error instanceof Error ? error.message : uiText("ui.could_not_add_this_item_1320ae3a10"));
     } finally {
       setBusyId(null);
     }
@@ -68,13 +71,13 @@ export function SavedCollectionButton({
         body: JSON.stringify({ name: newName }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? "Could not create collection");
+      if (!response.ok) throw new Error(payload.error ?? uiText("ui.could_not_create_collection_6539d1c123"));
       const collection = { ...payload.data, item_count: 0 } as SavedCollectionSummary;
       setCollections((current) => [collection, ...current]);
       setNewName("");
       await addToCollection(collection.id);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not create collection");
+      setMessage(error instanceof Error ? error.message : uiText("ui.could_not_create_collection_6539d1c123"));
     } finally {
       setBusyId(null);
     }
@@ -83,15 +86,15 @@ export function SavedCollectionButton({
   return (
     <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (next) void loadCollections(); }}>
       <DialogTrigger asChild>
-        <Button variant="outline" size={compact ? "icon" : "sm"} aria-label="Add to a collection">
+        <Button variant="outline" size={compact ? "icon" : "sm"} aria-label={uiText("ui.add_to_a_collection_42ecbfb2c3")}>
           <FolderPlus className="h-4 w-4" />
-          {compact ? null : "Collection"}
+          {compact ? null : uiText("ui.collection_7b790708ff")}
         </Button>
       </DialogTrigger>
       <DialogContent className="rounded-3xl sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Save to a collection</DialogTitle>
-          <DialogDescription>Collections are private. Owners and other members cannot see them.</DialogDescription>
+          <DialogTitle>{uiText("ui.save_to_a_collection_e88564561a")}</DialogTitle>
+          <DialogDescription>{uiText("ui.collections_are_private_owners_and_other_mem_5c56f78f8f")}</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
           <Input
@@ -99,16 +102,16 @@ export function SavedCollectionButton({
             onChange={(event) => setNewName(event.target.value)}
             onKeyDown={(event) => { if (event.key === "Enter") void createCollection(); }}
             maxLength={60}
-            placeholder="New collection name"
-            aria-label="New collection name"
+            placeholder={uiText("ui.new_collection_name_3b4aeb9c6e")}
+            aria-label={uiText("ui.new_collection_name_3b4aeb9c6e")}
           />
-          <Button onClick={() => void createCollection()} disabled={!newName.trim() || busyId !== null} aria-label="Create collection">
+          <Button onClick={() => void createCollection()} disabled={!newName.trim() || busyId !== null} aria-label={uiText("ui.create_collection_69152bd359")}>
             {busyId === "new" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           </Button>
         </div>
         <div className="max-h-64 space-y-2 overflow-y-auto">
-          {loading ? <p className="py-6 text-center text-sm text-muted-foreground">Loading collections…</p> : null}
-          {!loading && collections.length === 0 ? <p className="py-5 text-center text-sm text-muted-foreground">Create your first collection above.</p> : null}
+          {loading ? <p className="py-6 text-center text-sm text-muted-foreground">{uiText("ui.loading_collections_bfabc4a516")}</p> : null}
+          {!loading && collections.length === 0 ? <p className="py-5 text-center text-sm text-muted-foreground">{uiText("ui.create_your_first_collection_above_10750e1e24")}</p> : null}
           {collections.map((collection) => (
             <button
               type="button"
@@ -119,7 +122,7 @@ export function SavedCollectionButton({
             >
               <span>
                 <span className="block text-sm font-bold">{collection.name}</span>
-                <span className="block text-xs text-muted-foreground">{collection.item_count} item{collection.item_count === 1 ? "" : "s"}</span>
+                <span className="block text-xs text-muted-foreground">{collection.item_count}{uiText("ui.item_a5f3c2e9f9")}{collection.item_count === 1 ? "" : uiText("ui.s_043a718774")}</span>
               </span>
               {busyId === collection.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 text-muted-foreground" />}
             </button>

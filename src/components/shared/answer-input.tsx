@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import type { AnswerType } from "@/types/enums";
 import type { NumberInputConstraints } from "@/features/ppi/answer-validation";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 interface AnswerInputProps {
   answerType: AnswerType;
   options?: string[] | null;
@@ -27,10 +29,11 @@ export function AnswerInput({
   hasError,
   numberConstraints,
 }: AnswerInputProps) {
+  const uiText = useTranslator();
   if (answerType === "yes_no") {
     return (
       <div className="flex gap-4">
-        {["Yes", "No"].map((opt) => {
+        {[uiText("ui.yes_85a39ab345"), uiText("ui.no_1ea442a134")].map((opt) => {
           const val = opt === "Yes" ? "yes" : "no";
           const selected = value === val;
           return (
@@ -122,8 +125,7 @@ export function AnswerInput({
           )}
         </div>
         {numberConstraints && (
-          <p className="text-xs text-muted-foreground">
-            Enter a whole-number tread reading from {numberConstraints.min}/32 to {numberConstraints.max}/32.
+          <p className="text-xs text-muted-foreground">{uiText("ui.enter_a_whole_number_tread_reading_from_6951f167c4")}{numberConstraints.min}{uiText("ui.32_to_e9c7ab218a")}{numberConstraints.max}/32.
           </p>
         )}
       </div>
@@ -142,7 +144,7 @@ export function AnswerInput({
         "text-base rounded-xl resize-none",
         hasError && "border-destructive"
       )}
-      placeholder="Enter your answer..."
+      placeholder={uiText("ui.enter_your_answer_a7f44c8580")}
     />
   );
 }

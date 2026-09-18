@@ -6,7 +6,10 @@ import { generateWarrantyOffer } from "@/features/warranty/actions";
 import { Button } from "@/components/ui/button";
 import { Loader2, Shield } from "lucide-react";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 export function GetCoverageButton({ vscOutputId }: { vscOutputId: string }) {
+  const uiText = useTranslator();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -34,9 +37,7 @@ export function GetCoverageButton({ vscOutputId }: { vscOutputId: string }) {
           <Loader2 className="h-4 w-4 animate-spin mr-2" />
         ) : (
           <Shield className="h-4 w-4 mr-2" />
-        )}
-        Get Coverage Options
-      </Button>
+        )}{uiText("ui.get_coverage_options_7dfe0ff582")}</Button>
       {error && (
         <p className="text-red-300 text-xs mt-1">{error}</p>
       )}

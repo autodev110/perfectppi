@@ -6,6 +6,7 @@ import {
   verificationMethodLabel,
   type PublicTechnicianCredential,
 } from "@/features/technicians/credential-types";
+import { t as uiText } from "@/lib/i18n";
 
 export function TechnicianCredentialFacts({
   credentials,
@@ -16,11 +17,9 @@ export function TechnicianCredentialFacts({
 }) {
   if (credentials.length === 0) {
     return compact ? (
-      <Badge variant="outline">No reviewed credential on file</Badge>
+      <Badge variant="outline">{uiText("ui.no_reviewed_credential_on_file_3ca3329926")}</Badge>
     ) : (
-      <p className="text-sm text-muted-foreground">
-        No active professional credential has been reviewed by PerfectPPI.
-      </p>
+      <p className="text-sm text-muted-foreground">{uiText("ui.no_active_professional_credential_has_been_r_c5095aaa5a")}</p>
     );
   }
 
@@ -30,7 +29,7 @@ export function TechnicianCredentialFacts({
         <ShieldCheck className="h-3 w-3" aria-hidden="true" />
         {credentials.length === 1
           ? credentialTypeLabel(credentials[0].credential_type)
-          : `${credentials.length} reviewed credentials`}
+          : uiText("ui.reviewed_credentials_61bf8051c0", { arg0: String(credentials.length) })}
       </Badge>
     );
   }
@@ -44,24 +43,22 @@ export function TechnicianCredentialFacts({
             <p className="font-medium">{credential.credential_name}</p>
             <Badge variant="secondary">{credentialTypeLabel(credential.credential_type)}</Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Issued by {credential.issuer}
-            {credential.scope ? ` for ${credential.scope}` : ""}
+          <p className="mt-1 text-sm text-muted-foreground">{uiText("ui.issued_by_00289e4162")}{credential.issuer}
+            {credential.scope ? uiText("ui.for_23887aff2f", { arg0: String(credential.scope) }) : ""}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {verificationMethodLabel(credential.verification_method)}
             {credential.reviewed_at
-              ? ` by PerfectPPI Trust & Safety on ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(credential.reviewed_at))}`
+              ? uiText("ui.by_perfectppi_trust_safety_on_fa4527b11f", { arg0: String(new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(credential.reviewed_at))) })
               : ""}
             {credential.expires_on
-              ? ` · expires ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${credential.expires_on}T00:00:00Z`))}`
-              : " · no expiry supplied"}
+              ? uiText("ui.expires_c78912caa7", { arg0: String(new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${credential.expires_on}T00:00:00Z`))) })
+              : uiText("ui.no_expiry_supplied_6fd18f5f78")}
           </p>
         </div>
       ))}
-      <p className="text-xs text-muted-foreground">
-        A reviewed credential confirms the stated record and scope only; it is not an endorsement or a guarantee of work. To request a correction, contact{" "}
-        <Link href="/support" className="underline">Help &amp; Safety</Link>.
+      <p className="text-xs text-muted-foreground">{uiText("ui.a_reviewed_credential_confirms_the_stated_re_d8e953c5d1")}{" "}
+        <Link href="/support" className="underline">{uiText("ui.help_safety_ddae1fcf4d")}</Link>.
       </p>
     </div>
   );

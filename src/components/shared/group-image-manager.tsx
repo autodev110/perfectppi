@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { uploadFile } from "@/features/uploads/client";
 import { ImagePlus, Trash2 } from "lucide-react";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type Kind = "avatar" | "cover";
 
 // Group avatar / cover (plan 13.5). Upload goes to quarantine first; the
@@ -22,6 +24,7 @@ export function GroupImageManager({
   avatarUrl: string | null;
   coverUrl: string | null;
 }) {
+  const uiText = useTranslator();
   const router = useRouter();
   const [busy, setBusy] = useState<Kind | null>(null);
   const [progress, setProgress] = useState(0);
@@ -41,10 +44,10 @@ export function GroupImageManager({
         body: JSON.stringify({ kind, url: reference, contentType: file.type }),
       });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) throw new Error(payload?.error ?? "The image could not be saved.");
+      if (!response.ok) throw new Error(payload?.error ?? uiText("ui.the_image_could_not_be_saved_d08e917097"));
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The image could not be saved.");
+      setError(caught instanceof Error ? caught.message : uiText("ui.the_image_could_not_be_saved_d08e917097"));
     } finally {
       setBusy(null);
       if (inputs[kind].current) inputs[kind].current.value = "";
@@ -52,16 +55,16 @@ export function GroupImageManager({
   }
 
   async function remove(kind: Kind) {
-    if (busy || !window.confirm(`Remove the group ${kind}?`)) return;
+    if (busy || !window.confirm(uiText("ui.remove_the_group_0de4bd7763", { arg0: String(kind) }))) return;
     setBusy(kind);
     setError(null);
     try {
       const response = await fetch(`/api/community/groups/${encodeURIComponent(slug)}/images?kind=${kind}`, { method: "DELETE" });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) throw new Error(payload?.error ?? "The image could not be removed.");
+      if (!response.ok) throw new Error(payload?.error ?? uiText("ui.the_image_could_not_be_removed_a9320c3cb4"));
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The image could not be removed.");
+      setError(caught instanceof Error ? caught.message : uiText("ui.the_image_could_not_be_removed_a9320c3cb4"));
     } finally {
       setBusy(null);
     }
@@ -90,12 +93,11 @@ export function GroupImageManager({
               onChange={(event) => upload(kind, event.target.files?.[0])}
             />
             <Button type="button" size="sm" variant="outline" disabled={busy !== null} onClick={() => inputs[kind].current?.click()}>
-              {busy === kind ? `Uploading ${Math.round(progress * 100)}%` : url ? "Replace" : "Upload"}
+              {busy === kind ? uiText("ui.uploading_af7b50ce0c", { arg0: String(Math.round(progress * 100)) }) : url ? uiText("ui.replace_95e154398a") : uiText("ui.upload_865e89de78")}
             </Button>
             {url ? (
               <Button type="button" size="sm" variant="ghost" disabled={busy !== null} onClick={() => remove(kind)}>
-                <Trash2 className="mr-1 h-3.5 w-3.5" />Remove
-              </Button>
+                <Trash2 className="mr-1 h-3.5 w-3.5" />{uiText("ui.remove_c3812fc4ac")}</Button>
             ) : null}
           </div>
         </div>
@@ -105,9 +107,9 @@ export function GroupImageManager({
 
   return (
     <div className="space-y-5">
-      {slot("avatar", avatarUrl, "Avatar", "Square, shown next to the group name and in the directory.", "h-20 w-20 rounded-2xl")}
-      {slot("cover", coverUrl, "Cover", "Wide banner across the top of the group page. JPEG, PNG, or WebP.", "h-20 w-40 rounded-2xl")}
-      <p className="text-xs text-on-surface-variant">Images pass the same safety check as post photos before they appear. Only the owner and admins can change them.</p>
+      {slot("avatar", avatarUrl, uiText("ui.avatar_ca8e826d9c"), uiText("ui.square_shown_next_to_the_group_name_and_in_t_5839083049"), "h-20 w-20 rounded-2xl")}
+      {slot("cover", coverUrl, uiText("ui.cover_fa8d845666"), uiText("ui.wide_banner_across_the_top_of_the_group_page_2de2d7daba"), "h-20 w-40 rounded-2xl")}
+      <p className="text-xs text-on-surface-variant">{uiText("ui.images_pass_the_same_safety_check_as_post_ph_be2bbe2a7e")}</p>
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
     </div>
   );

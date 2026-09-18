@@ -34,6 +34,8 @@ import {
 import type { ComponentType } from "react";
 import { useSignOut } from "@/features/auth/hooks";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 const iconMap: Record<string, ComponentType<{ className?: string }>> = {
   LayoutDashboard,
   Car,
@@ -74,6 +76,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ items, title }: SidebarProps) {
+  const uiText = useTranslator();
   const pathname = usePathname();
   const signOut = useSignOut();
 
@@ -103,9 +106,7 @@ export function Sidebar({ items, title }: SidebarProps) {
         <Link
           href="/"
           className="text-lg font-black tracking-tighter text-slate-900"
-        >
-          PerfectPPI
-        </Link>
+        >{uiText("ui.perfectppi_67127e136c")}</Link>
         <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">
           {title}
         </p>
@@ -139,9 +140,7 @@ export function Sidebar({ items, title }: SidebarProps) {
           onClick={signOut}
           className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-slate-200"
         >
-          <LogOut className="h-[18px] w-[18px] shrink-0" />
-          Sign Out
-        </button>
+          <LogOut className="h-[18px] w-[18px] shrink-0" />{uiText("ui.sign_out_0b184bc5d5")}</button>
       </div>
     </aside>
   );

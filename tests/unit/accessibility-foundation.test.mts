@@ -1,9 +1,10 @@
+import { resolveSourceCopy } from "../helpers/localized-source.mts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 
 const root = new URL("../../", import.meta.url);
-const read = (path: string) => readFileSync(new URL(path, root), "utf8");
+const read = (path: string) => resolveSourceCopy(readFileSync(new URL(path, root), "utf8"));
 
 describe("accessibility foundation", () => {
   test("web layouts expose a keyboard skip target and motion/contrast preferences", () => {

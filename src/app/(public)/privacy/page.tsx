@@ -2,147 +2,95 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalDocument } from "@/components/legal/legal-document";
 import { CANONICAL_ORIGIN, DISCLOSURES_LAST_UPDATED } from "@/lib/legal/constants";
+import { t as uiText } from "@/lib/i18n";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy",
-  description: "How PerfectPPI collects, uses, discloses, retains, and protects personal information.",
+  title: uiText("ui.privacy_policy_506ff39462"),
+  description: uiText("ui.how_perfectppi_collects_uses_discloses_retai_85cce551be"),
   alternates: { canonical: `${CANONICAL_ORIGIN}/privacy` },
 };
 
 export default function PrivacyPage() {
   return (
     <LegalDocument
-      title="Privacy Policy"
-      description="This policy explains PerfectPPI's data practices across the website, iOS application, inspections, marketplace, community, messaging, and related services."
+      title={uiText("ui.privacy_policy_506ff39462")}
+      description={uiText("ui.this_policy_explains_perfectppi_s_data_pract_b174a80e77")}
       updated={DISCLOSURES_LAST_UPDATED}
     >
-      <h2>1. Scope and our role</h2>
-      <p>
-        This policy applies when PerfectPPI determines how personal information is handled in its services. An organization, dealer, technician business, warranty or service-contract provider, payment provider, or integrated partner may separately control information it receives and must provide its own notices where required.
-      </p>
+      <h2>{uiText("ui.1_scope_and_our_role_157026f57a")}</h2>
+      <p>{uiText("ui.this_policy_applies_when_perfectppi_determin_7e9df1c491")}</p>
 
-      <h2>2. Information we collect</h2>
-      <h3>Account and identity information</h3>
-      <p>
-        We collect account identifiers, name, email address, username, avatar, profile details, role, organization membership, authentication records, and account settings. If you use Google sign-in, we receive the basic profile information you authorize, currently your Google account identifier, name, email address, and profile image. We do not request Gmail, Google Drive, contacts, or other sensitive Google scopes.
-      </p>
-      <h3>Vehicle, inspection, and diagnostic information</h3>
-      <p>
-        We collect VIN, year, make, model, trim, mileage, vehicle photos and videos, inspection answers and notes, technician observations, report data, and OBD information such as adapter details, diagnostic trouble codes, warning-light status, readiness monitors, supported PIDs, and live readings. A VIN may identify a vehicle and can become personal information when linked to a person or account.
-      </p>
-      <h3>Marketplace, community, and communications</h3>
-      <p>
-        We collect listings, prices, approximate listing location, reviews, posts, comments, reports, appeals, messages, attachments, and media packages. Active public listings can be viewed by anyone. Community posts, comments, profiles, and their media are available only to signed-in PerfectPPI members, subject to the audience and privacy settings described in section 7. Messages are limited to conversation participants and authorized administrators, subject to safety, legal, and moderation needs.
-      </p>
-      <h3>Social identity, relationships, and reports</h3>
-      <p>
-        Every account has a unique username, which is public and, in this release, cannot be changed by you after it is chosen; an existing account without one received a randomly generated username. We store your profile privacy setting (public inside PerfectPPI or private), default post audience, discoverability preferences, accepted friend relationships, and the members you block or mute. If you choose the contact-discovery feature, the app sends one-way hashes of the email addresses and phone numbers in the contacts you permit so we can identify discoverable PerfectPPI accounts; address-book names and unmatched raw contact details remain on your device, and the hashes are not used for advertising. Blocking and muting are visible only to you. When you report content we record the report reason, optional details, the exact version of the content you saw, and the time; your identity is stored with the report for abuse prevention and is never shown to the author or to other members.
-      </p>
-      <h3>Technician and organization information</h3>
-      <p>
-        We collect business and profile details, specialties, experience, service area, availability, organization relationships, inspection assignments, and verification status. Credential claims may be reviewed before PerfectPPI describes them as verified.
-      </p>
-      <h3>Transactions, contracts, and support</h3>
-      <p>
-        We process order, selected-plan, price, payment-status, Stripe reference, receipt, contract, signature-status, DocuSeal reference, warranty or vehicle-service-contract workflow, support request, and dispute information. For an inspection dispute, this includes the selected reason, your description, status, decision, private resolution note, reviewer action, and audit history. Payment card details are entered with the payment provider and are not stored in the PerfectPPI application database.
-      </p>
-      <h3>Device and technical information</h3>
-      <p>
-        We receive IP address and request logs from hosting and security providers, necessary session cookies, device and app version information, APNs push tokens, error information, security events, and coarse first-party product actions. The iOS app asks for camera, photo-library, Bluetooth, notifications, contacts, and optional Face ID access only when the related feature needs it. Contact access is optional and may be limited to contacts you select. Bluetooth OBD data is available in the iOS app, not through browser Bluetooth.
-      </p>
-      <h3>Partner information</h3>
-      <p>
-        When an organization connects DealerSpace or another approved partner, we process partner installation and user identifiers, connection records, inspection references, vehicle snapshots, delivery events, webhook metadata, and deliverable access records.
-      </p>
+      <h2>{uiText("ui.2_information_we_collect_4a9938c3eb")}</h2>
+      <h3>{uiText("ui.account_and_identity_information_0cbec028a4")}</h3>
+      <p>{uiText("ui.we_collect_account_identifiers_name_email_ad_f9e73e28d4")}</p>
+      <h3>{uiText("ui.vehicle_inspection_and_diagnostic_informatio_185cb8a005")}</h3>
+      <p>{uiText("ui.we_collect_vin_year_make_model_trim_mileage__1490159bfa")}</p>
+      <h3>{uiText("ui.marketplace_community_and_communications_a9492f945c")}</h3>
+      <p>{uiText("ui.we_collect_listings_prices_approximate_listi_6c49971617")}</p>
+      <h3>{uiText("ui.social_identity_relationships_and_reports_90b0a0ffce")}</h3>
+      <p>{uiText("ui.every_account_has_a_unique_username_which_is_8944b91762")}</p>
+      <h3>{uiText("ui.technician_and_organization_information_3ca8bf2779")}</h3>
+      <p>{uiText("ui.we_collect_business_and_profile_details_spec_ae60787575")}</p>
+      <h3>{uiText("ui.transactions_contracts_and_support_a23bb4633c")}</h3>
+      <p>{uiText("ui.we_process_order_selected_plan_price_payment_959c944132")}</p>
+      <h3>{uiText("ui.device_and_technical_information_93227e677c")}</h3>
+      <p>{uiText("ui.we_receive_ip_address_and_request_logs_from__05d76da525")}</p>
+      <h3>{uiText("ui.partner_information_8b1d78cff8")}</h3>
+      <p>{uiText("ui.when_an_organization_connects_dealerspace_or_a7677b5e9b")}</p>
 
-      <h2>3. Sources</h2>
-      <p>
-        Information comes from you; other participants in an inspection, organization, transaction, or conversation; a connected OBD adapter; vehicle and VIN decoding sources such as NHTSA vPIC; identity providers; processors; integrated partners; and activity generated when the services are used.
-      </p>
+      <h2>{uiText("ui.3_sources_9e8d69d046")}</h2>
+      <p>{uiText("ui.information_comes_from_you_other_participant_5aa8c07217")}</p>
 
-      <h2>4. Why we use information</h2>
+      <h2>{uiText("ui.4_why_we_use_information_079c7764e2")}</h2>
       <ul>
-        <li>Authenticate users, maintain accounts, and secure sessions.</li>
-        <li>Decode vehicles, conduct inspections, store evidence, and generate reports.</li>
-        <li>Connect iOS to a supported OBD adapter and incorporate diagnostic results.</li>
-        <li>Operate marketplace, community, messaging, reviews, notifications, organizations, and technician workflows.</li>
-        <li>Process payments, signatures, contracts, receipts, and service-contract workflows.</li>
-        <li>Generate and moderate content with the AI processing described below.</li>
-        <li>Provide support, investigate abuse, maintain audit records, enforce rules, and comply with law.</li>
-        <li>Debug, maintain, and improve reliability, accessibility, and security.</li>
+        <li>{uiText("ui.authenticate_users_maintain_accounts_and_sec_964193fc2e")}</li>
+        <li>{uiText("ui.decode_vehicles_conduct_inspections_store_ev_5076bfabfd")}</li>
+        <li>{uiText("ui.connect_ios_to_a_supported_obd_adapter_and_i_9e0b5878ea")}</li>
+        <li>{uiText("ui.operate_marketplace_community_messaging_revi_939a3d85f6")}</li>
+        <li>{uiText("ui.process_payments_signatures_contracts_receip_d7d8ca1cc2")}</li>
+        <li>{uiText("ui.generate_and_moderate_content_with_the_ai_pr_71449eca80")}</li>
+        <li>{uiText("ui.provide_support_investigate_abuse_maintain_a_c615e4e0f0")}</li>
+        <li>{uiText("ui.debug_maintain_and_improve_reliability_acces_fcdd94d93f")}</li>
       </ul>
 
-      <h2>5. AI processing</h2>
-      <p>
-        PerfectPPI sends relevant vehicle, VIN, inspection-answer, diagnostic, and report context to Google Gemini to assist with structured inspection reports and coverage-related outputs. VIN images may also be sent to Gemini to read a VIN. In the current release, ordinary Community text posts and comments are not sent to Gemini or another general-purpose AI classifier before they publish; they pass deterministic server checks and publish immediately. Still photos are checked through a configured specialist illegal-content scanning service and re-encoded with metadata removed before they publish; Community video uploads are disabled. A general-purpose AI publication gate for Community content exists as a server-controlled capability that is switched off and would be disclosed here before use. We minimize inputs to what the feature needs and do not intentionally send account passwords or payment-card data to these services.
-      </p>
-      <p>
-        AI output can be incomplete or wrong. It is not a substitute for a physical inspection, diagnostic procedure, safety decision, repair advice, appraisal, insurance decision, or the binding terms of a service contract. Users may request correction or human review through <Link href="/support">Support</Link>. See the <Link href="/ai-disclosure">AI Processing Disclosure</Link> for more detail.
+      <h2>{uiText("ui.5_ai_processing_42f0099805")}</h2>
+      <p>{uiText("ui.perfectppi_sends_relevant_vehicle_vin_inspec_04b6a97d4d")}</p>
+      <p>{uiText("ui.ai_output_can_be_incomplete_or_wrong_it_is_n_16d9315adb")}<Link href="/support">{uiText("ui.support_be91940b79")}</Link>{uiText("ui.see_the_c4787bbca7")}<Link href="/ai-disclosure">{uiText("ui.ai_processing_disclosure_09c3e9b771")}</Link>{uiText("ui.for_more_detail_fdd608aba3")}</p>
+
+      <h2>{uiText("ui.6_when_information_is_disclosed_e9cf020d5f")}</h2>
+      <p>{uiText("ui.we_disclose_information_as_needed_to_supabas_e30cdba900")}</p>
+      <p>{uiText("ui.processor_practices_and_contract_terms_requi_9c4e390311")}</p>
+
+      <h2>{uiText("ui.7_public_content_and_sharing_links_3fa5ab4a20")}</h2>
+      <p>{uiText("ui.active_public_vehicle_listings_can_be_availa_b691de38f3")}</p>
+      <h3>{uiText("ui.reports_moderation_and_moderator_access_ca92a179ed")}</h3>
+      <p>{uiText("ui.a_valid_first_report_hides_a_post_or_comment_d7fa49d67c")}</p>
+      <p>{uiText("ui.a_requester_may_privately_dispute_a_complete_6eea3b291b")}</p>
+
+      <h2>{uiText("ui.8_cookies_analytics_sale_sharing_and_opt_out_4aaec6c664")}</h2>
+      <p>{uiText("ui.perfectppi_uses_necessary_authentication_and_903699bb29")}</p>
+      <p>{uiText("ui.you_can_disable_product_analytics_in_privacy_ce1632196a")}</p>
+      <p>{uiText("ui.where_applicable_we_treat_a_recognized_globa_0e37f71a87")}<Link href="/privacy-choices">{uiText("ui.your_privacy_choices_001864d293")}</Link>.
       </p>
 
-      <h2>6. When information is disclosed</h2>
-      <p>
-        We disclose information as needed to Supabase for authentication and database services; Vercel for application hosting; Cloudflare R2 for object storage; Google for sign-in, Gemini AI processing, moderation, and VIN/vehicle processing; a configured specialist illegal-content scanning service for community media safety; Apple for push delivery and platform services; Stripe for payment processing; DocuSeal for electronic-signature workflows; NHTSA vPIC for VIN decoding; connected organizations, technicians, and transaction participants; DealerSpace or another partner you or your organization connects; professional advisers; and authorities or other parties when required for law, safety, fraud prevention, or legal claims.
-      </p>
-      <p>
-        Processor practices and contract terms require ongoing review. Each third party may process information under its own terms and privacy notice when acting independently.
-      </p>
+      <h2>{uiText("ui.9_retention_and_deletion_3f9c49a8d7")}</h2>
+      <p>{uiText("ui.we_keep_each_category_only_as_long_as_reason_3257e84f38")}</p>
 
-      <h2>7. Public content and sharing links</h2>
-      <p>
-        Active public vehicle listings can be available without signing in. Community posts, comments, member profiles, and their media require a signed-in PerfectPPI account and are shown only to the audience you chose: a post is either visible to all signed-in members or to accepted friends only, a private profile can publish to friends only, and changing your profile to private immediately limits your earlier public posts to friends. Community content is not published to the open web or to search engines in this release. Community photos are stored privately and delivered only through an authenticated request that re-checks the post&apos;s status and audience each time; there is no permanent public image address. A share link for a media package acts like a bearer link: anyone who receives it may access the linked package until it is revoked or expires. Do not post documents, faces, plates, location details, or other personal information you do not want disclosed. PerfectPPI removes location and device metadata from published Community photos, but you should not rely on metadata removal as your only privacy protection, and PerfectPPI cannot recall copies that other members already saved.
-      </p>
-      <h3>Reports, moderation, and moderator access</h3>
-      <p>
-        A valid first report hides a post or comment from all members while a trained member of the PerfectPPI team reviews it. Moderators see the reported content, its version history, attached media, the report reasons, the author&apos;s prior moderation history, and internal notes; reporter identity is visible only to team members holding a separately granted permission. Every moderator view of restricted media and every decision, note, claim, and enforcement action is logged. Decisions are made by people, not by automated systems, and authors can appeal removals.
-      </p>
-      <p>
-        A requester may privately dispute a completed technician inspection during the displayed dispute window. While the dispute is open, creating or editing the linked public technician review is paused, and an existing active review is hidden. An administrator records the outcome and whether a review hidden specifically by that dispute is restored; a review hidden for a separate moderation reason is never restored automatically.
-      </p>
+      <h2>{uiText("ui.10_security_67a39824d2")}</h2>
+      <p>{uiText("ui.we_use_measures_intended_to_protect_informat_1a103a57a5")}</p>
 
-      <h2>8. Cookies, analytics, sale, sharing, and opt-out signals</h2>
-      <p>
-        PerfectPPI uses necessary authentication and security cookies. We use a first-party measurement system to count a closed list of meaningful actions, such as adding a Garage vehicle, saving a listing, requesting an inspection, joining a group, or publishing a Community post. It stores the account reference needed to count active users, a coarse action and product surface, time, and an optional one-way deduplication value. It does not accept arbitrary properties and does not store post or message text, report details, full VINs, exact locations, advertising identifiers, or third-party tracking IDs. The reviewed application source does not include a third-party advertising or behavioral-analytics SDK.
-      </p>
-      <p>
-        You can disable product analytics in Privacy &amp; Account settings. Disabling it stops new product events and deletes existing product-event rows associated with your profile. Otherwise, those rows expire after 90 days and are presented to administrators only as aggregate measures. PerfectPPI does not exchange personal information for money or use it for cross-context behavioral advertising. If those practices change, we will update this notice and provide required choices before using information for the new purpose.
-      </p>
-      <p>
-        Where applicable, we treat a recognized Global Privacy Control or other universal opt-out signal as a request to opt out of sale or targeted advertising for that browser or device. Because those activities are not currently enabled, honoring the signal does not change current application behavior. You may still submit a request through <Link href="/privacy-choices">Your Privacy Choices</Link>.
-      </p>
+      <h2>{uiText("ui.11_your_choices_and_privacy_rights_5337fd56e6")}</h2>
+      <p>{uiText("ui.depending_on_where_you_live_and_whether_a_la_80e5677b7a")}</p>
+      <p>{uiText("ui.submit_and_track_requests_through_f2654bc486")}<Link href="/privacy-choices">{uiText("ui.your_privacy_choices_001864d293")}</Link>{uiText("ui.or_email_us_we_will_verify_requests_proporti_8ebc7049c3")}</p>
 
-      <h2>9. Retention and deletion</h2>
-      <p>
-        We keep each category only as long as reasonably necessary for the feature, account, transaction, security, moderation, dispute, contractual, and legal purposes described here. Product analytics events expire after 90 days and are removed immediately when you disable product analytics. Authenticated account deletion removes the account and account-owned application data and managed media, normally beginning within 24 hours, unless affected evidence is subject to a documented legal hold. We keep minimized privacy-request records for 24 months. Unattached quarantined uploads expire after 30 minutes and enter retryable cleanup. A post you archive yourself can be restored for 30 days and is then eligible for controlled disposal. Content that was reported keeps a restricted evidence record (the reported version, attached media, reports, and the decision history) after the case closes for the period set in our retention schedule and is then disposed of through an audited process; until a period is approved for a record class, that evidence stays under restricted access, and a legal hold keeps evidence for as long as the hold applies. Deleting your account removes your public identity immediately, but evidence tied to an open case, a confirmed violation, an appeal, or a legal hold is retained under restricted access until its period ends, with reporter identity minimized. Reported illegal-content evidence is preserved for the period required by law. Backups and independent processor copies may persist according to their deletion cycles; contract, payment, tax, and provider-specific periods remain subject to applicable requirements and approved schedules.
-      </p>
+      <h2>{uiText("ui.12_google_api_data_03b347dd4e")}</h2>
+      <p>{uiText("ui.perfectppi_uses_google_identity_data_only_to_9c46673ca5")}</p>
 
-      <h2>10. Security</h2>
-      <p>
-        We use measures intended to protect information, including encrypted transport, access controls, row-level database security, server-only privileged credentials, signed access for private artifacts, audit and moderation records, and deletion queues for stored objects. No system can guarantee absolute security. Please report a suspected vulnerability or account compromise to the contact below.
-      </p>
+      <h2>{uiText("ui.13_children_8530127c80")}</h2>
+      <p>{uiText("ui.perfectppi_is_not_directed_to_children_under_9483fb5623")}</p>
 
-      <h2>11. Your choices and privacy rights</h2>
-      <p>
-        Depending on where you live and whether a law applies to PerfectPPI, you may have rights to know or access, correct, delete, obtain a portable copy, opt out of certain sale, targeted advertising, or profiling, limit certain sensitive-data uses, receive a list of third-party recipients, appeal a denial, and use an authorized agent. We provide the same request channel nationwide as a voluntary baseline and do not discriminate for exercising a privacy right.
-      </p>
-      <p>
-        Submit and track requests through <Link href="/privacy-choices">Your Privacy Choices</Link> or email us. We will verify requests proportionately, respond within the time required by applicable law, explain a denial, and provide an appeal path when required. Authorized agents should identify the person represented and provide proof of authority; we may verify directly with the person.
-      </p>
-
-      <h2>12. Google API data</h2>
-      <p>
-        PerfectPPI uses Google identity data only to authenticate you, create or update your basic profile, prevent fraud, and provide account support. PerfectPPI&apos;s use of information received from Google APIs will adhere to the Google API Services User Data Policy, including the Limited Use requirements. You can disconnect an eligible linked Google identity in account settings, revoke PerfectPPI access in your Google Account, or request account deletion. Disconnecting Google does not delete your PerfectPPI account or content.
-      </p>
-
-      <h2>13. Children</h2>
-      <p>
-        PerfectPPI is not directed to children under 13 and does not knowingly collect personal information from a child under 13 without legally sufficient parental consent. If you believe a child provided information, contact us. Additional protections may apply to teens. The minimum-age and age-assurance approach for community and direct-messaging features remains subject to business-owner and licensed-counsel approval.
-      </p>
-
-      <h2>14. U.S. operation and updates</h2>
-      <p>
-        PerfectPPI is intended for the United States. Providers may process information from locations outside your state. We will post policy changes here, update the version and date, and provide additional notice or request renewed agreement when legally required or appropriate for a material change.
-      </p>
+      <h2>{uiText("ui.14_u_s_operation_and_updates_5b9b80dae8")}</h2>
+      <p>{uiText("ui.perfectppi_is_intended_for_the_united_states_38ce6d3f04")}</p>
     </LegalDocument>
   );
 }

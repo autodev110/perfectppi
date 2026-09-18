@@ -2,12 +2,15 @@ import { getFullWarrantyFlow } from "@/features/warranty/queries";
 import { notFound, redirect } from "next/navigation";
 import { WarrantyFlowClient } from "./warranty-flow-client";
 
+import { getRequestTranslator } from "@/lib/i18n/server";
+
 interface PageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ payment?: string }>;
 }
 
 export default async function WarrantyDetailPage({ params, searchParams }: PageProps) {
+  const uiText = await getRequestTranslator();
   const { id } = await params;
   const { payment } = await searchParams;
 
@@ -23,7 +26,7 @@ export default async function WarrantyDetailPage({ params, searchParams }: PageP
     ? [flow.vehicle.year, flow.vehicle.make, flow.vehicle.model, flow.vehicle.trim]
         .filter(Boolean)
         .join(" ")
-    : "Unknown Vehicle";
+    : uiText("ui.unknown_vehicle_615ff95383");
 
   return (
     <WarrantyFlowClient

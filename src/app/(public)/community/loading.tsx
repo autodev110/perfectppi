@@ -1,6 +1,8 @@
+
+import { t as uiText } from "@/lib/i18n";
 export default function CommunityLoading() {
   return (
-    <div className="min-h-screen bg-surface px-8 pb-20 pt-28" aria-label="Loading Community posts" aria-busy="true">
+    <div className="min-h-screen bg-surface px-8 pb-20 pt-28" aria-label={uiText("ui.loading_community_posts_245d28d196")} aria-busy="true">
       <div className="mx-auto max-w-3xl animate-pulse space-y-5">
         <div className="h-14 w-3/4 rounded-2xl bg-surface-container-high" />
         <div className="h-11 w-72 rounded-2xl bg-surface-container-high" />

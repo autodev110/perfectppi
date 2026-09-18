@@ -13,6 +13,8 @@ import {
   type UserRole,
 } from "@/types/enums";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 interface RoleSwitcherProps {
   currentRole: UserRole;
   isDeveloper: boolean;
@@ -23,6 +25,7 @@ interface RoleSwitcherProps {
  * accounts, so each host page can drop it in unconditionally.
  */
 export function RoleSwitcher({ currentRole, isDeveloper }: RoleSwitcherProps) {
+  const uiText = useTranslator();
   const [pendingRole, setPendingRole] = useState<UserRole | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -53,16 +56,10 @@ export function RoleSwitcher({ currentRole, isDeveloper }: RoleSwitcherProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Code2 className="h-4 w-4" />
-          Developer — Role Switcher
-        </CardTitle>
+          <Code2 className="h-4 w-4" />{uiText("ui.developer_role_switcher_c2ad2509ee")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Switch this account into any role and land in that role&apos;s portal.
-          The change is real — permissions, navigation and data are exactly what
-          a normal account of that role sees.
-        </p>
+        <p className="text-sm text-muted-foreground">{uiText("ui.switch_this_account_into_any_role_and_land_i_54b5f59bfa")}</p>
 
         <div className="grid gap-2 sm:grid-cols-2">
           {SWITCHABLE_ROLES.map((role) => {
@@ -108,12 +105,8 @@ export function RoleSwitcher({ currentRole, isDeveloper }: RoleSwitcherProps) {
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <p className="text-xs text-muted-foreground">
-          Currently acting as{" "}
-          <Badge variant="secondary">{USER_ROLE_LABELS[currentRole]}</Badge>.
-          Switching to Technician or Organization Manager provisions the
-          supporting records once, then reuses them.
-        </p>
+        <p className="text-xs text-muted-foreground">{uiText("ui.currently_acting_as_080db11970")}{" "}
+          <Badge variant="secondary">{USER_ROLE_LABELS[currentRole]}</Badge>{uiText("ui.switching_to_technician_or_organization_mana_daa24d4982")}</p>
       </CardContent>
     </Card>
   );

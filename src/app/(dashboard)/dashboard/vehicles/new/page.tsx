@@ -14,7 +14,10 @@ import { VehicleConfigurationFields } from "@/components/shared/vehicle-configur
 import { VehicleMakeModelFields } from "@/components/shared/vehicle-make-model-fields";
 import Link from "next/link";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 export default function NewVehiclePage() {
+  const uiText = useTranslator();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -64,44 +67,44 @@ export default function NewVehiclePage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="font-heading text-2xl font-bold">Add Vehicle</h1>
+      <h1 className="font-heading text-2xl font-bold">{uiText("ui.add_vehicle_f10cf1da45")}</h1>
 
       <Card>
         <CardHeader>
-          <CardTitle>Vehicle Information</CardTitle>
+          <CardTitle>{uiText("ui.vehicle_information_e1f8540b9b")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form action={handleSubmit} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="nickname">Nickname</Label>
+                <Label htmlFor="nickname">{uiText("ui.nickname_d720f61c8c")}</Label>
                 <Input
                   id="nickname"
                   name="nickname"
-                  placeholder="Blue Daily"
+                  placeholder={uiText("ui.blue_daily_a9b8182d60")}
                   maxLength={60}
                   value={nickname}
                   onChange={(event) => setNickname(event.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="ownership_state">Garage relationship</Label>
+                <Label htmlFor="ownership_state">{uiText("ui.garage_relationship_e26b2f2b89")}</Label>
                 <select
                   id="ownership_state"
                   name="ownership_state"
                   defaultValue="owned"
                   className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
-                  <option value="owned">Owned</option>
-                  <option value="previously_owned">Previously owned</option>
-                  <option value="considering">Shopping / considering</option>
-                  <option value="project">Project</option>
+                  <option value="owned">{uiText("ui.owned_17b760c41c")}</option>
+                  <option value="previously_owned">{uiText("ui.previously_owned_c56be55e86")}</option>
+                  <option value="considering">{uiText("ui.shopping_considering_2850c42eca")}</option>
+                  <option value="project">{uiText("ui.project_9859597853")}</option>
                 </select>
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="year">Year</Label>
+                <Label htmlFor="year">{uiText("ui.year_89f6832560")}</Label>
                 <Input
                   id="year"
                   name="year"
@@ -114,11 +117,11 @@ export default function NewVehiclePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="trim">Trim</Label>
+                <Label htmlFor="trim">{uiText("ui.trim_aaa5478b26")}</Label>
                 <Input
                   id="trim"
                   name="trim"
-                  placeholder="SE"
+                  placeholder={uiText("ui.se_f031b70a26")}
                   value={trim}
                   onChange={(event) => setTrim(event.target.value)}
                 />
@@ -129,11 +132,11 @@ export default function NewVehiclePage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="vin">VIN</Label>
+                <Label htmlFor="vin">{uiText("ui.vin_5e0211b12d")}</Label>
                 <Input
                   id="vin"
                   name="vin"
-                  placeholder="17-character VIN"
+                  placeholder={uiText("ui.17_character_vin_380e833d76")}
                   maxLength={17}
                   className="font-mono uppercase"
                   value={vin}
@@ -162,7 +165,7 @@ export default function NewVehiclePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="mileage">Mileage</Label>
+                <Label htmlFor="mileage">{uiText("ui.mileage_ffe44a0179")}</Label>
                 <Input
                   id="mileage"
                   name="mileage"
@@ -181,25 +184,21 @@ export default function NewVehiclePage() {
               />
             </div>
             {factory ? (
-              <p className="text-xs text-muted-foreground">
-                Factory values come from the VIN and are kept separately; what you enter above describes the car as it is now.
-              </p>
+              <p className="text-xs text-muted-foreground">{uiText("ui.factory_values_come_from_the_vin_and_are_kep_43d882d8fb")}</p>
             ) : null}
             <div className="space-y-2">
-              <Label htmlFor="visibility">Visibility</Label>
+              <Label htmlFor="visibility">{uiText("ui.visibility_7448611d5f")}</Label>
               <select
                 id="visibility"
                 name="visibility"
                 defaultValue="private"
                 className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
-                <option value="private">Private - only visible in your dashboard</option>
-                <option value="friends">Friends - visible to accepted friends</option>
-                <option value="public">Public - can be used for public profile and marketplace</option>
+                <option value="private">{uiText("ui.private_only_visible_in_your_dashboard_99afad0bf6")}</option>
+                <option value="friends">{uiText("ui.friends_visible_to_accepted_friends_c3c3438ae7")}</option>
+                <option value="public">{uiText("ui.public_can_be_used_for_public_profile_and_ma_4d85549202")}</option>
               </select>
-              <p className="text-xs text-muted-foreground">
-                Keep private by default. Choose public only when you want the vehicle to appear on public pages.
-              </p>
+              <p className="text-xs text-muted-foreground">{uiText("ui.keep_private_by_default_choose_public_only_w_fc82f561c9")}</p>
             </div>
             {error && (
               <p className="text-sm text-destructive">{error}</p>
@@ -212,25 +211,23 @@ export default function NewVehiclePage() {
                 <p className="font-semibold">
                   {[existingVehicle.year, existingVehicle.make, existingVehicle.model, existingVehicle.trim]
                     .filter(Boolean)
-                    .join(" ") || "Existing vehicle"}
+                    .join(" ") || uiText("ui.existing_vehicle_04bb0a6731")}
                 </p>
                 {existingVehicle.vin && (
                   <p className="mt-1 font-mono text-xs text-muted-foreground">{existingVehicle.vin}</p>
                 )}
-                <p className="mt-2 text-sm font-medium text-primary">View vehicle details</p>
+                <p className="mt-2 text-sm font-medium text-primary">{uiText("ui.view_vehicle_details_f80ae6e662")}</p>
               </Link>
             )}
             <div className="flex gap-3">
               <Button type="submit" disabled={loading}>
-                {loading ? "Adding..." : "Add Vehicle"}
+                {loading ? uiText("ui.adding_913a8849b6") : uiText("ui.add_vehicle_f10cf1da45")}
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => router.back()}
-              >
-                Cancel
-              </Button>
+              >{uiText("ui.cancel_19766ed6cc")}</Button>
             </div>
           </form>
         </CardContent>

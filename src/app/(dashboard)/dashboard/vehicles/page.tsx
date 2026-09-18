@@ -5,16 +5,18 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Car, ClipboardCheck, KeyRound, Tag } from "lucide-react";
 import Link from "next/link";
 import { formatDate, formatMileage } from "@/lib/utils/formatting";
+import { t as uiText } from "@/lib/i18n";
+import { getRequestTranslator } from "@/lib/i18n/server";
 
 type GarageFilter = "all" | "owned" | "previously_owned" | "considering" | "project" | "listed";
 
 const garageFilters: Array<{ value: GarageFilter; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "owned", label: "Owned" },
-  { value: "previously_owned", label: "Previously owned" },
-  { value: "considering", label: "Shopping" },
-  { value: "project", label: "Projects" },
-  { value: "listed", label: "Listed" },
+  { value: "all", label: uiText("ui.all_a52ace420f") },
+  { value: "owned", label: uiText("ui.owned_17b760c41c") },
+  { value: "previously_owned", label: uiText("ui.previously_owned_c56be55e86") },
+  { value: "considering", label: uiText("ui.shopping_b5b68f9d45") },
+  { value: "project", label: uiText("ui.projects_04e2a9728a") },
+  { value: "listed", label: uiText("ui.listed_78797afdac") },
 ];
 
 function parseGarageFilter(value?: string): GarageFilter {
@@ -22,20 +24,21 @@ function parseGarageFilter(value?: string): GarageFilter {
 }
 
 function ownershipLabel(value: string) {
-  if (value === "previously_owned") return "Previously owned";
-  if (value === "considering") return "Shopping / considering";
-  if (value === "project") return "Project";
-  return "Owned";
+  if (value === "previously_owned") return uiText("ui.previously_owned_c56be55e86");
+  if (value === "considering") return uiText("ui.shopping_considering_2850c42eca");
+  if (value === "project") return uiText("ui.project_9859597853");
+  return uiText("ui.owned_17b760c41c");
 }
 
 function inspectionLabel(status: string) {
-  if (status === "completed" || status === "submitted") return "Report available";
-  if (status === "in_progress") return "Inspection in progress";
-  if (status === "needs_revision") return "Inspection needs revision";
+  if (status === "completed" || status === "submitted") return uiText("ui.report_available_d39fe6f159");
+  if (status === "in_progress") return uiText("ui.inspection_in_progress_10dbbf898b");
+  if (status === "needs_revision") return uiText("ui.inspection_needs_revision_b2625875bd");
   return status.replaceAll("_", " ").replace(/^./, (character) => character.toUpperCase());
 }
 
 export default async function VehiclesPage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
+  const uiText = await getRequestTranslator();
   const vehicles = await getMyVehicles();
   const filter = parseGarageFilter((await searchParams).filter);
   const filteredVehicles = vehicles.filter((vehicle) => {
@@ -48,29 +51,23 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-2xl font-bold">Garage</h1>
-          <p className="text-muted-foreground">
-            Keep your vehicles, projects, and shopping list organized.
-          </p>
+          <h1 className="font-heading text-2xl font-bold">{uiText("ui.garage_b15f625351")}</h1>
+          <p className="text-muted-foreground">{uiText("ui.keep_your_vehicles_projects_and_shopping_lis_e428aecffd")}</p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <Button asChild variant="outline">
             <Link href="/dashboard/vehicles/claim">
-              <KeyRound className="mr-2 h-4 w-4" />
-              Claim Purchased Vehicle
-            </Link>
+              <KeyRound className="mr-2 h-4 w-4" />{uiText("ui.claim_purchased_vehicle_2a5c01dcab")}</Link>
           </Button>
           <Button asChild>
             <Link href="/dashboard/vehicles/new">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Vehicle
-            </Link>
+              <Plus className="mr-2 h-4 w-4" />{uiText("ui.add_vehicle_f10cf1da45")}</Link>
           </Button>
         </div>
       </div>
 
       {vehicles.length > 0 && (
-        <nav aria-label="Garage filters" className="flex gap-2 overflow-x-auto pb-1">
+        <nav aria-label={uiText("ui.garage_filters_538321f678")} className="flex gap-2 overflow-x-auto pb-1">
           {garageFilters.map((option) => {
             const active = option.value === filter;
             const href = option.value === "all" ? "/dashboard/vehicles" : `/dashboard/vehicles?filter=${option.value}`;
@@ -96,12 +93,10 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Car className="mb-4 h-12 w-12 text-muted-foreground" />
-            <p className="text-lg font-medium">No vehicles yet</p>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Add your first vehicle to get started.
-            </p>
+            <p className="text-lg font-medium">{uiText("ui.no_vehicles_yet_fb626259b2")}</p>
+            <p className="mb-4 text-sm text-muted-foreground">{uiText("ui.add_your_first_vehicle_to_get_started_f4aa5eadf3")}</p>
             <Button asChild>
-              <Link href="/dashboard/vehicles/new">Add Vehicle</Link>
+              <Link href="/dashboard/vehicles/new">{uiText("ui.add_vehicle_f10cf1da45")}</Link>
             </Button>
           </CardContent>
         </Card>
@@ -109,8 +104,8 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-10 text-center">
             <Car className="mb-3 h-10 w-10 text-muted-foreground/40" />
-            <p className="font-medium">No vehicles match this filter</p>
-            <Button asChild variant="outline" className="mt-4"><Link href="/dashboard/vehicles">View all Garage vehicles</Link></Button>
+            <p className="font-medium">{uiText("ui.no_vehicles_match_this_filter_ee71f9dc27")}</p>
+            <Button asChild variant="outline" className="mt-4"><Link href="/dashboard/vehicles">{uiText("ui.view_all_garage_vehicles_65c2b6b560")}</Link></Button>
           </CardContent>
         </Card>
       ) : (
@@ -120,7 +115,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
               vehicle.vehicle_media?.find((media) => media.is_primary) ??
               vehicle.vehicle_media?.[0] ??
               null;
-            const vehicleLabel = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(" ") || "Unnamed vehicle";
+            const vehicleLabel = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(" ") || uiText("ui.unnamed_vehicle_7e4f43f340");
             const latestInspection = [...vehicle.ppi_requests].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
             const activeListing = vehicle.marketplace_listings.some((listing) => listing.status === "active");
 
@@ -135,7 +130,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={primaryMedia.url}
-                        alt={`${vehicle.year ?? ""} ${vehicle.make ?? ""} ${vehicle.model ?? ""}`.trim()}
+                        alt={uiText("ui.text_f6f18193e0", { arg0: String(vehicle.year ?? ""), arg1: String(vehicle.make ?? ""), arg2: String(vehicle.model ?? "") }).trim()}
                         className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : (
@@ -160,8 +155,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
                     </div>
                     {vehicle.mileage != null && (
                       <p className="mt-2 text-sm text-muted-foreground">
-                        {formatMileage(vehicle.mileage)} miles
-                        {vehicle.mileage_updated_at ? ` · Updated ${formatDate(vehicle.mileage_updated_at)}` : ""}
+                        {formatMileage(vehicle.mileage)}{uiText("ui.miles_9e73814859")}{vehicle.mileage_updated_at ? uiText("ui.updated_957137ce63", { arg0: String(formatDate(vehicle.mileage_updated_at)) }) : ""}
                       </p>
                     )}
                     <div className="mt-4 flex flex-wrap gap-2">
@@ -173,7 +167,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
                         </Badge>
                       )}
                       {activeListing && (
-                        <Badge variant="outline" className="gap-1"><Tag className="h-3 w-3" />Listed</Badge>
+                        <Badge variant="outline" className="gap-1"><Tag className="h-3 w-3" />{uiText("ui.listed_78797afdac")}</Badge>
                       )}
                     </div>
                   </CardContent>

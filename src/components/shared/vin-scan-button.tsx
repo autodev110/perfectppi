@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { t as uiText } from "@/lib/i18n";
+import { useTranslator } from "@/lib/i18n/client";
 
 export interface DecodedVinVehicle {
   vin: string;
@@ -23,8 +25,9 @@ interface VinScanButtonProps {
 export function VinScanButton({
   onDecoded,
   className,
-  label = "Scan VIN",
+  label = uiText("ui.scan_vin_5074b45d61"),
 }: VinScanButtonProps) {
+  const uiText = useTranslator();
   const inputRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,11 +43,11 @@ export function VinScanButton({
       const response = await fetch("/api/vehicles/scan-vin", { method: "POST", body });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(payload?.error ?? "Could not scan that VIN photo");
+        throw new Error(payload?.error ?? uiText("ui.could_not_scan_that_vin_photo_ab1fb71b14"));
       }
       onDecoded(payload.data as DecodedVinVehicle);
     } catch (scanError) {
-      setError(scanError instanceof Error ? scanError.message : "Could not scan that VIN photo");
+      setError(scanError instanceof Error ? scanError.message : uiText("ui.could_not_scan_that_vin_photo_ab1fb71b14"));
     } finally {
       setScanning(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -72,7 +75,7 @@ export function VinScanButton({
         ) : (
           <Camera className="mr-2 h-4 w-4" />
         )}
-        {scanning ? "Reading VIN..." : label}
+        {scanning ? uiText("ui.reading_vin_84405d096f") : label}
       </Button>
       {error && <p className="mt-2 text-sm font-medium text-destructive">{error}</p>}
     </div>

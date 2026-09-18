@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { X } from "lucide-react";
+import { t as uiText } from "@/lib/i18n";
 
 /**
  * Small "x" affordance in the corner of an uploaded photo. Deleting media is
@@ -10,8 +11,8 @@ import { X } from "lucide-react";
  */
 export function DeletePhotoButton({
   onDelete,
-  label = "Delete photo",
-  confirmMessage = "Delete this photo? This cannot be undone.",
+  label = uiText("ui.delete_photo_3a89d78c2f"),
+  confirmMessage = uiText("ui.delete_this_photo_this_cannot_be_undone_cb28334401"),
 }: {
   onDelete: () => Promise<void> | Promise<unknown>;
   label?: string;

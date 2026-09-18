@@ -12,6 +12,8 @@ import {
 } from "@/lib/community/post-types";
 import { Plus, X } from "lucide-react";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 export type PostTypeFieldState = {
   stage: string;
   parts: string;
@@ -93,6 +95,7 @@ export function PostTypeFields({
   inspections: InspectionOption[];
   vehicleId: string;
 }) {
+  const uiText = useTranslator();
   const set = <K extends keyof PostTypeFieldState>(key: K, value: PostTypeFieldState[K]) => onChange({ ...fields, [key]: value });
   const cls = "flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm";
 
@@ -101,14 +104,14 @@ export function PostTypeFields({
       return (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="build-stage">Stage</Label>
+            <Label htmlFor="build-stage">{uiText("ui.stage_de838855e4")}</Label>
             <select id="build-stage" value={fields.stage} onChange={(e) => set("stage", e.target.value)} className={cls}>
               {BUILD_STAGES.map((stage) => <option key={stage} value={stage}>{BUILD_STAGE_LABELS[stage]}</option>)}
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="build-parts">Parts (comma-separated, up to 10)</Label>
-            <Input id="build-parts" value={fields.parts} onChange={(e) => set("parts", e.target.value)} placeholder="Coilovers, sway bar" maxLength={700} />
+            <Label htmlFor="build-parts">{uiText("ui.parts_comma_separated_up_to_10_9e46f84f30")}</Label>
+            <Input id="build-parts" value={fields.parts} onChange={(e) => set("parts", e.target.value)} placeholder={uiText("ui.coilovers_sway_bar_6ec7d9368e")} maxLength={700} />
           </div>
         </div>
       );
@@ -116,47 +119,45 @@ export function PostTypeFields({
       return (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="maint-service">Service performed *</Label>
-            <Input id="maint-service" value={fields.service} onChange={(e) => set("service", e.target.value)} placeholder="Oil and filter change" maxLength={80} required />
+            <Label htmlFor="maint-service">{uiText("ui.service_performed_9d85ff2d26")}</Label>
+            <Input id="maint-service" value={fields.service} onChange={(e) => set("service", e.target.value)} placeholder={uiText("ui.oil_and_filter_change_5b330a957b")} maxLength={80} required />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="maint-mileage">Mileage (optional)</Label>
+            <Label htmlFor="maint-mileage">{uiText("ui.mileage_optional_a96e5225c2")}</Label>
             <Input id="maint-mileage" type="number" min={0} max={2000000} value={fields.mileage} onChange={(e) => set("mileage", e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="maint-cost">Cost in USD (optional)</Label>
+            <Label htmlFor="maint-cost">{uiText("ui.cost_in_usd_optional_22d0fe219d")}</Label>
             <Input id="maint-cost" type="number" min={0} step="0.01" value={fields.cost} onChange={(e) => set("cost", e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="maint-parts">Parts (comma-separated)</Label>
-            <Input id="maint-parts" value={fields.parts} onChange={(e) => set("parts", e.target.value)} placeholder="OEM filter, 5W-30" maxLength={700} />
+            <Label htmlFor="maint-parts">{uiText("ui.parts_comma_separated_c7a99a7a92")}</Label>
+            <Input id="maint-parts" value={fields.parts} onChange={(e) => set("parts", e.target.value)} placeholder={uiText("ui.oem_filter_5w_30_9ddc4d2e33")} maxLength={700} />
           </div>
           <label className="flex items-center gap-2 self-end text-sm">
-            <input type="checkbox" checked={fields.diy} onChange={(e) => set("diy", e.target.checked)} className="rounded" />
-            Did it myself
-          </label>
+            <input type="checkbox" checked={fields.diy} onChange={(e) => set("diy", e.target.checked)} className="rounded" />{uiText("ui.did_it_myself_f9d2bc1ee4")}</label>
         </div>
       );
     case "before_after":
-      return <p className="text-sm text-muted-foreground">Add at least two photos: the first is <strong>before</strong>, the second is <strong>after</strong>. Extra photos follow.</p>;
+      return <p className="text-sm text-muted-foreground">{uiText("ui.add_at_least_two_photos_the_first_is_e44c03eef7")}<strong>{uiText("ui.before_6db7d803e7")}</strong>{uiText("ui.the_second_is_934e8ecfd6")}<strong>{uiText("ui.after_f39592393e")}</strong>{uiText("ui.extra_photos_follow_d9cb45876c")}</p>;
     case "inspection_discussion": {
       const eligible = inspections.filter((inspection) => !vehicleId || inspection.vehicle_id === vehicleId);
       return (
         <div className="space-y-2">
-          <Label htmlFor="inspection-id">Inspection *</Label>
+          <Label htmlFor="inspection-id">{uiText("ui.inspection_be272eaa1a")}</Label>
           {eligible.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{vehicleId ? "No completed inspections for the attached vehicle yet." : "Attach the inspected vehicle first."}</p>
+            <p className="text-sm text-muted-foreground">{vehicleId ? uiText("ui.no_completed_inspections_for_the_attached_ve_502155a626") : uiText("ui.attach_the_inspected_vehicle_first_5e614d1fcf")}</p>
           ) : (
             <select id="inspection-id" value={fields.inspectionId} onChange={(e) => set("inspectionId", e.target.value)} className={cls} required>
-              <option value="">Choose an inspection</option>
+              <option value="">{uiText("ui.choose_an_inspection_d3500704a8")}</option>
               {eligible.map((inspection) => (
                 <option key={inspection.id} value={inspection.id}>
-                  {inspection.inspection_scope === "dents_tires" ? "Dents & tires" : "Complete"} · {inspection.status} · {new Date(inspection.updated_at).toLocaleDateString()}
+                  {inspection.inspection_scope === "dents_tires" ? uiText("ui.dents_tires_6612976b29") : uiText("ui.complete_143b270a32")} · {inspection.status} · {new Date(inspection.updated_at).toLocaleDateString()}
                 </option>
               ))}
             </select>
           )}
-          <p className="text-xs text-muted-foreground">Only the inspection type, scope, status, and date are shown. Findings stay in your report.</p>
+          <p className="text-xs text-muted-foreground">{uiText("ui.only_the_inspection_type_scope_status_and_da_a4af43baac")}</p>
         </div>
       );
     }
@@ -164,50 +165,50 @@ export function PostTypeFields({
       return (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="advice-budget">Budget in USD (optional)</Label>
+            <Label htmlFor="advice-budget">{uiText("ui.budget_in_usd_optional_c2f96a156a")}</Label>
             <Input id="advice-budget" type="number" min={0} step="1" value={fields.budget} onChange={(e) => set("budget", e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="advice-makes">Makes considered (comma-separated, up to 5)</Label>
-            <Input id="advice-makes" value={fields.makes} onChange={(e) => set("makes", e.target.value)} placeholder="Mazda, Toyota" maxLength={250} />
+            <Label htmlFor="advice-makes">{uiText("ui.makes_considered_comma_separated_up_to_5_8ca36678ab")}</Label>
+            <Input id="advice-makes" value={fields.makes} onChange={(e) => set("makes", e.target.value)} placeholder={uiText("ui.mazda_toyota_4849ff05d6")} maxLength={250} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="advice-year-min">From year</Label>
+            <Label htmlFor="advice-year-min">{uiText("ui.from_year_df00f24a82")}</Label>
             <Input id="advice-year-min" type="number" min={1886} max={2100} value={fields.yearMin} onChange={(e) => set("yearMin", e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="advice-year-max">To year</Label>
+            <Label htmlFor="advice-year-max">{uiText("ui.to_year_dd45021c5c")}</Label>
             <Input id="advice-year-max" type="number" min={1886} max={2100} value={fields.yearMax} onChange={(e) => set("yearMax", e.target.value)} />
           </div>
           <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="advice-use">What it&apos;s for (optional)</Label>
-            <Input id="advice-use" value={fields.useCase} onChange={(e) => set("useCase", e.target.value)} placeholder="Daily driver with weekend track days" maxLength={120} />
+            <Label htmlFor="advice-use">{uiText("ui.what_it_s_for_optional_0010f3226e")}</Label>
+            <Input id="advice-use" value={fields.useCase} onChange={(e) => set("useCase", e.target.value)} placeholder={uiText("ui.daily_driver_with_weekend_track_days_d29910454f")} maxLength={120} />
           </div>
         </div>
       );
     case "poll":
       return (
         <div className="space-y-3">
-          <Label>Options (2–6)</Label>
+          <Label>{uiText("ui.options_2_6_ccd1512e35")}</Label>
           {fields.pollOptions.map((option, index) => (
             <div key={index} className="flex gap-2">
-              <Input value={option} maxLength={80} placeholder={`Option ${index + 1}`} aria-label={`Option ${index + 1}`}
+              <Input value={option} maxLength={80} placeholder={uiText("ui.option_7bffed9508", { arg0: String(index + 1) })} aria-label={uiText("ui.option_7bffed9508", { arg0: String(index + 1) })}
                 onChange={(e) => set("pollOptions", fields.pollOptions.map((entry, i) => (i === index ? e.target.value : entry)))} />
               {fields.pollOptions.length > 2 ? (
-                <Button type="button" variant="ghost" size="icon" aria-label="Remove option" onClick={() => set("pollOptions", fields.pollOptions.filter((_, i) => i !== index))}><X className="h-4 w-4" /></Button>
+                <Button type="button" variant="ghost" size="icon" aria-label={uiText("ui.remove_option_bd765df418")} onClick={() => set("pollOptions", fields.pollOptions.filter((_, i) => i !== index))}><X className="h-4 w-4" /></Button>
               ) : null}
             </div>
           ))}
           {fields.pollOptions.length < 6 ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => set("pollOptions", [...fields.pollOptions, ""])}><Plus className="mr-1 h-3.5 w-3.5" />Add option</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => set("pollOptions", [...fields.pollOptions, ""])}><Plus className="mr-1 h-3.5 w-3.5" />{uiText("ui.add_option_ffbcabd155")}</Button>
           ) : null}
           <div className="space-y-2">
-            <Label htmlFor="poll-duration">Runs for</Label>
+            <Label htmlFor="poll-duration">{uiText("ui.runs_for_7b075e3d4c")}</Label>
             <select id="poll-duration" value={fields.pollDuration} onChange={(e) => set("pollDuration", Number(e.target.value) as PostTypeFieldState["pollDuration"])} className={cls}>
               {POLL_DURATIONS.map((hours) => <option key={hours} value={hours}>{POLL_DURATION_LABELS[hours]}</option>)}
             </select>
           </div>
-          <p className="text-xs text-muted-foreground">One vote per member, changeable until the poll closes. Votes are private; only counts are shown, after voting or at close. Options cannot change once someone has voted.</p>
+          <p className="text-xs text-muted-foreground">{uiText("ui.one_vote_per_member_changeable_until_the_pol_fb1f215a39")}</p>
         </div>
       );
     default:

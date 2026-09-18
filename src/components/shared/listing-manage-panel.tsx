@@ -15,6 +15,7 @@ import {
   type ListingStatus,
 } from "@/lib/marketplace/listing-status";
 import { ClipboardCheck, Pencil } from "lucide-react";
+import { t as uiText } from "@/lib/i18n";
 
 const ACTION_FORMS: Record<Exclude<ListingManageAction, "remove">, (formData: FormData) => Promise<void>> = {
   resume: reactivateMarketplaceListing,
@@ -41,19 +42,17 @@ export function ListingManagePanel({
   return (
     <div className="rounded-2xl bg-surface-container p-5 ghost-border">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Manage listing</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{uiText("ui.manage_listing_5ff00cd201")}</p>
         <span className="rounded-full bg-surface-container-lowest px-3 py-1 text-xs font-bold ghost-border">{LISTING_STATUS_LABELS[status]}</span>
       </div>
       {status === "removed" ? (
-        <p className="mt-3 text-sm text-on-surface-variant">This listing was removed. It stays on record for anyone who saved it or requested an inspection; create a new listing to sell this vehicle again.</p>
+        <p className="mt-3 text-sm text-on-surface-variant">{uiText("ui.this_listing_was_removed_it_stays_on_record__5a6ec61e15")}</p>
       ) : (
         <div className="mt-4 grid gap-2">
           <Link href={`/dashboard/listings/${listingId}/edit`} className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90">
-            <Pencil className="h-4 w-4" />Edit details
-          </Link>
+            <Pencil className="h-4 w-4" />{uiText("ui.edit_details_fd9c61ac50")}</Link>
           <Link href={`/dashboard/listings/${listingId}/inspection`} className="flex items-center justify-center gap-2 rounded-xl border border-primary/30 px-5 py-2.5 text-sm font-bold text-primary hover:bg-primary/5">
-            <ClipboardCheck className="h-4 w-4" />Inspection sharing
-          </Link>
+            <ClipboardCheck className="h-4 w-4" />{uiText("ui.inspection_sharing_e2ee3d13f5")}</Link>
           {actions.filter((action): action is Exclude<ListingManageAction, "remove"> => action !== "remove").map((action) => (
             <form key={action} action={ACTION_FORMS[action]}>
               <input type="hidden" name="listing_id" value={listingId} />
@@ -67,7 +66,7 @@ export function ListingManagePanel({
             <form action={removeMarketplaceListingFromForm}>
               <input type="hidden" name="listing_id" value={listingId} />
               <ConfirmSubmitButton
-                message="Remove this listing? Members who saved it or requested an inspection will see it as no longer available. This cannot be undone."
+                message={uiText("ui.remove_this_listing_members_who_saved_it_or__60a189d791")}
                 className="w-full rounded-xl px-5 py-2.5 text-sm font-bold text-destructive hover:bg-destructive/5"
               >
                 {LISTING_ACTION_LABELS.remove}
@@ -77,9 +76,7 @@ export function ListingManagePanel({
         </div>
       )}
       {error ? <p role="alert" className="mt-3 text-xs font-semibold text-destructive">{error}</p> : null}
-      <p className="mt-3 text-[11px] text-on-surface-variant">
-        Pausing hides the listing until you resume it. Marking it pending keeps it visible with a &ldquo;Sale pending&rdquo; badge.
-      </p>
+      <p className="mt-3 text-[11px] text-on-surface-variant">{uiText("ui.pausing_hides_the_listing_until_you_resume_i_f6a25380b6")}</p>
     </div>
   );
 }

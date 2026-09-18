@@ -30,6 +30,8 @@ import { TechnicianCredentialFacts } from "@/components/shared/technician-creden
 import { MemberContributionSummaryCard } from "@/components/shared/member-contribution-summary";
 import { getMemberContributionSummary } from "@/features/profiles/reputation";
 import { ExtendedReportControl } from "@/components/shared/extended-report-control";
+import { t as uiText } from "@/lib/i18n";
+import { getRequestTranslator } from "@/lib/i18n/server";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -53,14 +55,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const PPI_BADGE = {
-  personal:       { label: "Owner entered", color: "text-amber-700",  bg: "bg-amber-50 border-amber-200" },
-  general_tech:   { label: "Technician inspection", color: "text-slate-600",  bg: "bg-slate-50 border-slate-200" },
-  certified_tech: { label: "Reviewed credential", color: "text-teal-700", bg: "bg-teal-50 border-teal-200" },
+  personal:       { label: uiText("ui.owner_entered_5b48a5e342"), color: "text-amber-700",  bg: "bg-amber-50 border-amber-200" },
+  general_tech:   { label: uiText("ui.technician_inspection_cd51204a54"), color: "text-slate-600",  bg: "bg-slate-50 border-slate-200" },
+  certified_tech: { label: uiText("ui.reviewed_credential_3240dd1055"), color: "text-teal-700", bg: "bg-teal-50 border-teal-200" },
 } as const;
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function PublicProfilePage({ params }: PageProps) {
+  const uiText = await getRequestTranslator();
   const { username } = await params;
   const viewer = await getOptionalProfile(["consumer", "technician", "org_manager", "admin"]);
   if (!viewer) {
@@ -80,23 +83,23 @@ export default async function PublicProfilePage({ params }: PageProps) {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-3">
                   <h1 className="font-heading text-2xl font-extrabold tracking-tight text-on-surface">{preview.display_name ?? preview.username}</h1>
-                  {preview.is_technician ? <Badge className="bg-secondary-container text-on-secondary-container">Technician</Badge> : null}
+                  {preview.is_technician ? <Badge className="bg-secondary-container text-on-secondary-container">{uiText("ui.technician_9041ccc417")}</Badge> : null}
                 </div>
                 <p className="mt-1 text-sm text-on-surface-variant">@{preview.username}</p>
                 {preview.bio ? <p className="mt-3 max-w-xl text-sm leading-relaxed text-on-surface-variant">{preview.bio}</p> : null}
                 <div className="mt-6 flex flex-wrap items-center gap-3">
-                  <Button asChild><Link href={`/login?redirect=${encodeURIComponent(path)}`}>Sign in to see more</Link></Button>
-                  <Button asChild variant="outline"><Link href="/signup">Join PerfectPPI</Link></Button>
-                  <ShareButton path={path} title={`${preview.display_name ?? preview.username} · PerfectPPI`} />
+                  <Button asChild><Link href={`/login?redirect=${encodeURIComponent(path)}`}>{uiText("ui.sign_in_to_see_more_3a92d30221")}</Link></Button>
+                  <Button asChild variant="outline"><Link href="/signup">{uiText("ui.join_perfectppi_b81135c87b")}</Link></Button>
+                  <ShareButton path={path} title={uiText("ui.perfectppi_bcef5a6c45", { arg0: String(preview.display_name ?? preview.username) })} />
                 </div>
               </div>
             </section>
           ) : (
             <section className="rounded-3xl bg-surface-container-lowest p-10 text-center ghost-border">
               <Users className="mx-auto mb-3 h-9 w-9 text-on-surface-variant/40" />
-              <p className="font-semibold">This profile isn&rsquo;t available.</p>
-              <p className="mt-1 text-sm text-on-surface-variant">It may be private or no longer exist. Sign in if you were sent this link by a friend.</p>
-              <Button asChild className="mt-5"><Link href={`/login?redirect=${encodeURIComponent(path)}`}>Sign in</Link></Button>
+              <p className="font-semibold">{uiText("ui.this_profile_isn_t_available_09622a824c")}</p>
+              <p className="mt-1 text-sm text-on-surface-variant">{uiText("ui.it_may_be_private_or_no_longer_exist_sign_in_101a71dd10")}</p>
+              <Button asChild className="mt-5"><Link href={`/login?redirect=${encodeURIComponent(path)}`}>{uiText("ui.sign_in_bfd402b2f6")}</Link></Button>
             </section>
           )}
         </div>
@@ -130,7 +133,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
           <Avatar className="h-20 w-20 flex-shrink-0 ring-4 ring-surface shadow-md">
             <AvatarImage src={profile.avatar_url ?? ""} />
             <AvatarFallback className="text-2xl font-bold">
-              {getInitials(profile.display_name ?? profile.username ?? "U")}
+              {getInitials(profile.display_name ?? profile.username ?? uiText("ui.u_a25513c7e0"))}
             </AvatarFallback>
           </Avatar>
 
@@ -140,9 +143,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
                 {profile.display_name ?? profile.username}
               </h1>
               {profile.role === "technician" && (
-                <Badge className="bg-secondary-container text-on-secondary-container">
-                  Technician
-                </Badge>
+                <Badge className="bg-secondary-container text-on-secondary-container">{uiText("ui.technician_9041ccc417")}</Badge>
               )}
               {tech && (
                 <TechnicianCredentialFacts credentials={tech.credentials} compact />
@@ -160,31 +161,30 @@ export default async function PublicProfilePage({ params }: PageProps) {
               {vehicles.length > 0 && (
                 <div className="flex items-center gap-1.5 text-sm font-bold text-on-surface">
                   <Car className="h-4 w-4 text-on-surface-variant" />
-                  {vehicles.length} vehicle{vehicles.length !== 1 ? "s" : ""}
+                  {vehicles.length}{uiText("ui.vehicle_87d1124383")}{vehicles.length !== 1 ? uiText("ui.s_043a718774") : ""}
                 </div>
               )}
               {listings.length > 0 && (
                 <div className="flex items-center gap-1.5 text-sm font-bold text-on-surface">
                   <Tag className="h-4 w-4 text-on-surface-variant" />
-                  {listings.length} listing{listings.length !== 1 ? "s" : ""}
+                  {listings.length}{uiText("ui.listing_5712f39263")}{listings.length !== 1 ? uiText("ui.s_043a718774") : ""}
                 </div>
               )}
               {ppis.length > 0 && (
                 <div className="flex items-center gap-1.5 text-sm font-bold text-on-surface">
                   <ClipboardCheck className="h-4 w-4 text-on-surface-variant" />
-                  {ppis.length} inspection{ppis.length !== 1 ? "s" : ""}
+                  {ppis.length}{uiText("ui.inspection_6ddb257e8e")}{ppis.length !== 1 ? uiText("ui.s_043a718774") : ""}
                 </div>
               )}
               {tech && (
                 <div className="flex items-center gap-1.5 text-sm font-bold text-on-surface">
                   <Shield className="h-4 w-4 text-on-surface-variant" />
-                  {tech.total_inspections} completed
-                </div>
+                  {tech.total_inspections}{uiText("ui.completed_4a6e27436d")}</div>
               )}
               {friendship && friendship.state !== "self" && friendship.mutualFriendCount > 0 && (
                 <div className="flex items-center gap-1.5 text-sm font-bold text-on-surface">
                   <Users className="h-4 w-4 text-on-surface-variant" />
-                  {friendship.mutualFriendCount} mutual friend{friendship.mutualFriendCount !== 1 ? "s" : ""}
+                  {friendship.mutualFriendCount}{uiText("ui.mutual_friend_2948e8c064")}{friendship.mutualFriendCount !== 1 ? uiText("ui.s_043a718774") : ""}
                 </div>
               )}
             </div>
@@ -193,9 +193,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
           <div className="flex gap-2 flex-shrink-0">
             {tech && (
               <Button asChild variant="outline" size="sm">
-                <Link href={`/technicians/${tech.id}`}>
-                  View Tech Profile
-                </Link>
+                <Link href={`/technicians/${tech.id}`}>{uiText("ui.view_tech_profile_4ccfe1c834")}</Link>
               </Button>
             )}
             {friendship ? (
@@ -203,13 +201,11 @@ export default async function PublicProfilePage({ params }: PageProps) {
             ) : null}
             <Button asChild size="sm">
               <Link href={`/dashboard/messages`}>
-                <MessageSquare className="mr-2 h-4 w-4" />
-                Message
-              </Link>
+                <MessageSquare className="mr-2 h-4 w-4" />{uiText("ui.message_2f77668a9d")}</Link>
             </Button>
             {relationship ? <MemberSafetyActions profileId={profile.id} muted={relationship.mutedByMe} /> : null}
-            {profile.id !== viewer.id ? <ExtendedReportControl entityType="profile" entityId={profile.id} label="Profile" /> : null}
-            {profile.username ? <ShareButton path={sharePath({ kind: "profile", username: profile.username })} title={`${profile.display_name ?? profile.username} · PerfectPPI`} compact className="self-center px-2" /> : null}
+            {profile.id !== viewer.id ? <ExtendedReportControl entityType="profile" entityId={profile.id} label={uiText("ui.profile_d696a35bdd")} /> : null}
+            {profile.username ? <ShareButton path={sharePath({ kind: "profile", username: profile.username })} title={uiText("ui.perfectppi_bcef5a6c45", { arg0: String(profile.display_name ?? profile.username) })} compact className="self-center px-2" /> : null}
           </div>
         </div>
       </section>
@@ -223,9 +219,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
           <section>
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-heading text-lg font-extrabold tracking-tight text-on-surface flex items-center gap-2">
-                <Car className="h-5 w-5 text-on-surface-variant" />
-                Vehicles
-              </h2>
+                <Car className="h-5 w-5 text-on-surface-variant" />{uiText("ui.vehicles_9113796a52")}</h2>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               {vehicles.map((vehicle) => {
@@ -249,13 +243,12 @@ export default async function PublicProfilePage({ params }: PageProps) {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-heading font-bold text-sm text-on-surface truncate">{name || "Vehicle"}</p>
+                      <p className="font-heading font-bold text-sm text-on-surface truncate">{name || uiText("ui.vehicle_a62394ba4a")}</p>
                       {v.trim && <p className="text-xs text-on-surface-variant">{v.trim}</p>}
                       {v.mileage != null && (
                         <div className="flex items-center gap-1 mt-1 text-[11px] text-on-surface-variant font-semibold">
                           <Gauge className="h-3 w-3" />
-                          {formatMileage(v.mileage)} mi
-                        </div>
+                          {formatMileage(v.mileage)}{uiText("ui.mi_3074dbe604")}</div>
                       )}
                     </div>
                     <ArrowRight className="h-4 w-4 text-on-surface-variant group-hover:translate-x-1 transition-transform flex-shrink-0" />
@@ -271,11 +264,8 @@ export default async function PublicProfilePage({ params }: PageProps) {
           <section>
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-heading text-lg font-extrabold tracking-tight text-on-surface flex items-center gap-2">
-                <Tag className="h-5 w-5 text-on-surface-variant" />
-                Listings for Sale
-              </h2>
-              <Link href="/marketplace" className="text-xs font-bold text-on-tertiary-container hover:underline flex items-center gap-1">
-                Browse all <ArrowRight className="h-3.5 w-3.5" />
+                <Tag className="h-5 w-5 text-on-surface-variant" />{uiText("ui.listings_for_sale_5819911324")}</h2>
+              <Link href="/marketplace" className="text-xs font-bold text-on-tertiary-container hover:underline flex items-center gap-1">{uiText("ui.browse_all_c04cc40ca0")}<ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -307,10 +297,10 @@ export default async function PublicProfilePage({ params }: PageProps) {
                       </Badge>
                     </div>
                     <div className="p-4">
-                      <p className="font-heading font-bold text-sm text-on-surface mb-1">{name || l.title || "Vehicle"}</p>
+                      <p className="font-heading font-bold text-sm text-on-surface mb-1">{name || l.title || uiText("ui.vehicle_a62394ba4a")}</p>
                       <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-on-surface-variant">
                         {v?.mileage != null && (
-                          <span className="flex items-center gap-1"><Gauge className="h-3 w-3" />{formatMileage(v.mileage)} mi</span>
+                          <span className="flex items-center gap-1"><Gauge className="h-3 w-3" />{formatMileage(v.mileage)}{uiText("ui.mi_3074dbe604")}</span>
                         )}
                         {l.location && (
                           <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{l.location}</span>
@@ -329,9 +319,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
           <section>
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-heading text-lg font-extrabold tracking-tight text-on-surface flex items-center gap-2">
-                <ClipboardCheck className="h-5 w-5 text-on-surface-variant" />
-                Inspections
-              </h2>
+                <ClipboardCheck className="h-5 w-5 text-on-surface-variant" />{uiText("ui.inspections_20cbe85cdd")}</h2>
             </div>
             <div className="space-y-3">
               {ppis.map((ppi) => {
@@ -352,7 +340,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
                       {badge?.label}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-heading font-bold text-sm text-on-surface truncate">{name || "Vehicle"}</p>
+                      <p className="font-heading font-bold text-sm text-on-surface truncate">{name || uiText("ui.vehicle_a62394ba4a")}</p>
                       <p className="text-xs text-on-surface-variant">{formatDate(p.created_at)}</p>
                     </div>
                     <ArrowRight className="h-4 w-4 text-on-surface-variant group-hover:translate-x-1 transition-transform flex-shrink-0" />
@@ -368,11 +356,8 @@ export default async function PublicProfilePage({ params }: PageProps) {
           <section>
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-heading text-lg font-extrabold tracking-tight text-on-surface flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-on-surface-variant" />
-                Posts
-              </h2>
-              <Link href="/community" className="text-xs font-bold text-on-tertiary-container hover:underline flex items-center gap-1">
-                Community feed <ArrowRight className="h-3.5 w-3.5" />
+                <MessageSquare className="h-5 w-5 text-on-surface-variant" />{uiText("ui.posts_a80811cf68")}</h2>
+              <Link href="/community" className="text-xs font-bold text-on-tertiary-container hover:underline flex items-center gap-1">{uiText("ui.community_feed_ee4c81cb9d")}<ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
             <div className="space-y-3">
@@ -408,10 +393,8 @@ export default async function PublicProfilePage({ params }: PageProps) {
         {vehicles.length === 0 && listings.length === 0 && ppis.length === 0 && posts.length === 0 && (
           <div className="text-center py-16">
             <Car className="h-12 w-12 mx-auto mb-4 text-on-surface-variant/30" />
-            <p className="font-heading font-bold text-on-surface mb-1">Nothing public yet</p>
-            <p className="text-sm text-on-surface-variant">
-              This user hasn&apos;t made any vehicles or content public yet.
-            </p>
+            <p className="font-heading font-bold text-on-surface mb-1">{uiText("ui.nothing_public_yet_a97b8d808e")}</p>
+            <p className="text-sm text-on-surface-variant">{uiText("ui.this_user_hasn_t_made_any_vehicles_or_conten_1856aa6490")}</p>
           </div>
         )}
       </div>

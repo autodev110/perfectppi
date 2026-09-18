@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { UPLOAD_HINT } from "@/lib/uploads/upload-photo";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 // The sheet is always black, regardless of theme, so its buttons carry
 // explicit colors: the app's primary token is near-black (invisible here)
 // and the outline variant paints a white background under white text.
@@ -21,6 +23,7 @@ interface CameraCaptureProps {
 }
 
 export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCaptureProps) {
+  const uiText = useTranslator();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -114,15 +117,15 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
       } catch (error) {
         const message =
           error instanceof DOMException && error.name === "NotAllowedError"
-            ? "Camera permission was blocked. You can allow access and try again, or use the native photo picker below."
+            ? uiText("ui.camera_permission_was_blocked_you_can_allow__e52472affd")
             : error instanceof DOMException && error.name === "NotFoundError"
-              ? "No camera was found on this device. Use the photo picker below instead."
-              : "Could not start the live camera. Use the photo picker below instead.";
+              ? uiText("ui.no_camera_was_found_on_this_device_use_the_p_814f0a4d4a")
+              : uiText("ui.could_not_start_the_live_camera_use_the_phot_b995b7b1f8");
         setCameraError(message);
         setMode("error");
       }
     },
-    [stopStream, attachStreamToVideo]
+    [stopStream, attachStreamToVideo, uiText]
   );
 
   useEffect(() => {
@@ -148,7 +151,7 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
     if (!video.videoWidth || !video.videoHeight) {
-      setCameraError("Camera is still initializing — please wait a moment and try again.");
+      setCameraError(uiText("ui.camera_is_still_initializing_please_wait_a_m_b1f188dd5e"));
       return;
     }
 
@@ -223,7 +226,7 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={previewUrl}
-              alt="Captured preview"
+              alt={uiText("ui.captured_preview_e7f5e3b146")}
               className="h-full w-full rounded-2xl object-contain"
             />
           </div>
@@ -262,9 +265,7 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
         {!previewUrl && mode === "fallback" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-8 text-center">
             <Camera className="h-16 w-16 text-white/40" />
-            <p className="text-sm text-white/70">
-              Take a photo with your device camera or choose one from your library.
-            </p>
+            <p className="text-sm text-white/70">{uiText("ui.take_a_photo_with_your_device_camera_or_choo_fe081048b5")}</p>
             <p className="text-xs text-white/50">{UPLOAD_HINT}</p>
           </div>
         )}
@@ -272,15 +273,13 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
         {!previewUrl && mode === "error" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8">
             <p className="text-center text-sm text-red-400">
-              {cameraError ?? "Could not access camera. Please allow camera permissions and try again."}
+              {cameraError ?? uiText("ui.could_not_access_camera_please_allow_camera__ea253caa87")}
             </p>
             <Button
               variant="outline"
               onClick={() => startCamera(facingMode)}
               className={OVERLAY_OUTLINE}
-            >
-              Use Browser Camera
-            </Button>
+            >{uiText("ui.use_browser_camera_28f7028fd7")}</Button>
           </div>
         )}
       </div>
@@ -294,18 +293,14 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
               variant="outline"
               onClick={clearPreview}
               className={cn(OVERLAY_OUTLINE, "flex-1 sm:flex-none")}
-            >
-              Retake
-            </Button>
-            <Button onClick={handleUsePhoto} className={cn(OVERLAY_PRIMARY, "flex-1 px-8 py-3 text-base sm:flex-none")}>
-              Use Photo
-            </Button>
+            >{uiText("ui.retake_1c62f54c28")}</Button>
+            <Button onClick={handleUsePhoto} className={cn(OVERLAY_PRIMARY, "flex-1 px-8 py-3 text-base sm:flex-none")}>{uiText("ui.use_photo_6c042d2a42")}</Button>
           </div>
         ) : mode === "camera" || mode === "loading" ? (
           <button
             onClick={captureFrame}
             disabled={capturing || !videoReady}
-            aria-label="Capture photo"
+            aria-label={uiText("ui.capture_photo_a2678d11e3")}
             className={cn(
               "mx-auto flex h-20 w-20 items-center justify-center rounded-full border-4 border-white transition",
               capturing || !videoReady ? "opacity-50" : "active:scale-95 hover:scale-105"
@@ -318,24 +313,18 @@ export function CameraCapture({ onCapture, onClose, photoPrompt }: CameraCapture
             <Button
               onClick={() => cameraInputRef.current?.click()}
               className={cn(OVERLAY_PRIMARY, "w-full px-8 py-3 text-base sm:w-auto")}
-            >
-              Take Photo
-            </Button>
+            >{uiText("ui.take_photo_1ca36a90c3")}</Button>
             <Button
               variant="outline"
               onClick={() => libraryInputRef.current?.click()}
               className={cn(OVERLAY_OUTLINE, "w-full sm:w-auto")}
-            >
-              Choose from Library
-            </Button>
+            >{uiText("ui.choose_from_library_626d06a750")}</Button>
             {supportsBrowserCamera && (
               <Button
                 variant="ghost"
                 onClick={() => startCamera(facingMode)}
                 className={cn(OVERLAY_GHOST, "w-full sm:w-auto")}
-              >
-                Use Browser Camera Instead
-              </Button>
+              >{uiText("ui.use_browser_camera_instead_dd526fd3a6")}</Button>
             )}
             <input
               ref={cameraInputRef}

@@ -2,6 +2,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { sourceCopyTokens } from "../helpers/localized-source.mts";
 
 import {
   CANONICAL_ORIGIN,
@@ -17,10 +18,12 @@ async function source(path: string) {
 
 describe("compliance foundation", () => {
   test("the assent hash matches the versioned Terms source", async () => {
-    const terms = await source("src/app/(public)/terms/page.tsx");
+    const terms = await source("src/lib/legal/snapshots/terms-1.0.0.tsx.txt");
     const hash = createHash("sha256").update(terms).digest("hex");
     assert.equal(hash, TERMS_SHA256);
     assert.match(TERMS_VERSION, /^terms-\d+\.\d+\.\d+$/);
+    assert.deepEqual(sourceCopyTokens(await source("src/app/(public)/terms/page.tsx")), sourceCopyTokens(terms),
+      "English Terms changed: publish a new legal version and its accepted-document snapshot");
   });
 
   test("canonical legal pages are public and discoverable", async () => {

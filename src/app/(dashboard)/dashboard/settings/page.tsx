@@ -18,10 +18,13 @@ import { Textarea } from "@/components/ui/textarea";
 import type { Database } from "@/types/database";
 import { PrivacyCenter } from "@/components/legal/privacy-center";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type TechProfile = Database["public"]["Tables"]["technician_profiles"]["Row"];
 
 export default function AccountSettingsPage() {
+  const uiText = useTranslator();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [techProfile, setTechProfile] = useState<TechProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,7 +88,7 @@ export default function AccountSettingsPage() {
       return;
     }
 
-    setTechMessage("Technician access enabled.");
+    setTechMessage(uiText("ui.technician_access_enabled_73d0ad7867"));
     setTechSaving(false);
     await fetchData();
   }
@@ -128,18 +131,18 @@ export default function AccountSettingsPage() {
       return;
     }
 
-    setOrgMessage("Organization workspace created.");
+    setOrgMessage(uiText("ui.organization_workspace_created_38820c8e48"));
     setOrgSaving(false);
     await fetchData();
   }
 
   if (loading) {
-    return <p className="text-muted-foreground">Loading...</p>;
+    return <p className="text-muted-foreground">{uiText("ui.loading_47d2a515ef")}</p>;
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <h1 className="font-heading text-2xl font-bold">Account Settings</h1>
+      <h1 className="font-heading text-2xl font-bold">{uiText("ui.account_settings_d0f9bc7a3b")}</h1>
 
       {profile && (
         <RoleSwitcher
@@ -150,25 +153,23 @@ export default function AccountSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Notifications</CardTitle>
+          <CardTitle>{uiText("ui.notifications_788011833a")}</CardTitle>
         </CardHeader>
         <CardContent className="flex items-center justify-between gap-4">
-          <p className="text-sm text-muted-foreground">Per-category in-app and push switches.</p>
-          <Button asChild variant="outline" size="sm"><Link href="/dashboard/settings/notifications">Manage</Link></Button>
+          <p className="text-sm text-muted-foreground">{uiText("ui.per_category_in_app_and_push_switches_b530a61b8d")}</p>
+          <Button asChild variant="outline" size="sm"><Link href="/dashboard/settings/notifications">{uiText("ui.manage_5a23444828")}</Link></Button>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Current Access</CardTitle>
+          <CardTitle>{uiText("ui.current_access_7afa588e5a")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Your current role is <span className="font-medium text-foreground">{profile?.role ?? "unknown"}</span>.
+          <p className="text-sm text-muted-foreground">{uiText("ui.your_current_role_is_a3a91f2485")}<span className="font-medium text-foreground">{profile?.role ?? uiText("ui.unknown_b23a6a8439")}</span>.
           </p>
           {profile?.role && profile.role !== "consumer" && (
-            <p className="text-sm text-muted-foreground">
-              Your main workspace is{" "}
+            <p className="text-sm text-muted-foreground">{uiText("ui.your_main_workspace_is_3f6bec2725")}{" "}
               <Link
                 href={getRoleHomePath(profile.role)}
                 className="font-medium text-accent underline"
@@ -179,10 +180,7 @@ export default function AccountSettingsPage() {
             </p>
           )}
           {techProfile && (
-            <p className="text-sm text-muted-foreground">
-              Your technician profile is ready. Professional credentials are
-              submitted and reviewed from the technician profile screen.
-            </p>
+            <p className="text-sm text-muted-foreground">{uiText("ui.your_technician_profile_is_ready_professiona_8c32034df2")}</p>
           )}
         </CardContent>
       </Card>
@@ -191,29 +189,25 @@ export default function AccountSettingsPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Enable Technician Access</CardTitle>
+              <CardTitle>{uiText("ui.enable_technician_access_91248de224")}</CardTitle>
             </CardHeader>
             <CardContent>
               <form action={handleTechnicianSetup} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="tech-specialties">
-                    Specialties
-                  </Label>
+                  <Label htmlFor="tech-specialties">{uiText("ui.specialties_89440c3f3b")}</Label>
                   <Input
                     id="tech-specialties"
                     name="specialties"
-                    placeholder="European, EVs, Diagnostics"
+                    placeholder={uiText("ui.european_evs_diagnostics_f9e98f5c1c")}
                     defaultValue={techProfile?.specialties?.join(", ") ?? ""}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Separate specialties with commas.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{uiText("ui.separate_specialties_with_commas_51d2c55590")}</p>
                 </div>
                 {techMessage && (
                   <p className="text-sm text-destructive">{techMessage}</p>
                 )}
                 <Button type="submit" disabled={techSaving}>
-                  {techSaving ? "Enabling..." : "Become a Technician"}
+                  {techSaving ? uiText("ui.enabling_3ad3137c21") : uiText("ui.become_a_technician_655b3a657b")}
                 </Button>
               </form>
             </CardContent>
@@ -221,38 +215,34 @@ export default function AccountSettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Create Organization Workspace</CardTitle>
+              <CardTitle>{uiText("ui.create_organization_workspace_a57d111847")}</CardTitle>
             </CardHeader>
             <CardContent>
               <form action={handleOrganizationSetup} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="organization_name">Organization Name</Label>
+                  <Label htmlFor="organization_name">{uiText("ui.organization_name_4cbd907324")}</Label>
                   <Input
                     id="organization_name"
                     name="organization_name"
-                    placeholder="Autobay Motors"
+                    placeholder={uiText("ui.autobay_motors_01dd695055")}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="organization_description">
-                    Description
-                  </Label>
+                  <Label htmlFor="organization_description">{uiText("ui.description_526e0087cc")}</Label>
                   <Textarea
                     id="organization_description"
                     name="organization_description"
                     rows={3}
-                    placeholder="Tell customers about your shop."
+                    placeholder={uiText("ui.tell_customers_about_your_shop_73ada72490")}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="org-specialties">
-                    Your Specialties
-                  </Label>
+                  <Label htmlFor="org-specialties">{uiText("ui.your_specialties_e73a205850")}</Label>
                   <Input
                     id="org-specialties"
                     name="specialties"
-                    placeholder="Luxury, Imports, Electrical"
+                    placeholder={uiText("ui.luxury_imports_electrical_48ef21299d")}
                     defaultValue={techProfile?.specialties?.join(", ") ?? ""}
                   />
                 </div>
@@ -260,7 +250,7 @@ export default function AccountSettingsPage() {
                   <p className="text-sm text-destructive">{orgMessage}</p>
                 )}
                 <Button type="submit" disabled={orgSaving}>
-                  {orgSaving ? "Creating..." : "Create Organization Access"}
+                  {orgSaving ? uiText("ui.creating_def70944c9") : uiText("ui.create_organization_access_040b973532")}
                 </Button>
               </form>
             </CardContent>
@@ -271,34 +261,34 @@ export default function AccountSettingsPage() {
       {profile?.role === "technician" && (
         <Card>
           <CardHeader>
-            <CardTitle>Upgrade to Organization Manager</CardTitle>
+            <CardTitle>{uiText("ui.upgrade_to_organization_manager_435fd95511")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form action={handleOrganizationSetup} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="organization_name">Organization Name</Label>
+                <Label htmlFor="organization_name">{uiText("ui.organization_name_4cbd907324")}</Label>
                 <Input
                   id="organization_name"
                   name="organization_name"
-                  placeholder="Autobay Motors"
+                  placeholder={uiText("ui.autobay_motors_01dd695055")}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="organization_description">Description</Label>
+                <Label htmlFor="organization_description">{uiText("ui.description_526e0087cc")}</Label>
                 <Textarea
                   id="organization_description"
                   name="organization_description"
                   rows={3}
-                  placeholder="Tell customers about your organization."
+                  placeholder={uiText("ui.tell_customers_about_your_organization_f163a36180")}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="org-specialties">Your Specialties</Label>
+                <Label htmlFor="org-specialties">{uiText("ui.your_specialties_e73a205850")}</Label>
                 <Input
                   id="org-specialties"
                   name="specialties"
-                  placeholder="Diagnostics, Performance, EVs"
+                  placeholder={uiText("ui.diagnostics_performance_evs_7770f8b411")}
                   defaultValue={techProfile?.specialties?.join(", ") ?? ""}
                 />
               </div>
@@ -306,7 +296,7 @@ export default function AccountSettingsPage() {
                 <p className="text-sm text-destructive">{orgMessage}</p>
               )}
               <Button type="submit" disabled={orgSaving}>
-                {orgSaving ? "Creating..." : "Create My Organization"}
+                {orgSaving ? uiText("ui.creating_def70944c9") : uiText("ui.create_my_organization_50d33e09a4")}
               </Button>
             </form>
           </CardContent>
@@ -316,12 +306,10 @@ export default function AccountSettingsPage() {
       {profile?.role && profile.role !== "consumer" && profile.role !== "admin" && (
         <Card>
           <CardHeader>
-            <CardTitle>Switch Back to Consumer</CardTitle>
+            <CardTitle>{uiText("ui.switch_back_to_consumer_6451a466a3")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Your technician profile and data will be preserved. You can re-enable technician access from this page at any time.
-            </p>
+            <p className="text-sm text-muted-foreground">{uiText("ui.your_technician_profile_and_data_will_be_pre_74257e8f5c")}</p>
             {switchMessage && (
               <p className="text-sm text-destructive">{switchMessage}</p>
             )}
@@ -330,7 +318,7 @@ export default function AccountSettingsPage() {
               disabled={switchSaving}
               onClick={handleSwitchToConsumer}
             >
-              {switchSaving ? "Switching..." : "Switch to Consumer"}
+              {switchSaving ? uiText("ui.switching_e367dfd91c") : uiText("ui.switch_to_consumer_54d771d0c9")}
             </Button>
           </CardContent>
         </Card>
@@ -339,12 +327,10 @@ export default function AccountSettingsPage() {
       {profile?.role && profile.role !== "consumer" && profile.role !== "technician" && (
         <Card>
           <CardHeader>
-            <CardTitle>Workspace Ready</CardTitle>
+            <CardTitle>{uiText("ui.workspace_ready_9e7fe73e14")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Your access is already provisioned. Continue in your main
-              workspace from{" "}
+            <p className="text-sm text-muted-foreground">{uiText("ui.your_access_is_already_provisioned_continue__0ad110b3f4")}{" "}
               <Link
                 href={getRoleHomePath(profile.role)}
                 className="font-medium text-accent underline"

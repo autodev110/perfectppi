@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { spawnSync } from "node:child_process";
+import ts from "typescript";
+import { resolveSourceCopy } from "../helpers/localized-source.mts";
 
 const { en } = await import("../../src/lib/i18n/messages/en.ts");
 const { formatMessage, messageKeys, resolveLocale, t, translate } = await import("../../src/lib/i18n/index.ts");
@@ -38,6 +41,12 @@ const CATALOG_OWNED_MODULES = [
   "src/components/shared/listing-gallery.tsx",
   "src/components/shared/photo-upload-slot.tsx",
   "src/components/shared/share-button.tsx",
+  "src/config/site.ts",
+  "src/types/enums.ts",
+  "src/lib/community/post-types.ts",
+  "src/lib/social/group-options.ts",
+  "src/features/social/events-policy.ts",
+  "src/features/technicians/credential-types.ts",
 ];
 
 function stripNonCopy(source: string) {
@@ -96,7 +105,7 @@ describe("localization readiness (plan 32.2)", () => {
 
   test("every static key referenced in src exists in the catalog", () => {
     const keys = new Set<string>(messageKeys());
-    const pattern = /\b(?:t|translate)\((?:[^,()"']+,\s*)?"([a-z0-9_.]+)"/g;
+    const pattern = /\b(?:t|uiText|translate)\((?:[^,()"']+,\s*)?"([a-z0-9_.]+)"/g;
     let seen = 0;
     for (const file of walk(join(root, "src"))) {
       const source = readFileSync(file, "utf8");
@@ -106,6 +115,41 @@ describe("localization readiness (plan 32.2)", () => {
       }
     }
     assert.ok(seen > 40, "expected catalog usages in src");
+  });
+
+  test("screen copy resolves only keys actually referenced, including accessible labels", () => {
+    assert.equal(resolveSourceCopy('<button aria-label={uiText("ui.next_media_e7521225cb")}/>'), '<button aria-label="Next media"/>');
+    assert.equal(resolveSourceCopy('<span>{uiText("ui.next_media_e7521225cb")}</span>'), '<span>Next media</span>');
+    assert.equal(resolveSourceCopy("const status = 'active';"), "const status = 'active';");
+    assert.throws(() => resolveSourceCopy('uiText("ui.missing_key")'), /Missing UI message/);
+  });
+
+  test("page and control copy stays extracted without translating protocol inputs", () => {
+    const check = spawnSync(process.execPath, ["tools/localize-web-copy.mjs", "--check"], { cwd: root, encoding: "utf8" });
+    assert.equal(check.status, 0, check.stdout + check.stderr);
+    for (const file of walk(join(root, "src"))) {
+      const ast = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+      function visit(node: ts.Node) {
+        if (ts.isCallExpression(node) && node.expression.getText(ast) === "uiText"
+          && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) {
+          const key = node.arguments[0].text as keyof typeof en;
+          const params = [...en[key].matchAll(/\{(arg\d+)\}/g)].map((match) => match[1]);
+          if (params.length) {
+            const supplied = node.arguments[1];
+            assert.ok(supplied && ts.isObjectLiteralExpression(supplied), `${file}: ${key} needs parameters`);
+            const names = supplied.properties.map((property) => property.name?.getText(ast));
+            for (const name of params) assert.ok(names.includes(name), `${file}: ${key} is missing ${name}`);
+          }
+          const parent = node.parent;
+          if (ts.isCallExpression(parent) && ts.isPropertyAccessExpression(parent.expression)) {
+            assert.ok(!["get", "set", "has", "eq", "select", "from", "rpc"].includes(parent.expression.name.text),
+              `${file}: translated a protocol input to ${parent.expression.name.text}`);
+          }
+        }
+        ts.forEachChild(node, visit);
+      }
+      visit(ast);
+    }
   });
 
   test("catalog-owned modules carry no embedded sentences", () => {

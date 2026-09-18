@@ -7,6 +7,8 @@ import { uploadFile } from "@/features/uploads/client";
 import type { Database } from "@/types/database";
 import { ImagePlus, Trash2, Video } from "lucide-react";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type PostMedia = Database["public"]["Tables"]["community_post_media"]["Row"];
 
 const MAX_MEDIA = 10;
@@ -26,6 +28,7 @@ export function PostMediaManager({
   media: PostMedia[];
   locked?: boolean;
 }) {
+  const uiText = useTranslator();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -68,11 +71,11 @@ export function PostMediaManager({
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error ?? "Could not attach media");
+        throw new Error(payload.error ?? uiText("ui.could_not_attach_media_05dd9a72a3"));
       }
       router.refresh();
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "Could not upload media");
+      setError(uploadError instanceof Error ? uploadError.message : uiText("ui.could_not_upload_media_86b00c9cce"));
     } finally {
       setProgress(null);
     }
@@ -87,11 +90,11 @@ export function PostMediaManager({
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error ?? "Could not remove media");
+        throw new Error(payload.error ?? uiText("ui.could_not_remove_media_74e7e6312a"));
       }
       router.refresh();
     } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "Could not remove media");
+      setError(removeError instanceof Error ? removeError.message : uiText("ui.could_not_remove_media_74e7e6312a"));
     } finally {
       setRemovingId(null);
     }
@@ -110,7 +113,7 @@ export function PostMediaManager({
                 <div className="flex h-full flex-col items-center justify-center gap-1 p-2 text-center text-xs text-muted-foreground">
                   <ImagePlus className="h-5 w-5" />
                   <span className="font-semibold capitalize">{item.moderation_status.replaceAll("_", " ")}</span>
-                  <span>This media is not public.</span>
+                  <span>{uiText("ui.this_media_is_not_public_6aad75d1c7")}</span>
                 </div>
               ) : item.media_type === "video" ? (
                 <>
@@ -128,7 +131,7 @@ export function PostMediaManager({
                 className="absolute right-1 top-1 h-7 w-7 rounded-full"
                 onClick={() => removeMedia(item.id)}
                 disabled={busy}
-                aria-label={`Remove media ${index + 1}`}
+                aria-label={uiText("ui.remove_media_d672ceb021", { arg0: String(index + 1) })}
               >
                 <Trash2 className="h-3 w-3" />
               </Button>}
@@ -147,7 +150,7 @@ export function PostMediaManager({
       />
 
       {locked ? (
-        <p className="text-xs text-muted-foreground">Media is preserved while this post is under legal review.</p>
+        <p className="text-xs text-muted-foreground">{uiText("ui.media_is_preserved_while_this_post_is_under__0b89802775")}</p>
       ) : <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
@@ -157,12 +160,12 @@ export function PostMediaManager({
           disabled={busy || available === 0}
         >
           <ImagePlus className="mr-2 h-3.5 w-3.5" />
-          {media.length > 0 ? "Add more" : "Add photos or videos"}
+          {media.length > 0 ? uiText("ui.add_more_989e717412") : uiText("ui.add_photos_or_videos_0ab4812fe6")}
         </Button>
         <span className="text-xs text-muted-foreground">
           {progress === null
-            ? `${media.length}/${MAX_MEDIA}`
-            : `Uploading… ${Math.round(progress * 100)}%`}
+            ? uiText("ui.text_cf66c58436", { arg0: String(media.length), arg1: String(MAX_MEDIA) })
+            : uiText("ui.uploading_5b0eae420f", { arg0: String(Math.round(progress * 100)) })}
         </span>
       </div>}
 
@@ -172,7 +175,7 @@ export function PostMediaManager({
             className="h-full bg-primary transition-[width] duration-150"
             style={{ width: `${Math.round(progress * 100)}%` }}
             role="progressbar"
-            aria-label="Media upload progress"
+            aria-label={uiText("ui.media_upload_progress_568312ed3c")}
             aria-valuenow={Math.round(progress * 100)}
             aria-valuemin={0}
             aria-valuemax={100}

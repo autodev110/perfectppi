@@ -1,3 +1,4 @@
+import { resolveSourceCopy } from "../helpers/localized-source.mts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
@@ -7,7 +8,7 @@ import { describe, test } from "node:test";
 // and the page sources so a flag flip without a copy change fails CI.
 
 const root = new URL("../../", import.meta.url);
-const read = (path: string) => readFileSync(new URL(path, root), "utf8");
+const read = (path: string) => resolveSourceCopy(readFileSync(new URL(path, root), "utf8"));
 
 const flagsSql = read("supabase/migrations/20260910190000_product_feature_flags.sql");
 const seeded = new Map([...flagsSql.matchAll(/\('([a-z_]+)',\s+(true|false)\)/g)].map((m) => [m[1], m[2] === "true"]));

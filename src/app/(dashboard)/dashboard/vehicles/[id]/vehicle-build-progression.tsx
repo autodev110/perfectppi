@@ -17,6 +17,8 @@ import {
 import { uploadFailureMessage } from "@/lib/uploads/prepare-image";
 import type { OwnedVehicleTimelines } from "@/features/vehicles/timelines";
 import { ArrowRight, FileText, ImagePlus, Loader2, Paperclip, Trash2 } from "lucide-react";
+import { t as uiText } from "@/lib/i18n";
+import { useTranslator } from "@/lib/i18n/client";
 
 type Entry = OwnedVehicleTimelines["build"][number];
 type Stage = OwnedVehicleTimelines["stages"][number];
@@ -52,7 +54,7 @@ async function requestJson<T = unknown>(url: string, method: "POST" | "PATCH" | 
     body: body ? JSON.stringify(body) : undefined,
   });
   const payload = await response.json().catch(() => null) as { error?: string; data?: T } | null;
-  if (!response.ok) throw new Error(payload?.error ?? "The change could not be saved. Please try again.");
+  if (!response.ok) throw new Error(payload?.error ?? uiText("ui.the_change_could_not_be_saved_please_try_aga_9e39290243"));
   return payload?.data as T;
 }
 
@@ -67,6 +69,7 @@ export function VehicleBuildProgression({
   timelines: OwnedVehicleTimelines;
   media: Media[];
 }) {
+  const uiText = useTranslator();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -95,13 +98,13 @@ export function VehicleBuildProgression({
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-heading text-xl font-bold">Build Progression</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Stages group your modifications. Costs, labor, documents, and private notes stay visible only to you.</p>
+          <h2 className="font-heading text-xl font-bold">{uiText("ui.build_progression_87b7d7a66c")}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{uiText("ui.stages_group_your_modifications_costs_labor__970a94a5ad")}</p>
         </div>
         {progress.total > 0 ? (
           <div className="min-w-48 text-right">
             <p className="text-xs font-semibold text-muted-foreground">
-              {timelines.stages.length > 0 ? `${progress.done} of ${progress.total} stages complete` : `${progress.done} of ${progress.total} entries installed`}
+              {timelines.stages.length > 0 ? uiText("ui.of_stages_complete_943b6ca612", { arg0: String(progress.done), arg1: String(progress.total) }) : uiText("ui.of_entries_installed_545bb3f4b5", { arg0: String(progress.done), arg1: String(progress.total) })}
             </p>
             <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
               <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress.percent}%` }} />
@@ -114,7 +117,7 @@ export function VehicleBuildProgression({
 
       {/* Stage form */}
       <details className="rounded-xl border bg-muted/20 p-4" open={timelines.stages.length === 0 && timelines.build.length > 0}>
-        <summary className="cursor-pointer font-semibold">Add stage</summary>
+        <summary className="cursor-pointer font-semibold">{uiText("ui.add_stage_76fa771d57")}</summary>
         <form
           className="mt-4 grid gap-4 sm:grid-cols-2"
           action={(form) => run(() => requestJson(`${base}/stages`, "POST", {
@@ -123,87 +126,87 @@ export function VehicleBuildProgression({
             is_public: form.get("is_public") === "on",
           }), "The stage could not be saved.")}
         >
-          <div className="space-y-2"><Label htmlFor="stage-title">Stage title *</Label><Input id="stage-title" name="title" required maxLength={120} placeholder="Stage 1: Bolt-ons" /></div>
-          <div className="space-y-2"><Label htmlFor="stage-status">Status</Label>
+          <div className="space-y-2"><Label htmlFor="stage-title">{uiText("ui.stage_title_347a768579")}</Label><Input id="stage-title" name="title" required maxLength={120} placeholder={uiText("ui.stage_1_bolt_ons_e608106ae8")} /></div>
+          <div className="space-y-2"><Label htmlFor="stage-status">{uiText("ui.status_920e413c7d")}</Label>
             <select id="stage-status" name="status" className={inputClass} defaultValue="planned">
               {(Object.keys(BUILD_STAGE_STATUS_LABELS) as BuildStageStatus[]).map((status) => <option key={status} value={status}>{BUILD_STAGE_STATUS_LABELS[status]}</option>)}
             </select>
           </div>
-          <div className="space-y-2"><Label htmlFor="stage-target">Target date</Label><Input id="stage-target" name="target_date" type="date" /></div>
-          <div className="space-y-2 sm:col-span-2"><Label htmlFor="stage-description">Goal</Label><Textarea id="stage-description" name="description" maxLength={2000} rows={2} placeholder="What this stage is meant to achieve" /></div>
-          <label className="flex items-start gap-3 rounded-xl border p-3 sm:col-span-2"><input className="mt-1" type="checkbox" name="is_public" /><span><span className="block text-sm font-medium">Show this stage on the public Vehicle Passport</span><span className="block text-xs text-muted-foreground">Only the stage name, goal, status, and its shared entries are visible. Never costs.</span></span></label>
-          <div className="sm:col-span-2"><Button type="submit" disabled={busy}>Add Stage</Button></div>
+          <div className="space-y-2"><Label htmlFor="stage-target">{uiText("ui.target_date_834cc86be2")}</Label><Input id="stage-target" name="target_date" type="date" /></div>
+          <div className="space-y-2 sm:col-span-2"><Label htmlFor="stage-description">{uiText("ui.goal_cdbf6975e8")}</Label><Textarea id="stage-description" name="description" maxLength={2000} rows={2} placeholder={uiText("ui.what_this_stage_is_meant_to_achieve_cfa09db9f4")} /></div>
+          <label className="flex items-start gap-3 rounded-xl border p-3 sm:col-span-2"><input className="mt-1" type="checkbox" name="is_public" /><span><span className="block text-sm font-medium">{uiText("ui.show_this_stage_on_the_public_vehicle_passpo_a93a4deb30")}</span><span className="block text-xs text-muted-foreground">{uiText("ui.only_the_stage_name_goal_status_and_its_shar_63cf6be060")}</span></span></label>
+          <div className="sm:col-span-2"><Button type="submit" disabled={busy}>{uiText("ui.add_stage_afe6f5a225")}</Button></div>
         </form>
       </details>
 
       {/* Entry form */}
       <details className="rounded-xl border bg-muted/20 p-4" open={timelines.build.length === 0}>
-        <summary className="cursor-pointer font-semibold">Add build entry</summary>
+        <summary className="cursor-pointer font-semibold">{uiText("ui.add_build_entry_8f75f2aee4")}</summary>
         <form className="mt-4 space-y-4" action={(form) => run(() => requestJson(base, "POST", entryPayload(form)), "The build entry could not be saved.")}>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Title *" name="title" required maxLength={160} placeholder="Coilover installation" />
-            <Field label="Category *" name="category" required maxLength={80} placeholder="Suspension" />
-            <div className="space-y-2"><Label htmlFor="entry-stage">Stage</Label>
+            <Field label={uiText("ui.title_4bf07d033e")} name="title" required maxLength={160} placeholder={uiText("ui.coilover_installation_2fe452fdda")} />
+            <Field label={uiText("ui.category_1539ace749")} name="category" required maxLength={80} placeholder={uiText("ui.suspension_acf82993e1")} />
+            <div className="space-y-2"><Label htmlFor="entry-stage">{uiText("ui.stage_de838855e4")}</Label>
               <select id="entry-stage" name="stage_id" className={inputClass} defaultValue="">
-                <option value="">No stage</option>
+                <option value="">{uiText("ui.no_stage_ba342c9f81")}</option>
                 {timelines.stages.map((stage) => <option key={stage.id} value={stage.id}>{stage.title}</option>)}
               </select>
             </div>
-            <SelectField label="Status" name="status" options={["planned", "installed", "removed", "sold"]} />
-            <Field label="Manufacturer" name="manufacturer" maxLength={120} />
-            <Field label="Part number" name="part_number" maxLength={100} />
-            <Field label="Install date" name="installed_on" type="date" />
-            <Field label="Install mileage" name="mileage" type="number" min={0} />
-            <SelectField label="Installed by" name="installation_kind" options={["unknown", "self_installed", "shop_installed"]} />
-            <Field label="Shop" name="shop_name" maxLength={160} />
-            <Field label="Parts cost (USD, private)" name="cost" type="number" min={0} step="0.01" />
-            <Field label="Labor cost (USD, private)" name="labor" type="number" min={0} step="0.01" />
-            <Field label="Labor hours (private)" name="labor_hours" type="number" min={0} step="0.1" />
-            <Field label="Before" name="before_spec" maxLength={300} placeholder="Stock airbox, 200 hp" />
-            <Field label="After" name="after_spec" maxLength={300} placeholder="Cold-air intake, 212 hp" />
-            <Field label="Vehicle configuration" name="vehicle_configuration" maxLength={500} />
-            <Field label="Wheel size" name="wheel_size" maxLength={40} placeholder="18 in" />
-            <Field label="Wheel width" name="wheel_width" type="number" min={0} step="0.01" />
-            <Field label="Wheel offset (mm)" name="wheel_offset_mm" type="number" step="0.1" />
-            <Field label="Tire size" name="tire_size" maxLength={40} placeholder="245/40R18" />
-            <Field label="Suspension drop" name="suspension_drop" maxLength={80} />
+            <SelectField label={uiText("ui.status_920e413c7d")} name="status" options={["planned", "installed", "removed", "sold"]} />
+            <Field label={uiText("ui.manufacturer_1af384c577")} name="manufacturer" maxLength={120} />
+            <Field label={uiText("ui.part_number_d7d232144f")} name="part_number" maxLength={100} />
+            <Field label={uiText("ui.install_date_62b17b0949")} name="installed_on" type="date" />
+            <Field label={uiText("ui.install_mileage_7e71f8db06")} name="mileage" type="number" min={0} />
+            <SelectField label={uiText("ui.installed_by_42a5157b57")} name="installation_kind" options={["unknown", "self_installed", "shop_installed"]} />
+            <Field label={uiText("ui.shop_d00aae6b7f")} name="shop_name" maxLength={160} />
+            <Field label={uiText("ui.parts_cost_usd_private_609be8e8cc")} name="cost" type="number" min={0} step="0.01" />
+            <Field label={uiText("ui.labor_cost_usd_private_9363e4955d")} name="labor" type="number" min={0} step="0.01" />
+            <Field label={uiText("ui.labor_hours_private_29ae1b8e21")} name="labor_hours" type="number" min={0} step="0.1" />
+            <Field label={uiText("ui.before_9bb7250050")} name="before_spec" maxLength={300} placeholder={uiText("ui.stock_airbox_200_hp_128e049576")} />
+            <Field label={uiText("ui.after_7b68fe5510")} name="after_spec" maxLength={300} placeholder={uiText("ui.cold_air_intake_212_hp_e473a041e5")} />
+            <Field label={uiText("ui.vehicle_configuration_87c002e653")} name="vehicle_configuration" maxLength={500} />
+            <Field label={uiText("ui.wheel_size_5883b41627")} name="wheel_size" maxLength={40} placeholder={uiText("ui.18_in_6f82e22f3b")} />
+            <Field label={uiText("ui.wheel_width_7830f511a6")} name="wheel_width" type="number" min={0} step="0.01" />
+            <Field label={uiText("ui.wheel_offset_mm_6087184192")} name="wheel_offset_mm" type="number" step="0.1" />
+            <Field label={uiText("ui.tire_size_ec20be9319")} name="tire_size" maxLength={40} placeholder={uiText("ui.245_40r18_4dba587823")} />
+            <Field label={uiText("ui.suspension_drop_beb1902ef6")} name="suspension_drop" maxLength={80} />
           </div>
-          <div className="space-y-2"><Label htmlFor="public_notes">Public notes</Label><Textarea id="public_notes" name="public_notes" maxLength={5000} rows={3} /></div>
-          <div className="space-y-2"><Label htmlFor="private_notes">Private notes</Label><Textarea id="private_notes" name="private_notes" maxLength={5000} rows={3} /></div>
-          <label className="flex items-start gap-3 rounded-xl border p-3"><input className="mt-1" type="checkbox" name="is_public" /><span><span className="block text-sm font-medium">Show on public Vehicle Passport</span><span className="block text-xs text-muted-foreground">Public fields, before/after, and attached photos are shared. Cost, labor, documents, and private notes remain private.</span></span></label>
-          <Button type="submit" disabled={busy}>{busy ? "Saving..." : "Add Build Entry"}</Button>
+          <div className="space-y-2"><Label htmlFor="public_notes">{uiText("ui.public_notes_9e7d46d0df")}</Label><Textarea id="public_notes" name="public_notes" maxLength={5000} rows={3} /></div>
+          <div className="space-y-2"><Label htmlFor="private_notes">{uiText("ui.private_notes_72ff78fb2f")}</Label><Textarea id="private_notes" name="private_notes" maxLength={5000} rows={3} /></div>
+          <label className="flex items-start gap-3 rounded-xl border p-3"><input className="mt-1" type="checkbox" name="is_public" /><span><span className="block text-sm font-medium">{uiText("ui.show_on_public_vehicle_passport_b34d6835ed")}</span><span className="block text-xs text-muted-foreground">{uiText("ui.public_fields_before_after_and_attached_phot_6f8f76b346")}</span></span></label>
+          <Button type="submit" disabled={busy}>{busy ? uiText("ui.saving_dc85af8f2b") : uiText("ui.add_build_entry_a94cee80c4")}</Button>
         </form>
       </details>
 
       {groups.length === 0 ? (
-        <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No build entries yet. Add a stage to plan the progression, or add an entry directly.</p>
+        <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">{uiText("ui.no_build_entries_yet_add_a_stage_to_plan_the_3ebde365f2")}</p>
       ) : (
         groups.map((group) => (
           <section key={group.stage?.id ?? "unstaged"} className="rounded-2xl border p-4 sm:p-5">
             <header className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="font-heading text-lg font-bold">{group.stage?.title ?? "Unstaged entries"}</h3>
+                <h3 className="font-heading text-lg font-bold">{group.stage?.title ?? uiText("ui.unstaged_entries_2857f873b9")}</h3>
                 {group.stage ? (
                   <p className="text-xs text-muted-foreground">
                     {BUILD_STAGE_STATUS_LABELS[group.stage.status]}
-                    {group.stage.target_date ? ` · target ${formatDate(group.stage.target_date)}` : ""}
-                    {group.stage.completed_on ? ` · completed ${formatDate(group.stage.completed_on)}` : ""}
-                    {` · ${group.stage.is_public ? "Shared" : "Private"}`}
+                    {group.stage.target_date ? uiText("ui.target_d9db326bb2", { arg0: String(formatDate(group.stage.target_date)) }) : ""}
+                    {group.stage.completed_on ? uiText("ui.completed_51bc2f1310", { arg0: String(formatDate(group.stage.completed_on)) }) : ""}
+                    {uiText("ui.text_913ac5c53d", { arg0: String(group.stage.is_public ? uiText("ui.shared_e3c4b39d6d") : uiText("ui.private_c63eb6720c")) })}
                   </p>
                 ) : null}
                 {group.stage?.description ? <p className="mt-1 text-sm">{group.stage.description}</p> : null}
               </div>
               <div className="text-right text-xs text-muted-foreground">
-                <p>{group.totals.installed_count}/{group.totals.entry_count} installed</p>
+                <p>{group.totals.installed_count}/{group.totals.entry_count}{uiText("ui.installed_cf2f634769")}</p>
                 {group.totals.parts_cents + group.totals.labor_cents > 0 ? (
-                  <p>{formatCurrency(group.totals.parts_cents)} parts{group.totals.labor_cents ? ` + ${formatCurrency(group.totals.labor_cents)} labor` : ""}{group.totals.labor_hours ? ` · ${group.totals.labor_hours} h` : ""} <span className="font-semibold">(private)</span></p>
+                  <p>{formatCurrency(group.totals.parts_cents)}{uiText("ui.parts_ffd363a395")}{group.totals.labor_cents ? uiText("ui.labor_e0100e378d", { arg0: String(formatCurrency(group.totals.labor_cents)) }) : ""}{group.totals.labor_hours ? uiText("ui.h_40b8f9d6e2", { arg0: String(group.totals.labor_hours) }) : ""} <span className="font-semibold">{uiText("ui.private_6a15a7227e")}</span></p>
                 ) : null}
               </div>
             </header>
             {group.stage ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <select
-                  aria-label="Change stage status"
+                  aria-label={uiText("ui.change_stage_status_13435cb090")}
                   className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
                   value={group.stage.status}
                   disabled={busy}
@@ -212,17 +215,16 @@ export function VehicleBuildProgression({
                   {(Object.keys(BUILD_STAGE_STATUS_LABELS) as BuildStageStatus[]).map((status) => <option key={status} value={status}>{BUILD_STAGE_STATUS_LABELS[status]}</option>)}
                 </select>
                 <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => requestJson(`${base}/stages/${group.stage!.id}`, "PATCH", { is_public: !group.stage!.is_public }), "The stage could not be updated.")}>
-                  {group.stage.is_public ? "Make private" : "Share on passport"}
+                  {group.stage.is_public ? uiText("ui.make_private_e83dbc0a3f") : uiText("ui.share_on_passport_04814feb46")}
                 </Button>
                 <DocumentUploader vehicleId={vehicleId} stageId={group.stage.id} entryId={null} onDone={() => router.refresh()} onError={setError} />
-                <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (window.confirm("Delete this stage? Its entries are kept and become unstaged.")) void run(() => requestJson(`${base}/stages/${group.stage!.id}`, "DELETE"), "The stage could not be deleted."); }}>
-                  <Trash2 className="mr-1 h-3.5 w-3.5" />Delete stage
-                </Button>
+                <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (window.confirm(uiText("ui.delete_this_stage_its_entries_are_kept_and_b_1afba46105"))) void run(() => requestJson(`${base}/stages/${group.stage!.id}`, "DELETE"), uiText("ui.the_stage_could_not_be_deleted_70fadf14e9")); }}>
+                  <Trash2 className="mr-1 h-3.5 w-3.5" />{uiText("ui.delete_stage_0e8ac37962")}</Button>
               </div>
             ) : null}
             <DocumentList vehicleId={vehicleId} documents={documentsFor(null, group.stage?.id ?? null)} onChanged={() => router.refresh()} onError={setError} />
             <div className="mt-4 space-y-3">
-              {group.entries.length === 0 ? <p className="text-sm text-muted-foreground">No entries in this stage yet.</p> : null}
+              {group.entries.length === 0 ? <p className="text-sm text-muted-foreground">{uiText("ui.no_entries_in_this_stage_yet_caa2453752")}</p> : null}
               {group.entries.map((entry) => (
                 <EntryCard
                   key={entry.id}
@@ -254,6 +256,7 @@ function EntryCard({ entry, stages, media, documents, vehicleId, busy, onError, 
   onError: (message: string | null) => void;
   onRun: (task: () => Promise<unknown>, fallback: string) => Promise<void>;
 }) {
+  const uiText = useTranslator();
   const router = useRouter();
   const [pickingPhotos, setPickingPhotos] = useState(false);
   const [selected, setSelected] = useState<string[]>(entry.photos.map((photo) => photo.media_id));
@@ -266,19 +269,18 @@ function EntryCard({ entry, stages, media, documents, vehicleId, busy, onError, 
           <p className="font-semibold">{entry.title}</p>
           <p className="text-sm text-muted-foreground">{entry.category} · {entry.status.replaceAll("_", " ")}</p>
         </div>
-        <span className="text-xs text-muted-foreground">{entry.is_public ? "Shared" : "Private"}</span>
+        <span className="text-xs text-muted-foreground">{entry.is_public ? uiText("ui.shared_e3c4b39d6d") : uiText("ui.private_c63eb6720c")}</span>
       </div>
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-        {entry.manufacturer && <span>{entry.manufacturer}{entry.part_number ? ` · ${entry.part_number}` : ""}</span>}
+        {entry.manufacturer && <span>{entry.manufacturer}{entry.part_number ? uiText("ui.text_913ac5c53d", { arg0: String(entry.part_number) }) : ""}</span>}
         {entry.installed_on && <span>{formatDate(entry.installed_on)}</span>}
-        {entry.mileage != null && <span>{formatMileage(entry.mileage)} mi</span>}
+        {entry.mileage != null && <span>{formatMileage(entry.mileage)}{uiText("ui.mi_3074dbe604")}</span>}
         {entry.shop_name && <span>{entry.shop_name}</span>}
         {(entry.cost_cents != null || entry.labor_cents != null) && (
           <span>
-            {entry.cost_cents != null ? `${formatCurrency(entry.cost_cents)} parts` : ""}
-            {entry.labor_cents != null ? `${entry.cost_cents != null ? " + " : ""}${formatCurrency(entry.labor_cents)} labor` : ""}
-            {entry.labor_hours != null ? ` · ${entry.labor_hours} h` : ""} (private)
-          </span>
+            {entry.cost_cents != null ? uiText("ui.parts_82f8295d32", { arg0: String(formatCurrency(entry.cost_cents)) }) : ""}
+            {entry.labor_cents != null ? uiText("ui.labor_c1623afdce", { arg0: String(entry.cost_cents != null ? " + " : ""), arg1: String(formatCurrency(entry.labor_cents)) }) : ""}
+            {entry.labor_hours != null ? uiText("ui.h_40b8f9d6e2", { arg0: String(entry.labor_hours) }) : ""}{uiText("ui.private_009f973e46")}</span>
         )}
       </div>
       {(entry.before_spec || entry.after_spec) && (
@@ -289,7 +291,7 @@ function EntryCard({ entry, stages, media, documents, vehicleId, busy, onError, 
         </p>
       )}
       {entry.public_notes && <p className="mt-3 whitespace-pre-wrap text-sm">{entry.public_notes}</p>}
-      {entry.private_notes && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-muted p-3 text-sm"><strong>Private:</strong> {entry.private_notes}</p>}
+      {entry.private_notes && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-muted p-3 text-sm"><strong>{uiText("ui.private_fb10fb0165")}</strong> {entry.private_notes}</p>}
 
       {entry.photos.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -302,8 +304,8 @@ function EntryCard({ entry, stages, media, documents, vehicleId, busy, onError, 
 
       {pickingPhotos ? (
         <div className="mt-3 rounded-xl border bg-muted/20 p-3">
-          <p className="text-xs text-muted-foreground">Choose from this vehicle&rsquo;s approved photos. Upload new ones from the Overview tab first.</p>
-          {media.length === 0 ? <p className="mt-2 text-sm">No approved photos yet.</p> : (
+          <p className="text-xs text-muted-foreground">{uiText("ui.choose_from_this_vehicle_s_approved_photos_u_3894a68eae")}</p>
+          {media.length === 0 ? <p className="mt-2 text-sm">{uiText("ui.no_approved_photos_yet_e834946101")}</p> : (
             <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6">
               {media.map((item) => {
                 const on = selected.includes(item.id);
@@ -318,8 +320,8 @@ function EntryCard({ entry, stages, media, documents, vehicleId, busy, onError, 
             </div>
           )}
           <div className="mt-3 flex gap-2">
-            <Button size="sm" disabled={busy} onClick={() => onRun(() => requestJson(`${base}/${entry.id}/photos`, "PUT", { media_ids: selected }).then(() => setPickingPhotos(false)), "The photos could not be saved.")}>Save photos</Button>
-            <Button size="sm" variant="ghost" onClick={() => { setSelected(entry.photos.map((photo) => photo.media_id)); setPickingPhotos(false); }}>Cancel</Button>
+            <Button size="sm" disabled={busy} onClick={() => onRun(() => requestJson(`${base}/${entry.id}/photos`, "PUT", { media_ids: selected }).then(() => setPickingPhotos(false)), "The photos could not be saved.")}>{uiText("ui.save_photos_0672889e42")}</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setSelected(entry.photos.map((photo) => photo.media_id)); setPickingPhotos(false); }}>{uiText("ui.cancel_19766ed6cc")}</Button>
           </div>
         </div>
       ) : null}
@@ -328,43 +330,44 @@ function EntryCard({ entry, stages, media, documents, vehicleId, busy, onError, 
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <select
-          aria-label="Move to stage"
+          aria-label={uiText("ui.move_to_stage_e64cc92ef7")}
           className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
           value={entry.stage_id ?? ""}
           disabled={busy}
           onChange={(event) => onRun(() => requestJson(`${base}/${entry.id}`, "PATCH", { stage_id: event.target.value || null }), "The entry could not be moved.")}
         >
-          <option value="">No stage</option>
+          <option value="">{uiText("ui.no_stage_ba342c9f81")}</option>
           {stages.map((stage) => <option key={stage.id} value={stage.id}>{stage.title}</option>)}
         </select>
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => setPickingPhotos((value) => !value)}><ImagePlus className="mr-1 h-3.5 w-3.5" />Photos</Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => setPickingPhotos((value) => !value)}><ImagePlus className="mr-1 h-3.5 w-3.5" />{uiText("ui.photos_5e3147ab51")}</Button>
         <DocumentUploader vehicleId={vehicleId} entryId={entry.id} stageId={null} onDone={() => router.refresh()} onError={onError} />
-        <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (window.confirm("Delete this build entry? This cannot be undone.")) void onRun(() => requestJson(`${base}/${entry.id}`, "DELETE"), "The build entry could not be deleted."); }}>Delete</Button>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (window.confirm(uiText("ui.delete_this_build_entry_this_cannot_be_undon_477a89b4a0"))) void onRun(() => requestJson(`${base}/${entry.id}`, "DELETE"), uiText("ui.the_build_entry_could_not_be_deleted_a56de41de4")); }}>{uiText("ui.delete_e2d0a54968")}</Button>
       </div>
     </article>
   );
 }
 
 function DocumentList({ vehicleId, documents, onChanged, onError }: { vehicleId: string; documents: Doc[]; onChanged: () => void; onError: (message: string | null) => void }) {
+  const uiText = useTranslator();
   if (documents.length === 0) return null;
   async function open(doc: Doc) {
     try {
       // A short-lived signed URL; the document itself has no public address.
       const response = await fetch(`/api/vehicles/${vehicleId}/build/documents/${doc.id}`);
       const payload = await response.json().catch(() => null) as { data?: { url: string }; error?: string } | null;
-      if (!response.ok || !payload?.data) throw new Error(payload?.error ?? "The document could not be opened.");
+      if (!response.ok || !payload?.data) throw new Error(payload?.error ?? uiText("ui.the_document_could_not_be_opened_b68ba94c93"));
       window.open(payload.data.url, "_blank", "noopener");
     } catch (cause) {
-      onError(cause instanceof Error ? cause.message : "The document could not be opened.");
+      onError(cause instanceof Error ? cause.message : uiText("ui.the_document_could_not_be_opened_b68ba94c93"));
     }
   }
   async function remove(doc: Doc) {
-    if (!window.confirm(`Delete "${doc.title}"? This cannot be undone.`)) return;
+    if (!window.confirm(uiText("ui.delete_this_cannot_be_undone_cfafff86af", { arg0: String(doc.title) }))) return;
     try {
       await requestJson(`/api/vehicles/${vehicleId}/build/documents/${doc.id}`, "DELETE");
       onChanged();
     } catch (cause) {
-      onError(cause instanceof Error ? cause.message : "The document could not be deleted.");
+      onError(cause instanceof Error ? cause.message : uiText("ui.the_document_could_not_be_deleted_597a77a4af"));
     }
   }
   return (
@@ -373,8 +376,8 @@ function DocumentList({ vehicleId, documents, onChanged, onError }: { vehicleId:
         <li key={doc.id} className="flex items-center gap-2 text-sm">
           <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
           <button type="button" onClick={() => open(doc)} className="min-w-0 truncate font-medium hover:underline">{doc.title}</button>
-          <span className="shrink-0 text-xs text-muted-foreground">{BUILD_DOCUMENT_KIND_LABELS[doc.kind]} · {Math.max(1, Math.round(doc.size_bytes / 1024))} KB · private</span>
-          <button type="button" onClick={() => remove(doc)} aria-label={`Delete ${doc.title}`} className="ml-auto text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+          <span className="shrink-0 text-xs text-muted-foreground">{BUILD_DOCUMENT_KIND_LABELS[doc.kind]} · {Math.max(1, Math.round(doc.size_bytes / 1024))}{uiText("ui.kb_private_5d76f7952b")}</span>
+          <button type="button" onClick={() => remove(doc)} aria-label={uiText("ui.delete_0d42b5c1be", { arg0: String(doc.title) })} className="ml-auto text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
         </li>
       ))}
     </ul>
@@ -384,6 +387,7 @@ function DocumentList({ vehicleId, documents, onChanged, onError }: { vehicleId:
 // Private document upload: presigned PUT (or the server fallback) with the
 // `vehicle_document` entity, then the record. Receipts never get a public URL.
 function DocumentUploader({ vehicleId, entryId, stageId, onDone, onError }: { vehicleId: string; entryId: string | null; stageId: string | null; onDone: () => void; onError: (message: string | null) => void }) {
+  const uiText = useTranslator();
   const input = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -391,7 +395,7 @@ function DocumentUploader({ vehicleId, entryId, stageId, onDone, onError }: { ve
     setUploading(true);
     onError(null);
     try {
-      if (file.size > 25 * 1024 * 1024) throw new Error("Documents can be up to 25 MB.");
+      if (file.size > 25 * 1024 * 1024) throw new Error(uiText("ui.documents_can_be_up_to_25_mb_fb3b7bceae"));
       const presign = await fetch("/api/upload/presigned-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -403,18 +407,18 @@ function DocumentUploader({ vehicleId, entryId, stageId, onDone, onError }: { ve
         const put = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } }).catch(() => null);
         reference = put?.ok ? publicUrl : await uploadDirect(file);
       } else if (presign.status === 400 || presign.status === 404) {
-        throw new Error(await uploadFailureMessage(presign, "The document could not be uploaded."));
+        throw new Error(await uploadFailureMessage(presign, uiText("ui.the_document_could_not_be_uploaded_071247b5c9")));
       } else {
         reference = await uploadDirect(file);
       }
       const kind = /receipt/i.test(file.name) ? "receipt" : /invoice/i.test(file.name) ? "invoice" : /dyno/i.test(file.name) ? "dyno_sheet" : "other";
       await requestJson(`/api/vehicles/${vehicleId}/build/documents`, "POST", {
-        storage_reference: reference, title: file.name.replace(/\.[^.]+$/, "").slice(0, 120) || "Document", kind,
+        storage_reference: reference, title: file.name.replace(/\.[^.]+$/, "").slice(0, 120) || uiText("ui.document_d6bd8c0aee"), kind,
         entry_id: entryId, stage_id: stageId, content_type: file.type || "application/octet-stream", size_bytes: file.size,
       });
       onDone();
     } catch (cause) {
-      onError(cause instanceof Error ? cause.message : "The document could not be uploaded.");
+      onError(cause instanceof Error ? cause.message : uiText("ui.the_document_could_not_be_uploaded_071247b5c9"));
     } finally {
       setUploading(false);
       if (input.current) input.current.value = "";
@@ -427,7 +431,7 @@ function DocumentUploader({ vehicleId, entryId, stageId, onDone, onError }: { ve
     form.append("entity", "vehicle_document");
     form.append("recordId", vehicleId);
     const response = await fetch("/api/upload/direct", { method: "POST", body: form });
-    if (!response.ok) throw new Error(await uploadFailureMessage(response, "The document could not be uploaded."));
+    if (!response.ok) throw new Error(await uploadFailureMessage(response, uiText("ui.the_document_could_not_be_uploaded_071247b5c9")));
     const payload = await response.json() as { publicUrl: string };
     return payload.publicUrl;
   }
@@ -437,7 +441,7 @@ function DocumentUploader({ vehicleId, entryId, stageId, onDone, onError }: { ve
       <input ref={input} type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} />
       <Button size="sm" variant="outline" type="button" disabled={uploading} onClick={() => input.current?.click()}>
         {uploading ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Paperclip className="mr-1 h-3.5 w-3.5" />}
-        {uploading ? "Uploading…" : "Receipt / document"}
+        {uploading ? uiText("ui.uploading_5ce44dd77d") : uiText("ui.receipt_document_5c1703dab3")}
       </Button>
     </>
   );

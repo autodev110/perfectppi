@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatMileage } from "@/lib/utils/formatting";
 import Link from "next/link";
+import { t as uiText } from "@/lib/i18n";
 
 interface VehicleCardProps {
   id: string;
@@ -40,17 +41,15 @@ export function VehicleCard({
           <Badge
             variant={visibility === "public" ? "default" : "secondary"}
           >
-            {visibility === "private" ? "Only me" : visibility === "friends" ? "Friends" : "Public"}
+            {visibility === "private" ? uiText("ui.only_me_bdc0857b99") : visibility === "friends" ? uiText("ui.friends_bd104d1b98") : uiText("ui.public_591935b15b")}
           </Badge>
         </div>
         {mileage != null && (
           <p className="mt-2 text-sm text-muted-foreground">
-            {formatMileage(mileage)} miles
-          </p>
+            {formatMileage(mileage)}{uiText("ui.miles_9e73814859")}</p>
         )}
         {vin && (
-          <p className="mt-1 font-mono text-xs text-muted-foreground">
-            VIN: {vin}
+          <p className="mt-1 font-mono text-xs text-muted-foreground">{uiText("ui.vin_5d4e351bed")}{vin}
           </p>
         )}
       </CardContent>

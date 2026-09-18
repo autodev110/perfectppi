@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { UsernameInput } from "@/components/shared/username-input";
 import { usernameSchema } from "@/features/profiles/username";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 export function UsernameForm({ nextPath }: { nextPath: string }) {
+  const uiText = useTranslator();
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [saving, setSaving] = useState(false);
@@ -28,7 +31,7 @@ export function UsernameForm({ nextPath }: { nextPath: string }) {
     });
     const result = await response.json().catch(() => null);
     if (!response.ok) {
-      setError(result?.error ?? "Your username could not be saved. Please try again.");
+      setError(result?.error ?? uiText("ui.your_username_could_not_be_saved_please_try__597702d259"));
       setSaving(false);
       return;
     }
@@ -46,7 +49,7 @@ export function UsernameForm({ nextPath }: { nextPath: string }) {
         disabled={saving || !usernameSchema.safeParse(username).success}
         className="h-12 w-full rounded-xl bg-on-tertiary-container font-heading font-bold text-white disabled:opacity-50"
       >
-        {saving ? "Saving username..." : "Continue"}
+        {saving ? uiText("ui.saving_username_24d1594247") : uiText("ui.continue_31fbef1625")}
       </button>
     </form>
   );

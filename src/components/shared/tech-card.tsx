@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "./user-avatar";
 import Link from "next/link";
+import { t as uiText } from "@/lib/i18n";
 
 interface TechCardProps {
   id: string;
@@ -26,14 +27,13 @@ export function TechCard({
       <CardContent className="flex items-start gap-4 p-6">
         <UserAvatar src={avatarUrl} name={displayName} className="h-12 w-12" />
         <div className="flex-1">
-          <p className="font-semibold">{displayName ?? "Technician"}</p>
+          <p className="font-semibold">{displayName ?? uiText("ui.technician_9041ccc417")}</p>
           {orgName && (
             <p className="text-sm text-muted-foreground">{orgName}</p>
           )}
           <div className="mt-2 flex flex-wrap gap-1">
             <Badge variant="outline" className="text-xs">
-              {totalInspections} inspections
-            </Badge>
+              {totalInspections}{uiText("ui.inspections_72d3585c34")}</Badge>
           </div>
           {specialties && specialties.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">

@@ -9,10 +9,12 @@ import { getInitials } from "@/lib/utils/formatting";
 import { Search, UserPlus, Users } from "lucide-react";
 import { decodeSearchCursor } from "@/features/search/cursor";
 import { normalizeSearchQuery } from "@/features/search/queries";
+import { t as uiText } from "@/lib/i18n";
+import { getRequestTranslator } from "@/lib/i18n/server";
 
 export const metadata = {
-  title: "Find People — PerfectPPI",
-  description: "Search PerfectPPI members by username or display name.",
+  title: uiText("ui.find_people_perfectppi_e62019a1de"),
+  description: uiText("ui.search_perfectppi_members_by_username_or_dis_98ffa00bce"),
 };
 
 export const dynamic = "force-dynamic";
@@ -21,6 +23,7 @@ export const dynamic = "force-dynamic";
 // username first; the database applies discoverability, blocks, and account
 // state before anything is returned.
 export default async function PeoplePage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string; cursor?: string }> }) {
+  const uiText = await getRequestTranslator();
   await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const params = await searchParams;
   const query = normalizeSearchQuery(params.q);
@@ -38,28 +41,24 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
     <div className="min-h-screen bg-surface">
       <section className="px-8 pb-10 pt-28">
         <div className="mx-auto max-w-3xl">
-          <h1 className="font-heading text-3xl font-extrabold tracking-tight text-on-surface">Find people</h1>
-          <p className="mt-2 text-sm text-on-surface-variant">
-            Search by username or name. Members who turned off discovery only appear when you enter their complete username.
-          </p>
+          <h1 className="font-heading text-3xl font-extrabold tracking-tight text-on-surface">{uiText("ui.find_people_17a85d8fc0")}</h1>
+          <p className="mt-2 text-sm text-on-surface-variant">{uiText("ui.search_by_username_or_name_members_who_turne_b69fc4f5db")}</p>
           <form action="/community/people" method="get" className="mt-6 flex gap-2" role="search">
             <Input
               name="q"
               defaultValue={query}
-              placeholder="@username or name"
+              placeholder={uiText("ui.username_or_name_2f2a4263a9")}
               maxLength={64}
               autoComplete="off"
-              aria-label="Search people"
+              aria-label={uiText("ui.search_people_8a7e7f1bc5")}
               disabled={!enabled}
             />
             <Button type="submit" disabled={!enabled}>
-              <Search className="mr-2 h-4 w-4" />
-              Search
-            </Button>
+              <Search className="mr-2 h-4 w-4" />{uiText("ui.search_49c266baaa")}</Button>
           </form>
           <div className="mt-3 flex items-center gap-4 text-xs">
-            <Link href="/dashboard/friends" className="font-bold text-on-tertiary-container hover:underline">Your friends and requests</Link>
-            <Link href="/community" className="font-bold text-on-tertiary-container hover:underline">Back to Community</Link>
+            <Link href="/dashboard/friends" className="font-bold text-on-tertiary-container hover:underline">{uiText("ui.your_friends_and_requests_50c179b25f")}</Link>
+            <Link href="/community" className="font-bold text-on-tertiary-container hover:underline">{uiText("ui.back_to_community_fc6e768cae")}</Link>
           </div>
         </div>
       </section>
@@ -67,35 +66,35 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
       <section className="px-8 pb-20">
         <div className="mx-auto max-w-3xl space-y-3">
           {!enabled ? (
-            <EmptyState icon={Users} title="People search is not available yet" body="Friend requests and people search are switched off in this release." />
+            <EmptyState icon={Users} title={uiText("ui.people_search_is_not_available_yet_c1a91fdf3e")} body="Friend requests and people search are switched off in this release." />
           ) : outcome === "rate_limited" ? (
-            <EmptyState icon={Search} title="Please slow down" body="You have searched frequently. Wait a moment and try again." />
+            <EmptyState icon={Search} title={uiText("ui.please_slow_down_051395e683")} body="You have searched frequently. Wait a moment and try again." />
           ) : outcome === "unavailable" ? (
-            <EmptyState icon={Search} title="Search is temporarily unavailable" body="We could not safely run this search. Please try again shortly." />
+            <EmptyState icon={Search} title={uiText("ui.search_is_temporarily_unavailable_de495ae44d")} body="We could not safely run this search. Please try again shortly." />
           ) : tooShort ? (
-            <EmptyState icon={Search} title="Keep typing" body="Enter at least two characters." />
+            <EmptyState icon={Search} title={uiText("ui.keep_typing_e480e20837")} body="Enter at least two characters." />
           ) : query && results.length === 0 ? (
-            <EmptyState icon={Search} title="No members found" body="Check the spelling, or ask for their complete username." />
+            <EmptyState icon={Search} title={uiText("ui.no_members_found_a4e937d257")} body="Check the spelling, or ask for their complete username." />
           ) : !query ? (
-            <EmptyState icon={UserPlus} title="Search for someone you know" body="Results show a member's name, username, and mutual friends." />
+            <EmptyState icon={UserPlus} title={uiText("ui.search_for_someone_you_know_2519479505")} body="Results show a member's name, username, and mutual friends." />
           ) : (
             results.map((person) => (
               <article key={person.id} className="flex items-center justify-between gap-4 rounded-2xl bg-surface-container-lowest p-4 shadow-sm ghost-border">
                 <Link href={person.username ? `/profile/${person.username}` : "#"} className="flex min-w-0 items-center gap-3">
                   <Avatar className="h-11 w-11">
                     <AvatarImage src={person.avatar_url ?? ""} />
-                    <AvatarFallback className="text-xs">{getInitials(person.display_name ?? person.username ?? "U")}</AvatarFallback>
+                    <AvatarFallback className="text-xs">{getInitials(person.display_name ?? person.username ?? uiText("ui.u_a25513c7e0"))}</AvatarFallback>
                   </Avatar>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-bold text-on-surface">
-                      {person.display_name ?? person.username ?? "PerfectPPI member"}
+                      {person.display_name ?? person.username ?? uiText("ui.perfectppi_member_99bd607db6")}
                     </span>
                     <span className="block truncate text-xs text-on-surface-variant">
-                      {person.username ? `@${person.username}` : null}
+                      {person.username ? uiText("ui.text_d513a96df3", { arg0: String(person.username) }) : null}
                       {person.mutual_friend_count > 0
-                        ? ` · ${person.mutual_friend_count} mutual friend${person.mutual_friend_count === 1 ? "" : "s"}`
+                        ? uiText("ui.mutual_friend_8649b5f78a", { arg0: String(person.mutual_friend_count), arg1: String(person.mutual_friend_count === 1 ? "" : "s") })
                         : null}
-                      {person.exact_match ? " · exact match" : null}
+                      {person.exact_match ? uiText("ui.exact_match_c8bb6b8fbf") : null}
                     </span>
                   </span>
                 </Link>
@@ -104,12 +103,12 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
             ))
           )}
           {query && enabled ? (
-            <nav className="flex items-center justify-between pt-3" aria-label="Search pagination">
+            <nav className="flex items-center justify-between pt-3" aria-label={uiText("ui.search_pagination_c3634a64b7")}>
               {params.cursor ? (
-                <Button asChild variant="outline"><Link href={`/community/people?q=${encodeURIComponent(query)}`}>Back to first results</Link></Button>
+                <Button asChild variant="outline"><Link href={`/community/people?q=${encodeURIComponent(query)}`}>{uiText("ui.back_to_first_results_58fbbfa217")}</Link></Button>
               ) : <span />}
               {nextCursor ? (
-                <Button asChild variant="outline"><Link href={`/community/people?q=${encodeURIComponent(query)}&cursor=${encodeURIComponent(nextCursor)}`}>More results</Link></Button>
+                <Button asChild variant="outline"><Link href={`/community/people?q=${encodeURIComponent(query)}&cursor=${encodeURIComponent(nextCursor)}`}>{uiText("ui.more_results_750ecbe1c8")}</Link></Button>
               ) : <span />}
             </nav>
           ) : null}

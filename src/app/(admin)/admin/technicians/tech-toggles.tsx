@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { toggleTechnicianFeatured } from "@/features/admin/actions";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 interface TechTogglesProps {
   techId: string;
   isFeatured: boolean;
 }
 
 export function TechToggles({ techId, isFeatured }: TechTogglesProps) {
+  const uiText = useTranslator();
   const [featured, setFeatured] = useState(isFeatured);
   const [loadingFeatured, setLoadingFeatured] = useState(false);
 
@@ -31,7 +34,7 @@ export function TechToggles({ techId, isFeatured }: TechTogglesProps) {
             : "bg-muted text-muted-foreground hover:bg-muted/80"
         }`}
       >
-        {featured ? "Featured ★" : "Feature"}
+        {featured ? uiText("ui.featured_573ce0ff77") : uiText("ui.feature_3d377ae910")}
       </button>
     </div>
   );

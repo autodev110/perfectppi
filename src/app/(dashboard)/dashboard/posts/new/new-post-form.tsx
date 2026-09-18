@@ -17,6 +17,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils/formatting";
 import { uploadFile } from "@/features/uploads/client";
 import { ImagePlus, Trash2, Video } from "lucide-react";
+import { t as uiText } from "@/lib/i18n";
+import { useTranslator } from "@/lib/i18n/client";
 
 const MAX_MEDIA = 10;
 
@@ -44,7 +46,7 @@ type NewPostFormProps = {
 };
 
 function vehicleLabel(vehicle: CommunityPostOptionVehicle | null) {
-  return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ") || "Vehicle";
+  return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ") || uiText("ui.vehicle_a62394ba4a");
 }
 
 export function NewPostForm({
@@ -59,6 +61,7 @@ export function NewPostForm({
   capabilities,
   eventPhotoContext,
 }: NewPostFormProps) {
+  const uiText = useTranslator();
   const videoAllowed = capabilities.communityVideoUploads && !eventPhotoContext;
   const mediaAllowed = capabilities.communityPhotoUploads;
   const acceptTypes = videoAllowed
@@ -101,7 +104,7 @@ export function NewPostForm({
     setError(null);
 
     if (eventPhotoContext && media.length === 0) {
-      setError("Add at least one photo from the event.");
+      setError(uiText("ui.add_at_least_one_photo_from_the_event_fe98bd4c56"));
       setLoading(false);
       return;
     }
@@ -157,18 +160,18 @@ export function NewPostForm({
         });
         if (!response.ok) {
           const payload = await response.json();
-          throw new Error(payload.error ?? "Could not attach media");
+          throw new Error(payload.error ?? uiText("ui.could_not_attach_media_05dd9a72a3"));
         }
         const finalizeResponse = await fetch(`/api/community/posts/${targetPostId}/finalize`, {
           method: "POST",
         });
         const finalized = await finalizeResponse.json();
         if (!finalizeResponse.ok || !finalized.data) {
-          throw new Error(finalized.error ?? "Could not finalize post");
+          throw new Error(finalized.error ?? uiText("ui.could_not_finalize_post_1454a82a8c"));
         }
         createdModerationStatus.current = finalized.data.moderationStatus;
       } catch (uploadError) {
-        setError(uploadError instanceof Error ? uploadError.message : "Could not upload media");
+        setError(uploadError instanceof Error ? uploadError.message : uiText("ui.could_not_upload_media_86b00c9cce"));
         setProgress([]);
         setLoading(false);
         return;
@@ -187,14 +190,14 @@ export function NewPostForm({
     if (!files || draftLocked) return;
     const chosen = Array.from(files);
     if (!videoAllowed && chosen.some((file) => file.type.startsWith("video/"))) {
-      setError("Video posts are coming later. Please choose photos only.");
+      setError(uiText("ui.video_posts_are_coming_later_please_choose_p_baf97f607e"));
     }
     const selected = chosen.filter(
       (file) => file.type.startsWith("image/") || (videoAllowed && file.type.startsWith("video/")),
     );
     const available = Math.max(0, MAX_MEDIA - media.length);
     if (selected.length > available) {
-      setError(`Posts can include up to ${MAX_MEDIA} ${videoAllowed ? "photos or videos" : "photos"}`);
+      setError(uiText("ui.posts_can_include_up_to_0b085abfa9", { arg0: String(MAX_MEDIA), arg1: String(videoAllowed ? uiText("ui.photos_or_videos_e5b05de8b9") : "photos") }));
     }
     setMedia((current) => [...current, ...selected.slice(0, available)]);
     setMediaDescriptions((current) => [...current, ...selected.slice(0, available).map(() => "")]);
@@ -217,13 +220,13 @@ export function NewPostForm({
       <fieldset disabled={draftLocked} className="contents">
       {eventPhotoContext ? (
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-primary">Event photo thread</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-primary">{uiText("ui.event_photo_thread_6b19ac1816")}</p>
           <p className="mt-1 font-heading font-bold">{eventPhotoContext.title}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Photos only. Your caption and images go through the standard Community review.</p>
+          <p className="mt-1 text-xs text-muted-foreground">{uiText("ui.photos_only_your_caption_and_images_go_throu_1398f72130")}</p>
         </div>
       ) : null}
       <div className="space-y-2">
-        <Label htmlFor="group_id">Post destination</Label>
+        <Label htmlFor="group_id">{uiText("ui.post_destination_868c78293c")}</Label>
         <select
           id="group_id"
           name="group_id"
@@ -232,17 +235,17 @@ export function NewPostForm({
           disabled={Boolean(eventPhotoContext)}
           className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
         >
-          <option value="">My feed</option>
+          <option value="">{uiText("ui.my_feed_1ae18f0448")}</option>
           {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
         </select>
         {eventPhotoContext ? <input type="hidden" name="group_id" value={eventPhotoContext.groupId ?? ""} /> : null}
         <p className="text-xs text-muted-foreground">
-          {groups.length ? "Only groups you have joined appear here." : "Join a Community group to post there."}
+          {groups.length ? uiText("ui.only_groups_you_have_joined_appear_here_0d76904233") : uiText("ui.join_a_community_group_to_post_there_020e56ba88")}
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="audience">Audience</Label>
+        <Label htmlFor="audience">{uiText("ui.audience_545c023576")}</Label>
         <select
           id="audience"
           name="audience"
@@ -251,19 +254,19 @@ export function NewPostForm({
           disabled={Boolean(groupId)}
           className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
         >
-          <option value="friends">Friends</option>
-          {canPostPublic ? <option value="public">Public inside PerfectPPI</option> : null}
+          <option value="friends">{uiText("ui.friends_bd104d1b98")}</option>
+          {canPostPublic ? <option value="public">{uiText("ui.public_inside_perfectppi_59260e8311")}</option> : null}
         </select>
         {groupId ? <input type="hidden" name="audience" value="public" /> : null}
         <p className="text-xs text-muted-foreground">
           {groupId
-            ? "Public group posts are visible to eligible signed-in PerfectPPI members."
-            : canPostPublic ? "Public posts are visible only to signed-in PerfectPPI members." : "Your private profile can publish to Friends only."}
+            ? uiText("ui.public_group_posts_are_visible_to_eligible_s_d815a467d3")
+            : canPostPublic ? uiText("ui.public_posts_are_visible_only_to_signed_in_p_53632f2cc6") : uiText("ui.your_private_profile_can_publish_to_friends__dd48f84cd4")}
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="post_type">Post type</Label>
+        <Label htmlFor="post_type">{uiText("ui.post_type_e5c31e2bea")}</Label>
         <select
           id="post_type"
           name="post_type"
@@ -277,30 +280,30 @@ export function NewPostForm({
         {eventPhotoContext ? <input type="hidden" name="post_type" value="general" /> : null}
         <p className="text-xs text-muted-foreground">
           {postType === "question"
-            ? "Responses can be marked as the accepted answer after publishing."
+            ? uiText("ui.responses_can_be_marked_as_the_accepted_answ_19ce9448da")
             : postType === "general"
-              ? "Pick a type to add structured details members can scan and filter."
+              ? uiText("ui.pick_a_type_to_add_structured_details_member_5503b88e5c")
               : POST_TYPE_LABELS[postType].prompt}
         </p>
       </div>
 
       <div className="space-y-2">
-          <Label htmlFor="content">{eventPhotoContext ? "Caption" : postType === "question" ? "Question" : "Post"} *</Label>
+          <Label htmlFor="content">{eventPhotoContext ? uiText("ui.caption_87d296ec94") : postType === "question" ? uiText("ui.question_289aff12b0") : uiText("ui.post_a5554622c6")} *</Label>
         <Textarea
           id="content"
           name="content"
           rows={7}
           maxLength={1200}
           required
-          placeholder={eventPhotoContext ? "What should other attendees know about these photos?" : postType === "question"
-            ? "Describe the symptoms, when they happen, and what you have already checked."
+          placeholder={eventPhotoContext ? uiText("ui.what_should_other_attendees_know_about_these_efc5982adf") : postType === "question"
+            ? uiText("ui.describe_the_symptoms_when_they_happen_and_w_d3ff6eee3a")
             : POST_TYPE_LABELS[postType].prompt}
         />
       </div>
 
       {postType !== "general" && postType !== "question" ? (
         <div className="space-y-2 rounded-xl border p-4">
-          <Label className="text-xs uppercase tracking-wide text-muted-foreground">{POST_TYPE_LABELS[postType].label} details</Label>
+          <Label className="text-xs uppercase tracking-wide text-muted-foreground">{POST_TYPE_LABELS[postType].label}{uiText("ui.details_06a7c52288")}</Label>
           <PostTypeFields
             postType={postType}
             fields={typeFields}
@@ -314,8 +317,8 @@ export function NewPostForm({
       {mediaAllowed ? <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <Label htmlFor="post-media">Photos{eventPhotoContext ? " *" : ""}</Label>
-            <p className="text-xs text-muted-foreground">Add {eventPhotoContext ? "1 to " : "up to "}10 photos. Their order becomes the carousel order.</p>
+            <Label htmlFor="post-media">{uiText("ui.photos_5e3147ab51")}{eventPhotoContext ? " *" : ""}</Label>
+            <p className="text-xs text-muted-foreground">{uiText("ui.add_8d89e4a829")}{eventPhotoContext ? uiText("ui.1_to_11499cdb53") : uiText("ui.up_to_33bb38ae0f")}{uiText("ui.10_photos_their_order_becomes_the_carousel_o_63d10c7740")}</p>
           </div>
           <span className="text-xs font-semibold text-muted-foreground">{media.length}/{MAX_MEDIA}</span>
         </div>
@@ -336,11 +339,10 @@ export function NewPostForm({
             disabled={loading || media.length >= MAX_MEDIA}
           >
             <ImagePlus className="mr-2 h-4 w-4" />
-            {videoAllowed ? "Add Media" : "Add Photos"}
+            {videoAllowed ? uiText("ui.add_media_a078fb55c6") : uiText("ui.add_photos_aa07436c2c")}
           </Button>
           {uploading ? (
-            <span className="text-xs font-medium text-muted-foreground">
-              Uploading media… {Math.round(overallProgress * 100)}%
+            <span className="text-xs font-medium text-muted-foreground">{uiText("ui.uploading_media_38364a4e54")}{Math.round(overallProgress * 100)}%
             </span>
           ) : null}
         </div>
@@ -363,26 +365,26 @@ export function NewPostForm({
           </div>
         ) : null}
       </div> : (
-        <p className="text-xs text-muted-foreground">Photo uploads are temporarily unavailable. You can still post text.</p>
+        <p className="text-xs text-muted-foreground">{uiText("ui.photo_uploads_are_temporarily_unavailable_yo_c11d265e0b")}</p>
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="attachment_type">Attach context</Label>
+        <Label htmlFor="attachment_type">{uiText("ui.attach_context_67d0385e08")}</Label>
         <select
           id="attachment_type"
           value={attachmentType}
           onChange={(event) => setAttachmentType(event.target.value)}
           className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          <option value="none">No attachment</option>
-          <option value="vehicle">Public vehicle profile</option>
-          <option value="listing">Active marketplace listing</option>
+          <option value="none">{uiText("ui.no_attachment_e37fad9915")}</option>
+          <option value="vehicle">{uiText("ui.public_vehicle_profile_9295b13817")}</option>
+          <option value="listing">{uiText("ui.active_marketplace_listing_c5e2b1aab4")}</option>
         </select>
       </div>
 
       {attachmentType === "vehicle" && (
         <div className="space-y-2">
-          <Label htmlFor="vehicle_id">Public vehicle</Label>
+          <Label htmlFor="vehicle_id">{uiText("ui.public_vehicle_b47f8cbc2a")}</Label>
           <select
             id="vehicle_id"
             name="vehicle_id"
@@ -390,22 +392,22 @@ export function NewPostForm({
             onChange={(event) => setVehicleId(event.target.value)}
             className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            <option value="">Choose a public vehicle</option>
+            <option value="">{uiText("ui.choose_a_public_vehicle_92655a2258")}</option>
             {vehicles.map((vehicle) => (
               <option key={vehicle.id} value={vehicle.id}>
-                {vehicleLabel(vehicle)}{vehicle.vin ? ` · ${vehicle.vin}` : ""}
+                {vehicleLabel(vehicle)}{vehicle.vin ? uiText("ui.text_913ac5c53d", { arg0: String(vehicle.vin) }) : ""}
               </option>
             ))}
           </select>
           {vehicles.length === 0 && (
-            <p className="text-xs text-muted-foreground">Make a vehicle public first if you want to attach it.</p>
+            <p className="text-xs text-muted-foreground">{uiText("ui.make_a_vehicle_public_first_if_you_want_to_a_71740d0a5d")}</p>
           )}
         </div>
       )}
 
       {attachmentType === "listing" && (
         <div className="space-y-2">
-          <Label htmlFor="listing_id">Active listing</Label>
+          <Label htmlFor="listing_id">{uiText("ui.active_listing_b387f0944b")}</Label>
           <select
             id="listing_id"
             name="listing_id"
@@ -413,7 +415,7 @@ export function NewPostForm({
             onChange={(event) => setListingId(event.target.value)}
             className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            <option value="">Choose an active listing</option>
+            <option value="">{uiText("ui.choose_an_active_listing_ac65368695")}</option>
             {listings.map((listing) => (
               <option key={listing.id} value={listing.id}>
                 {listing.title} · {vehicleLabel(listing.vehicle)} · {formatCurrency(listing.asking_price_cents)}
@@ -421,23 +423,21 @@ export function NewPostForm({
             ))}
           </select>
           {listings.length === 0 && (
-            <p className="text-xs text-muted-foreground">Create an active marketplace listing first if you want to share one.</p>
+            <p className="text-xs text-muted-foreground">{uiText("ui.create_an_active_marketplace_listing_first_i_f3152c8340")}</p>
           )}
         </div>
       )}
       </fieldset>
 
       {draftLocked && error ? (
-        <p className="text-xs text-muted-foreground">
-          Your private post draft is saved. Retry publishing to continue the same upload without creating a duplicate.
-        </p>
+        <p className="text-xs text-muted-foreground">{uiText("ui.your_private_post_draft_is_saved_retry_publi_a62abe57ea")}</p>
       ) : null}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="flex gap-3">
-        <Button type="submit" disabled={loading}>{loading ? "Publishing..." : "Publish Post"}</Button>
-        <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
+        <Button type="submit" disabled={loading}>{loading ? uiText("ui.publishing_5f51143bee") : uiText("ui.publish_post_d3c183d5db")}</Button>
+        <Button type="button" variant="outline" onClick={() => router.back()}>{uiText("ui.cancel_19766ed6cc")}</Button>
       </div>
     </form>
   );
@@ -458,6 +458,7 @@ function MediaPreview({
   onDescriptionChange: (description: string) => void;
   onRemove: () => void;
 }) {
+  const uiText = useTranslator();
   const [url, setUrl] = useState("");
   useEffect(() => {
     const objectUrl = URL.createObjectURL(file);
@@ -482,7 +483,7 @@ function MediaPreview({
         {file.type.startsWith("video/") ? <Video className="h-3 w-3" /> : index + 1}
       </span>
       {progress === null ? (
-        <Button type="button" size="icon" variant="destructive" className="absolute right-2 top-2 h-8 w-8 rounded-full" onClick={onRemove} aria-label={`Remove media ${index + 1}`}>
+        <Button type="button" size="icon" variant="destructive" className="absolute right-2 top-2 h-8 w-8 rounded-full" onClick={onRemove} aria-label={uiText("ui.remove_media_d672ceb021", { arg0: String(index + 1) })}>
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       ) : (
@@ -491,7 +492,7 @@ function MediaPreview({
             className="h-full bg-primary transition-[width] duration-150"
             style={{ width: `${Math.round(progress * 100)}%` }}
             role="progressbar"
-            aria-label={`Upload progress for media ${index + 1}`}
+            aria-label={uiText("ui.upload_progress_for_media_b88b1a7ada", { arg0: String(index + 1) })}
             aria-valuenow={Math.round(progress * 100)}
             aria-valuemin={0}
             aria-valuemax={100}
@@ -501,14 +502,14 @@ function MediaPreview({
       </div>
       {file.type.startsWith("image/") ? (
         <div>
-          <label htmlFor={`media-description-${index}`} className="sr-only">Description for photo {index + 1}</label>
+          <label htmlFor={`media-description-${index}`} className="sr-only">{uiText("ui.description_for_photo_000771bdbc")}{index + 1}</label>
           <input
             id={`media-description-${index}`}
             type="text"
             value={description}
             maxLength={300}
             onChange={(event) => onDescriptionChange(event.target.value)}
-            placeholder="Describe photo (optional)"
+            placeholder={uiText("ui.describe_photo_optional_760e4ae1c4")}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
           />
         </div>

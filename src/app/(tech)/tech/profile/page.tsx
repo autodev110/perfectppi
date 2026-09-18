@@ -16,11 +16,14 @@ import { SocialPrivacyFields } from "@/components/shared/social-privacy-fields";
 import { SafetyRelationships } from "@/components/shared/safety-relationships";
 import { TechnicianCredentialManager } from "@/components/shared/technician-credential-manager";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type TechProfile = Database["public"]["Tables"]["technician_profiles"]["Row"];
 type Organization = Database["public"]["Tables"]["organizations"]["Row"];
 
 export default function TechProfilePage() {
+  const uiText = useTranslator();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [techProfile, setTechProfile] = useState<TechProfile | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -92,7 +95,7 @@ export default function TechProfilePage() {
       return;
     }
 
-    setProfileMessage("Profile updated.");
+    setProfileMessage(uiText("ui.profile_updated_3a06720a52"));
     setProfileSaving(false);
     await fetchData();
   }
@@ -109,7 +112,7 @@ export default function TechProfilePage() {
       return;
     }
 
-    setTechMessage("Technician profile updated.");
+    setTechMessage(uiText("ui.technician_profile_updated_f824367ef1"));
     setTechSaving(false);
     await fetchData();
   }
@@ -129,12 +132,12 @@ export default function TechProfilePage() {
   }
 
   if (loading) {
-    return <p className="text-muted-foreground">Loading...</p>;
+    return <p className="text-muted-foreground">{uiText("ui.loading_47d2a515ef")}</p>;
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <h1 className="font-heading text-2xl font-bold">Technician Profile</h1>
+      <h1 className="font-heading text-2xl font-bold">{uiText("ui.technician_profile_983bd01445")}</h1>
 
       {profile && (
         <RoleSwitcher
@@ -145,12 +148,12 @@ export default function TechProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Public Profile</CardTitle>
+          <CardTitle>{uiText("ui.public_profile_6f3c838c26")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form action={handleProfileSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="display_name">Display Name</Label>
+              <Label htmlFor="display_name">{uiText("ui.display_name_18d67c992b")}</Label>
               <Input
                 id="display_name"
                 name="display_name"
@@ -158,14 +161,14 @@ export default function TechProfilePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Username</Label>
+              <Label>{uiText("ui.username_e3b89e9d33")}</Label>
               <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm">
-                {profile?.username ? `@${profile.username}` : "Not assigned"}
+                {profile?.username ? uiText("ui.text_d513a96df3", { arg0: String(profile.username) }) : uiText("ui.not_assigned_13075c2336")}
               </div>
-              <p className="text-xs text-muted-foreground">Usernames cannot be changed yet.</p>
+              <p className="text-xs text-muted-foreground">{uiText("ui.usernames_cannot_be_changed_yet_a580056e04")}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="bio">Bio</Label>
+              <Label htmlFor="bio">{uiText("ui.bio_3933b18021")}</Label>
               <Textarea
                 id="bio"
                 name="bio"
@@ -178,7 +181,7 @@ export default function TechProfilePage() {
               <p className="text-sm text-muted-foreground">{profileMessage}</p>
             )}
             <Button type="submit" disabled={profileSaving}>
-              {profileSaving ? "Saving..." : "Save Profile"}
+              {profileSaving ? uiText("ui.saving_dc85af8f2b") : uiText("ui.save_profile_a4212f1e2f")}
             </Button>
           </form>
         </CardContent>
@@ -186,32 +189,30 @@ export default function TechProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Technician Details</CardTitle>
+          <CardTitle>{uiText("ui.technician_details_dce96fa68f")}</CardTitle>
         </CardHeader>
         <CardContent>
           {techProfile ? (
             <form action={handleTechSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="specialties">Specialties</Label>
+                <Label htmlFor="specialties">{uiText("ui.specialties_89440c3f3b")}</Label>
                 <Input
                   id="specialties"
                   name="specialties"
                   defaultValue={techProfile.specialties?.join(", ") ?? ""}
-                  placeholder="Diagnostics, Imports, EVs"
+                  placeholder={uiText("ui.diagnostics_imports_evs_a06f14cf33")}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Separate specialties with commas.
-                </p>
+                <p className="text-xs text-muted-foreground">{uiText("ui.separate_specialties_with_commas_51d2c55590")}</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="supported_makes">Supported Makes</Label>
+                <Label htmlFor="supported_makes">{uiText("ui.supported_makes_7a111f8f89")}</Label>
                 <Input
                   id="supported_makes"
                   name="supported_makes"
                   defaultValue={techProfile.supported_makes.join(", ")}
-                  placeholder="Honda, Toyota, Ford"
+                  placeholder={uiText("ui.honda_toyota_ford_3bcd974a8c")}
                 />
-                <p className="text-xs text-muted-foreground">Separate makes with commas.</p>
+                <p className="text-xs text-muted-foreground">{uiText("ui.separate_makes_with_commas_b85374ddac")}</p>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -223,9 +224,7 @@ export default function TechProfilePage() {
                   className="rounded"
                   disabled={Boolean(organization)}
                 />
-                <Label htmlFor="is_independent">
-                  Independent technician
-                </Label>
+                <Label htmlFor="is_independent">{uiText("ui.independent_technician_b16d3da1e9")}</Label>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex items-center gap-2">
@@ -237,7 +236,7 @@ export default function TechProfilePage() {
                     defaultChecked={techProfile.offers_mobile_service}
                     className="rounded"
                   />
-                  <Label htmlFor="offers_mobile_service">Offers mobile service</Label>
+                  <Label htmlFor="offers_mobile_service">{uiText("ui.offers_mobile_service_7424a0763c")}</Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <input
@@ -248,20 +247,18 @@ export default function TechProfilePage() {
                     defaultChecked={techProfile.offers_shop_service}
                     className="rounded"
                   />
-                  <Label htmlFor="offers_shop_service">Offers shop service</Label>
+                  <Label htmlFor="offers_shop_service">{uiText("ui.offers_shop_service_6372e27a72")}</Label>
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="service_area">Service Area</Label>
+                <Label htmlFor="service_area">{uiText("ui.service_area_ba44ee1db7")}</Label>
                 <Input
                   id="service_area"
                   name="service_area"
                   defaultValue={techProfile.service_area ?? ""}
-                  placeholder="e.g. Dallas–Fort Worth, TX"
+                  placeholder={uiText("ui.e_g_dallas_fort_worth_tx_97c21d0114")}
                 />
-                <p className="text-xs text-muted-foreground">
-                  City, metro area, or region where you perform inspections.
-                </p>
+                <p className="text-xs text-muted-foreground">{uiText("ui.city_metro_area_or_region_where_you_perform__ff5e7b98fa")}</p>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -272,13 +269,10 @@ export default function TechProfilePage() {
                   defaultChecked={techProfile.is_available}
                   className="rounded"
                 />
-                <Label htmlFor="is_available">
-                  Available for new inspections
-                </Label>
+                <Label htmlFor="is_available">{uiText("ui.available_for_new_inspections_6266480d26")}</Label>
               </div>
               {organization && (
-                <p className="text-sm text-muted-foreground">
-                  Affiliated organization:{" "}
+                <p className="text-sm text-muted-foreground">{uiText("ui.affiliated_organization_0d27af52f5")}{" "}
                   <span className="font-medium text-foreground">
                     {organization.name}
                   </span>
@@ -288,20 +282,18 @@ export default function TechProfilePage() {
                 <p className="text-sm text-muted-foreground">{techMessage}</p>
               )}
               <Button type="submit" disabled={techSaving}>
-                {techSaving ? "Saving..." : "Save Technician Details"}
+                {techSaving ? uiText("ui.saving_dc85af8f2b") : uiText("ui.save_technician_details_1740360f40")}
               </Button>
             </form>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Technician profile not found for this account.
-            </p>
+            <p className="text-sm text-muted-foreground">{uiText("ui.technician_profile_not_found_for_this_accoun_7e2fb1bfde")}</p>
           )}
         </CardContent>
       </Card>
       {techProfile && (
         <Card>
           <CardHeader>
-            <CardTitle>Professional Credentials</CardTitle>
+            <CardTitle>{uiText("ui.professional_credentials_625039847b")}</CardTitle>
           </CardHeader>
           <CardContent>
             <TechnicianCredentialManager />
@@ -310,12 +302,10 @@ export default function TechProfilePage() {
       )}
       <Card>
         <CardHeader>
-          <CardTitle>Switch Back to Consumer</CardTitle>
+          <CardTitle>{uiText("ui.switch_back_to_consumer_6451a466a3")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Your technician profile and inspection history will be preserved. You can re-enable technician access from your account settings at any time.
-          </p>
+          <p className="text-sm text-muted-foreground">{uiText("ui.your_technician_profile_and_inspection_histo_956eb9319b")}</p>
           {switchMessage && (
             <p className="text-sm text-destructive">{switchMessage}</p>
           )}
@@ -324,12 +314,12 @@ export default function TechProfilePage() {
             disabled={switchSaving}
             onClick={handleSwitchToConsumer}
           >
-            {switchSaving ? "Switching..." : "Switch to Consumer"}
+            {switchSaving ? uiText("ui.switching_e367dfd91c") : uiText("ui.switch_to_consumer_54d771d0c9")}
           </Button>
         </CardContent>
       </Card>
       <Card>
-        <CardHeader><CardTitle>Privacy &amp; Safety</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{uiText("ui.privacy_safety_f096950eac")}</CardTitle></CardHeader>
         <CardContent><SafetyRelationships /></CardContent>
       </Card>
       <PrivacyCenter />

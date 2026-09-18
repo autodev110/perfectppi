@@ -1,19 +1,21 @@
 import { getMyWarranties } from "@/features/warranty/queries";
 import Link from "next/link";
 import { Shield, ChevronRight, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { t as uiText } from "@/lib/i18n";
+import { getRequestTranslator } from "@/lib/i18n/server";
 
 function statusLabel(orderStatus: string | undefined, optionStatus: string): string {
   if (!orderStatus) {
-    if (optionStatus === "offered" || optionStatus === "viewed") return "Plan Available";
-    return "Offered";
+    if (optionStatus === "offered" || optionStatus === "viewed") return uiText("ui.plan_available_1db8ea4550");
+    return uiText("ui.offered_95e7004b8d");
   }
   const map: Record<string, string> = {
-    contract_pending: "Pending Signature",
-    signed: "Signed — Awaiting Payment",
-    payment_pending: "Payment Pending",
-    paid: "Active Coverage",
-    failed: "Payment Failed",
-    cancelled: "Cancelled",
+    contract_pending: uiText("ui.pending_signature_ce7438d6dc"),
+    signed: uiText("ui.signed_awaiting_payment_a7d3a42f94"),
+    payment_pending: uiText("ui.payment_pending_ac3729c091"),
+    paid: uiText("ui.active_coverage_f028d9fa05"),
+    failed: uiText("ui.payment_failed_a287ab868d"),
+    cancelled: uiText("ui.cancelled_d353a99eb4"),
   };
   return map[orderStatus] ?? orderStatus;
 }
@@ -35,17 +37,14 @@ function StatusIcon({ status }: { status: string | undefined }) {
 }
 
 export default async function MyWarrantiesPage() {
+  const uiText = await getRequestTranslator();
   const warranties = await getMyWarranties();
 
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-3xl font-extrabold tracking-tight text-on-surface mb-1">
-          My Warranties
-        </h1>
-        <p className="text-on-surface-variant text-sm font-medium">
-          Vehicle Service Contracts and coverage status
-        </p>
+        <h1 className="text-3xl font-extrabold tracking-tight text-on-surface mb-1">{uiText("ui.my_warranties_cec28470c5")}</h1>
+        <p className="text-on-surface-variant text-sm font-medium">{uiText("ui.vehicle_service_contracts_and_coverage_statu_288c89e60c")}</p>
       </header>
 
       {warranties.length === 0 ? (
@@ -53,18 +52,12 @@ export default async function MyWarrantiesPage() {
           <div className="bg-primary-container/10 rounded-full p-4 mb-4">
             <Shield className="h-8 w-8 text-primary-container" />
           </div>
-          <h3 className="text-lg font-bold text-on-surface mb-2">
-            No warranties yet
-          </h3>
-          <p className="text-sm text-on-surface-variant max-w-xs mb-6">
-            Complete a vehicle inspection to unlock VSC coverage options for your vehicle.
-          </p>
+          <h3 className="text-lg font-bold text-on-surface mb-2">{uiText("ui.no_warranties_yet_0d14ea4f33")}</h3>
+          <p className="text-sm text-on-surface-variant max-w-xs mb-6">{uiText("ui.complete_a_vehicle_inspection_to_unlock_vsc__7299003f18")}</p>
           <Link
             href="/dashboard/ppi"
             className="px-5 py-2.5 bg-primary-container text-white rounded-xl text-sm font-bold"
-          >
-            View Inspections
-          </Link>
+          >{uiText("ui.view_inspections_234282a9ca")}</Link>
         </div>
       ) : (
         <div className="space-y-3">
@@ -73,7 +66,7 @@ export default async function MyWarrantiesPage() {
               ? [vehicle.year, vehicle.make, vehicle.model, vehicle.trim]
                   .filter(Boolean)
                   .join(" ")
-              : "Unknown Vehicle";
+              : uiText("ui.unknown_vehicle_615ff95383");
 
             return (
               <Link
@@ -93,8 +86,7 @@ export default async function MyWarrantiesPage() {
                   </div>
                   {order && (
                     <p className="text-xs text-on-surface-variant truncate">
-                      {order.plan_name} &middot; {order.term_years}yr
-                      {order.term_miles ? ` / ${order.term_miles.toLocaleString()}mi` : ""}
+                      {order.plan_name} &middot; {order.term_years}{uiText("ui.yr_5ee26e7e05")}{order.term_miles ? uiText("ui.mi_d92ee53fd6", { arg0: String(order.term_miles.toLocaleString()) }) : ""}
                     </p>
                   )}
                 </div>

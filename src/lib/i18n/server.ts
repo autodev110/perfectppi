@@ -1,10 +1,12 @@
 import "server-only";
 
 import { headers } from "next/headers";
-import { createTranslator, resolveLocale, type Locale, type Translator } from "./index.ts";
+import { createTranslator, DEFAULT_LOCALE, SUPPORTED_LOCALES, resolveLocale, type Locale, type Translator } from "./index.ts";
 
 /** The locale negotiated for this request (Accept-Language, default English). */
 export async function getRequestLocale(): Promise<Locale> {
+  // Keep public pages prerenderable until another language is actually shipped.
+  if ((SUPPORTED_LOCALES as readonly string[]).length === 1) return DEFAULT_LOCALE;
   try {
     const requestHeaders = await headers();
     return resolveLocale(requestHeaders.get("accept-language"));

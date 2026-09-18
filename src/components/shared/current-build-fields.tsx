@@ -9,6 +9,8 @@ import {
   type FactorySummary,
 } from "@/lib/vehicles/factory-spec";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 export type CurrentBuildValues = { engine: string; transmission: string; drivetrain: string; body_style: string };
 
 // The current-build fields with the factory value shown under each one
@@ -26,6 +28,7 @@ export function CurrentBuildFields({
   factory: FactorySummary | null;
   originals?: { engine: boolean; transmission: boolean; drivetrain: boolean };
 }) {
+  const uiText = useTranslator();
   const driveConflict = factory?.drivetrain && values.drivetrain
     && normalizeDrivetrain(factory.drivetrain) && normalizeDrivetrain(values.drivetrain)
     && normalizeDrivetrain(factory.drivetrain) !== normalizeDrivetrain(values.drivetrain)
@@ -36,10 +39,10 @@ export function CurrentBuildFields({
     && (originals?.transmission ?? true);
 
   const fields: Array<{ key: keyof CurrentBuildValues; label: string; placeholder: string; conflict?: boolean }> = [
-    { key: "engine", label: "Current engine/motor", placeholder: "2.0L turbo or swapped engine" },
-    { key: "drivetrain", label: "Current drivetrain", placeholder: "FWD, RWD, AWD, or 4WD", conflict: Boolean(driveConflict) },
-    { key: "transmission", label: "Current transmission", placeholder: "10-speed automatic", conflict: Boolean(transConflict) },
-    { key: "body_style", label: "Body style", placeholder: "Sedan" },
+    { key: "engine", label: uiText("ui.current_engine_motor_c513af8075"), placeholder: uiText("ui.2_0l_turbo_or_swapped_engine_ff96d7c8d4") },
+    { key: "drivetrain", label: uiText("ui.current_drivetrain_a23751a0e3"), placeholder: uiText("ui.fwd_rwd_awd_or_4wd_9071355366"), conflict: Boolean(driveConflict) },
+    { key: "transmission", label: uiText("ui.current_transmission_c985bc1b17"), placeholder: uiText("ui.10_speed_automatic_f88323c575"), conflict: Boolean(transConflict) },
+    { key: "body_style", label: uiText("ui.body_style_191c24bf12"), placeholder: uiText("ui.sedan_18c9b86509") },
   ];
 
   return (
@@ -61,16 +64,14 @@ export function CurrentBuildFields({
             />
             {factoryValue ? (
               <p id={`${field.key}-factory`} className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span>Factory (VIN): <span className="font-semibold text-foreground">{factoryValue}</span></span>
+                <span>{uiText("ui.factory_vin_4dded2e01e")}<span className="font-semibold text-foreground">{factoryValue}</span></span>
                 {values[field.key].trim() !== factoryValue ? (
-                  <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => onChange(field.key, factoryValue)}>Use factory value</Button>
+                  <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => onChange(field.key, factoryValue)}>{uiText("ui.use_factory_value_331bb3472f")}</Button>
                 ) : null}
               </p>
             ) : null}
             {field.conflict ? (
-              <p className="text-xs font-semibold text-destructive">
-                This contradicts the VIN&rsquo;s factory record. Use the factory value, or choose Modified / Custom build below and mark this part as not original.
-              </p>
+              <p className="text-xs font-semibold text-destructive">{uiText("ui.this_contradicts_the_vin_s_factory_record_us_374d7b093a")}</p>
             ) : null}
           </div>
         );

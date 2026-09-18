@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getInitials } from "@/lib/utils/formatting";
 import { MessageSquare, Star, TrendingUp } from "lucide-react";
 
+import { getRequestTranslator } from "@/lib/i18n/server";
+
 function vehicleLabel(vehicle: {
   year: number | null;
   make: string | null;
@@ -19,6 +21,7 @@ function vehicleLabel(vehicle: {
 }
 
 export default async function TechReviewsPage() {
+  const uiText = await getRequestTranslator();
   const { technicianProfile, reviews } = await getMyTechnicianReviews();
 
   if (!technicianProfile) redirect("/tech");
@@ -30,16 +33,14 @@ export default async function TechReviewsPage() {
   return (
     <div className="space-y-8 max-w-4xl">
       <header>
-        <h1 className="text-3xl font-black font-heading tracking-tight">Reviews</h1>
-        <p className="text-sm text-on-surface-variant mt-2">
-          Feedback left by inspection requesters after completed technician PPIs.
-        </p>
+        <h1 className="text-3xl font-black font-heading tracking-tight">{uiText("ui.reviews_84cb7871b7")}</h1>
+        <p className="text-sm text-on-surface-variant mt-2">{uiText("ui.feedback_left_by_inspection_requesters_after_441e9c8a6e")}</p>
       </header>
 
       <section className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-xs uppercase tracking-widest text-on-surface-variant">Average Rating</CardTitle>
+            <CardTitle className="text-xs uppercase tracking-widest text-on-surface-variant">{uiText("ui.average_rating_66195d7600")}</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center gap-2">
             <Star className="h-5 w-5 text-amber-500" />
@@ -50,7 +51,7 @@ export default async function TechReviewsPage() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-xs uppercase tracking-widest text-on-surface-variant">Total Reviews</CardTitle>
+            <CardTitle className="text-xs uppercase tracking-widest text-on-surface-variant">{uiText("ui.total_reviews_cd63123f4a")}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-black font-heading">{totalReviews}</p>
@@ -59,7 +60,7 @@ export default async function TechReviewsPage() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-xs uppercase tracking-widest text-on-surface-variant">Reputation Score</CardTitle>
+            <CardTitle className="text-xs uppercase tracking-widest text-on-surface-variant">{uiText("ui.reputation_score_d7a54a7e7d")}</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-teal" />
@@ -72,10 +73,8 @@ export default async function TechReviewsPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <MessageSquare className="h-10 w-10 text-on-surface-variant/30 mx-auto mb-3" />
-            <p className="font-bold text-on-surface">No reviews yet</p>
-            <p className="text-sm text-on-surface-variant mt-1">
-              Reviews will appear here once requesters complete inspections and leave feedback.
-            </p>
+            <p className="font-bold text-on-surface">{uiText("ui.no_reviews_yet_8b670b7eea")}</p>
+            <p className="text-sm text-on-surface-variant mt-1">{uiText("ui.reviews_will_appear_here_once_requesters_com_e441b626fe")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -92,15 +91,15 @@ export default async function TechReviewsPage() {
                       <Avatar className="h-9 w-9">
                         <AvatarImage src={reviewer?.avatar_url ?? ""} />
                         <AvatarFallback className="text-xs">
-                          {getInitials(reviewer?.display_name ?? reviewer?.username ?? "U")}
+                          {getInitials(reviewer?.display_name ?? reviewer?.username ?? uiText("ui.u_a25513c7e0"))}
                         </AvatarFallback>
                       </Avatar>
                       <div>
                         <p className="text-sm font-bold text-on-surface">
-                          {reviewer?.display_name ?? reviewer?.username ?? "PerfectPPI user"}
+                          {reviewer?.display_name ?? reviewer?.username ?? uiText("ui.perfectppi_user_77df1ce619")}
                         </p>
                         <p className="text-xs text-on-surface-variant">
-                          {new Date(review.created_at).toLocaleDateString("en-US", {
+                          {new Date(review.created_at).toLocaleDateString(uiText("ui.en_us_5c49f88daf"), {
                             month: "short",
                             day: "numeric",
                             year: "numeric",
@@ -123,12 +122,11 @@ export default async function TechReviewsPage() {
                   )}
 
                   {vehicle && (
-                    <div className="pt-2 border-t border-outline-variant/20 text-xs text-on-surface-variant">
-                      Inspection vehicle: {vehicleLabel(vehicle) || "Vehicle"}
+                    <div className="pt-2 border-t border-outline-variant/20 text-xs text-on-surface-variant">{uiText("ui.inspection_vehicle_9593e7d16d")}{vehicleLabel(vehicle) || uiText("ui.vehicle_a62394ba4a")}
                       {review.ppi_request?.id && (
                         <span>
                           {" "}
-                          · <Link href={`/tech/ppi`} className="underline-offset-2 hover:underline">View queue</Link>
+                          · <Link href={`/tech/ppi`} className="underline-offset-2 hover:underline">{uiText("ui.view_queue_e700ab00bf")}</Link>
                         </span>
                       )}
                     </div>

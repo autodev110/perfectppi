@@ -18,6 +18,8 @@ import {
 } from "@/components/shared/source-badge";
 import { formatDate } from "@/lib/utils/formatting";
 
+import { getRequestTranslator } from "@/lib/i18n/server";
+
 export const dynamic = "force-dynamic";
 
 // ============================================================================
@@ -33,6 +35,7 @@ export const dynamic = "force-dynamic";
 // ============================================================================
 
 export default async function IncomingDealerSpaceInspectionsPage() {
+  const uiText = await getRequestTranslator();
   await requireRole(["org_manager"]);
 
   const context = await getManagerContext();
@@ -50,11 +53,8 @@ export default async function IncomingDealerSpaceInspectionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-bold">DealerSpace</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Connect a dealership management system and track the vehicles it sends
-          for inspection.
-        </p>
+        <h1 className="font-heading text-2xl font-bold">{uiText("ui.dealerspace_7d7288383a")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{uiText("ui.connect_a_dealership_management_system_and_t_3fd4b22def")}</p>
       </div>
 
       <DealerSpaceConnectionPanel
@@ -65,21 +65,16 @@ export default async function IncomingDealerSpaceInspectionsPage() {
 
       {activeConnection && (
         <div>
-          <h2 className="font-heading text-lg font-bold">Incoming inspections</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Vehicles sent to your organization from the connected dealership.
-          </p>
+          <h2 className="font-heading text-lg font-bold">{uiText("ui.incoming_inspections_4614232169")}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{uiText("ui.vehicles_sent_to_your_organization_from_the__bbb34f6c8f")}</p>
         </div>
       )}
 
       {activeConnection && inspections.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
           <Inbox className="h-10 w-10 text-muted-foreground" />
-          <h3 className="mt-4 font-semibold">Nothing received yet</h3>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            When a DealerSpace technician clicks <strong>Send to Perfect PPI</strong>, the
-            vehicle appears here.
-          </p>
+          <h3 className="mt-4 font-semibold">{uiText("ui.nothing_received_yet_28053acc50")}</h3>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">{uiText("ui.when_a_dealerspace_technician_clicks_273da1adaa")}<strong>{uiText("ui.send_to_perfect_ppi_0d68606570")}</strong>{uiText("ui.the_vehicle_appears_here_b89b0c8280")}</p>
         </div>
       )}
 
@@ -89,7 +84,7 @@ export default async function IncomingDealerSpaceInspectionsPage() {
             const vehicleName =
               [row.vehicle.year, row.vehicle.make, row.vehicle.model, row.vehicle.trim]
                 .filter(Boolean)
-                .join(" ") || "Unknown Vehicle";
+                .join(" ") || uiText("ui.unknown_vehicle_615ff95383");
 
             return (
               <div key={row.refId} className="rounded-xl border bg-card p-4">
@@ -102,26 +97,22 @@ export default async function IncomingDealerSpaceInspectionsPage() {
 
                     <div className="mt-2 grid gap-x-6 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
                       {row.vehicle.vin && (
-                        <span>
-                          VIN <span className="font-mono">{row.vehicle.vin}</span>
+                        <span>{uiText("ui.vin_439a32c322")}<span className="font-mono">{row.vehicle.vin}</span>
                         </span>
                       )}
                       {row.vehicle.stockNumber && (
-                        <span>
-                          Stock <span className="font-mono">{row.vehicle.stockNumber}</span>
+                        <span>{uiText("ui.stock_238e0f57c9")}<span className="font-mono">{row.vehicle.stockNumber}</span>
                         </span>
                       )}
                       {row.vehicle.mileage !== null && (
-                        <span>{row.vehicle.mileage.toLocaleString()} mi</span>
+                        <span>{row.vehicle.mileage.toLocaleString()}{uiText("ui.mi_3074dbe604")}</span>
                       )}
-                      <span>Received {formatDate(row.receivedAt)}</span>
-                      <span>
-                        Technician{" "}
-                        {row.assignedTech?.displayName ?? "Unassigned"}
+                      <span>{uiText("ui.received_6977283ffa")}{formatDate(row.receivedAt)}</span>
+                      <span>{uiText("ui.technician_9041ccc417")}{" "}
+                        {row.assignedTech?.displayName ?? uiText("ui.unassigned_14d33bd014")}
                       </span>
                       {row.externalReconCaseId && (
-                        <span>
-                          Recon case{" "}
+                        <span>{uiText("ui.recon_case_c56ccf8ba9")}{" "}
                           <span className="font-mono">{row.externalReconCaseId}</span>
                         </span>
                       )}
@@ -137,9 +128,7 @@ export default async function IncomingDealerSpaceInspectionsPage() {
                   <Link
                     href={`/org/inspections/dealerspace/${row.refId}`}
                     className="flex shrink-0 items-center gap-1 rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-secondary"
-                  >
-                    Open
-                    <ChevronRight className="h-4 w-4" />
+                  >{uiText("ui.open_ed077f3d81")}<ChevronRight className="h-4 w-4" />
                   </Link>
                 </div>
               </div>

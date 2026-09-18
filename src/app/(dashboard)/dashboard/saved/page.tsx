@@ -15,12 +15,15 @@ import { formatDate, getInitials } from "@/lib/utils/formatting";
 import { Bookmark, Car, MessageSquare, Tag } from "lucide-react";
 import { decodeSavedCursor } from "@/features/saved/cursor";
 
+import { getRequestTranslator } from "@/lib/i18n/server";
+
 export const dynamic = "force-dynamic";
 
 // Private saved posts (plan Phase 1B / 7.4 "Saved Items"). Posts that were
 // hidden, removed, or moved out of the viewer's audience simply do not
 // appear; the save itself is kept so a restored post comes back.
 export default async function SavedPostsPage({ searchParams }: { searchParams: Promise<{ tab?: string; cursor?: string }> }) {
+  const uiText = await getRequestTranslator();
   const profile = await requireRole(["consumer", "technician", "org_manager", "admin"]);
   const params = await searchParams;
   const tab = params.tab === "listings" || params.tab === "collections" ? params.tab : "posts";
@@ -37,20 +40,18 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-heading text-2xl font-extrabold tracking-tight">Saved</h1>
-          <p className="text-sm text-muted-foreground">
-            Bookmarks and named collections. Only you can see them; authors, sellers, and vehicle owners are never told.
-          </p>
+          <h1 className="font-heading text-2xl font-extrabold tracking-tight">{uiText("ui.saved_b5c120b316")}</h1>
+          <p className="text-sm text-muted-foreground">{uiText("ui.bookmarks_and_named_collections_only_you_can_1770ec62f6")}</p>
         </div>
         <Button asChild variant="outline">
-          <Link href={tab === "listings" ? "/marketplace" : "/community"}>{tab === "listings" ? "Browse Marketplace" : "Back to Community"}</Link>
+          <Link href={tab === "listings" ? "/marketplace" : "/community"}>{tab === "listings" ? uiText("ui.browse_marketplace_d319099fe0") : uiText("ui.back_to_community_fc6e768cae")}</Link>
         </Button>
       </div>
 
-      <nav className="flex w-fit gap-1 rounded-2xl bg-surface-container-low p-1.5 ghost-border" aria-label="Saved items">
-        <Link href="/dashboard/saved" className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === "posts" ? "bg-surface-container-lowest shadow-sm" : "text-muted-foreground"}`}>Posts</Link>
-        <Link href="/dashboard/saved?tab=listings" className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === "listings" ? "bg-surface-container-lowest shadow-sm" : "text-muted-foreground"}`}>Listings</Link>
-        <Link href="/dashboard/saved?tab=collections" className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === "collections" ? "bg-surface-container-lowest shadow-sm" : "text-muted-foreground"}`}>Collections</Link>
+      <nav className="flex w-fit gap-1 rounded-2xl bg-surface-container-low p-1.5 ghost-border" aria-label={uiText("ui.saved_items_76f4856bed")}>
+        <Link href="/dashboard/saved" className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === "posts" ? "bg-surface-container-lowest shadow-sm" : "text-muted-foreground"}`}>{uiText("ui.posts_a80811cf68")}</Link>
+        <Link href="/dashboard/saved?tab=listings" className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === "listings" ? "bg-surface-container-lowest shadow-sm" : "text-muted-foreground"}`}>{uiText("ui.listings_5009238dba")}</Link>
+        <Link href="/dashboard/saved?tab=collections" className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === "collections" ? "bg-surface-container-lowest shadow-sm" : "text-muted-foreground"}`}>{uiText("ui.collections_9f9feade76")}</Link>
       </nav>
 
       {tab === "collections" ? (
@@ -60,10 +61,8 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
           <Card>
             <CardContent className="p-10 text-center">
               <Tag className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
-              <p className="font-heading font-bold">No saved listings</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Tap Save on a listing to follow it here. You are told when its price changes or it sells.
-              </p>
+              <p className="font-heading font-bold">{uiText("ui.no_saved_listings_ff1345a7ca")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{uiText("ui.tap_save_on_a_listing_to_follow_it_here_you__9be70cb28e")}</p>
             </CardContent>
           </Card>
         ) : (
@@ -79,10 +78,10 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
                         <Car className="h-5 w-5 text-muted-foreground" />
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-bold">{listing.title || name || "Listing"}</span>
+                        <span className="block truncate text-sm font-bold">{listing.title || name || uiText("ui.listing_fc7f1aa205")}</span>
                         <span className="block truncate text-xs text-muted-foreground">
                           {name}{name ? " · " : ""}{formatCurrency(listing.asking_price_cents)}
-                          {unavailable ? ` · ${listing.status === "sold" ? "Sold" : "No longer available"}` : ""}
+                          {unavailable ? uiText("ui.text_913ac5c53d", { arg0: String(listing.status === "sold" ? uiText("ui.sold_b870b1b487") : uiText("ui.no_longer_available_4bc7f76d36")) }) : ""}
                         </span>
                       </span>
                     </Link>
@@ -91,9 +90,9 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
                 </Card>
               );
             })}
-            <nav className="flex items-center justify-between pt-2" aria-label="Saved listings pagination">
-              {params.cursor ? <Button asChild variant="outline"><Link href="/dashboard/saved?tab=listings">Back to first results</Link></Button> : <span />}
-              {listingPage.nextCursor ? <Button asChild variant="outline"><Link href={`/dashboard/saved?tab=listings&cursor=${encodeURIComponent(listingPage.nextCursor)}`}>More listings</Link></Button> : <span />}
+            <nav className="flex items-center justify-between pt-2" aria-label={uiText("ui.saved_listings_pagination_7adfa86fb9")}>
+              {params.cursor ? <Button asChild variant="outline"><Link href="/dashboard/saved?tab=listings">{uiText("ui.back_to_first_results_58fbbfa217")}</Link></Button> : <span />}
+              {listingPage.nextCursor ? <Button asChild variant="outline"><Link href={`/dashboard/saved?tab=listings&cursor=${encodeURIComponent(listingPage.nextCursor)}`}>{uiText("ui.more_listings_ea1dc5ff04")}</Link></Button> : <span />}
             </nav>
           </div>
         )
@@ -101,10 +100,8 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
         <Card>
           <CardContent className="p-10 text-center">
             <Bookmark className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
-            <p className="font-heading font-bold">Nothing saved yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Tap Save on any Community post to keep it here. Posts that become unavailable drop out on their own.
-            </p>
+            <p className="font-heading font-bold">{uiText("ui.nothing_saved_yet_96e97dcf07")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{uiText("ui.tap_save_on_any_community_post_to_keep_it_he_8022729dec")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -120,12 +117,12 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
                     <Avatar className="h-9 w-9">
                       <AvatarImage src={post.author?.avatar_url ?? ""} />
                       <AvatarFallback className="text-xs">
-                        {getInitials(post.author?.display_name ?? post.author?.username ?? "U")}
+                        {getInitials(post.author?.display_name ?? post.author?.username ?? uiText("ui.u_a25513c7e0"))}
                       </AvatarFallback>
                     </Avatar>
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold">
-                        {post.author?.display_name ?? post.author?.username ?? "PerfectPPI user"}
+                        {post.author?.display_name ?? post.author?.username ?? uiText("ui.perfectppi_user_77df1ce619")}
                       </span>
                       <span className="block text-xs text-muted-foreground">{formatDate(post.created_at)}</span>
                     </span>
@@ -137,18 +134,16 @@ export default async function SavedPostsPage({ searchParams }: { searchParams: P
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <MessageSquare className="h-3.5 w-3.5" />
-                    {post.comments.length} comment{post.comments.length === 1 ? "" : "s"}
+                    {post.comments.length}{uiText("ui.comment_774c7dd540")}{post.comments.length === 1 ? "" : uiText("ui.s_043a718774")}
                   </span>
-                  <Link href={`/community#post-${post.id}`} className="font-semibold text-primary hover:underline">
-                    Open in Community
-                  </Link>
+                  <Link href={`/community#post-${post.id}`} className="font-semibold text-primary hover:underline">{uiText("ui.open_in_community_5b1fe0f025")}</Link>
                 </div>
               </CardContent>
             </Card>
           ))}
-          <nav className="flex items-center justify-between pt-2" aria-label="Saved pagination">
-            {params.cursor ? <Button asChild variant="outline"><Link href="/dashboard/saved">Back to first results</Link></Button> : <span />}
-            {postPage.nextCursor ? <Button asChild variant="outline"><Link href={`/dashboard/saved?cursor=${encodeURIComponent(postPage.nextCursor)}`}>More posts</Link></Button> : <span />}
+          <nav className="flex items-center justify-between pt-2" aria-label={uiText("ui.saved_pagination_adeb673e08")}>
+            {params.cursor ? <Button asChild variant="outline"><Link href="/dashboard/saved">{uiText("ui.back_to_first_results_58fbbfa217")}</Link></Button> : <span />}
+            {postPage.nextCursor ? <Button asChild variant="outline"><Link href={`/dashboard/saved?cursor=${encodeURIComponent(postPage.nextCursor)}`}>{uiText("ui.more_posts_6a4ac3287f")}</Link></Button> : <span />}
           </nav>
         </div>
       )}

@@ -51,6 +51,8 @@ import {
   FileSignature,
   CreditCard,
 } from "lucide-react";
+import { t as uiText } from "@/lib/i18n";
+import { getRequestTranslator } from "@/lib/i18n/server";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,43 +69,45 @@ type PageProps = {
 // ── Metadata ──────────────────────────────────────────────────────────────────
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const uiText = await getRequestTranslator();
   const { id } = await params;
   const vehicle = await getPublicVehicle(id);
   if (!vehicle) return {};
 
   const name = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ");
   // Year/make/model only (plan 23.3, 15.4): never VIN, plate, or location.
-  const description = `View available inspection records and details for this ${name} on PerfectPPI.`;
+  const description = uiText("ui.view_available_inspection_records_and_detail_b0b61d1846", { arg0: String(name) });
   return {
-    title: `${name} — PerfectPPI`,
+    title: uiText("ui.perfectppi_58cb425bbe", { arg0: String(name) }),
     description,
-    openGraph: { title: `${name} · PerfectPPI`, description, url: `/vehicle/${id}` },
+    openGraph: { title: uiText("ui.perfectppi_bcef5a6c45", { arg0: String(name) }), description, url: `/vehicle/${id}` },
   };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<string, string> = {
-  submitted: "Submitted",
-  completed: "Completed",
+  submitted: uiText("ui.submitted_64900440a8"),
+  completed: uiText("ui.completed_22a970d2e5"),
 };
 
 const WARRANTY_STATUS_LABEL: Record<string, string> = {
-  not_offered: "Not Offered",
-  offered: "Offered",
-  viewed: "Viewed",
-  selected: "Selected",
-  contract_pending: "Contract Pending",
-  signed: "Signed",
-  payment_pending: "Payment Pending",
-  paid: "Paid",
-  failed: "Payment Failed",
-  cancelled: "Cancelled",
+  not_offered: uiText("ui.not_offered_9f2d36b68d"),
+  offered: uiText("ui.offered_95e7004b8d"),
+  viewed: uiText("ui.viewed_1b28d17855"),
+  selected: uiText("ui.selected_57fd7a0cf3"),
+  contract_pending: uiText("ui.contract_pending_370fb9845e"),
+  signed: uiText("ui.signed_08251562b3"),
+  payment_pending: uiText("ui.payment_pending_ac3729c091"),
+  paid: uiText("ui.paid_fb81b961af"),
+  failed: uiText("ui.payment_failed_a287ab868d"),
+  cancelled: uiText("ui.cancelled_d353a99eb4"),
 };
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function PublicVehiclePage({ params, searchParams }: PageProps) {
+  const uiText = await getRequestTranslator();
   const { id } = await params;
   const {
     tab,
@@ -175,7 +179,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
           {listingInspection && (
             <div className="absolute top-4 left-4 flex items-center gap-2 rounded-xl border border-teal/20 bg-white/90 px-3 py-1.5 text-xs font-bold text-teal backdrop-blur-sm">
               <ClipboardCheck className="h-3.5 w-3.5" />
-              {listingInspection.scope === "dents_tires" ? "Dents & Tires" : "Complete"} · {formatDate(listingInspection.inspected_at)}
+              {listingInspection.scope === "dents_tires" ? uiText("ui.dents_tires_ea36eba96f") : uiText("ui.complete_143b270a32")} · {formatDate(listingInspection.inspected_at)}
             </div>
           )}
         </div>
@@ -184,7 +188,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
         <div className="px-7 py-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
           <div className="min-w-0">
             <h1 className="font-heading text-2xl font-extrabold tracking-tight text-on-surface mb-1 break-words">
-              {vehicle.nickname || vehicleName || "Unknown Vehicle"}
+              {vehicle.nickname || vehicleName || uiText("ui.unknown_vehicle_615ff95383")}
             </h1>
             {vehicle.nickname && <p className="text-sm text-on-surface-variant mb-1">{vehicleName}</p>}
             {vehicle.trim && (
@@ -193,26 +197,22 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
             {/* Spec pills */}
             <div className="flex flex-wrap gap-2 mt-2">
               {vehicle.ownership_state === "previously_owned" && (
-                <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant">
-                  Previously owned{vehicle.sold_at ? ` · ${formatDate(vehicle.sold_at)}` : ""}
+                <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant">{uiText("ui.previously_owned_c56be55e86")}{vehicle.sold_at ? uiText("ui.text_913ac5c53d", { arg0: String(formatDate(vehicle.sold_at)) }) : ""}
                 </span>
               )}
               {vehicle.visibility === "friends" && (
-                <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant">
-                  Friends only
-                </span>
+                <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant">{uiText("ui.friends_only_9f75521f3c")}</span>
               )}
               {vehicle.mileage != null && (
                 <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant">
                   <Gauge className="h-3 w-3" />
-                  {formatMileage(vehicle.mileage)} mi
-                </span>
+                  {formatMileage(vehicle.mileage)}{uiText("ui.mi_3074dbe604")}</span>
               )}
               <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-surface-container ghost-border text-on-surface-variant">
                 <Calendar className="h-3 w-3" />
                 {activeListing
-                  ? `Listed ${formatDate(activeListing.created_at)}`
-                  : `Profile created ${formatDate(vehicle.created_at)}`}
+                  ? uiText("ui.listed_fdb00456ea", { arg0: String(formatDate(activeListing.created_at)) })
+                  : uiText("ui.profile_created_175272670b", { arg0: String(formatDate(vehicle.created_at)) })}
               </span>
             </div>
           </div>
@@ -220,7 +220,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
           {/* Owner + share */}
           <div className="flex flex-shrink-0 flex-col items-end gap-2">
           {vehicle.visibility === "public" ? (
-            <ShareButton path={sharePath({ kind: "vehicle", id: vehicle.id })} title={`${vehicleName} · PerfectPPI`} />
+            <ShareButton path={sharePath({ kind: "vehicle", id: vehicle.id })} title={uiText("ui.perfectppi_bcef5a6c45", { arg0: String(vehicleName) })} />
           ) : null}
           {viewerId ? <SavedCollectionButton entityType="vehicle" entityId={vehicle.id} /> : null}
           {owner && owner.is_public && (
@@ -231,14 +231,14 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
               <Avatar className="h-9 w-9">
                 <AvatarImage src={owner.avatar_url ?? ""} />
                 <AvatarFallback className="text-xs">
-                  {getInitials(owner.display_name ?? "U")}
+                  {getInitials(owner.display_name ?? uiText("ui.u_a25513c7e0"))}
                 </AvatarFallback>
               </Avatar>
               <div>
                 <p className="text-xs font-bold text-on-surface">
-                  {owner.display_name ?? owner.username ?? "Owner"}
+                  {owner.display_name ?? owner.username ?? uiText("ui.owner_4b1b8aa360")}
                 </p>
-                <p className="text-[10px] text-on-surface-variant">View profile</p>
+                <p className="text-[10px] text-on-surface-variant">{uiText("ui.view_profile_d4788f256f")}</p>
               </div>
             </Link>
           )}
@@ -251,11 +251,11 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
           rather than letting it push the whole page sideways. */}
       <div className="flex max-w-full gap-1 overflow-x-auto p-1 bg-surface-container rounded-xl ghost-border mb-6 w-full sm:w-fit">
         {[
-          { key: "overview", label: "Overview" },
-          { key: "posts", label: `Posts${discussionPosts.length > 0 ? ` (${discussionPosts.length})` : ""}` },
-          { key: "build", label: `Build${timelines.build.length > 0 ? ` (${timelines.build.length})` : ""}` },
-          { key: "maintenance", label: `Maintenance${timelines.maintenance.length > 0 ? ` (${timelines.maintenance.length})` : ""}` },
-          { key: "inspections", label: `Inspections${ppiHistory.length > 0 ? ` (${ppiHistory.length})` : ""}` },
+          { key: "overview", label: uiText("ui.overview_d4b1ea5708") },
+          { key: "posts", label: uiText("ui.posts_f975c2f59c", { arg0: String(discussionPosts.length > 0 ? ` (${discussionPosts.length})` : "") }) },
+          { key: "build", label: uiText("ui.build_7d630a8ffd", { arg0: String(timelines.build.length > 0 ? ` (${timelines.build.length})` : "") }) },
+          { key: "maintenance", label: uiText("ui.maintenance_c27b4ef54b", { arg0: String(timelines.maintenance.length > 0 ? ` (${timelines.maintenance.length})` : "") }) },
+          { key: "inspections", label: uiText("ui.inspections_7dcdc3ec4f", { arg0: String(ppiHistory.length > 0 ? ` (${ppiHistory.length})` : "") }) },
         ].map(({ key, label }) => (
           <Link
             key={key}
@@ -276,23 +276,21 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
         <div className="space-y-5">
           {/* Vehicle specs */}
           <div className="bg-surface-container-lowest rounded-[1.25rem] p-6 ghost-border shadow-sm">
-            <h2 className="font-heading font-extrabold text-base mb-4 text-on-surface">
-              Vehicle Details
-            </h2>
+            <h2 className="font-heading font-extrabold text-base mb-4 text-on-surface">{uiText("ui.vehicle_details_5f09e0a945")}</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-5">
               {[
-                { label: "Year", value: vehicle.year?.toString() },
-                { label: "Make", value: vehicle.make },
-                { label: "Model", value: vehicle.model },
-                { label: "Trim", value: vehicle.trim },
+                { label: uiText("ui.year_89f6832560"), value: vehicle.year?.toString() },
+                { label: uiText("ui.make_ccdd25d423"), value: vehicle.make },
+                { label: uiText("ui.model_5e2c614c23"), value: vehicle.model },
+                { label: uiText("ui.trim_aaa5478b26"), value: vehicle.trim },
                 // Owner-confirmed configuration: a swapped engine or a 2WD
                 // conversion must not read as factory equipment.
-                { label: "Configuration", value: vehicle.configuration_type === "custom_build" ? "Custom build" : vehicle.configuration_type === "modified" ? "Modified" : null },
-                { label: "Engine", value: vehicle.engine ? `${vehicle.engine}${vehicle.engine_original === false ? " (swapped)" : ""}` : vehicle.engine_original === false ? "Swapped" : null },
-                { label: "Drivetrain", value: vehicle.drivetrain ? `${vehicle.drivetrain}${vehicle.drivetrain_original === false ? " (converted)" : ""}` : vehicle.drivetrain_original === false ? "Converted" : null },
-                { label: "Transmission", value: vehicle.transmission ? `${vehicle.transmission}${vehicle.transmission_original === false ? " (swapped)" : ""}` : vehicle.transmission_original === false ? "Swapped" : null },
-                { label: "Body style", value: vehicle.body_style },
-                { label: "Mileage", value: vehicle.mileage != null ? `${formatMileage(vehicle.mileage)} miles${vehicle.mileage_status === "not_actual" ? " (not actual)" : vehicle.mileage_status === "unknown" ? " (unverified)" : ""}` : null },
+                { label: uiText("ui.configuration_b332c3492d"), value: vehicle.configuration_type === "custom_build" ? "Custom build" : vehicle.configuration_type === "modified" ? "Modified" : null },
+                { label: uiText("ui.engine_8e75ebbdb2"), value: vehicle.engine ? `${vehicle.engine}${vehicle.engine_original === false ? " (swapped)" : ""}` : vehicle.engine_original === false ? "Swapped" : null },
+                { label: uiText("ui.drivetrain_203e886158"), value: vehicle.drivetrain ? `${vehicle.drivetrain}${vehicle.drivetrain_original === false ? " (converted)" : ""}` : vehicle.drivetrain_original === false ? "Converted" : null },
+                { label: uiText("ui.transmission_3e10134259"), value: vehicle.transmission ? `${vehicle.transmission}${vehicle.transmission_original === false ? " (swapped)" : ""}` : vehicle.transmission_original === false ? "Swapped" : null },
+                { label: uiText("ui.body_style_191c24bf12"), value: vehicle.body_style },
+                { label: uiText("ui.mileage_ffe44a0179"), value: vehicle.mileage != null ? `${formatMileage(vehicle.mileage)} miles${vehicle.mileage_status === "not_actual" ? " (not actual)" : vehicle.mileage_status === "unknown" ? " (unverified)" : ""}` : null },
               ].filter((f) => f.value).map(({ label, value }) => (
                 <div key={label}>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">
@@ -309,9 +307,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
           {/* Factory spec vs current build (Renditions doc) */}
           {vehicle.factory_spec || vehicle.engine_original === false || vehicle.transmission_original === false || vehicle.drivetrain_original === false ? (
             <div className="bg-surface-container-lowest rounded-[1.25rem] p-6 ghost-border shadow-sm">
-              <h2 className="font-heading font-extrabold text-base mb-4 text-on-surface">
-                Factory spec vs. current build
-              </h2>
+              <h2 className="font-heading font-extrabold text-base mb-4 text-on-surface">{uiText("ui.factory_spec_vs_current_build_b0fd096fdc")}</h2>
               <FactorySpecComparison
                 spec={vehicle.factory_spec}
                 current={{
@@ -326,15 +322,11 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
 
           {/* Inspection summary */}
           <div className="bg-surface-container-lowest rounded-[1.25rem] p-6 ghost-border shadow-sm">
-            <h2 className="font-heading font-extrabold text-base mb-4 text-on-surface">
-              Inspection Summary
-            </h2>
+            <h2 className="font-heading font-extrabold text-base mb-4 text-on-surface">{uiText("ui.inspection_summary_23ed878855")}</h2>
             {ppiHistory.length === 0 ? (
               <div className="flex items-center gap-3 text-on-surface-variant">
                 <ClipboardCheck className="h-5 w-5 opacity-40" />
-                <p className="text-sm">
-                  No submitted PPI reports are attached to this vehicle yet.
-                </p>
+                <p className="text-sm">{uiText("ui.no_submitted_ppi_reports_are_attached_to_thi_d12bb8cab2")}</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -344,25 +336,21 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                   </div>
                   <div>
                     <p className="text-sm font-bold text-on-surface">
-                      {ppiHistory.length} inspection{ppiHistory.length !== 1 ? "s" : ""} on record
-                    </p>
-                    <p className="text-xs text-on-surface-variant">
-                      Most recent: {formatDate(latestPpi!.created_at)}
+                      {ppiHistory.length}{uiText("ui.inspection_6ddb257e8e")}{ppiHistory.length !== 1 ? uiText("ui.s_043a718774") : ""}{uiText("ui.on_record_58f3bc38ea")}</p>
+                    <p className="text-xs text-on-surface-variant">{uiText("ui.most_recent_79460bb63f")}{formatDate(latestPpi!.created_at)}
                     </p>
                   </div>
                   {latestPpi && (
                     <span className="ml-auto flex items-center gap-1.5 rounded-xl border border-teal/20 bg-teal/10 px-3 py-1.5 text-xs font-bold text-teal">
                       <ClipboardCheck className="h-3 w-3" />
-                      {latestPpi.inspection_scope === "dents_tires" ? "Dents & Tires" : "Complete"}
+                      {latestPpi.inspection_scope === "dents_tires" ? uiText("ui.dents_tires_ea36eba96f") : uiText("ui.complete_143b270a32")}
                     </span>
                   )}
                 </div>
                 <Link
                   href={`/vehicle/${id}?tab=inspections`}
                   className="flex items-center gap-2 text-xs font-bold text-on-tertiary-container hover:gap-3 transition-all mt-2"
-                >
-                  View full inspection history
-                  <ArrowRight className="h-3.5 w-3.5" />
+                >{uiText("ui.view_full_inspection_history_dd10215e58")}<ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
             )}
@@ -372,28 +360,19 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
           <div className="bg-primary-container rounded-[1.25rem] p-6 text-white relative overflow-hidden">
             <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
             <div className="relative z-10">
-              <h2 className="font-heading font-extrabold text-base mb-1">
-                Request an Inspection
-              </h2>
-              <p className="text-sm text-primary-fixed-dim mb-5">
-                Request a PPI from an available technician and review any
-                displayed credential status before assigning the work.
-              </p>
+              <h2 className="font-heading font-extrabold text-base mb-1">{uiText("ui.request_an_inspection_96d2bce826")}</h2>
+              <p className="text-sm text-primary-fixed-dim mb-5">{uiText("ui.request_a_ppi_from_an_available_technician_a_3e8e9f2443")}</p>
               <div className="flex flex-wrap gap-3">
                 <Link
                   href="/signup"
                   className="flex items-center gap-2 bg-white text-primary px-5 py-2.5 rounded-xl text-sm font-bold shadow hover:scale-105 transition-all"
                 >
-                  <Wrench className="h-4 w-4" />
-                  Request Technician PPI
-                </Link>
+                  <Wrench className="h-4 w-4" />{uiText("ui.request_technician_ppi_244efef457")}</Link>
                 <Link
                   href="/technicians"
                   className="flex items-center gap-2 bg-white/10 text-white px-5 py-2.5 rounded-xl text-sm font-bold ghost-border hover:bg-white/20 transition-all"
                 >
-                  <User className="h-4 w-4" />
-                  Browse Technicians
-                </Link>
+                  <User className="h-4 w-4" />{uiText("ui.browse_technicians_b612da0c71")}</Link>
               </div>
             </div>
           </div>
@@ -409,7 +388,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                 <div className="flex items-center gap-2 mb-3">
                   <Tag className="h-4 w-4 text-on-tertiary-container" />
                   <Badge className="bg-teal/10 text-teal hover:bg-teal/10">
-                    {activeListing.status === "pending" ? "Sale pending" : "Active Listing"}
+                    {activeListing.status === "pending" ? uiText("ui.sale_pending_22fc610c46") : uiText("ui.active_listing_f78079dc05")}
                   </Badge>
                 </div>
                 <h2 className="font-heading text-2xl font-extrabold tracking-tight text-on-surface mb-2 break-words">
@@ -420,32 +399,25 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                     {activeListing.description}
                   </p>
                 ) : (
-                  <p className="text-sm text-on-surface-variant">
-                    No seller description has been added yet.
-                  </p>
+                  <p className="text-sm text-on-surface-variant">{uiText("ui.no_seller_description_has_been_added_yet_a2a948e18a")}</p>
                 )}
                 {activeListing.inspection_summary && (
                   <div className="mt-5 rounded-2xl bg-teal/10 p-4 text-sm text-on-surface ghost-border">
                     <div className="flex items-center gap-2 font-bold">
                       <ClipboardCheck className="h-4 w-4 text-teal" />
                       {activeListing.inspection_summary.scope === "dents_tires"
-                        ? "Dents & Tires inspection"
-                        : "Complete inspection"}
+                        ? uiText("ui.dents_tires_inspection_e9b5f53170")
+                        : uiText("ui.complete_inspection_e53fe9cd46")}
                     </div>
-                    <p className="mt-1 text-xs text-on-surface-variant">
-                      Inspected {formatDate(activeListing.inspection_summary.inspected_at)} by {activeListing.inspection_summary.performed_by}.
+                    <p className="mt-1 text-xs text-on-surface-variant">{uiText("ui.inspected_8827e62e78")}{formatDate(activeListing.inspection_summary.inspected_at)}{uiText("ui.by_52e86deffb")}{activeListing.inspection_summary.performed_by}.
                     </p>
-                    <p className="mt-2 text-[11px] text-on-surface-variant">
-                      This inspection reflects the vehicle at that time and is not a guarantee of its current condition. Private notes, media, VIN, and the full report are not publicly shared.
-                    </p>
+                    <p className="mt-2 text-[11px] text-on-surface-variant">{uiText("ui.this_inspection_reflects_the_vehicle_at_that_e3e19173a4")}</p>
                   </div>
                 )}
               </div>
 
               <div className="min-w-0 rounded-2xl bg-surface-container p-5 ghost-border">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">
-                  Asking Price
-                </p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">{uiText("ui.asking_price_eeb164d8de")}</p>
                 <p className="font-heading text-3xl font-black tracking-tight text-primary mb-4">
                   {formatCurrency(activeListing.asking_price_cents)}
                 </p>
@@ -458,8 +430,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                     </div>
                   )}
                   <div className="flex items-center gap-2 text-on-surface-variant">
-                    <Calendar className="h-4 w-4" />
-                    Listed {formatDate(activeListing.created_at)}
+                    <Calendar className="h-4 w-4" />{uiText("ui.listed_5aadd10d19")}{formatDate(activeListing.created_at)}
                   </div>
                 </div>
 
@@ -467,7 +438,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                   href={`/marketplace/listings/${activeListing.id}`}
                   className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-primary px-5 py-3 text-sm font-bold text-primary hover:bg-primary/5 transition-colors"
                 >
-                  {activeListing.viewer_is_seller ? "Manage Listing" : "View full listing"}
+                  {activeListing.viewer_is_seller ? uiText("ui.manage_listing_f013a973e5") : uiText("ui.view_full_listing_a9319f6f1d")}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 {activeListing.viewer_is_seller ? null : (
@@ -477,9 +448,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                     <button
                       type="submit"
                       className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90 transition-opacity"
-                    >
-                      Message Seller
-                      <ArrowRight className="h-4 w-4" />
+                    >{uiText("ui.message_seller_21fc80c704")}<ArrowRight className="h-4 w-4" />
                     </button>
                   </form>
                 )}
@@ -489,8 +458,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                   </div>
                 ) : null}
                 {!activeListing.viewer_is_seller && activeListing.inspection_request ? (
-                  <div className="mt-3 rounded-xl bg-teal/10 px-4 py-3 text-center text-xs font-bold text-teal ghost-border">
-                    Inspection requested · {activeListing.inspection_request.status.replaceAll("_", " ")}
+                  <div className="mt-3 rounded-xl bg-teal/10 px-4 py-3 text-center text-xs font-bold text-teal ghost-border">{uiText("ui.inspection_requested_f051fb089f")}{activeListing.inspection_request.status.replaceAll("_", " ")}
                   </div>
                 ) : !activeListing.viewer_is_seller ? (
                   <form action={requestMarketplaceInspectionFromListing}>
@@ -501,20 +469,14 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                       type="submit"
                       className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-primary px-5 py-3 text-sm font-bold text-primary hover:bg-primary/5 transition-colors"
                     >
-                      <ClipboardCheck className="h-4 w-4" />
-                      Request Inspection
-                    </button>
+                      <ClipboardCheck className="h-4 w-4" />{uiText("ui.request_inspection_7ad098f214")}</button>
                   </form>
                 ) : null}
                 {!activeListing.viewer_is_seller && (
-                  <p className="mt-2 text-[11px] text-on-surface-variant">
-                    Opens your existing thread with this seller, or starts a new one.
-                  </p>
+                  <p className="mt-2 text-[11px] text-on-surface-variant">{uiText("ui.opens_your_existing_thread_with_this_seller__d8fd599ae7")}</p>
                 )}
                 {inspectionRequested && (
-                  <p className="mt-2 text-xs font-semibold text-teal">
-                    Your inspection request was sent.
-                  </p>
+                  <p className="mt-2 text-xs font-semibold text-teal">{uiText("ui.your_inspection_request_was_sent_d32b1335db")}</p>
                 )}
                 {inspectionError && (
                   <p className="mt-2 text-xs font-semibold text-destructive break-words">
@@ -531,12 +493,8 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
           ) : (
             <div className="text-center py-10">
               <Tag className="h-10 w-10 text-on-surface-variant/30 mx-auto mb-3" />
-              <p className="font-heading font-bold text-on-surface mb-1">
-                This vehicle is not listed for sale
-              </p>
-              <p className="text-sm text-on-surface-variant max-w-md mx-auto">
-                If the owner publishes a marketplace listing, the buyer-facing price and seller notes will appear here.
-              </p>
+              <p className="font-heading font-bold text-on-surface mb-1">{uiText("ui.this_vehicle_is_not_listed_for_sale_8d488e4544")}</p>
+              <p className="text-sm text-on-surface-variant max-w-md mx-auto">{uiText("ui.if_the_owner_publishes_a_marketplace_listing_b590401d24")}</p>
             </div>
           )}
         </div>
@@ -550,32 +508,25 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
               <div className="bg-surface-container-lowest rounded-[1.25rem] p-6 ghost-border shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
                   <Shield className="h-4 w-4 text-on-tertiary-container" />
-                  <p className="font-heading font-extrabold text-on-surface">
-                    Vehicle Service Contract Status
-                  </p>
+                  <p className="font-heading font-extrabold text-on-surface">{uiText("ui.vehicle_service_contract_status_9150d15b72")}</p>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="rounded-xl bg-surface-container p-4 ghost-border">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">
-                      Offer
-                    </p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">{uiText("ui.offer_0cf57c63eb")}</p>
                     <p className="text-sm font-bold text-on-surface">
                       {WARRANTY_STATUS_LABEL[warrantySnapshot.option.status] ?? warrantySnapshot.option.status}
                     </p>
                     {warrantySnapshot.option.offered_at && (
-                      <p className="text-[11px] text-on-surface-variant mt-1">
-                        Offered {formatDate(warrantySnapshot.option.offered_at)}
+                      <p className="text-[11px] text-on-surface-variant mt-1">{uiText("ui.offered_4b2c2b42e7")}{formatDate(warrantySnapshot.option.offered_at)}
                       </p>
                     )}
                   </div>
 
                   <div className="rounded-xl bg-surface-container p-4 ghost-border">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">
-                      Selected Plan
-                    </p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">{uiText("ui.selected_plan_1b2c766b4a")}</p>
                     <p className="text-sm font-bold text-on-surface">
-                      {warrantySnapshot.order?.plan_name ?? "Not selected"}
+                      {warrantySnapshot.order?.plan_name ?? uiText("ui.not_selected_df12aeba9b")}
                     </p>
                     {warrantySnapshot.order && (
                       <p className="text-[11px] text-on-surface-variant mt-1">
@@ -585,23 +536,20 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                   </div>
 
                   <div className="rounded-xl bg-surface-container p-4 ghost-border">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">
-                      Payment
-                    </p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">{uiText("ui.payment_7048f38b33")}</p>
                     <p className="text-sm font-bold text-on-surface">
                       {warrantySnapshot.payment
                         ? warrantySnapshot.payment.status === "completed"
-                          ? "Paid"
+                          ? uiText("ui.paid_fb81b961af")
                           : warrantySnapshot.payment.status === "failed"
-                            ? "Failed"
+                            ? uiText("ui.failed_031a8f0f65")
                             : warrantySnapshot.payment.status === "refunded"
-                              ? "Refunded"
-                              : "Pending"
-                        : "Not paid"}
+                              ? uiText("ui.refunded_117f6a7cf0")
+                              : uiText("ui.pending_331551b0de")
+                        : uiText("ui.not_paid_1e6a78758a")}
                     </p>
                     {warrantySnapshot.payment?.paid_at && (
-                      <p className="text-[11px] text-on-surface-variant mt-1">
-                        Paid {formatDate(warrantySnapshot.payment.paid_at)}
+                      <p className="text-[11px] text-on-surface-variant mt-1">{uiText("ui.paid_70f97cde6c")}{formatDate(warrantySnapshot.payment.paid_at)}
                       </p>
                     )}
                   </div>
@@ -609,32 +557,30 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
               </div>
 
               <div className="bg-surface-container-lowest rounded-[1.25rem] p-6 ghost-border shadow-sm">
-                <h3 className="font-heading font-extrabold text-sm text-on-surface mb-3">
-                  Flow Progress
-                </h3>
+                <h3 className="font-heading font-extrabold text-sm text-on-surface mb-3">{uiText("ui.flow_progress_466084dce3")}</h3>
                 <div className="space-y-2.5">
                   {[
                     {
                       icon: Shield,
-                      label: "Offer Created",
+                      label: uiText("ui.offer_created_bf9f0a9b0a"),
                       value: !!warrantySnapshot.option,
                       meta: warrantySnapshot.option.created_at,
                     },
                     {
                       icon: Tag,
-                      label: "Plan Selected",
+                      label: uiText("ui.plan_selected_b91e36f277"),
                       value: !!warrantySnapshot.order,
                       meta: warrantySnapshot.order?.selected_at ?? null,
                     },
                     {
                       icon: FileSignature,
-                      label: "Contract Signed",
+                      label: uiText("ui.contract_signed_773a167fa5"),
                       value: !!warrantySnapshot.contract?.signed_at,
                       meta: warrantySnapshot.contract?.signed_at ?? null,
                     },
                     {
                       icon: CreditCard,
-                      label: "Payment Completed",
+                      label: uiText("ui.payment_completed_c501feea91"),
                       value: warrantySnapshot.payment?.status === "completed",
                       meta: warrantySnapshot.payment?.paid_at ?? null,
                     },
@@ -650,7 +596,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                       <div className="flex-1">
                         <p className="text-xs font-bold text-on-surface">{step.label}</p>
                         <p className="text-[11px] text-on-surface-variant">
-                          {step.meta ? formatDate(step.meta) : "Not reached yet"}
+                          {step.meta ? formatDate(step.meta) : uiText("ui.not_reached_yet_07b0eec3c9")}
                         </p>
                       </div>
                     </div>
@@ -661,12 +607,8 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
           ) : (
             <div className="bg-surface-container-lowest rounded-[1.25rem] p-10 ghost-border text-center">
               <Shield className="h-10 w-10 text-on-surface-variant/30 mx-auto mb-3" />
-              <p className="font-heading font-bold text-on-surface mb-1">
-                No vehicle service contract data yet
-              </p>
-              <p className="text-sm text-on-surface-variant max-w-md mx-auto">
-                Warranty status appears once a completed inspection produces coverage options and a contract flow begins.
-              </p>
+              <p className="font-heading font-bold text-on-surface mb-1">{uiText("ui.no_vehicle_service_contract_data_yet_d34dc6f41a")}</p>
+              <p className="text-sm text-on-surface-variant max-w-md mx-auto">{uiText("ui.warranty_status_appears_once_a_completed_ins_b2ee5928ad")}</p>
             </div>
           )}
         </div>
@@ -678,12 +620,10 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
           {discussionPosts.length === 0 ? (
             <div className="bg-surface-container-lowest rounded-[1.25rem] p-10 ghost-border text-center">
               <MessageSquare className="h-10 w-10 text-on-surface-variant/30 mx-auto mb-3" />
-              <p className="font-heading font-bold text-on-surface mb-1">No vehicle discussions yet</p>
-              <p className="text-sm text-on-surface-variant max-w-md mx-auto mb-5">
-                Community posts that reference this vehicle will appear here.
-              </p>
+              <p className="font-heading font-bold text-on-surface mb-1">{uiText("ui.no_vehicle_discussions_yet_420eb2bae8")}</p>
+              <p className="text-sm text-on-surface-variant max-w-md mx-auto mb-5">{uiText("ui.community_posts_that_reference_this_vehicle__3ca2d22ff4")}</p>
               <Button asChild>
-                <Link href="/dashboard/posts/new">Create Post</Link>
+                <Link href="/dashboard/posts/new">{uiText("ui.create_post_80c6491121")}</Link>
               </Button>
             </div>
           ) : (
@@ -697,32 +637,30 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={post.author?.avatar_url ?? ""} />
                       <AvatarFallback className="text-xs">
-                        {getInitials(post.author?.display_name ?? post.author?.username ?? "U")}
+                        {getInitials(post.author?.display_name ?? post.author?.username ?? uiText("ui.u_a25513c7e0"))}
                       </AvatarFallback>
                     </Avatar>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-xs font-bold text-on-surface">
-                          {post.author?.display_name ?? post.author?.username ?? "PerfectPPI user"}
+                          {post.author?.display_name ?? post.author?.username ?? uiText("ui.perfectppi_user_77df1ce619")}
                         </p>
                         {post.post_type === "question" ? (
                           <Badge className="bg-teal/10 text-teal hover:bg-teal/10">
-                            {post.accepted_answer_comment_id ? "Solved" : "Question"}
+                            {post.accepted_answer_comment_id ? uiText("ui.solved_eb858c458b") : uiText("ui.question_289aff12b0")}
                           </Badge>
                         ) : null}
                       </div>
                       <p className="text-[10px] text-on-surface-variant">
                         {formatDate(post.created_at)}
-                        {post.edited_at ? <span title={`Edited ${formatDate(post.edited_at)}`}> · Edited</span> : null}
+                        {post.edited_at ? <span title={uiText("ui.edited_b37cf770a2", { arg0: String(formatDate(post.edited_at)) })}>{uiText("ui.edited_e9d550c507")}</span> : null}
                       </p>
                     </div>
                   </div>
                   <Link
                     href="/community"
                     className="text-[11px] font-bold text-on-tertiary-container hover:underline"
-                  >
-                    Open feed
-                  </Link>
+                  >{uiText("ui.open_feed_6b535fbe14")}</Link>
                 </div>
 
                 <p className="text-sm text-on-surface-variant whitespace-pre-wrap mb-5">
@@ -755,12 +693,10 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                   <div className="space-y-2.5 mb-4">
                     {post.comments.map((comment) => {
                       const isReply = Boolean(comment.parent_comment_id);
-                      const authorName = comment.author?.display_name ?? comment.author?.username ?? "PerfectPPI user";
+                      const authorName = comment.author?.display_name ?? comment.author?.username ?? uiText("ui.perfectppi_user_77df1ce619");
                       if (comment.removed) {
                         return (
-                          <div key={comment.id} className="rounded-xl bg-surface-container p-3 text-xs italic text-on-surface-variant ghost-border">
-                            Comment removed
-                          </div>
+                          <div key={comment.id} className="rounded-xl bg-surface-container p-3 text-xs italic text-on-surface-variant ghost-border">{uiText("ui.comment_removed_f80ae1c83e")}</div>
                         );
                       }
                       const text = (
@@ -777,7 +713,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                           <p className="text-[11px] font-bold text-on-surface">{authorName}</p>
                           <p className="text-[10px] text-on-surface-variant">
                             {formatDate(comment.created_at)}
-                            {comment.edited_at ? <span title={`Edited ${formatDate(comment.edited_at)}`}> · Edited</span> : null}
+                            {comment.edited_at ? <span title={uiText("ui.edited_b37cf770a2", { arg0: String(formatDate(comment.edited_at)) })}>{uiText("ui.edited_e9d550c507")}</span> : null}
                           </p>
                         </div>
                         {post.post_type === "question" && !isReply ? (
@@ -817,11 +753,9 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                     name="content"
                     rows={3}
                     maxLength={600}
-                    placeholder="Add a comment..."
+                    placeholder={uiText("ui.add_a_comment_23c5f33170")}
                   />
-                  <Button type="submit" size="sm">
-                    Comment
-                  </Button>
+                  <Button type="submit" size="sm">{uiText("ui.comment_44f5e3fbec")}</Button>
                 </form>
               </article>
             ))
@@ -834,7 +768,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
         <div className="space-y-4">
           {viewerId && !vehicle.viewer_is_owner ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] bg-surface-container-lowest p-4 ghost-border">
-              <div><p className="text-sm font-bold">Build updates</p><p className="text-xs text-on-surface-variant">Private subscription. It is never shown as a follower count.</p></div>
+              <div><p className="text-sm font-bold">{uiText("ui.build_updates_50d14a2209")}</p><p className="text-xs text-on-surface-variant">{uiText("ui.private_subscription_it_is_never_shown_as_a__c2b2c9361a")}</p></div>
               <BuildSubscriptionButton vehicleId={vehicle.id} initialSubscribed={buildSubscribed} />
             </div>
           ) : null}
@@ -853,10 +787,8 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
           {ppiHistory.length === 0 ? (
             <div className="bg-surface-container-lowest rounded-[1.25rem] p-10 ghost-border text-center">
               <ClipboardCheck className="h-10 w-10 text-on-surface-variant/30 mx-auto mb-3" />
-              <p className="font-heading font-bold text-on-surface mb-1">No inspections yet</p>
-              <p className="text-sm text-on-surface-variant">
-                Submitted PPI reports will appear here after an inspection is completed.
-              </p>
+              <p className="font-heading font-bold text-on-surface mb-1">{uiText("ui.no_inspections_yet_fd46a43da4")}</p>
+              <p className="text-sm text-on-surface-variant">{uiText("ui.submitted_ppi_reports_will_appear_here_after_50b38d9e22")}</p>
             </div>
           ) : (
             ppiHistory.map((ppi, i) => {
@@ -880,7 +812,7 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                     <div className="flex items-center gap-2 flex-wrap mb-2">
                       <span className="flex items-center gap-1.5 rounded-lg border border-teal/20 bg-teal/10 px-2.5 py-1 text-[11px] font-bold text-teal">
                         <ClipboardCheck className="h-3 w-3" />
-                        {ppi.inspection_scope === "dents_tires" ? "Dents & Tires" : "Complete inspection"}
+                        {ppi.inspection_scope === "dents_tires" ? uiText("ui.dents_tires_ea36eba96f") : uiText("ui.complete_inspection_e53fe9cd46")}
                       </span>
                       <Badge variant="outline" className="text-[11px]">
                         {STATUS_LABEL[ppi.status] ?? ppi.status}
@@ -898,14 +830,14 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={tech.avatar_url ?? ""} />
                           <AvatarFallback className="text-xs">
-                            {getInitials(tech.display_name ?? "T")}
+                            {getInitials(tech.display_name ?? uiText("ui.t_e632b7095b"))}
                           </AvatarFallback>
                         </Avatar>
                         <div>
                           <p className="text-xs font-bold text-on-surface">
-                            {tech.display_name ?? "Technician"}
+                            {tech.display_name ?? uiText("ui.technician_9041ccc417")}
                           </p>
-                          <p className="text-[10px] text-on-surface-variant">Inspector</p>
+                          <p className="text-[10px] text-on-surface-variant">{uiText("ui.inspector_da188e3b1c")}</p>
                         </div>
                       </>
                     ) : requester?.is_public ? (
@@ -913,14 +845,14 @@ export default async function PublicVehiclePage({ params, searchParams }: PagePr
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={requester.avatar_url ?? ""} />
                           <AvatarFallback className="text-xs">
-                            {getInitials(requester.display_name ?? "U")}
+                            {getInitials(requester.display_name ?? uiText("ui.u_a25513c7e0"))}
                           </AvatarFallback>
                         </Avatar>
                         <div>
                           <p className="text-xs font-bold text-on-surface">
-                            {requester.display_name ?? "Owner"}
+                            {requester.display_name ?? uiText("ui.owner_4b1b8aa360")}
                           </p>
-                          <p className="text-[10px] text-on-surface-variant">Self-inspection</p>
+                          <p className="text-[10px] text-on-surface-variant">{uiText("ui.self_inspection_44834b4fae")}</p>
                         </div>
                       </>
                     ) : null}
@@ -942,7 +874,7 @@ type PublicTimelines = Awaited<ReturnType<typeof getPublicVehicleTimelines>>;
 // before/after specs and approved photos are public, costs never are.
 function PublicBuildTimeline({ entries, stages, canSave }: { entries: PublicTimelines["build"]; stages: PublicTimelines["stages"]; canSave: boolean }) {
   if (entries.length === 0 && stages.length === 0) {
-    return <TimelineEmpty icon={<Wrench className="h-10 w-10" />} title="No shared build entries" message="The owner has not shared any modifications for this vehicle." />;
+    return <TimelineEmpty icon={<Wrench className="h-10 w-10" />} title={uiText("ui.no_shared_build_entries_2f7dd995d0")} message={uiText("ui.the_owner_has_not_shared_any_modifications_f_981fca4a3a")} />;
   }
   const groups = groupBuildByStage(stages, entries);
   const progress = buildProgress(stages, entries);
@@ -951,8 +883,8 @@ function PublicBuildTimeline({ entries, stages, canSave }: { entries: PublicTime
       {stages.length > 0 ? (
         <div className="rounded-[1.25rem] bg-surface-container-lowest p-5 shadow-sm ghost-border">
           <div className="flex items-center justify-between gap-3 text-sm">
-            <p className="font-bold">Build progression</p>
-            <p className="text-on-surface-variant">{progress.done} of {progress.total} stages complete</p>
+            <p className="font-bold">{uiText("ui.build_progression_1925373c77")}</p>
+            <p className="text-on-surface-variant">{progress.done}{uiText("ui.of_a4282e4b22")}{progress.total}{uiText("ui.stages_complete_a54cd3e3de")}</p>
           </div>
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface-container" aria-hidden="true">
             <div className="h-full rounded-full bg-primary" style={{ width: `${progress.percent}%` }} />
@@ -967,12 +899,12 @@ function PublicBuildTimeline({ entries, stages, canSave }: { entries: PublicTime
                 <h2 className="font-heading text-lg font-extrabold text-on-surface">{group.stage.title}</h2>
                 {group.stage.description ? <p className="text-sm text-on-surface-variant">{group.stage.description}</p> : null}
               </div>
-              <Badge variant="outline">{BUILD_STAGE_STATUS_LABELS[group.stage.status]}{group.stage.completed_on ? ` · ${formatDate(group.stage.completed_on)}` : ""}</Badge>
+              <Badge variant="outline">{BUILD_STAGE_STATUS_LABELS[group.stage.status]}{group.stage.completed_on ? uiText("ui.text_913ac5c53d", { arg0: String(formatDate(group.stage.completed_on)) }) : ""}</Badge>
             </div>
           ) : stages.length > 0 ? (
-            <h2 className="px-1 font-heading text-lg font-extrabold text-on-surface">Other modifications</h2>
+            <h2 className="px-1 font-heading text-lg font-extrabold text-on-surface">{uiText("ui.other_modifications_12c49ea14a")}</h2>
           ) : null}
-          {group.entries.length === 0 ? <p className="px-1 text-sm text-on-surface-variant">No shared entries in this stage yet.</p> : null}
+          {group.entries.length === 0 ? <p className="px-1 text-sm text-on-surface-variant">{uiText("ui.no_shared_entries_in_this_stage_yet_acba570577")}</p> : null}
           {group.entries.map((entry) => (
         <article id={`build-${entry.id}`} key={entry.id} className="scroll-mt-24 rounded-[1.25rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -980,13 +912,13 @@ function PublicBuildTimeline({ entries, stages, canSave }: { entries: PublicTime
             <Badge variant="outline">{entry.status.replaceAll("_", " ")}</Badge>
           </div>
           <div className="mt-4 flex flex-wrap gap-2 text-xs text-on-surface-variant">
-            {entry.manufacturer && <span className="rounded-lg bg-surface-container px-3 py-1.5">{entry.manufacturer}{entry.part_number ? ` · ${entry.part_number}` : ""}</span>}
+            {entry.manufacturer && <span className="rounded-lg bg-surface-container px-3 py-1.5">{entry.manufacturer}{entry.part_number ? uiText("ui.text_913ac5c53d", { arg0: String(entry.part_number) }) : ""}</span>}
             {entry.installed_on && <span className="rounded-lg bg-surface-container px-3 py-1.5">{formatDate(entry.installed_on)}</span>}
-            {entry.mileage != null && <span className="rounded-lg bg-surface-container px-3 py-1.5">{formatMileage(entry.mileage)} mi</span>}
+            {entry.mileage != null && <span className="rounded-lg bg-surface-container px-3 py-1.5">{formatMileage(entry.mileage)}{uiText("ui.mi_3074dbe604")}</span>}
             <span className="rounded-lg bg-surface-container px-3 py-1.5">{entry.fitment_confidence.replaceAll("_", " ")}</span>
           </div>
-          {[entry.vehicle_configuration, entry.wheel_size && `Wheels: ${entry.wheel_size}`, entry.wheel_width != null && `Width: ${entry.wheel_width} in`, entry.wheel_offset_mm != null && `Offset: ${entry.wheel_offset_mm} mm`, entry.tire_size && `Tires: ${entry.tire_size}`, entry.suspension_drop && `Drop: ${entry.suspension_drop}`].filter(Boolean).length > 0 && (
-            <p className="mt-4 text-sm text-on-surface-variant">{[entry.vehicle_configuration, entry.wheel_size && `Wheels: ${entry.wheel_size}`, entry.wheel_width != null && `Width: ${entry.wheel_width} in`, entry.wheel_offset_mm != null && `Offset: ${entry.wheel_offset_mm} mm`, entry.tire_size && `Tires: ${entry.tire_size}`, entry.suspension_drop && `Drop: ${entry.suspension_drop}`].filter(Boolean).join(" · ")}</p>
+          {[entry.vehicle_configuration, entry.wheel_size && uiText("ui.wheels_a727b1d45e", { arg0: String(entry.wheel_size) }), entry.wheel_width != null && uiText("ui.width_in_241c06fc53", { arg0: String(entry.wheel_width) }), entry.wheel_offset_mm != null && uiText("ui.offset_mm_562464b572", { arg0: String(entry.wheel_offset_mm) }), entry.tire_size && uiText("ui.tires_201a935d20", { arg0: String(entry.tire_size) }), entry.suspension_drop && uiText("ui.drop_ca99ada333", { arg0: String(entry.suspension_drop) })].filter(Boolean).length > 0 && (
+            <p className="mt-4 text-sm text-on-surface-variant">{[entry.vehicle_configuration, entry.wheel_size && uiText("ui.wheels_a727b1d45e", { arg0: String(entry.wheel_size) }), entry.wheel_width != null && uiText("ui.width_in_241c06fc53", { arg0: String(entry.wheel_width) }), entry.wheel_offset_mm != null && uiText("ui.offset_mm_562464b572", { arg0: String(entry.wheel_offset_mm) }), entry.tire_size && uiText("ui.tires_201a935d20", { arg0: String(entry.tire_size) }), entry.suspension_drop && uiText("ui.drop_ca99ada333", { arg0: String(entry.suspension_drop) })].filter(Boolean).join(" · ")}</p>
           )}
           {(entry.before_spec || entry.after_spec) && (
             <p className="mt-4 flex flex-wrap items-center gap-2 text-sm">
@@ -1000,12 +932,12 @@ function PublicBuildTimeline({ entries, stages, canSave }: { entries: PublicTime
             <div className="mt-4 flex flex-wrap gap-2">
               {entry.photos.map((photo) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={photo.media_id} src={photo.url} alt={`${entry.title} photo`} className="h-24 w-32 rounded-xl object-cover" loading="lazy" />
+                <img key={photo.media_id} src={photo.url} alt={uiText("ui.photo_d806f25a03", { arg0: String(entry.title) })} className="h-24 w-32 rounded-xl object-cover" loading="lazy" />
               ))}
             </div>
           ) : null}
           {canSave ? <div className="mt-4"><SavedCollectionButton entityType="build" entityId={entry.id} /></div> : null}
-          <p className="mt-4 text-[11px] text-on-surface-variant">Owner-reported unless a stronger source is shown. Fitment is not guaranteed.</p>
+          <p className="mt-4 text-[11px] text-on-surface-variant">{uiText("ui.owner_reported_unless_a_stronger_source_is_s_d980413bd0")}</p>
         </article>
           ))}
         </section>
@@ -1016,25 +948,25 @@ function PublicBuildTimeline({ entries, stages, canSave }: { entries: PublicTime
 
 function PublicMaintenanceTimeline({ events }: { events: PublicTimelines["maintenance"] }) {
   if (events.length === 0) {
-    return <TimelineEmpty icon={<Wrench className="h-10 w-10" />} title="No shared maintenance" message="The owner has not shared any maintenance records for this vehicle." />;
+    return <TimelineEmpty icon={<Wrench className="h-10 w-10" />} title={uiText("ui.no_shared_maintenance_e1898498d9")} message={uiText("ui.the_owner_has_not_shared_any_maintenance_rec_709791e428")} />;
   }
   return (
     <div className="space-y-4">
       {events.map((event) => (
         <article key={event.id} className="rounded-[1.25rem] bg-surface-container-lowest p-6 shadow-sm ghost-border">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div><p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Maintenance</p><h2 className="mt-1 font-heading text-lg font-extrabold text-on-surface">{event.service_type}</h2></div>
+            <div><p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">{uiText("ui.maintenance_17ccfa5b68")}</p><h2 className="mt-1 font-heading text-lg font-extrabold text-on-surface">{event.service_type}</h2></div>
             <span className="text-sm font-semibold text-on-surface-variant">{formatDate(event.serviced_on)}</span>
           </div>
           <div className="mt-4 flex flex-wrap gap-2 text-xs text-on-surface-variant">
-            {event.mileage != null && <span className="rounded-lg bg-surface-container px-3 py-1.5">{formatMileage(event.mileage)} mi</span>}
+            {event.mileage != null && <span className="rounded-lg bg-surface-container px-3 py-1.5">{formatMileage(event.mileage)}{uiText("ui.mi_3074dbe604")}</span>}
             {event.provider && <span className="rounded-lg bg-surface-container px-3 py-1.5">{event.provider}</span>}
-            {event.next_due_on && <span className="rounded-lg bg-surface-container px-3 py-1.5">Next due {formatDate(event.next_due_on)}</span>}
-            {event.next_due_mileage != null && <span className="rounded-lg bg-surface-container px-3 py-1.5">Due at {formatMileage(event.next_due_mileage)} mi</span>}
+            {event.next_due_on && <span className="rounded-lg bg-surface-container px-3 py-1.5">{uiText("ui.next_due_335850a2e4")}{formatDate(event.next_due_on)}</span>}
+            {event.next_due_mileage != null && <span className="rounded-lg bg-surface-container px-3 py-1.5">{uiText("ui.due_at_1933526533")}{formatMileage(event.next_due_mileage)}{uiText("ui.mi_3074dbe604")}</span>}
           </div>
-          {event.parts_fluids && <p className="mt-4 whitespace-pre-wrap text-sm text-on-surface"><strong>Parts and fluids:</strong> {event.parts_fluids}</p>}
+          {event.parts_fluids && <p className="mt-4 whitespace-pre-wrap text-sm text-on-surface"><strong>{uiText("ui.parts_and_fluids_17e9cc6dc8")}</strong> {event.parts_fluids}</p>}
           {event.public_notes && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-on-surface">{event.public_notes}</p>}
-          <p className="mt-4 text-[11px] text-on-surface-variant">Owner-reported service record. Private receipts, cost, and notes are not shared.</p>
+          <p className="mt-4 text-[11px] text-on-surface-variant">{uiText("ui.owner_reported_service_record_private_receip_4f1f85544d")}</p>
         </article>
       ))}
     </div>

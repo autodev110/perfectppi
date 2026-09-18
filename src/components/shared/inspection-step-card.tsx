@@ -5,6 +5,8 @@ import { ChevronLeft, ChevronRight, Check, SkipForward } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 interface InspectionStepCardProps {
   sectionLabel: string;
   questionNumber: number;
@@ -36,6 +38,7 @@ export function InspectionStepCard({
   isDeferred = false,
   saving,
 }: InspectionStepCardProps) {
+  const uiText = useTranslator();
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* Header bar */}
@@ -52,23 +55,21 @@ export function InspectionStepCard({
           <p className="text-xs font-semibold text-primary uppercase tracking-wider truncate">
             {sectionLabel}
           </p>
-          <p className="text-xs text-muted-foreground">
-            Question {questionNumber} of {totalQuestions}
+          <p className="text-xs text-muted-foreground">{uiText("ui.question_39821a754d")}{questionNumber}{uiText("ui.of_a4282e4b22")}{totalQuestions}
           </p>
         </div>
 
         {/* Save indicator */}
         <div className="w-16 text-right">
           {saving === "saving" && (
-            <span className="text-xs text-muted-foreground">Saving…</span>
+            <span className="text-xs text-muted-foreground">{uiText("ui.saving_23e39291d6")}</span>
           )}
           {saving === "saved" && (
             <span className="text-xs text-emerald-600 flex items-center justify-end gap-1">
-              <Check className="h-3 w-3" /> Saved
-            </span>
+              <Check className="h-3 w-3" />{uiText("ui.saved_e00c733304")}</span>
           )}
           {saving === "error" && (
-            <span className="text-xs text-destructive">Retry</span>
+            <span className="text-xs text-destructive">{uiText("ui.retry_942087cc2d")}</span>
           )}
         </div>
       </div>
@@ -81,14 +82,12 @@ export function InspectionStepCard({
             {prompt}
           </h2>
           {isDeferred && (
-            <span className="mr-2 inline-block rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
-              Skipped earlier
-            </span>
+            <span className="mr-2 inline-block rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">{uiText("ui.skipped_earlier_fad2fa330e")}</span>
           )}
           {isRequired ? (
-            <span className="inline-block text-xs text-destructive font-medium">Required</span>
+            <span className="inline-block text-xs text-destructive font-medium">{uiText("ui.required_4850b174b7")}</span>
           ) : (
-            <span className="inline-block text-xs text-muted-foreground">Optional</span>
+            <span className="inline-block text-xs text-muted-foreground">{uiText("ui.optional_59be71333c")}</span>
           )}
         </div>
 
@@ -105,9 +104,7 @@ export function InspectionStepCard({
               onClick={onSkip}
               className="flex-none text-muted-foreground"
             >
-              <SkipForward className="h-4 w-4 mr-1" />
-              Skip for now
-            </Button>
+              <SkipForward className="h-4 w-4 mr-1" />{uiText("ui.skip_for_now_b58eb52c88")}</Button>
           )}
           <Button
             onClick={onNext}
@@ -118,10 +115,9 @@ export function InspectionStepCard({
             )}
           >
             {isFinalQuestion ? (
-              "Review & Submit"
+              uiText("ui.review_submit_e877c5633a")
             ) : (
-              <>
-                Continue <ChevronRight className="h-5 w-5 ml-1" />
+              <>{uiText("ui.continue_9560cc3b00")}<ChevronRight className="h-5 w-5 ml-1" />
               </>
             )}
           </Button>

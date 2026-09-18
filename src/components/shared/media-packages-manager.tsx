@@ -8,7 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check, Copy } from "lucide-react";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 export function MediaPackagesManager({ packages }: { packages: MediaPackageWithShare[] }) {
+  const uiText = useTranslator();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +32,7 @@ export function MediaPackagesManager({ packages }: { packages: MediaPackageWithS
         setCopiedLink((current) => (current === url ? null : current));
       }, 1500);
     } catch {
-      setError("Could not copy link to clipboard.");
+      setError(uiText("ui.could_not_copy_link_to_clipboard_0222c47588"));
     }
   }
 
@@ -42,7 +45,7 @@ export function MediaPackagesManager({ packages }: { packages: MediaPackageWithS
       });
 
       if ("error" in result) {
-        setError(result.error ?? "Failed to generate share link");
+        setError(result.error ?? uiText("ui.failed_to_generate_share_link_57b351cb36"));
         return;
       }
 
@@ -57,7 +60,7 @@ export function MediaPackagesManager({ packages }: { packages: MediaPackageWithS
     startTransition(async () => {
       const result = await deleteMediaPackage(mediaPackageId);
       if ("error" in result) {
-        setError(result.error ?? "Failed to delete media package");
+        setError(result.error ?? uiText("ui.failed_to_delete_media_package_9771d8a269"));
         return;
       }
 
@@ -70,7 +73,7 @@ export function MediaPackagesManager({ packages }: { packages: MediaPackageWithS
       {generatedUrl ? (
         <Card>
           <CardHeader>
-            <CardTitle>Latest Share Link</CardTitle>
+            <CardTitle>{uiText("ui.latest_share_link_f5c66c10de")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm break-all">{generatedUrl}</p>
@@ -82,14 +85,10 @@ export function MediaPackagesManager({ packages }: { packages: MediaPackageWithS
             >
               {copiedLink === generatedUrl ? (
                 <>
-                  <Check className="h-3.5 w-3.5 mr-1.5" />
-                  Copied
-                </>
+                  <Check className="h-3.5 w-3.5 mr-1.5" />{uiText("ui.copied_8d525e5f15")}</>
               ) : (
                 <>
-                  <Copy className="h-3.5 w-3.5 mr-1.5" />
-                  Copy Link
-                </>
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />{uiText("ui.copy_link_724e78a325")}</>
               )}
             </Button>
           </CardContent>
@@ -100,9 +99,7 @@ export function MediaPackagesManager({ packages }: { packages: MediaPackageWithS
 
       {packages.length === 0 ? (
         <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No media packages yet.
-          </CardContent>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">{uiText("ui.no_media_packages_yet_2ba4902b0f")}</CardContent>
         </Card>
       ) : (
         packages.map((pkg) => (
@@ -123,12 +120,12 @@ export function MediaPackagesManager({ packages }: { packages: MediaPackageWithS
                   ) : null}
 
                   <p className="text-sm">
-                    {pkg.items.length} item{pkg.items.length === 1 ? "" : "s"}
+                    {pkg.items.length}{uiText("ui.item_a5f3c2e9f9")}{pkg.items.length === 1 ? "" : uiText("ui.s_043a718774")}
                   </p>
 
                   {currentShareUrl ? (
                     <div className="space-y-1">
-                      <p className="text-xs font-medium text-muted-foreground">Current share link</p>
+                      <p className="text-xs font-medium text-muted-foreground">{uiText("ui.current_share_link_031d9426f1")}</p>
                       <div className="flex items-center gap-2">
                         <p className="text-xs font-mono break-all text-muted-foreground flex-1">
                           {currentShareUrl}
@@ -157,16 +154,14 @@ export function MediaPackagesManager({ packages }: { packages: MediaPackageWithS
                       onClick={() => handleGenerateShare(pkg.id)}
                       disabled={isPending}
                     >
-                      {currentShareUrl ? "Regenerate Share Link" : "Generate Share Link"}
+                      {currentShareUrl ? uiText("ui.regenerate_share_link_6e905d8319") : uiText("ui.generate_share_link_47e28d02ec")}
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => handleDelete(pkg.id)}
                       disabled={isPending}
-                    >
-                      Delete
-                    </Button>
+                    >{uiText("ui.delete_e2d0a54968")}</Button>
                   </div>
                 </CardContent>
               </Card>

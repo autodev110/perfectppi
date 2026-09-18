@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/dialog";
 import { formatRelativeTime, getInitials } from "@/lib/utils/formatting";
 import { Inbox, MessageSquarePlus, Radio, Search, Sparkles } from "lucide-react";
+import { t as uiText } from "@/lib/i18n";
+import { useTranslator } from "@/lib/i18n/client";
 
 function participantLabel(recipient: MessageRecipient) {
   if (recipient.display_name?.trim()) return recipient.display_name;
@@ -56,8 +58,8 @@ function conversationAvatarSeed(conversation: ConversationSummary, myProfileId: 
 }
 
 function conversationPreview(conversation: ConversationSummary) {
-  if (!conversation.last_message) return "No messages yet — start the conversation.";
-  if (conversation.last_message.has_attachment) return "📎 Sent an attachment";
+  if (!conversation.last_message) return uiText("ui.no_messages_yet_start_the_conversation_150c76c28e");
+  if (conversation.last_message.has_attachment) return uiText("ui.sent_an_attachment_53469c71fe");
   return conversation.last_message.content;
 }
 
@@ -86,6 +88,7 @@ export function MessagesCenter({
   title: string;
   description: string;
 }) {
+  const uiText = useTranslator();
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedRecipient, setSelectedRecipient] = useState<string>("");
@@ -155,7 +158,7 @@ export function MessagesCenter({
     startTransition(async () => {
       const result = await createConversation({ participantId: target });
       if ("error" in result) {
-        setError(result.error ?? "Failed to start conversation");
+        setError(result.error ?? uiText("ui.failed_to_start_conversation_6ba48fbb4e"));
         return;
       }
 
@@ -179,21 +182,17 @@ export function MessagesCenter({
                 isRefreshing ? "animate-pulse text-amber-500" : "text-emerald-600"
               }`}
             />
-            {isRefreshing ? "Syncing" : "Live"}
+            {isRefreshing ? uiText("ui.syncing_5c8b9e1ce0") : uiText("ui.live_b64ac05f17")}
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="rounded-full">
-                <MessageSquarePlus className="mr-1.5 h-4 w-4" />
-                New
-              </Button>
+                <MessageSquarePlus className="mr-1.5 h-4 w-4" />{uiText("ui.new_18fdd549b2")}</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle className="font-heading text-xl">Start a conversation</DialogTitle>
-                <DialogDescription>
-                  Friends receive messages directly. Eligible group members receive one private request to accept or decline.
-                </DialogDescription>
+                <DialogTitle className="font-heading text-xl">{uiText("ui.start_a_conversation_258150cb3e")}</DialogTitle>
+                <DialogDescription>{uiText("ui.friends_receive_messages_directly_eligible_g_bb0461a2eb")}</DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
                 <div className="relative">
@@ -201,7 +200,7 @@ export function MessagesCenter({
                   <Input
                     value={recipientQuery}
                     onChange={(e) => setRecipientQuery(e.target.value)}
-                    placeholder="Search by name, username, or role..."
+                    placeholder={uiText("ui.search_by_name_username_or_role_a1cf7760f9")}
                     className="pl-9"
                     autoFocus
                   />
@@ -210,8 +209,8 @@ export function MessagesCenter({
                   {filteredRecipients.length === 0 ? (
                     <p className="px-4 py-8 text-center text-xs text-muted-foreground">
                       {recipients.length === 0
-                        ? "No recipients available yet."
-                        : "No matches. Try a different search."}
+                        ? uiText("ui.no_recipients_available_yet_006c1bb9f0")
+                        : uiText("ui.no_matches_try_a_different_search_26d1e5a68e")}
                     </p>
                   ) : (
                     <ul className="divide-y divide-outline-variant/10">
@@ -243,14 +242,12 @@ export function MessagesCenter({
                                 </p>
                                 <p className="text-[11px] text-muted-foreground">
                                   {recipient.contact_mode === "request"
-                                    ? `Message request via ${recipient.shared_group_name ?? "shared group"}`
-                                    : `${recipient.role} · Friend`}
+                                    ? uiText("ui.message_request_via_38926c6aa5", { arg0: String(recipient.shared_group_name ?? uiText("ui.shared_group_eed6076c23")) })
+                                    : uiText("ui.friend_8c6e172b1f", { arg0: String(recipient.role) })}
                                 </p>
                               </div>
                               {isSelected ? (
-                                <span className="text-[11px] font-bold uppercase text-primary">
-                                  Selected
-                                </span>
+                                <span className="text-[11px] font-bold uppercase text-primary">{uiText("ui.selected_57fd7a0cf3")}</span>
                               ) : null}
                             </button>
                           </li>
@@ -262,14 +259,12 @@ export function MessagesCenter({
                 {error ? <p className="text-xs text-destructive">{error}</p> : null}
               </div>
               <DialogFooter>
-                <Button variant="ghost" onClick={() => setDialogOpen(false)}>
-                  Cancel
-                </Button>
+                <Button variant="ghost" onClick={() => setDialogOpen(false)}>{uiText("ui.cancel_19766ed6cc")}</Button>
                 <Button
                   onClick={() => handleStartConversation()}
                   disabled={!selectedRecipient || isPending}
                 >
-                  {isPending ? "Starting..." : "Start conversation"}
+                  {isPending ? uiText("ui.starting_82b93630a9") : uiText("ui.start_conversation_b61625d09b")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -288,9 +283,7 @@ export function MessagesCenter({
                     ? "bg-surface-container-lowest text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
-              >
-                All
-                <span className="ml-1.5 rounded-full bg-surface-container-high/60 px-1.5 text-[10px]">
+              >{uiText("ui.all_a52ace420f")}<span className="ml-1.5 rounded-full bg-surface-container-high/60 px-1.5 text-[10px]">
                   {conversations.length}
                 </span>
               </button>
@@ -301,9 +294,7 @@ export function MessagesCenter({
                     ? "bg-surface-container-lowest text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
-              >
-                Requests
-                {requests.length > 0 ? (
+              >{uiText("ui.requests_ada27592c9")}{requests.length > 0 ? (
                   <span className="ml-1.5 rounded-full bg-accent px-1.5 text-[10px] text-white">
                     {requests.length}
                   </span>
@@ -316,9 +307,7 @@ export function MessagesCenter({
                     ? "bg-surface-container-lowest text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
-              >
-                Unread
-                {totalUnread > 0 ? (
+              >{uiText("ui.unread_1b9f384c14")}{totalUnread > 0 ? (
                   <span className="ml-1.5 rounded-full bg-accent px-1.5 text-[10px] text-white">
                     {totalUnread}
                   </span>
@@ -331,7 +320,7 @@ export function MessagesCenter({
             <Input
               value={conversationQuery}
               onChange={(e) => setConversationQuery(e.target.value)}
-              placeholder="Search conversations..."
+              placeholder={uiText("ui.search_conversations_e90dd01731")}
               className="pl-9 h-9"
             />
           </div>
@@ -344,17 +333,17 @@ export function MessagesCenter({
             </div>
             <p className="text-base font-bold text-foreground">
               {filter === "unread"
-                ? "No unread messages"
+                ? uiText("ui.no_unread_messages_41080bff99")
                 : filter === "requests"
-                  ? "No message requests"
-                  : "No conversations yet"}
+                  ? uiText("ui.no_message_requests_08b2a977c3")
+                  : uiText("ui.no_conversations_yet_0d60084f05")}
             </p>
             <p className="mt-1 max-w-xs text-xs text-muted-foreground">
               {filter === "unread"
-                ? "You're all caught up. Switch to 'All' to see every thread."
+                ? uiText("ui.you_re_all_caught_up_switch_to_all_to_see_ev_f7a679d341")
                 : filter === "requests"
-                  ? "Eligible group-member introductions will wait here until you accept or decline them."
-                  : "Start a conversation with a friend or eligible group member."}
+                  ? uiText("ui.eligible_group_member_introductions_will_wai_4dc4b307b1")
+                  : uiText("ui.start_a_conversation_with_a_friend_or_eligib_32fd6066b6")}
             </p>
             {filter === "all" ? (
               <Button
@@ -363,9 +352,7 @@ export function MessagesCenter({
                 variant="outline"
                 className="mt-4 rounded-full"
               >
-                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                New conversation
-              </Button>
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />{uiText("ui.new_conversation_396c946f0c")}</Button>
             ) : null}
           </div>
         ) : (
@@ -374,7 +361,7 @@ export function MessagesCenter({
               const peopleLabel = conversationPeopleLabel(
                 conversation.participants,
                 myProfileId,
-              ) || "Conversation";
+              ) || uiText("ui.conversation_ccca181757");
               const carLabel = listingCarLabel(conversation.listing_context);
               const role = conversationRole(conversation);
               const preview = conversationPreview(conversation);
@@ -412,7 +399,7 @@ export function MessagesCenter({
                         >
                           {peopleLabel}
                           {filter === "requests" ? (
-                            <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wider text-accent">Request</span>
+                            <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wider text-accent">{uiText("ui.request_59f03d642b")}</span>
                           ) : null}
                           {carLabel ? (
                             <span className="ml-1.5 text-xs font-semibold text-muted-foreground">

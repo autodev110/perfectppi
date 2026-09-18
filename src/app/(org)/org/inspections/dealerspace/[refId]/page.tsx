@@ -17,6 +17,8 @@ import { Separator } from "@/components/ui/separator";
 import { formatDateTime } from "@/lib/utils/formatting";
 import { REQUIRED_ARTIFACT_TYPES } from "@/features/partner/constants";
 import type { PpiRequestStatus } from "@/types/enums";
+import { t as uiText } from "@/lib/i18n";
+import { getRequestTranslator } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -25,13 +27,14 @@ interface PageProps {
 }
 
 const ARTIFACT_LABELS: Record<string, string> = {
-  inspection_report_json: "Inspection report (JSON)",
-  inspection_report_pdf: "Inspection report (PDF)",
-  vsc_determination_json: "VSC determination (JSON)",
-  vsc_determination_pdf: "VSC determination (PDF)",
+  inspection_report_json: uiText("ui.inspection_report_json_dbe06172c7"),
+  inspection_report_pdf: uiText("ui.inspection_report_pdf_69a2a7a510"),
+  vsc_determination_json: uiText("ui.vsc_determination_json_a2195696e5"),
+  vsc_determination_pdf: uiText("ui.vsc_determination_pdf_72497aae88"),
 };
 
 export default async function DealerSpaceInspectionDetailPage({ params }: PageProps) {
+  const uiText = await getRequestTranslator();
   await requireRole(["org_manager"]);
 
   const context = await getManagerContext();
@@ -92,7 +95,7 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
   const vehicleName =
     [snapshot.year, snapshot.make, snapshot.model, snapshot.trim]
       .filter(Boolean)
-      .join(" ") || "Unknown Vehicle";
+      .join(" ") || uiText("ui.unknown_vehicle_615ff95383");
 
   const presentTypes = new Set(
     (artifacts ?? [])
@@ -106,9 +109,7 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
         href="/org/inspections/dealerspace"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" />
-        Incoming DealerSpace inspections
-      </Link>
+        <ArrowLeft className="h-4 w-4" />{uiText("ui.incoming_dealerspace_inspections_018188f6e3")}</Link>
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -128,9 +129,7 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
               technician workflow. Without this link a manager can see every
               detail here and have no way to open it. */}
           <Button variant="outline" size="sm" asChild>
-            <Link href={`/tech/ppi/${request.id}`}>
-              Open inspection
-              <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+            <Link href={`/tech/ppi/${request.id}`}>{uiText("ui.open_inspection_8e231e5f94")}<ExternalLink className="ml-1.5 h-3.5 w-3.5" />
             </Link>
           </Button>
 
@@ -144,23 +143,20 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Vehicle snapshot</CardTitle>
+          <CardTitle className="text-base">{uiText("ui.vehicle_snapshot_764ce90825")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="mb-4 text-xs text-muted-foreground">
-            Captured when DealerSpace sent this vehicle. Later edits in DealerSpace do
-            not change it.
-          </p>
+          <p className="mb-4 text-xs text-muted-foreground">{uiText("ui.captured_when_dealerspace_sent_this_vehicle__7de6ea0c8e")}</p>
           <dl className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
             {[
-              ["VIN", snapshot.vin],
-              ["Stock number", snapshot.stockNumber],
-              ["Mileage", snapshot.mileage],
-              ["Exterior colour", snapshot.exteriorColor],
-              ["Interior colour", snapshot.interiorColor],
-              ["Engine", snapshot.engine],
-              ["Transmission", snapshot.transmission],
-              ["Drivetrain", snapshot.drivetrain],
+              [uiText("ui.vin_5e0211b12d"), snapshot.vin],
+              [uiText("ui.stock_number_74608bd0de"), snapshot.stockNumber],
+              [uiText("ui.mileage_ffe44a0179"), snapshot.mileage],
+              [uiText("ui.exterior_colour_5b9d83c335"), snapshot.exteriorColor],
+              [uiText("ui.interior_colour_f9484cc186"), snapshot.interiorColor],
+              [uiText("ui.engine_8e75ebbdb2"), snapshot.engine],
+              [uiText("ui.transmission_3e10134259"), snapshot.transmission],
+              [uiText("ui.drivetrain_203e886158"), snapshot.drivetrain],
             ]
               .filter(([, value]) => value !== null && value !== undefined && value !== "")
               .map(([label, value]) => (
@@ -175,21 +171,21 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
 
           <dl className="grid gap-x-8 gap-y-3 text-xs sm:grid-cols-2">
             <div>
-              <dt className="text-muted-foreground">Assigned technician</dt>
+              <dt className="text-muted-foreground">{uiText("ui.assigned_technician_2f63a211ae")}</dt>
               <dd className="mt-0.5 font-medium">
-                {request.assigned_tech?.display_name ?? "Unassigned"}
+                {request.assigned_tech?.display_name ?? uiText("ui.unassigned_14d33bd014")}
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Received</dt>
+              <dt className="text-muted-foreground">{uiText("ui.received_49f19beeec")}</dt>
               <dd className="mt-0.5 font-medium">{formatDateTime(ref.created_at)}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">DealerSpace Recon case</dt>
+              <dt className="text-muted-foreground">{uiText("ui.dealerspace_recon_case_3434e76d42")}</dt>
               <dd className="mt-0.5 font-mono">{ref.external_recon_case_id ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">DealerSpace Inspection phase</dt>
+              <dt className="text-muted-foreground">{uiText("ui.dealerspace_inspection_phase_8451b47b0b")}</dt>
               <dd className="mt-0.5 font-mono">
                 {ref.external_inspection_phase_id ?? "—"}
               </dd>
@@ -200,13 +196,10 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Deliverables</CardTitle>
+          <CardTitle className="text-base">{uiText("ui.deliverables_c7ec4b92c2")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            All four artifacts must exist for one output version before this inspection
-            can be sent.
-          </p>
+          <p className="text-xs text-muted-foreground">{uiText("ui.all_four_artifacts_must_exist_for_one_output_63e283c480")}</p>
 
           {REQUIRED_ARTIFACT_TYPES.map((type) => {
             const artifact = (artifacts ?? []).find(
@@ -229,7 +222,7 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
                     <p className="font-medium">{ARTIFACT_LABELS[type]}</p>
                     {artifact && (
                       <p className="truncate font-mono text-[11px] text-muted-foreground">
-                        {Number(artifact.size_bytes).toLocaleString()} bytes · sha256{" "}
+                        {Number(artifact.size_bytes).toLocaleString()}{uiText("ui.bytes_sha256_f3f7b9f45e")}{" "}
                         {artifact.sha256.slice(0, 16)}…
                       </p>
                     )}
@@ -242,7 +235,7 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
                       : "bg-secondary text-secondary-foreground"
                   }`}
                 >
-                  {present ? "Ready" : "Pending"}
+                  {present ? uiText("ui.ready_5fa7aac537") : uiText("ui.pending_331551b0de")}
                 </span>
               </div>
             );
@@ -253,7 +246,7 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
       {(events ?? []).length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Delivery activity</CardTitle>
+            <CardTitle className="text-base">{uiText("ui.delivery_activity_9f88a4c8ca")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {(events ?? []).map((event) => {
@@ -267,8 +260,8 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
                     <p className="font-mono font-medium">{event.event_type}</p>
                     <p className="text-muted-foreground">
                       {formatDateTime(event.created_at)}
-                      {event.attempt_count > 0 && ` · ${event.attempt_count} attempt(s)`}
-                      {event.last_response_status && ` · HTTP ${event.last_response_status}`}
+                      {event.attempt_count > 0 && uiText("ui.attempt_s_77f0b2057e", { arg0: String(event.attempt_count) })}
+                      {event.last_response_status && uiText("ui.http_08753830b5", { arg0: String(event.last_response_status) })}
                     </p>
                     {error?.message && (
                       <p className="mt-0.5 text-destructive">{error.message}</p>

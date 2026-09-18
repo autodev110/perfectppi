@@ -20,6 +20,8 @@ import { CONTACT_SHARING_WARNING, containsContactDetails } from "@/lib/messages/
 import { formatDateTime, formatRelativeTime, getInitials } from "@/lib/utils/formatting";
 import { ArrowLeft, Car, Radio, SendHorizontal, CheckCheck, Check, FileText, Paperclip, X } from "lucide-react";
 import { ExtendedReportControl } from "@/components/shared/extended-report-control";
+import { t as uiText } from "@/lib/i18n";
+import { useTranslator } from "@/lib/i18n/client";
 
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 
@@ -47,8 +49,8 @@ function formatDayLabel(iso: string) {
   const sameDay = d.toDateString() === now.toDateString();
   const isYesterday = d.toDateString() === yesterday.toDateString();
 
-  if (sameDay) return "Today";
-  if (isYesterday) return "Yesterday";
+  if (sameDay) return uiText("ui.today_2b065c7c9c");
+  if (isYesterday) return uiText("ui.yesterday_566181254b");
 
   const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
   if (diffDays < 7) return d.toLocaleDateString(undefined, { weekday: "long" });
@@ -96,6 +98,7 @@ export function ConversationThread({
   initialCanSend: boolean;
   sendUnavailableReason: string | null;
 }) {
+  const uiText = useTranslator();
   const router = useRouter();
   const [messages, setMessages] = useState<MessageRow[]>(initialMessages);
   const [draft, setDraft] = useState("");
@@ -132,7 +135,7 @@ export function ConversationThread({
   // Title names everyone in the thread; the car it is about (marketplace
   // threads) sits on the subtitle line so it survives a narrow header.
   const peopleLabel =
-    conversationPeopleLabel(participants, myProfileId) || "No participants";
+    conversationPeopleLabel(participants, myProfileId) || uiText("ui.no_participants_3209f3f68e");
   const carLabel = listingCarLabel(listingContext);
   const incomingRequest = requestStatus === "pending" && requestedBy !== myProfileId;
   const outgoingRequest = requestStatus === "pending" && requestedBy === myProfileId;
@@ -288,7 +291,7 @@ export function ConversationThread({
           );
         }
       } catch (uploadError) {
-        setError(uploadError instanceof Error ? uploadError.message : "Failed to upload attachment");
+        setError(uploadError instanceof Error ? uploadError.message : uiText("ui.failed_to_upload_attachment_eefd13326e"));
         setUploadProgress(null);
         return;
       } finally {
@@ -324,7 +327,7 @@ export function ConversationThread({
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         setDraft(content);
         setAttachment(selectedAttachment);
-        setError(result.error ?? "Failed to send message");
+        setError(result.error ?? uiText("ui.failed_to_send_message_66b8e077d8"));
         return;
       }
 
@@ -348,7 +351,7 @@ export function ConversationThread({
     startTransition(async () => {
       const result = await decideMessageRequest({ conversationId, decision });
       if ("error" in result) {
-        setError(result.error ?? "Could not update the message request");
+        setError(result.error ?? uiText("ui.could_not_update_the_message_request_b38d84d343"));
         return;
       }
       if (decision === "decline") {
@@ -370,12 +373,10 @@ export function ConversationThread({
           href={routeBase}
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
         >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          All messages
-        </Link>
+          <ArrowLeft className="h-3.5 w-3.5" />{uiText("ui.all_messages_5eb8f65577")}</Link>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/20 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
           <Radio className={`h-3.5 w-3.5 ${liveConnected ? "text-emerald-600" : "text-amber-500 animate-pulse"}`} />
-          {liveConnected ? "Live" : "Syncing"}
+          {liveConnected ? uiText("ui.live_b64ac05f17") : uiText("ui.syncing_5c8b9e1ce0")}
         </span>
       </div>
 
@@ -407,18 +408,18 @@ export function ConversationThread({
         <CardContent className="p-0">
           {incomingRequest ? (
             <div className="border-b border-outline-variant/10 bg-amber-50 px-5 py-4 text-amber-950">
-              <p className="text-sm font-bold">Message request</p>
-              <p className="mt-1 text-xs">This group member can only continue messaging if you accept. Opening this request does not send a read receipt.</p>
+              <p className="text-sm font-bold">{uiText("ui.message_request_2de564f22a")}</p>
+              <p className="mt-1 text-xs">{uiText("ui.this_group_member_can_only_continue_messagin_fc888d9803")}</p>
               <div className="mt-3 flex gap-2">
-                <Button size="sm" onClick={() => handleRequestDecision("accept")} disabled={isPending}>Accept</Button>
-                <Button size="sm" variant="outline" onClick={() => handleRequestDecision("decline")} disabled={isPending}>Decline</Button>
+                <Button size="sm" onClick={() => handleRequestDecision("accept")} disabled={isPending}>{uiText("ui.accept_89713b9c9c")}</Button>
+                <Button size="sm" variant="outline" onClick={() => handleRequestDecision("decline")} disabled={isPending}>{uiText("ui.decline_a2d285b352")}</Button>
               </div>
             </div>
           ) : outgoingRequest ? (
             <div className="border-b border-outline-variant/10 bg-surface-container-low px-5 py-3 text-xs text-muted-foreground">
               {messages.length === 0
-                ? "Send one introduction. You can continue after this member accepts your request."
-                : "Message request sent. You can continue if this member accepts."}
+                ? uiText("ui.send_one_introduction_you_can_continue_after_7f2e9f3047")
+                : uiText("ui.message_request_sent_you_can_continue_if_thi_50b6bd7f68")}
             </div>
           ) : null}
           <div
@@ -430,10 +431,8 @@ export function ConversationThread({
                 <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-surface-container">
                   <SendHorizontal className="h-6 w-6 text-muted-foreground" />
                 </div>
-                <p className="text-sm font-semibold text-foreground">No messages yet</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Send the first message to start the conversation.
-                </p>
+                <p className="text-sm font-semibold text-foreground">{uiText("ui.no_messages_yet_f42e0f6601")}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{uiText("ui.send_the_first_message_to_start_the_conversa_1429464938")}</p>
               </div>
             ) : (
               <div className="space-y-6">
@@ -499,15 +498,13 @@ export function ConversationThread({
                                   message.attachment_type?.startsWith("image/") ? (
                                     <a href={message.attachment_url} target="_blank" rel="noopener noreferrer" className="mt-2 block overflow-hidden rounded-lg">
                                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img src={message.attachment_url} alt="Message attachment" className="max-h-72 w-full object-cover" />
+                                      <img src={message.attachment_url} alt={uiText("ui.message_attachment_f11cada211")} className="max-h-72 w-full object-cover" />
                                     </a>
                                   ) : message.attachment_type?.startsWith("video/") ? (
                                     <video src={message.attachment_url} controls playsInline preload="metadata" className="mt-2 max-h-72 w-full rounded-lg" />
                                   ) : (
                                     <a href={message.attachment_url} target="_blank" rel="noopener noreferrer" className="mt-2 flex items-center gap-2 rounded-lg bg-black/10 px-3 py-2 text-[11px] font-semibold underline underline-offset-2">
-                                      <FileText className="h-4 w-4" />
-                                      Open attachment
-                                    </a>
+                                      <FileText className="h-4 w-4" />{uiText("ui.open_attachment_9aeeab931b")}</a>
                                   )
                                 ) : null}
                               </div>
@@ -531,7 +528,7 @@ export function ConversationThread({
                                 <ExtendedReportControl
                                   entityType="message"
                                   entityId={message.id}
-                                  label="Message"
+                                  label={uiText("ui.message_2f77668a9d")}
                                   onReported={() => setMessages((current) => current.filter((item) => item.id !== message.id))}
                                 />
                               ) : null}
@@ -553,7 +550,7 @@ export function ConversationThread({
             {!canCompose ? (
               <p className="rounded-xl bg-surface-container-low px-4 py-3 text-center text-xs text-muted-foreground">
                 {sendUnavailableReason
-                  ?? (incomingRequest ? "Accept this request to reply." : "Waiting for this member to accept your request.")}
+                  ?? (incomingRequest ? uiText("ui.accept_this_request_to_reply_c19d524467") : uiText("ui.waiting_for_this_member_to_accept_your_reque_ea3c0ee687"))}
               </p>
             ) : attachment ? (
               <div className="mb-2 rounded-xl border border-outline-variant/20 bg-surface-container-low px-3 py-2">
@@ -562,12 +559,12 @@ export function ConversationThread({
                     <p className="truncate text-xs font-semibold">{attachment.name}</p>
                     <p className="text-[10px] text-muted-foreground">
                       {uploadProgress === null
-                        ? `${Math.ceil(attachment.size / 1024)} KB`
-                        : `Uploading… ${Math.round(uploadProgress * 100)}%`}
+                        ? uiText("ui.kb_58167308ec", { arg0: String(Math.ceil(attachment.size / 1024)) })
+                        : uiText("ui.uploading_5b0eae420f", { arg0: String(Math.round(uploadProgress * 100)) })}
                     </p>
                   </div>
                   {uploadProgress === null ? (
-                    <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setAttachment(null)} aria-label="Remove attachment">
+                    <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setAttachment(null)} aria-label={uiText("ui.remove_attachment_595b066a88")}>
                       <X className="h-4 w-4" />
                     </Button>
                   ) : null}
@@ -578,7 +575,7 @@ export function ConversationThread({
                       className="h-full bg-primary transition-[width] duration-150"
                       style={{ width: `${Math.round(uploadProgress * 100)}%` }}
                       role="progressbar"
-                      aria-label="Attachment upload progress"
+                      aria-label={uiText("ui.attachment_upload_progress_414c6868b4")}
                       aria-valuenow={Math.round(uploadProgress * 100)}
                       aria-valuemin={0}
                       aria-valuemax={100}
@@ -601,7 +598,7 @@ export function ConversationThread({
               }}
             />
             {canCompose ? <div className="flex items-end gap-2">
-              <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 rounded-xl" onClick={() => attachmentInputRef.current?.click()} disabled={isPending} aria-label="Add attachment">
+              <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 rounded-xl" onClick={() => attachmentInputRef.current?.click()} disabled={isPending} aria-label={uiText("ui.add_attachment_ebda695e76")}>
                 <Paperclip className="h-4 w-4" />
               </Button>
               <Textarea
@@ -609,7 +606,7 @@ export function ConversationThread({
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={handleComposerKeyDown}
-                placeholder="Type a message..."
+                placeholder={uiText("ui.type_a_message_69518e684f")}
                 rows={1}
                 className="min-h-[44px] max-h-32 resize-none rounded-xl bg-surface-container-low border-outline-variant/20 text-sm"
               />
@@ -618,15 +615,13 @@ export function ConversationThread({
                 disabled={isPending || (!draft.trim() && !attachment)}
                 size="icon"
                 className="h-11 w-11 shrink-0 rounded-xl"
-                aria-label="Send message"
+                aria-label={uiText("ui.send_message_93a26b1eaf")}
               >
                 <SendHorizontal className="h-4 w-4" />
               </Button>
             </div> : null}
             {canCompose ? <div className="mt-1.5 flex items-center justify-between px-1">
-              <p className="text-[10px] text-muted-foreground">
-                Enter to send · Shift+Enter for a new line
-              </p>
+              <p className="text-[10px] text-muted-foreground">{uiText("ui.enter_to_send_shift_enter_for_a_new_line_7134f1a6e8")}</p>
               <p className="text-[10px] text-muted-foreground">{draft.trim().length}/4000</p>
             </div> : null}
             {canCompose && containsContactDetails(draft) ? (

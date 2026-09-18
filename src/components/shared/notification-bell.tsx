@@ -17,6 +17,8 @@ import { formatRelativeTime } from "@/lib/utils/formatting";
 import type { Database } from "@/types/database";
 import { notificationDestinationIntent } from "@/lib/notifications/routing";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 type NotificationType = NotificationRow["type"];
 
@@ -59,6 +61,7 @@ const typeStyle: Record<
 // Destinations resolve server-side in /notifications/<id>, which knows the
 // role's messages base itself, so the bell no longer needs it.
 export function NotificationBell() {
+  const uiText = useTranslator();
   const router = useRouter();
   const [profileId, setProfileId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -127,7 +130,7 @@ export function NotificationBell() {
           variant="ghost"
           size="icon"
           className="relative"
-          aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
+          aria-label={uiText("ui.notifications_d098e69752", { arg0: String(unreadCount > 0 ? `, ${unreadCount} unread` : "") })}
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
@@ -143,9 +146,9 @@ export function NotificationBell() {
       <DropdownMenuContent align="end" className="w-[22rem] p-0">
         <div className="flex items-center justify-between px-4 py-3">
           <div>
-            <p className="text-sm font-bold text-foreground">Notifications</p>
+            <p className="text-sm font-bold text-foreground">{uiText("ui.notifications_788011833a")}</p>
             <p className="text-[11px] text-muted-foreground">
-              {unreadCount > 0 ? `${unreadCount} unread` : "You're all caught up"}
+              {unreadCount > 0 ? uiText("ui.unread_fb6bff3203", { arg0: String(unreadCount) }) : uiText("ui.you_re_all_caught_up_2f485b9971")}
             </p>
           </div>
           {unreadCount > 0 && (
@@ -153,9 +156,7 @@ export function NotificationBell() {
               onClick={handleMarkAll}
               className="inline-flex items-center gap-1 rounded-full border border-outline-variant/20 bg-surface-container-low px-2.5 py-1 text-[11px] font-semibold text-foreground transition-colors hover:bg-surface-container"
             >
-              <CheckCheck className="h-3 w-3" />
-              Mark all read
-            </button>
+              <CheckCheck className="h-3 w-3" />{uiText("ui.mark_all_read_3bc62a9e6a")}</button>
           )}
         </div>
         <DropdownMenuSeparator className="m-0" />
@@ -165,10 +166,8 @@ export function NotificationBell() {
               <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-surface-container">
                 <Bell className="h-5 w-5 text-muted-foreground" />
               </div>
-              <p className="text-sm font-semibold text-foreground">No notifications</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                New activity will show up here.
-              </p>
+              <p className="text-sm font-semibold text-foreground">{uiText("ui.no_notifications_cbce2040cc")}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">{uiText("ui.new_activity_will_show_up_here_a0193e2b0e")}</p>
             </div>
           ) : (
             <ul className="py-1">

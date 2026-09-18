@@ -26,6 +26,7 @@ import { SavedCollectionButton } from "@/components/shared/saved-collection-butt
 import { CommunityFeedMuteMenu } from "@/components/shared/community-feed-mute-menu";
 import { CommunityAuthorEditor } from "@/components/shared/community-author-editor";
 import { CommunityReplyForm } from "@/components/shared/community-reply-form";
+import { t as uiText } from "@/lib/i18n";
 
 function getVehicleName(vehicle: { year: number | null; make: string | null; model: string | null; trim: string | null } | null) {
   return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ");
@@ -47,16 +48,16 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
             <Avatar className="h-10 w-10">
               <AvatarImage src={post.author?.avatar_url ?? ""} />
               <AvatarFallback className="text-xs">
-                {getInitials(post.author?.display_name ?? post.author?.username ?? "U")}
+                {getInitials(post.author?.display_name ?? post.author?.username ?? uiText("ui.u_a25513c7e0"))}
               </AvatarFallback>
             </Avatar>
             <div>
               <p className="text-sm font-bold text-on-surface">
-                {post.author?.display_name ?? post.author?.username ?? "PerfectPPI user"}
+                {post.author?.display_name ?? post.author?.username ?? uiText("ui.perfectppi_user_77df1ce619")}
               </p>
               <p className="text-xs text-on-surface-variant">
                 {linkToPost ? <Link href={sharePath({ kind: "post", id: post.id })} className="hover:underline">{formatDate(post.created_at)}</Link> : formatDate(post.created_at)}
-                {post.edited_at ? <span title={`Edited ${formatDate(post.edited_at)}`}> · Edited</span> : null}
+                {post.edited_at ? <span title={uiText("ui.edited_b37cf770a2", { arg0: String(formatDate(post.edited_at)) })}>{uiText("ui.edited_e9d550c507")}</span> : null}
               </p>
               {post.group ? (
                 <Link href={`/community/groups/${post.group.slug}`} className="text-xs font-semibold text-primary hover:underline">
@@ -68,7 +69,7 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
           <div className="flex items-center gap-2">
             {post.post_type === "question" ? (
               <Badge className="bg-teal/10 text-teal hover:bg-teal/10">
-                {post.accepted_answer_comment_id ? "Solved" : "Question"}
+                {post.accepted_answer_comment_id ? uiText("ui.solved_eb858c458b") : uiText("ui.question_289aff12b0")}
               </Badge>
             ) : post.post_type !== "general" && POST_TYPE_LABELS[post.post_type as PostType] ? (
               <Badge className="bg-teal/10 text-teal hover:bg-teal/10">{POST_TYPE_LABELS[post.post_type as PostType].chip}</Badge>
@@ -120,13 +121,12 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
         ) : null}
         {post.collapsed_repost_count > 0 ? (
           <p className="mt-4 rounded-xl bg-surface-container px-3 py-2 text-xs text-on-surface-variant">
-            {post.collapsed_repost_count} repetitive repost{post.collapsed_repost_count === 1 ? "" : "s"} collapsed.
-          </p>
+            {post.collapsed_repost_count}{uiText("ui.repetitive_repost_c3e6f21b61")}{post.collapsed_repost_count === 1 ? "" : uiText("ui.s_043a718774")}{uiText("ui.collapsed_2bbdb17c35")}</p>
         ) : null}
       </div>
 
       {post.post_type === "before_after" && post.media.length >= 2 ? (
-        <div className="mx-6 mb-2 grid grid-cols-2 gap-1 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant"><span>Before</span><span>After</span></div>
+        <div className="mx-6 mb-2 grid grid-cols-2 gap-1 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant"><span>{uiText("ui.before_9bb7250050")}</span><span>{uiText("ui.after_7b68fe5510")}</span></div>
       ) : null}
       <PostMediaCarousel media={post.media} />
 
@@ -153,18 +153,16 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
             <div className="mb-2 flex flex-wrap gap-2">
               {post.marketplace_listing ? (
                 <Badge className="bg-teal/10 text-teal hover:bg-teal/10">
-                  <Tag className="mr-1 h-3 w-3" />
-                  Marketplace Listing
-                </Badge>
+                  <Tag className="mr-1 h-3 w-3" />{uiText("ui.marketplace_listing_b3090cd8a1")}</Badge>
               ) : (
-                <Badge variant="outline">Vehicle Profile</Badge>
+                <Badge variant="outline">{uiText("ui.vehicle_profile_bb9e352661")}</Badge>
               )}
             </div>
             <p className="font-heading text-lg font-extrabold tracking-tight text-on-surface break-words">
-              {vehicleName || "Vehicle profile"}
+              {vehicleName || uiText("ui.vehicle_profile_003132d6e2")}
             </p>
             <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold text-on-surface-variant">
-              {post.vehicle.mileage != null && <span>{formatMileage(post.vehicle.mileage)} mi</span>}
+              {post.vehicle.mileage != null && <span>{formatMileage(post.vehicle.mileage)}{uiText("ui.mi_3074dbe604")}</span>}
               {post.marketplace_listing && (
                 <span>{formatCurrency(post.marketplace_listing.asking_price_cents)}</span>
               )}
@@ -183,10 +181,10 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
           />
           <CommunitySaveButton postId={post.id} initialSaved={post.saved_by_viewer} />
           <SavedCollectionButton entityType="post" entityId={post.id} compact />
-          <ShareButton path={sharePath({ kind: "post", id: post.id })} title={`${post.author?.display_name ?? post.author?.username ?? "A member"} on PerfectPPI Community`} />
+          <ShareButton path={sharePath({ kind: "post", id: post.id })} title={uiText("ui.on_perfectppi_community_b43573bef3", { arg0: String(post.author?.display_name ?? post.author?.username ?? uiText("ui.a_member_239ee7bae2")) })} />
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-on-surface-variant" />
-            {liveCommentCount} comment{liveCommentCount === 1 ? "" : "s"}
+            {liveCommentCount}{uiText("ui.comment_774c7dd540")}{liveCommentCount === 1 ? "" : uiText("ui.s_043a718774")}
           </div>
         </div>
 
@@ -194,13 +192,11 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
           <div className="mb-5 space-y-3">
             {post.comments.map((comment) => {
               const isReply = Boolean(comment.parent_comment_id);
-              const authorName = comment.author?.display_name ?? comment.author?.username ?? "PerfectPPI user";
+              const authorName = comment.author?.display_name ?? comment.author?.username ?? uiText("ui.perfectppi_user_77df1ce619");
               if (comment.removed) {
                 // Plan 15.1: neutral placeholder keeps the replies below it readable.
                 return (
-                  <div key={comment.id} className="rounded-xl bg-surface-container px-4 py-3 text-xs italic text-on-surface-variant ghost-border">
-                    Comment removed
-                  </div>
+                  <div key={comment.id} className="rounded-xl bg-surface-container px-4 py-3 text-xs italic text-on-surface-variant ghost-border">{uiText("ui.comment_removed_f80ae1c83e")}</div>
                 );
               }
               const text = (
@@ -227,7 +223,7 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
                     <div className="flex items-center gap-2">
                       <p className="text-[10px] text-on-surface-variant">
                         {formatDate(comment.created_at)}
-                        {comment.edited_at ? <span title={`Edited ${formatDate(comment.edited_at)}`}> · Edited</span> : null}
+                        {comment.edited_at ? <span title={uiText("ui.edited_b37cf770a2", { arg0: String(formatDate(comment.edited_at)) })}>{uiText("ui.edited_e9d550c507")}</span> : null}
                       </p>
                       {comment.report_context ? (
                         <CommunityReportControl entityType="community_comment" entityId={comment.id} reportContext={comment.report_context} compact />
@@ -259,11 +255,11 @@ export function CommunityPostArticle({ post, viewerId, linkToPost = true }: { po
         {post.can_interact ? (
           <form action={createCommunityComment} className="space-y-3">
             <input type="hidden" name="post_id" value={post.id} />
-            <Textarea name="content" placeholder="Add a factual question or comment..." rows={3} maxLength={600} />
-            <Button type="submit" size="sm">Comment</Button>
+            <Textarea name="content" placeholder={uiText("ui.add_a_factual_question_or_comment_a4e0f21d49")} rows={3} maxLength={600} />
+            <Button type="submit" size="sm">{uiText("ui.comment_44f5e3fbec")}</Button>
           </form>
         ) : post.group ? (
-          <Button asChild size="sm" variant="outline"><Link href={`/community/groups/${post.group.slug}`}>Join the group to comment</Link></Button>
+          <Button asChild size="sm" variant="outline"><Link href={`/community/groups/${post.group.slug}`}>{uiText("ui.join_the_group_to_comment_4c6f5effb3")}</Link></Button>
         ) : null}
       </div>
     </article>

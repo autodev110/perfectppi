@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useSignOut } from "@/features/auth/hooks";
 import type { EnforcementNotice } from "@/lib/moderation/enforcement-notice";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type Status = {
   available: boolean;
   notice: EnforcementNotice | null;
@@ -28,6 +30,7 @@ type Status = {
  * Signing out is the escape hatch.
  */
 export default function AccountUnavailablePage() {
+  const uiText = useTranslator();
   const signOut = useSignOut();
   const [status, setStatus] = useState<Status | null | undefined>(undefined);
 
@@ -51,7 +54,7 @@ export default function AccountUnavailablePage() {
 
       {status === undefined ? (
         <div className="space-y-2" aria-busy="true">
-          <h1 className="font-heading text-3xl font-bold tracking-tight">Checking your account…</h1>
+          <h1 className="font-heading text-3xl font-bold tracking-tight">{uiText("ui.checking_your_account_caea68eeb9")}</h1>
         </div>
       ) : enforced && notice ? (
         <div className="space-y-3">
@@ -62,39 +65,29 @@ export default function AccountUnavailablePage() {
         </div>
       ) : (
         <div className="space-y-2">
-          <h1 className="font-heading text-3xl font-bold tracking-tight">
-            We can&apos;t load your account
-          </h1>
-          <p className="text-muted-foreground">
-            You&apos;re signed in, but your account is currently unavailable. This
-            may be temporary or may require help from support.
-          </p>
+          <h1 className="font-heading text-3xl font-bold tracking-tight">{uiText("ui.we_can_t_load_your_account_62670c847b")}</h1>
+          <p className="text-muted-foreground">{uiText("ui.you_re_signed_in_but_your_account_is_current_ca68d366a6")}</p>
         </div>
       )}
 
       <div className="space-y-3">
         {!enforced ? (
           <Button asChild className="w-full">
-            <Link href="/dashboard">Try again</Link>
+            <Link href="/dashboard">{uiText("ui.try_again_d8b8392e2c")}</Link>
           </Button>
         ) : null}
         <Button asChild variant={enforced ? "default" : "ghost"} className="w-full">
-          <Link href={status?.support_path ?? "/support"}>{enforced ? "Contact support to request a review" : "Contact support"}</Link>
+          <Link href={status?.support_path ?? "/support"}>{enforced ? uiText("ui.contact_support_to_request_a_review_9f84f24c9a") : uiText("ui.contact_support_814f4ed2d5")}</Link>
         </Button>
-        <Button variant="outline" className="w-full" onClick={signOut}>
-          Sign out
-        </Button>
+        <Button variant="outline" className="w-full" onClick={signOut}>{uiText("ui.sign_out_48f0d3d397")}</Button>
         {enforced ? (
           <Button asChild variant="ghost" className="w-full">
-            <Link href="/privacy-choices">Privacy choices and data requests</Link>
+            <Link href="/privacy-choices">{uiText("ui.privacy_choices_and_data_requests_cd4179787b")}</Link>
           </Button>
         ) : null}
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        You can still read our policies, contact support, and exercise your
-        privacy rights while product access is unavailable.
-      </p>
+      <p className="text-xs text-muted-foreground">{uiText("ui.you_can_still_read_our_policies_contact_supp_926ef3983e")}</p>
     </div>
   );
 }

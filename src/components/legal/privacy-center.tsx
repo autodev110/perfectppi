@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { t as uiText } from "@/lib/i18n";
+import { useTranslator } from "@/lib/i18n/client";
 
 type PrivacyRequest = {
   id: string;
@@ -16,13 +18,14 @@ type PrivacyRequest = {
 type Identity = { id: string; provider: string };
 
 const requestTypes = [
-  ["access", "Access my data"],
-  ["correction", "Correct my data"],
-  ["opt_out", "Privacy opt-out"],
-  ["appeal", "Appeal a privacy decision"],
+  ["access", uiText("ui.access_my_data_95157e99f7")],
+  ["correction", uiText("ui.correct_my_data_4324cca491")],
+  ["opt_out", uiText("ui.privacy_opt_out_868ae136f4")],
+  ["appeal", uiText("ui.appeal_a_privacy_decision_f433c4ef0a")],
 ] as const;
 
 export function PrivacyCenter() {
+  const uiText = useTranslator();
   const [requests, setRequests] = useState<PrivacyRequest[]>([]);
   const [identities, setIdentities] = useState<Identity[]>([]);
   const [requestType, setRequestType] = useState<(typeof requestTypes)[number][0]>("access");
@@ -73,8 +76,8 @@ export function PrivacyCenter() {
     });
     const body = await response.json().catch(() => ({}));
     setMessage(response.ok
-      ? body.message ?? "Request submitted."
-      : body.error ?? "Request could not be submitted.");
+      ? body.message ?? uiText("ui.request_submitted_b170085590")
+      : body.error ?? uiText("ui.request_could_not_be_submitted_6bc6e41b61"));
     if (response.ok) {
       setDetails("");
       setDeletionConfirmation("");
@@ -89,10 +92,10 @@ export function PrivacyCenter() {
     const response = await fetch("/api/account/identities", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider: "google" }),
+      body: JSON.stringify({ provider: uiText("ui.google_bbdefa2950") }),
     });
     const body = await response.json().catch(() => ({}));
-    setMessage(response.ok ? "Google was disconnected." : body.error ?? "Google could not be disconnected.");
+    setMessage(response.ok ? uiText("ui.google_was_disconnected_a969b8ae80") : body.error ?? uiText("ui.google_could_not_be_disconnected_deea71846c"));
     if (response.ok) await load();
     setWorking(false);
   }
@@ -109,10 +112,10 @@ export function PrivacyCenter() {
     if (response.ok) {
       setAnalyticsEnabled(body.enabled === true);
       setMessage(enabled
-        ? "Product analytics is enabled."
-        : "Product analytics is disabled and your existing product events were deleted.");
+        ? uiText("ui.product_analytics_is_enabled_95633e61ef")
+        : uiText("ui.product_analytics_is_disabled_and_your_exist_c4f9827831"));
     } else {
-      setMessage(body.error ?? "Analytics preference could not be saved.");
+      setMessage(body.error ?? uiText("ui.analytics_preference_could_not_be_saved_5e511a2da5"));
     }
     setWorking(false);
   }
@@ -121,27 +124,27 @@ export function PrivacyCenter() {
 
   return (
     <Card>
-      <CardHeader><CardTitle>Privacy & Account</CardTitle></CardHeader>
+      <CardHeader><CardTitle>{uiText("ui.privacy_account_3f19ac8fe8")}</CardTitle></CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2 text-sm text-muted-foreground">
-          <p>Request access, export, correction, opt-out, appeal, or account deletion. We may verify your identity before completing a request.</p>
+          <p>{uiText("ui.request_access_export_correction_opt_out_app_0f74e000ec")}</p>
           <p>
-            <Link href="/privacy" className="font-medium text-accent underline">Privacy Policy</Link>
-            {" · "}<Link href="/privacy-choices" className="font-medium text-accent underline">Privacy Choices</Link>
-            {" · "}<Link href="/terms" className="font-medium text-accent underline">Terms</Link>
+            <Link href="/privacy" className="font-medium text-accent underline">{uiText("ui.privacy_policy_506ff39462")}</Link>
+            {" · "}<Link href="/privacy-choices" className="font-medium text-accent underline">{uiText("ui.privacy_choices_174105e93f")}</Link>
+            {" · "}<Link href="/terms" className="font-medium text-accent underline">{uiText("ui.terms_ede5489964")}</Link>
           </p>
         </div>
 
         <div className="space-y-3">
           <div className="rounded-md border p-4">
-            <h3 className="text-sm font-semibold">Download your data</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Create an authenticated JSON export of your account, inspections, vehicles, posts, messages, and related records.</p>
+            <h3 className="text-sm font-semibold">{uiText("ui.download_your_data_fdbb4b35c4")}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{uiText("ui.create_an_authenticated_json_export_of_your__49059a7476")}</p>
             <Button asChild variant="outline" className="mt-3">
-              <a href="/api/privacy/export" download>Download My Data</a>
+              <a href="/api/privacy/export" download>{uiText("ui.download_my_data_5c4238f6a8")}</a>
             </Button>
           </div>
 
-          <Label htmlFor="privacy-request-type">Request type</Label>
+          <Label htmlFor="privacy-request-type">{uiText("ui.request_type_6db8df2da9")}</Label>
           <select
             id="privacy-request-type"
             value={requestType}
@@ -150,21 +153,21 @@ export function PrivacyCenter() {
           >
             {requestTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <Label htmlFor="privacy-request-details">Details (optional)</Label>
+          <Label htmlFor="privacy-request-details">{uiText("ui.details_optional_4239d7e46a")}</Label>
           <Textarea
             id="privacy-request-details"
             value={details}
             onChange={(event) => setDetails(event.target.value)}
             maxLength={2000}
             rows={3}
-            placeholder="Tell us what you need. Do not include passwords or payment details."
+            placeholder={uiText("ui.tell_us_what_you_need_do_not_include_passwor_1c385fb3bd")}
           />
-          <Button disabled={working} onClick={() => submitRequest(requestType)}>Submit Privacy Request</Button>
+          <Button disabled={working} onClick={() => submitRequest(requestType)}>{uiText("ui.submit_privacy_request_0b54e3291d")}</Button>
         </div>
 
         {requests.length > 0 && (
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold">Recent requests</h3>
+            <h3 className="text-sm font-semibold">{uiText("ui.recent_requests_b83a589f11")}</h3>
             {requests.slice(0, 5).map((request) => (
               <div key={request.id} className="flex items-center justify-between rounded-md border p-3 text-sm">
                 <span>{request.request_type.replaceAll("_", " ")}</span>
@@ -176,9 +179,9 @@ export function PrivacyCenter() {
 
         {hasGoogle && (
           <div className="space-y-2 border-t pt-5">
-            <h3 className="text-sm font-semibold">Connected sign-in methods</h3>
-            <p className="text-sm text-muted-foreground">Google can be disconnected only when another sign-in method is available, so you cannot lock yourself out.</p>
-            <Button variant="outline" disabled={working} onClick={disconnectGoogle}>Disconnect Google</Button>
+            <h3 className="text-sm font-semibold">{uiText("ui.connected_sign_in_methods_feb3314289")}</h3>
+            <p className="text-sm text-muted-foreground">{uiText("ui.google_can_be_disconnected_only_when_another_827d5e44ff")}</p>
+            <Button variant="outline" disabled={working} onClick={disconnectGoogle}>{uiText("ui.disconnect_google_1f4e6793ca")}</Button>
           </div>
         )}
 
@@ -193,18 +196,16 @@ export function PrivacyCenter() {
               className="mt-1 h-5 w-5 rounded border-input accent-accent"
             />
             <div>
-              <Label htmlFor="usage-analytics-enabled">Share product usage analytics</Label>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Help improve PerfectPPI with coarse action counts. We do not include message text, report details, VINs, exact locations, or advertising identifiers. Turning this off deletes your existing product events.
-              </p>
+              <Label htmlFor="usage-analytics-enabled">{uiText("ui.share_product_usage_analytics_dd776f8d5f")}</Label>
+              <p className="mt-1 text-sm text-muted-foreground">{uiText("ui.help_improve_perfectppi_with_coarse_action_c_42bdec3d1e")}</p>
             </div>
           </div>
         </div>
 
         <div className="space-y-3 border-t pt-5">
-          <h3 className="text-sm font-semibold text-destructive">Delete account</h3>
-          <p className="text-sm text-muted-foreground">This schedules permanent account deletion. It normally begins within 24 hours; processing pauses only where a documented legal preservation hold applies.</p>
-          <Label htmlFor="delete-confirmation">Type DELETE to confirm</Label>
+          <h3 className="text-sm font-semibold text-destructive">{uiText("ui.delete_account_a2e20a3357")}</h3>
+          <p className="text-sm text-muted-foreground">{uiText("ui.this_schedules_permanent_account_deletion_it_a70e5cd754")}</p>
+          <Label htmlFor="delete-confirmation">{uiText("ui.type_delete_to_confirm_d4856f418b")}</Label>
           <input
             id="delete-confirmation"
             value={deletionConfirmation}
@@ -215,9 +216,7 @@ export function PrivacyCenter() {
             variant="destructive"
             disabled={working || deletionConfirmation !== "DELETE"}
             onClick={() => submitRequest("deletion", deletionConfirmation)}
-          >
-            Request Account Deletion
-          </Button>
+          >{uiText("ui.request_account_deletion_29ac7e6d5b")}</Button>
         </div>
 
         {message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}

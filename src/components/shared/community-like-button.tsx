@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 export function CommunityLikeButton({
   postId,
   initialLiked,
@@ -15,6 +17,7 @@ export function CommunityLikeButton({
   initialCount: number;
   disabled?: boolean;
 }) {
+  const uiText = useTranslator();
   const [liked, setLiked] = useState(initialLiked);
   const [count, setCount] = useState(initialCount);
   const [busy, setBusy] = useState(false);
@@ -36,13 +39,13 @@ export function CommunityLikeButton({
         body: JSON.stringify({ liked: nextLiked }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? "Could not update like");
+      if (!response.ok) throw new Error(payload.error ?? uiText("ui.could_not_update_like_3e4642f81d"));
       setLiked(payload.data.liked);
       setCount(payload.data.likeCount);
     } catch (caught) {
       setLiked(previousLiked);
       setCount(previousCount);
-      setError(caught instanceof Error ? caught.message : "Could not update like");
+      setError(caught instanceof Error ? caught.message : uiText("ui.could_not_update_like_3e4642f81d"));
     } finally {
       setBusy(false);
     }
@@ -55,7 +58,7 @@ export function CommunityLikeButton({
         onClick={toggle}
         disabled={busy || disabled}
         aria-pressed={liked}
-        aria-label={disabled ? `${count} likes` : liked ? "Unlike post" : "Like post"}
+        aria-label={disabled ? uiText("ui.likes_411935c69d", { arg0: String(count) }) : liked ? uiText("ui.unlike_post_6b51363be8") : uiText("ui.like_post_0b310074a0")}
         className={cn(
           "inline-flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-sm font-semibold transition-colors",
           liked ? "text-red-600" : "text-on-surface-variant hover:bg-surface-container-high",

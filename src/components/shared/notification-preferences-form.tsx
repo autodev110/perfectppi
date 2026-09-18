@@ -4,9 +4,12 @@ import { useState } from "react";
 import type { NotificationPreference } from "@/features/notifications/preferences";
 import { cn } from "@/lib/utils";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 // Per-category in-app/push switches (plan 22.1). Locked categories render
 // as always-on. Each change saves immediately and rolls back on failure.
 export function NotificationPreferencesForm({ initial }: { initial: NotificationPreference[] }) {
+  const uiText = useTranslator();
   const [rows, setRows] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,11 +30,11 @@ export function NotificationPreferencesForm({ initial }: { initial: Notification
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
-        throw new Error(payload?.error ?? "Could not save");
+        throw new Error(payload?.error ?? uiText("ui.could_not_save_16efcd21d7"));
       }
     } catch (caught) {
       setRows(previous);
-      setError(caught instanceof Error ? caught.message : "Could not save");
+      setError(caught instanceof Error ? caught.message : uiText("ui.could_not_save_16efcd21d7"));
     } finally {
       setBusy(null);
     }
@@ -40,17 +43,15 @@ export function NotificationPreferencesForm({ initial }: { initial: Notification
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 gap-y-3 text-sm">
-        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Category</span>
-        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">In-app</span>
-        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Push</span>
+        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{uiText("ui.category_292c06f004")}</span>
+        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{uiText("ui.in_app_a2de15673a")}</span>
+        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{uiText("ui.push_731ce7ed80")}</span>
         {rows.map((row) => (
           <RowFragment key={row.category} row={row} busy={busy} onChange={update} />
         ))}
       </div>
       {error ? <p role="alert" className="text-xs text-destructive">{error}</p> : null}
-      <p className="text-xs text-muted-foreground">
-        Safety, moderation, and account notices are always delivered so you never miss a decision about your content or your account.
-      </p>
+      <p className="text-xs text-muted-foreground">{uiText("ui.safety_moderation_and_account_notices_are_al_789a0e5e2f")}</p>
     </div>
   );
 }
@@ -64,6 +65,7 @@ function RowFragment({
   busy: string | null;
   onChange: (category: string, field: "in_app" | "push", value: boolean) => void;
 }) {
+  const uiText = useTranslator();
   const disabled = row.locked;
   return (
     <>
@@ -79,7 +81,7 @@ function RowFragment({
             checked={row[field]}
             disabled={disabled || busy === `${row.category}:${field}`}
             onChange={(event) => onChange(row.category, field, event.target.checked)}
-            aria-label={`${row.label} ${field === "in_app" ? "in-app" : "push"} notifications`}
+            aria-label={uiText("ui.notifications_659e342a16", { arg0: String(row.label), arg1: String(field === "in_app" ? "in-app" : "push") })}
           />
         </label>
       ))}

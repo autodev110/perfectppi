@@ -6,10 +6,11 @@ import {
   DISCLOSURES_LAST_UPDATED,
   MODERATION_RESPONSE_TARGETS,
 } from "@/lib/legal/constants";
+import { t as uiText } from "@/lib/i18n";
 
 export const metadata: Metadata = {
-  title: "Community Guidelines",
-  description: "Rules for PerfectPPI posts, comments, reviews, listings, profiles, messages, and media, and how reporting and moderation work.",
+  title: uiText("ui.community_guidelines_5e0f74c160"),
+  description: uiText("ui.rules_for_perfectppi_posts_comments_reviews__e991fe0762"),
   alternates: { canonical: `${CANONICAL_ORIGIN}/community-guidelines` },
 };
 
@@ -19,74 +20,49 @@ export const metadata: Metadata = {
 export default function CommunityGuidelinesPage() {
   return (
     <LegalDocument
-      title="Community Guidelines"
-      description="These rules apply to posts, comments, reviews, listings, profiles, usernames, messages, attachments, and other content you submit to PerfectPPI. They exist so the Community stays useful for people who own, inspect, repair, buy, and sell vehicles."
+      title={uiText("ui.community_guidelines_5e0f74c160")}
+      description={uiText("ui.these_rules_apply_to_posts_comments_reviews__00cc415583")}
       updated={DISCLOSURES_LAST_UPDATED}
       version="community-guidelines-2026-09-10"
     >
-      <h2>What the Community is for</h2>
-      <p>
-        Document a vehicle, solve a problem, learn from owners and technicians, evaluate a purchase, and sell with trustworthy history. Posts that help someone do one of those things belong here. Content that exists only to provoke, sell unrelated products, or farm attention does not.
-      </p>
+      <h2>{uiText("ui.what_the_community_is_for_92a28bd2d2")}</h2>
+      <p>{uiText("ui.document_a_vehicle_solve_a_problem_learn_fro_ac98146c50")}</p>
 
-      <h2>Be accurate and authentic</h2>
-      <p>
-        Use one account and your real ownership context. Do not impersonate another person, shop, or manufacturer; fabricate inspection evidence, mileage, service history, or reviews; conceal a material relationship with a seller or shop; misstate credentials; manipulate ratings; pressure or retaliate against someone for an honest review or private inspection dispute; or list a vehicle you are not authorized to sell. Honest positive and negative opinions are welcome.
-      </p>
+      <h2>{uiText("ui.be_accurate_and_authentic_278eeb39ef")}</h2>
+      <p>{uiText("ui.use_one_account_and_your_real_ownership_cont_8ff749abd9")}</p>
 
-      <h2 id="vehicle-safety">Vehicle safety comes first</h2>
-      <p>
-        Community answers are not a professional diagnosis. Do not present guesswork as certainty on brakes, steering, airbags, fuel systems, vehicle lifting and jack points, wheel fasteners, or high-voltage EV systems, and do not encourage anyone to disable a safety system, ignore a recall, or drive a vehicle that is not safe to drive. Speed runs, street-racing challenges, and content that encourages dangerous driving are not allowed. PerfectPPI labels posts that involve these topics with a safety notice; treat it seriously and get qualified help for anything you would not stake your life on.
-      </p>
+      <h2 id="vehicle-safety">{uiText("ui.vehicle_safety_comes_first_18b4523c65")}</h2>
+      <p>{uiText("ui.community_answers_are_not_a_professional_dia_9c3ed1fba7")}</p>
 
-      <h2>No scams or unsafe transactions</h2>
-      <p>
-        Do not solicit deposits before a buyer has seen a vehicle, ask for gift cards, wire transfers, or other untraceable payment, post a listing you do not control, advertise title washing, odometer tampering, or emissions-defeat parts, or move a conversation off-platform to avoid PerfectPPI protections. Report suspicious listings and messages rather than warning other members in public with unverified accusations.
-      </p>
+      <h2>{uiText("ui.no_scams_or_unsafe_transactions_1817766f2f")}</h2>
+      <p>{uiText("ui.do_not_solicit_deposits_before_a_buyer_has_s_213ac50dcf")}</p>
 
-      <h2>Respect people</h2>
-      <p>
-        Disagree about cars, not about people. Threats, targeted harassment, bullying, hate or dehumanizing content, sexual content, sexual exploitation, child sexual abuse material, non-consensual intimate imagery, and instructions for self-harm are prohibited and may be preserved and escalated as the law requires. Do not organize brigading against a member, shop, or seller.
-      </p>
+      <h2>{uiText("ui.respect_people_d573becc2d")}</h2>
+      <p>{uiText("ui.disagree_about_cars_not_about_people_threats_ab771b6148")}</p>
 
-      <h2>Protect privacy</h2>
-      <p>
-        Share only what you have the right to share. Do not post another person&apos;s home address, precise live location, phone number, full VIN, plate in a way that identifies a private owner, documents, signatures, private messages, or face without an appropriate basis. Your own vehicle&apos;s VIN, receipts, and inspection details stay private unless you choose to show a redacted summary. PerfectPPI removes location and device metadata from photos you publish, but it cannot remove what is visible in the picture.
-      </p>
+      <h2>{uiText("ui.protect_privacy_58cea86e53")}</h2>
+      <p>{uiText("ui.share_only_what_you_have_the_right_to_share__0de691668a")}</p>
 
-      <h2>No spam or platform abuse</h2>
-      <p>
-        No unsolicited promotion, repeated or near-duplicate posting, link farming, scraping, fake engagement, evasion of a block or restriction, alternate accounts to get around enforcement, or uploads designed to defeat safety checks. Posts are limited to a small number of links; executable and disguised links are rejected.
-      </p>
+      <h2>{uiText("ui.no_spam_or_platform_abuse_8baa7641c2")}</h2>
+      <p>{uiText("ui.no_unsolicited_promotion_repeated_or_near_du_0c18f5bff1")}</p>
 
-      <h2>How publishing works right now</h2>
-      <p>
-        Ordinary text posts and comments publish immediately after automatic server checks for length, link safety, duplicate and rapid posting, and a small set of high-confidence disallowed patterns such as exposed personal information, direct threats, and known scam phrasing. There is no routine human or AI approval step before an ordinary text post appears. Still photos are checked against a specialist illegal-image safeguard and re-encoded with metadata removed before they publish; if that safeguard is unavailable, new photos wait rather than publish unchecked. Community video is not available in this release. Existing content that was previously pending, rejected, or held remains unavailable.
-      </p>
+      <h2>{uiText("ui.how_publishing_works_right_now_ac3df62ff5")}</h2>
+      <p>{uiText("ui.ordinary_text_posts_and_comments_publish_imm_ba80550d29")}</p>
 
-      <h2>Reporting</h2>
-      <p>
-        Every post and comment you did not write has a report control. Choose the reason that best describes what you observed and add details when asked. A first valid report hides the post or comment from everyone while the PerfectPPI team reviews it; reporting a comment hides only that comment. The author is never told who reported them. Reports are rate-limited, and reports the team determines were knowingly false or abusive can lead to enforcement against the reporter. For imminent danger to a person, contact local emergency services; PerfectPPI is not an emergency service.
-      </p>
+      <h2>{uiText("ui.reporting_b1fa104b9b")}</h2>
+      <p>{uiText("ui.every_post_and_comment_you_did_not_write_has_c41b900811")}</p>
 
-      <h2>Blocking and muting</h2>
-      <p>
-        Blocking a member removes each of you from the other&apos;s posts, comments, search, suggestions, and messages, cancels any pending requests, and is not announced. Muting hides a member&apos;s posts from you without changing anything for them. Both are managed from your privacy settings and can be reversed.
-      </p>
+      <h2>{uiText("ui.blocking_and_muting_0120b87260")}</h2>
+      <p>{uiText("ui.blocking_a_member_removes_each_of_you_from_t_61fd2b6f36")}</p>
 
-      <h2>Moderation decisions and appeals</h2>
-      <p>
-        A trained member of the PerfectPPI team reviews hidden content and chooses one of three outcomes: restore it to its original audience, remove it from the Community, or preserve it under restricted legal review. We aim to review urgent reports (threats, exposed personal information, suspected illegal content) within {MODERATION_RESPONSE_TARGETS.urgentHours} hours and other reports within {MODERATION_RESPONSE_TARGETS.ordinaryHours} hours. Authors are notified of the outcome and, when content is removed, told which policy applied and how to appeal; appeals are normally reviewed within {MODERATION_RESPONSE_TARGETS.appealHours} hours by someone other than the original reviewer when staffing permits. Depending on severity and history, enforcement may include a warning, a temporary posting, media, or reporting hold, suspension, or a permanent ban. Every decision is recorded and auditable.
-      </p>
+      <h2>{uiText("ui.moderation_decisions_and_appeals_4cc0c76f8b")}</h2>
+      <p>{uiText("ui.a_trained_member_of_the_perfectppi_team_revi_87b501a43a")}{MODERATION_RESPONSE_TARGETS.urgentHours}{uiText("ui.hours_and_other_reports_within_375ea02651")}{MODERATION_RESPONSE_TARGETS.ordinaryHours}{uiText("ui.hours_authors_are_notified_of_the_outcome_an_7882609457")}{MODERATION_RESPONSE_TARGETS.appealHours}{uiText("ui.hours_by_someone_other_than_the_original_rev_6206f7ca1e")}</p>
 
-      <h2>What removal means</h2>
-      <p>
-        Removing content takes it off every PerfectPPI surface and stops it from being retrieved again. The underlying record, reports, and evidence are retained under restricted access for an approved retention period so that appeals, legal obligations, and abuse prevention can be honored, then disposed of; a legal hold keeps evidence for as long as the hold applies. Deleting your account removes your public identity immediately but does not shorten that period for content already under review or confirmed as a violation. PerfectPPI cannot recall copies that other people already saved or screenshotted.
-      </p>
+      <h2>{uiText("ui.what_removal_means_748bea37c6")}</h2>
+      <p>{uiText("ui.removing_content_takes_it_off_every_perfectp_bbaf033655")}</p>
 
-      <h2>Copyright and other complaints</h2>
-      <p>
-        Use the <Link href="/copyright">Copyright Complaints</Link> page for infringement notices; intellectual-property reports require a written explanation. For anything else, or if you believe a decision was wrong, see <Link href="/support">Support &amp; Safety</Link>.
+      <h2>{uiText("ui.copyright_and_other_complaints_2d28e3c17d")}</h2>
+      <p>{uiText("ui.use_the_8f5f60fb25")}<Link href="/copyright">{uiText("ui.copyright_complaints_8d9566d40f")}</Link>{uiText("ui.page_for_infringement_notices_intellectual_p_a8c89b3a02")}<Link href="/support">{uiText("ui.support_safety_8c5afaf04f")}</Link>.
       </p>
     </LegalDocument>
   );

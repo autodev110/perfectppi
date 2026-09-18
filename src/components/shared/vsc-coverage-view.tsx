@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { VscCoverageData, VscComponentDetermination } from "@/types/api";
 import { Shield, ShieldCheck, ShieldX, ShieldAlert } from "lucide-react";
+import { t as uiText } from "@/lib/i18n";
 
 interface VscCoverageViewProps {
   coverage: VscCoverageData;
@@ -14,19 +15,19 @@ const eligibilityConfig: Record<
   { label: string; color: string; icon: typeof Shield; bgColor: string }
 > = {
   eligible: {
-    label: "Eligible for Coverage",
+    label: uiText("ui.eligible_for_coverage_b8cbd7a4cf"),
     color: "text-emerald-700",
     icon: ShieldCheck,
     bgColor: "bg-emerald-50 border-emerald-200",
   },
   conditional: {
-    label: "Conditional Eligibility",
+    label: uiText("ui.conditional_eligibility_59177481cb"),
     color: "text-amber-700",
     icon: ShieldAlert,
     bgColor: "bg-amber-50 border-amber-200",
   },
   ineligible: {
-    label: "Not Eligible",
+    label: uiText("ui.not_eligible_5c2dfa1435"),
     color: "text-red-700",
     icon: ShieldX,
     bgColor: "bg-red-50 border-red-200",
@@ -37,9 +38,9 @@ const determinationConfig: Record<
   VscComponentDetermination["determination"],
   { label: string; color: string }
 > = {
-  covered: { label: "Covered", color: "bg-emerald-100 text-emerald-800 border-emerald-300" },
-  limited: { label: "Limited", color: "bg-amber-100 text-amber-800 border-amber-300" },
-  excluded: { label: "Excluded", color: "bg-red-100 text-red-800 border-red-300" },
+  covered: { label: uiText("ui.covered_da69bf500e"), color: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+  limited: { label: uiText("ui.limited_e5125d9f63"), color: "bg-amber-100 text-amber-800 border-amber-300" },
+  excluded: { label: uiText("ui.excluded_bef1fd9e5c"), color: "bg-red-100 text-red-800 border-red-300" },
 };
 
 export function VscCoverageView({ coverage, generatedAt }: VscCoverageViewProps) {
@@ -68,9 +69,8 @@ export function VscCoverageView({ coverage, generatedAt }: VscCoverageViewProps)
                 {eligibility.label}
               </h3>
               <p className="text-sm mt-1 leading-relaxed">{eligibility_summary}</p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Generated{" "}
-                {new Date(generatedAt).toLocaleDateString("en-US", {
+              <p className="text-xs text-muted-foreground mt-2">{uiText("ui.generated_827ec8d9f9")}{" "}
+                {new Date(generatedAt).toLocaleDateString(uiText("ui.en_us_5c49f88daf"), {
                   month: "short",
                   day: "numeric",
                   year: "numeric",

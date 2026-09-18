@@ -30,6 +30,8 @@ import type {
   UserLinkView,
 } from "@/features/partner/queries";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 // ============================================================================
 // DealerSpace connection panel.
 //
@@ -45,6 +47,7 @@ interface Props {
 }
 
 export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Props) {
+  const uiText = useTranslator();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [freshCode, setFreshCode] = useState<string | null>(null);
@@ -64,7 +67,7 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
         return;
       }
       setFreshCode(result.data.code);
-      toast.success("Installation code generated. Copy it now — it is shown once.");
+      toast.success(uiText("ui.installation_code_generated_copy_it_now_it_i_5b29698e1a"));
       router.refresh();
     });
 
@@ -76,7 +79,7 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
         return;
       }
       setFreshCode(null);
-      toast.success("Installation code revoked.");
+      toast.success(uiText("ui.installation_code_revoked_72059237b0"));
       router.refresh();
     });
 
@@ -87,7 +90,7 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
         toast.error(result.error);
         return;
       }
-      toast.success("Connection revoked. Its credentials no longer work.");
+      toast.success(uiText("ui.connection_revoked_its_credentials_no_longer_f479709e90"));
       router.refresh();
     });
 
@@ -99,7 +102,7 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
         return;
       }
       setFreshCredentials(result.data);
-      toast.success("New credentials issued. Copy both values into DealerSpace now.");
+      toast.success(uiText("ui.new_credentials_issued_copy_both_values_into_89368abb70"));
       router.refresh();
     });
 
@@ -110,7 +113,7 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
         toast.error(result.error);
         return;
       }
-      toast.success("Account link revoked.");
+      toast.success(uiText("ui.account_link_revoked_f24a7fee53"));
       router.refresh();
     });
 
@@ -118,9 +121,7 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Plug className="h-4 w-4" />
-          DealerSpace Integration
-        </CardTitle>
+          <Plug className="h-4 w-4" />{uiText("ui.dealerspace_integration_d9a02ce966")}</CardTitle>
       </CardHeader>
 
       <CardContent className="space-y-6">
@@ -130,47 +131,44 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="font-semibold">
-                    {activeConnection.displayName ?? "DealerSpace"}
+                    {activeConnection.displayName ?? uiText("ui.dealerspace_7d7288383a")}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Dealership ID{" "}
+                  <p className="text-xs text-muted-foreground">{uiText("ui.dealership_id_452b0d8a6f")}{" "}
                     <span className="font-mono">
                       {activeConnection.externalOrganizationId}
                     </span>
                   </p>
                 </div>
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                  Connected
-                </span>
+                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">{uiText("ui.connected_22965568d2")}</span>
               </div>
 
               <dl className="mt-4 grid gap-x-8 gap-y-3 text-xs sm:grid-cols-2">
                 <div>
-                  <dt className="text-muted-foreground">Connected</dt>
+                  <dt className="text-muted-foreground">{uiText("ui.connected_22965568d2")}</dt>
                   <dd className="mt-0.5">{formatDateTime(activeConnection.connectedAt)}</dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Last used</dt>
+                  <dt className="text-muted-foreground">{uiText("ui.last_used_830ec7f812")}</dt>
                   <dd className="mt-0.5">
                     {activeConnection.lastUsedAt
                       ? formatDateTime(activeConnection.lastUsedAt)
-                      : "Never"}
+                      : uiText("ui.never_6300ef800b")}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Token</dt>
+                  <dt className="text-muted-foreground">{uiText("ui.token_d2089be672")}</dt>
                   <dd className="mt-0.5 font-mono">{activeConnection.tokenIdentifier}</dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Scopes</dt>
+                  <dt className="text-muted-foreground">{uiText("ui.scopes_0d5644ff52")}</dt>
                   <dd className="mt-0.5 font-mono">
                     {activeConnection.scopes.join(", ")}
                   </dd>
                 </div>
                 <div className="sm:col-span-2">
-                  <dt className="text-muted-foreground">Webhook endpoint</dt>
+                  <dt className="text-muted-foreground">{uiText("ui.webhook_endpoint_42b43613f6")}</dt>
                   <dd className="mt-0.5 break-all font-mono">
-                    {activeConnection.webhookUrl ?? "Not registered"}
+                    {activeConnection.webhookUrl ?? uiText("ui.not_registered_ca374c23ed")}
                   </dd>
                 </div>
               </dl>
@@ -178,10 +176,10 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
 
             {freshCredentials && (
               <SecretReveal
-                title="New credentials — shown once"
+                title={uiText("ui.new_credentials_shown_once_271428dae7")}
                 entries={[
-                  ["Connection token", freshCredentials.token],
-                  ["Webhook signing secret", freshCredentials.webhookSecret],
+                  [uiText("ui.connection_token_ffde763442"), freshCredentials.token],
+                  [uiText("ui.webhook_signing_secret_48c7cde407"), freshCredentials.webhookSecret],
                 ]}
               />
             )}
@@ -193,39 +191,26 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
                 disabled={pending}
                 onClick={() => rotate(activeConnection.id)}
               >
-                <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                Rotate credentials
-              </Button>
+                <RefreshCw className="mr-2 h-3.5 w-3.5" />{uiText("ui.rotate_credentials_99374a232d")}</Button>
               <Button
                 variant="outline"
                 size="sm"
                 disabled={pending}
                 onClick={() => disconnect(activeConnection.id)}
               >
-                <Trash2 className="mr-2 h-3.5 w-3.5" />
-                Revoke connection
-              </Button>
+                <Trash2 className="mr-2 h-3.5 w-3.5" />{uiText("ui.revoke_connection_473c85193b")}</Button>
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Rotation replaces both credentials immediately. Copy the one-time values,
-              then open DealerSpace → Settings → Perfect PPI and use “Verify and save
-              credentials.” DealerSpace verifies both values before storing them.
-            </p>
+            <p className="text-xs text-muted-foreground">{uiText("ui.rotation_replaces_both_credentials_immediate_b8c7de41c1")}</p>
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Generate an installation code and give it to your DealerSpace
-              administrator. They enter it in DealerSpace, which exchanges it for
-              credentials over a server-to-server call. The code is valid for 30 minutes
-              and works once.
-            </p>
+            <p className="text-sm text-muted-foreground">{uiText("ui.generate_an_installation_code_and_give_it_to_fa168bfde3")}</p>
 
             {freshCode ? (
               <SecretReveal
-                title="Installation code — shown once"
-                entries={[["Code", freshCode]]}
+                title={uiText("ui.installation_code_shown_once_22f91c733a")}
+                entries={[[uiText("ui.code_340f463033"), freshCode]]}
               />
             ) : (
               <Button onClick={generate} disabled={pending} size="sm">
@@ -233,17 +218,14 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
                   <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                 ) : (
                   <KeyRound className="mr-2 h-3.5 w-3.5" />
-                )}
-                Generate installation code
-              </Button>
+                )}{uiText("ui.generate_installation_code_d0e301dc0f")}</Button>
             )}
 
             {pendingCode && (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-xs">
                 <div>
                   <p className="font-mono font-medium">{pendingCode.codePrefix}-…</p>
-                  <p className="text-muted-foreground">
-                    Expires {formatDateTime(pendingCode.expiresAt)}
+                  <p className="text-muted-foreground">{uiText("ui.expires_d970e4fd10")}{formatDateTime(pendingCode.expiresAt)}
                   </p>
                 </div>
                 <Button
@@ -251,9 +233,7 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
                   size="sm"
                   disabled={pending}
                   onClick={() => revokeCode(pendingCode.id)}
-                >
-                  Revoke
-                </Button>
+                >{uiText("ui.revoke_87e6d00bbf")}</Button>
               </div>
             )}
           </div>
@@ -264,11 +244,8 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
             <Separator />
             <div className="space-y-3">
               <div>
-                <p className="text-sm font-medium">Linked technician accounts</p>
-                <p className="text-xs text-muted-foreground">
-                  Each technician authorized their own link. Revoking one stops that
-                  DealerSpace user from assigning inspections to them.
-                </p>
+                <p className="text-sm font-medium">{uiText("ui.linked_technician_accounts_b6e48bddab")}</p>
+                <p className="text-xs text-muted-foreground">{uiText("ui.each_technician_authorized_their_own_link_re_b639a35c50")}</p>
               </div>
 
               {userLinks.map((link) => (
@@ -278,11 +255,10 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
                 >
                   <div>
                     <p className="font-medium">
-                      {link.displayName ?? link.username ?? "Technician"}
+                      {link.displayName ?? link.username ?? uiText("ui.technician_9041ccc417")}
                     </p>
-                    <p className="text-muted-foreground">
-                      DealerSpace user{" "}
-                      <span className="font-mono">{link.externalUserId}</span> · linked{" "}
+                    <p className="text-muted-foreground">{uiText("ui.dealerspace_user_fb704b40fc")}{" "}
+                      <span className="font-mono">{link.externalUserId}</span>{uiText("ui.linked_105bbb09b1")}{" "}
                       {formatDateTime(link.linkedAt)}
                     </p>
                   </div>
@@ -292,11 +268,9 @@ export function DealerSpaceConnectionPanel({ connections, codes, userLinks }: Pr
                       size="sm"
                       disabled={pending}
                       onClick={() => unlinkUser(link.id)}
-                    >
-                      Revoke
-                    </Button>
+                    >{uiText("ui.revoke_87e6d00bbf")}</Button>
                   ) : (
-                    <span className="text-muted-foreground">Revoked</span>
+                    <span className="text-muted-foreground">{uiText("ui.revoked_f6f738d043")}</span>
                   )}
                 </div>
               ))}
@@ -315,6 +289,7 @@ function SecretReveal({
   title: string;
   entries: Array<[string, string]>;
 }) {
+  const uiText = useTranslator();
   const [copied, setCopied] = useState<string | null>(null);
 
   const copy = async (label: string, value: string) => {
@@ -323,7 +298,7 @@ function SecretReveal({
       setCopied(label);
       setTimeout(() => setCopied(null), 2000);
     } catch {
-      toast.error("Could not copy — select the text manually.");
+      toast.error(uiText("ui.could_not_copy_select_the_text_manually_1e283da2cc"));
     }
   };
 
@@ -359,10 +334,7 @@ function SecretReveal({
         ))}
       </div>
 
-      <p className="mt-3 text-xs text-muted-foreground">
-        Perfect PPI stores only a hash of these values and cannot show them again. If
-        they are lost, rotate the credentials.
-      </p>
+      <p className="mt-3 text-xs text-muted-foreground">{uiText("ui.perfect_ppi_stores_only_a_hash_of_these_valu_93b0ce8675")}</p>
     </div>
   );
 }

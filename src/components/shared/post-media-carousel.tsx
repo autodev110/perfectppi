@@ -4,12 +4,15 @@ import { useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Database } from "@/types/database";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type PostMedia = Pick<
   Database["public"]["Tables"]["community_post_media"]["Row"],
   "id" | "url" | "media_type" | "alt_text"
 >;
 
 export function PostMediaCarousel({ media }: { media: PostMedia[] }) {
+  const uiText = useTranslator();
   const track = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
 
@@ -22,7 +25,7 @@ export function PostMediaCarousel({ media }: { media: PostMedia[] }) {
   }
 
   return (
-    <div className="relative border-y border-outline-variant/20 bg-surface-container" role="region" aria-roledescription="carousel" aria-label="Post media">
+    <div className="relative border-y border-outline-variant/20 bg-surface-container" role="region" aria-roledescription="carousel" aria-label={uiText("ui.post_media_27a8b3f582")}>
       <div
         ref={track}
         className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth motion-reduce:scroll-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -32,14 +35,14 @@ export function PostMediaCarousel({ media }: { media: PostMedia[] }) {
         }}
       >
         {media.map((item, itemIndex) => (
-          <div key={item.id} className="relative aspect-square min-w-full snap-center bg-surface-container sm:aspect-[4/3]" role="group" aria-roledescription="slide" aria-label={`${itemIndex + 1} of ${media.length}`}>
+          <div key={item.id} className="relative aspect-square min-w-full snap-center bg-surface-container sm:aspect-[4/3]" role="group" aria-roledescription="slide" aria-label={uiText("ui.of_c0dcca3190", { arg0: String(itemIndex + 1), arg1: String(media.length) })}>
             {item.media_type === "video" ? (
               <video
                 src={item.url}
                 controls
                 playsInline
                 preload="metadata"
-                aria-label={item.alt_text || `Video ${itemIndex + 1}`}
+                aria-label={item.alt_text || uiText("ui.video_ae0ccc8b3e", { arg0: String(itemIndex + 1) })}
                 className="h-full w-full bg-black object-contain"
               />
             ) : (
@@ -62,9 +65,9 @@ export function PostMediaCarousel({ media }: { media: PostMedia[] }) {
       </div>
       {media.length > 1 ? (
         <>
-          <button type="button" onClick={() => go(index - 1)} disabled={index === 0} aria-label="Previous media" className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white shadow outline-none focus-visible:ring-4 focus-visible:ring-white disabled:invisible"><ChevronLeft className="h-5 w-5" /></button>
-          <button type="button" onClick={() => go(index + 1)} disabled={index === media.length - 1} aria-label="Next media" className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white shadow outline-none focus-visible:ring-4 focus-visible:ring-white disabled:invisible"><ChevronRight className="h-5 w-5" /></button>
-          <p className="sr-only" aria-live="polite">Media {index + 1} of {media.length}</p>
+          <button type="button" onClick={() => go(index - 1)} disabled={index === 0} aria-label={uiText("ui.previous_media_26b519b9f7")} className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white shadow outline-none focus-visible:ring-4 focus-visible:ring-white disabled:invisible"><ChevronLeft className="h-5 w-5" /></button>
+          <button type="button" onClick={() => go(index + 1)} disabled={index === media.length - 1} aria-label={uiText("ui.next_media_e7521225cb")} className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white shadow outline-none focus-visible:ring-4 focus-visible:ring-white disabled:invisible"><ChevronRight className="h-5 w-5" /></button>
+          <p className="sr-only" aria-live="polite">{uiText("ui.media_bbd28ef791")}{index + 1}{uiText("ui.of_a4282e4b22")}{media.length}</p>
         </>
       ) : null}
     </div>

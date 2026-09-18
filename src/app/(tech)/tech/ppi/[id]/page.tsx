@@ -15,6 +15,8 @@ import { inspectionDisplayName } from "@/features/ppi/presentation";
 import { INSPECTION_SCOPE_LABELS } from "@/features/ppi/constants";
 import type { InspectionScope } from "@/types/enums";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 interface RequestDetail {
   id: string;
   ppi_type: string;
@@ -39,6 +41,7 @@ interface RequestDetail {
 }
 
 export default function TechInspectionDetailPage() {
+  const uiText = useTranslator();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [request, setRequest] = useState<RequestDetail | null>(null);
@@ -63,7 +66,7 @@ export default function TechInspectionDetailPage() {
     setError(null);
     const result = await acceptRequest(id);
     if ("error" in result) {
-      setError(result.error ?? "Unknown error");
+      setError(result.error ?? uiText("ui.unknown_error_27c2ccd962"));
       setAccepting(false);
       return;
     }
@@ -82,9 +85,9 @@ export default function TechInspectionDetailPage() {
     return (
       <div className="text-center py-20">
         <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-        <p className="text-muted-foreground">Request not found</p>
+        <p className="text-muted-foreground">{uiText("ui.request_not_found_bb08e04092")}</p>
         <Button variant="outline" asChild className="mt-4">
-          <Link href="/tech/ppi">Back to Queue</Link>
+          <Link href="/tech/ppi">{uiText("ui.back_to_queue_1be6ee3fc9")}</Link>
         </Button>
       </div>
     );
@@ -105,7 +108,7 @@ export default function TechInspectionDetailPage() {
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/tech/ppi" aria-label="Back to inspection queue">
+          <Link href="/tech/ppi" aria-label={uiText("ui.back_to_inspection_queue_b780d80849")}>
             <ChevronLeft className="h-5 w-5" />
           </Link>
         </Button>
@@ -127,34 +130,33 @@ export default function TechInspectionDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Car className="h-4 w-4" /> Vehicle Details
-          </CardTitle>
+            <Car className="h-4 w-4" />{uiText("ui.vehicle_details_26dd95425e")}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <p className="text-muted-foreground text-xs">Inspection</p>
+            <p className="text-muted-foreground text-xs">{uiText("ui.inspection_6e4fa13da4")}</p>
             <p className="font-medium">
               {INSPECTION_SCOPE_LABELS[request.inspection_scope ?? "complete"]}
             </p>
           </div>
           {request.vehicle?.vin && (
             <div>
-              <p className="text-muted-foreground text-xs">VIN</p>
+              <p className="text-muted-foreground text-xs">{uiText("ui.vin_5e0211b12d")}</p>
               <p className="font-mono font-medium text-xs">{request.vehicle.vin}</p>
             </div>
           )}
           {request.vehicle?.mileage && (
             <div>
-              <p className="text-muted-foreground text-xs">Mileage</p>
-              <p className="font-medium">{request.vehicle.mileage.toLocaleString()} mi</p>
+              <p className="text-muted-foreground text-xs">{uiText("ui.mileage_ffe44a0179")}</p>
+              <p className="font-medium">{request.vehicle.mileage.toLocaleString()}{uiText("ui.mi_3074dbe604")}</p>
             </div>
           )}
           <div>
-            <p className="text-muted-foreground text-xs">Whose Car</p>
+            <p className="text-muted-foreground text-xs">{uiText("ui.whose_car_75614f1bb0")}</p>
             <p className="font-medium capitalize">{request.whose_car}</p>
           </div>
           <div>
-            <p className="text-muted-foreground text-xs">Request Type</p>
+            <p className="text-muted-foreground text-xs">{uiText("ui.request_type_50365e0bf8")}</p>
             <p className="font-medium capitalize">{request.requester_role}</p>
           </div>
         </CardContent>
@@ -163,18 +165,16 @@ export default function TechInspectionDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <User className="h-4 w-4" /> Requester
-          </CardTitle>
+            <User className="h-4 w-4" />{uiText("ui.requester_a374bf6170")}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm">
           <p className="font-medium">
             {request.requester?.display_name ??
-              (request.source_system === "dealerspace" ? "Dealership" : "Consumer")}
+              (request.source_system === "dealerspace" ? uiText("ui.dealership_a761f63f29") : uiText("ui.consumer_3fdb185870"))}
           </p>
           <p className="text-muted-foreground flex items-center gap-1 mt-1">
-            <Calendar className="h-3.5 w-3.5" />
-            Requested{" "}
-            {new Date(request.created_at).toLocaleDateString("en-US", {
+            <Calendar className="h-3.5 w-3.5" />{uiText("ui.requested_2d9e28289f")}{" "}
+            {new Date(request.created_at).toLocaleDateString(uiText("ui.en_us_5c49f88daf"), {
               month: "long",
               day: "numeric",
               year: "numeric",
@@ -188,28 +188,28 @@ export default function TechInspectionDetailPage() {
       {/* Actions */}
       {canAccept && (
         <Button onClick={handleAccept} disabled={accepting} className="w-full h-12 font-bold">
-          {accepting ? "Accepting…" : "Accept & Begin Inspection"}
+          {accepting ? uiText("ui.accepting_a168fd64e9") : uiText("ui.accept_begin_inspection_03f3c6c4bf")}
         </Button>
       )}
 
       {canInspect && (
         <Button asChild className="w-full h-12 font-bold">
           <Link href={`/tech/ppi/${id}/inspect`}>
-            {request.status === "in_progress" ? "Continue Inspection" : "Begin Inspection"}
+            {request.status === "in_progress" ? uiText("ui.continue_inspection_05f0b20679") : uiText("ui.begin_inspection_48623433af")}
           </Link>
         </Button>
       )}
 
       {canEdit && (
         <Button variant="outline" asChild className="w-full h-12 font-bold">
-          <Link href={`/tech/ppi/${id}/edit`}>Edit & Resubmit</Link>
+          <Link href={`/tech/ppi/${id}/edit`}>{uiText("ui.edit_resubmit_250add2f69")}</Link>
         </Button>
       )}
 
       {isSubmitted && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
-          <p className="text-emerald-800 font-semibold">Inspection submitted.</p>
-          <p className="text-emerald-700 text-sm mt-1">The requester has been notified.</p>
+          <p className="text-emerald-800 font-semibold">{uiText("ui.inspection_submitted_86f635ff98")}</p>
+          <p className="text-emerald-700 text-sm mt-1">{uiText("ui.the_requester_has_been_notified_c995f1eb73")}</p>
         </div>
       )}
 

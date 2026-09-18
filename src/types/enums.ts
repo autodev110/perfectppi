@@ -1,3 +1,5 @@
+
+import { t as uiText } from "./../lib/i18n/index.ts";
 // ============================================================================
 // PerfectPPI Enums — mirrors database enums + client-only types
 // ============================================================================
@@ -24,19 +26,19 @@ export const SWITCHABLE_ROLES = [
 ] as const satisfies readonly UserRole[];
 
 export const USER_ROLE_LABELS: Record<UserRole, string> = {
-  consumer: "Consumer",
-  technician: "Technician",
-  org_manager: "Organization Manager",
-  admin: "Admin",
-  developer: "Developer",
+  consumer: uiText("ui.consumer_3fdb185870"),
+  technician: uiText("ui.technician_9041ccc417"),
+  org_manager: uiText("ui.organization_manager_e5da2451a1"),
+  admin: uiText("ui.admin_c1c224b03c"),
+  developer: uiText("ui.developer_3fb7b39416"),
 };
 
 export const USER_ROLE_DESCRIPTIONS: Record<UserRole, string> = {
-  consumer: "Vehicles, listings, inspection requests, warranties.",
-  technician: "Assigned inspection queue, submissions, reviews.",
-  org_manager: "Organization roster, inspections, DealerSpace.",
-  admin: "Platform-wide moderation, outputs, contracts, audit log.",
-  developer: "This switcher. No portal data of its own.",
+  consumer: uiText("ui.vehicles_listings_inspection_requests_warran_37b9348016"),
+  technician: uiText("ui.assigned_inspection_queue_submissions_review_120633d424"),
+  org_manager: uiText("ui.organization_roster_inspections_dealerspace_17ee364020"),
+  admin: uiText("ui.platform_wide_moderation_outputs_contracts_a_fc93692c0a"),
+  developer: uiText("ui.this_switcher_no_portal_data_of_its_own_a5cd5d08fd"),
 };
 
 // Domain B: Vehicles
@@ -166,11 +168,11 @@ export type AuditAction =
 
 // Factual inspection-source labels. Avoid ranking or endorsement language.
 export const PPI_TRUST_TIERS = {
-  personal: { label: "Personal inspection", badge: "Owner entered", color: "amber" },
-  general_tech: { label: "Technician inspection", badge: "Technician", color: "slate" },
+  personal: { label: uiText("ui.personal_inspection_70f8e0f2cb"), badge: uiText("ui.owner_entered_5b48a5e342"), color: "amber" },
+  general_tech: { label: uiText("ui.technician_inspection_cd51204a54"), badge: uiText("ui.technician_9041ccc417"), color: "slate" },
   certified_tech: {
-    label: "Technician inspection",
-    badge: "Reviewed credential",
+    label: uiText("ui.technician_inspection_cd51204a54"),
+    badge: uiText("ui.reviewed_credential_3240dd1055"),
     color: "yellow",
   },
 } as const;

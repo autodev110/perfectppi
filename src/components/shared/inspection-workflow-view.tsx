@@ -24,6 +24,8 @@ import { CheckCircle2, AlertCircle, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { numberInputConstraints } from "@/features/ppi/answer-validation";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 interface InspectionWorkflowViewProps {
   requestId: string;
   submissionId: string;
@@ -37,6 +39,7 @@ export function InspectionWorkflowView({
   submissionId,
   returnPath,
 }: InspectionWorkflowViewProps) {
+  const uiText = useTranslator();
   const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>("workflow");
   const [started, setStarted] = useState(false);
@@ -70,7 +73,7 @@ export function InspectionWorkflowView({
         body: JSON.stringify({ storageReference: upload.storageReference }),
       });
       if (!response.ok) {
-        setMediaError(await uploadFailureMessage(response, "Could not remove the retained photo."));
+        setMediaError(await uploadFailureMessage(response, uiText("ui.could_not_remove_the_retained_photo_8724fa1ea5")));
         return;
       }
     }
@@ -99,12 +102,12 @@ export function InspectionWorkflowView({
           ppi_section_id: pending.sectionId,
           ppi_answer_id: pending.answerId ?? null,
           url: publicUrl,
-          media_type: "image",
+          media_type: uiText("ui.image_6105d6cc76"),
           captured_at: new Date().toISOString(),
         }),
       });
       if (!attachRes.ok) {
-        throw new UploadError(await uploadFailureMessage(attachRes, "Photo uploaded but could not be attached to the inspection."), "processing", attachRes.status, attachRes.status >= 500);
+        throw new UploadError(await uploadFailureMessage(attachRes, uiText("ui.photo_uploaded_but_could_not_be_attached_to__a00beab0ee")), "processing", attachRes.status, attachRes.status >= 500);
       }
       const { data } = await attachRes.json();
       workflow.addMedia(pending.sectionId, data);
@@ -114,7 +117,7 @@ export function InspectionWorkflowView({
       const stage: UploadStage = "failed";
       patchPending(pending.id, {
         stage,
-        error: error instanceof Error ? error.message : "Photo upload failed. Please try again.",
+        error: error instanceof Error ? error.message : uiText("ui.photo_upload_failed_please_try_again_e17c5befb6"),
         retryable: error instanceof UploadError ? error.retryable : true,
       });
     }
@@ -140,7 +143,7 @@ export function InspectionWorkflowView({
     setMediaError(null);
     const result = await deletePpiMedia(mediaId);
     if ("error" in result) {
-      setMediaError(result.error ?? "Could not delete that photo.");
+      setMediaError(result.error ?? uiText("ui.could_not_delete_that_photo_db0ec674c9"));
       return;
     }
     workflow.removeMedia(sectionId, mediaId);
@@ -166,8 +169,8 @@ export function InspectionWorkflowView({
     return (
       <div className="flex min-h-screen items-center justify-center flex-col gap-4 px-6 text-center">
         <AlertCircle className="h-12 w-12 text-destructive" />
-        <p className="text-lg font-semibold">No inspection data found</p>
-        <Button onClick={() => router.push(returnPath)}>Go Back</Button>
+        <p className="text-lg font-semibold">{uiText("ui.no_inspection_data_found_8d8e7c4167")}</p>
+        <Button onClick={() => router.push(returnPath)}>{uiText("ui.go_back_b8d99df106")}</Button>
       </div>
     );
   }
@@ -196,12 +199,8 @@ export function InspectionWorkflowView({
           <button
             onClick={() => setViewMode("workflow")}
             className="text-muted-foreground hover:text-foreground transition-colors text-sm"
-          >
-            ← Back to Inspection
-          </button>
-          <h1 className="font-heading text-lg font-bold flex-1 text-center">
-            Review & Submit
-          </h1>
+          >{uiText("ui.back_to_inspection_1a3f61c79a")}</button>
+          <h1 className="font-heading text-lg font-bold flex-1 text-center">{uiText("ui.review_submit_e877c5633a")}</h1>
           <div className="w-24" />
         </div>
 
@@ -221,8 +220,7 @@ export function InspectionWorkflowView({
                 <p className="text-sm font-semibold text-destructive">{workflow.submitError}</p>
                 {workflow.missingAnswerIds.size > 0 && (
                   <p className="text-xs text-destructive/80 mt-1">
-                    {workflow.missingAnswerIds.size} required question(s) still need answers.
-                  </p>
+                    {workflow.missingAnswerIds.size}{uiText("ui.required_question_s_still_need_answers_9d6c22d4d6")}</p>
                 )}
               </div>
             </div>
@@ -230,9 +228,7 @@ export function InspectionWorkflowView({
 
           {!workflow.allComplete && (
             <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
-              <p className="text-sm text-amber-800 font-medium">
-                Some sections are incomplete. You can still submit but required questions must be answered.
-              </p>
+              <p className="text-sm text-amber-800 font-medium">{uiText("ui.some_sections_are_incomplete_you_can_still_s_637caa39b5")}</p>
             </div>
           )}
 
@@ -248,16 +244,14 @@ export function InspectionWorkflowView({
             disabled={workflow.submitting}
             className="w-full h-14 text-lg font-bold rounded-xl"
           >
-            {workflow.submitting ? "Submitting…" : "Submit Inspection"}
+            {workflow.submitting ? uiText("ui.submitting_49195f559e") : uiText("ui.submit_inspection_a2fb6741dc")}
           </Button>
 
           <Button
             variant="outline"
             onClick={() => setViewMode("workflow")}
             className="w-full"
-          >
-            Continue Editing
-          </Button>
+          >{uiText("ui.continue_editing_56fd975f4c")}</Button>
         </div>
       </div>
     );
@@ -268,10 +262,8 @@ export function InspectionWorkflowView({
     return (
       <div className="flex min-h-screen items-center justify-center flex-col gap-6 px-6 text-center">
         <CheckCircle2 className="h-20 w-20 text-emerald-500" />
-        <h2 className="text-2xl font-black font-heading">Inspection Submitted!</h2>
-        <p className="text-muted-foreground">
-          Your inspection has been submitted successfully. Redirecting…
-        </p>
+        <h2 className="text-2xl font-black font-heading">{uiText("ui.inspection_submitted_bb5891f014")}</h2>
+        <p className="text-muted-foreground">{uiText("ui.your_inspection_has_been_submitted_successfu_23433635bf")}</p>
       </div>
     );
   }
@@ -283,10 +275,10 @@ export function InspectionWorkflowView({
   const sectionType = currentSection.section_type as SectionType;
   const sectionStateLabel =
     currentSection.completion_state === "completed"
-      ? "Completed"
+      ? uiText("ui.completed_22a970d2e5")
       : currentSection.completion_state === "in_progress"
-      ? "In Progress"
-      : "Not Started";
+      ? uiText("ui.in_progress_b4cc4b07c3")
+      : uiText("ui.not_started_6d54f9ecea");
   // Photo rules come off the answer row, not a positional lookup into the
   // template array: two scopes can seed the same section with different rules,
   // and a stored answer order can outlive a template edit.
@@ -361,7 +353,7 @@ export function InspectionWorkflowView({
 
           {currentQuestion.prompt === VEHICLE_BASICS_VIN_PROMPT && (
             <VinScanButton
-              label={currentValue.trim() ? "Rescan VIN" : "Scan VIN"}
+              label={currentValue.trim() ? uiText("ui.rescan_vin_3da7075dc3") : uiText("ui.scan_vin_5074b45d61")}
               onDecoded={(vehicle) => workflow.setAnswer(currentQuestion.id, vehicle.vin)}
             />
           )}
@@ -369,10 +361,8 @@ export function InspectionWorkflowView({
           <div className="rounded-xl border bg-card p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold">Section Notes</p>
-                <p className="text-xs text-muted-foreground">
-                  Optional notes saved with the current section.
-                </p>
+                <p className="text-sm font-semibold">{uiText("ui.section_notes_6a05c4aca2")}</p>
+                <p className="text-xs text-muted-foreground">{uiText("ui.optional_notes_saved_with_the_current_sectio_c1af4806de")}</p>
               </div>
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 {sectionStateLabel}
@@ -383,7 +373,7 @@ export function InspectionWorkflowView({
               value={currentSection.notes ?? ""}
               onChange={(e) => workflow.setSectionNotes(currentSection.id, e.target.value)}
               rows={3}
-              placeholder="Add any extra observations for this section..."
+              placeholder={uiText("ui.add_any_extra_observations_for_this_section_157356c799")}
               className="resize-none"
             />
           </div>
@@ -404,7 +394,7 @@ export function InspectionWorkflowView({
               )}
             >
               <Camera className="h-5 w-5" />
-              {photoPrompt ?? "Capture Photo"}
+              {photoPrompt ?? uiText("ui.capture_photo_d312fd29a2")}
             </button>
 
           <p className="text-center text-xs text-muted-foreground">{UPLOAD_HINT}</p>
@@ -425,14 +415,14 @@ export function InspectionWorkflowView({
                   className="group relative aspect-[4/3] overflow-hidden rounded-xl border bg-secondary"
                 >
                   <DeletePhotoButton
-                    label={`Delete photo ${index + 1}`}
+                    label={uiText("ui.delete_photo_3a4d9e70ca", { arg0: String(index + 1) })}
                     confirmMessage="Delete this inspection photo? This cannot be undone."
                     onDelete={() => deleteCapturedPhoto(currentSection.id, media.id)}
                   />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={`/api/ppi/media/${media.id}`}
-                    alt={`Inspection photo ${index + 1}`}
+                    alt={uiText("ui.inspection_photo_d0a8a2557e", { arg0: String(index + 1) })}
                     className="absolute inset-0 h-full w-full object-cover"
                     onError={(e) => {
                       console.error("[inspection] image failed to load", {
@@ -443,8 +433,7 @@ export function InspectionWorkflowView({
                       });
                     }}
                   />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-xs font-medium text-white">
-                    Photo {index + 1}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-xs font-medium text-white">{uiText("ui.photo_234ad78cf0")}{index + 1}
                   </div>
                 </div>
               ))}
@@ -452,9 +441,7 @@ export function InspectionWorkflowView({
           )}
 
           {requiresPhoto && !hasRequiredPhoto && (
-            <p className="text-sm font-medium text-amber-700">
-              Capture at least one photo before continuing.
-            </p>
+            <p className="text-sm font-medium text-amber-700">{uiText("ui.capture_at_least_one_photo_before_continuing_85e8dcfc47")}</p>
           )}
 
           {mediaError && (
@@ -462,9 +449,7 @@ export function InspectionWorkflowView({
           )}
 
           {hasError && (
-            <p className="text-sm text-destructive font-medium">
-              This answer is missing or invalid.
-            </p>
+            <p className="text-sm text-destructive font-medium">{uiText("ui.this_answer_is_missing_or_invalid_19210b8158")}</p>
           )}
         </div>
       </InspectionStepCard>

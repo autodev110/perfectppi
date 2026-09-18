@@ -15,11 +15,14 @@ import { ArrowLeft, Calendar, Car, ChevronRight, FileText, User } from "lucide-r
 import type { SectionType } from "@/types/enums";
 import type { StandardizedContent, VscCoverageData } from "@/types/api";
 
+import { getRequestTranslator } from "@/lib/i18n/server";
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
 export default async function AdminInspectionDetailPage({ params }: PageProps) {
+  const uiText = await getRequestTranslator();
   await requireRole(["admin"]);
   const { id } = await params;
 
@@ -44,7 +47,7 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
 
   const vehicleName = vehicle
     ? [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(" ")
-    : "Unknown Vehicle";
+    : uiText("ui.unknown_vehicle_615ff95383");
 
   const isSubmitted = ["submitted", "completed"].includes(request.status);
   const sections = (submission as { sections?: { section_type: string; notes: string | null; answers: { prompt: string; answer_value: string | null; answer_type: string }[] }[] } | null)?.sections ?? [];
@@ -56,9 +59,7 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
         href="/admin/inspections"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        All Inspections
-      </Link>
+        <ArrowLeft className="h-3.5 w-3.5" />{uiText("ui.all_inspections_426376221e")}</Link>
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
@@ -75,28 +76,27 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Car className="h-5 w-5" /> Vehicle Details
-          </CardTitle>
+            <Car className="h-5 w-5" />{uiText("ui.vehicle_details_26dd95425e")}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 text-sm">
           {vehicle?.vin && (
             <div>
-              <p className="text-muted-foreground">VIN</p>
+              <p className="text-muted-foreground">{uiText("ui.vin_5e0211b12d")}</p>
               <p className="font-mono font-medium">{vehicle.vin}</p>
             </div>
           )}
           {vehicle?.mileage && (
             <div>
-              <p className="text-muted-foreground">Mileage</p>
-              <p className="font-medium">{vehicle.mileage.toLocaleString()} mi</p>
+              <p className="text-muted-foreground">{uiText("ui.mileage_ffe44a0179")}</p>
+              <p className="font-medium">{vehicle.mileage.toLocaleString()}{uiText("ui.mi_3074dbe604")}</p>
             </div>
           )}
           <div>
-            <p className="text-muted-foreground">Whose Car</p>
+            <p className="text-muted-foreground">{uiText("ui.whose_car_75614f1bb0")}</p>
             <p className="font-medium capitalize">{request.whose_car}</p>
           </div>
           <div>
-            <p className="text-muted-foreground">Requester Role</p>
+            <p className="text-muted-foreground">{uiText("ui.requester_role_cc2ca7dc39")}</p>
             <p className="font-medium capitalize">{request.requester_role}</p>
           </div>
         </CardContent>
@@ -106,20 +106,18 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" /> Inspection Info
-          </CardTitle>
+            <FileText className="h-5 w-5" />{uiText("ui.inspection_info_22d8ed0de8")}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <p className="text-muted-foreground">Type</p>
+            <p className="text-muted-foreground">{uiText("ui.type_baaddf70fb")}</p>
             <PpiBadge type={request.ppi_type} className="mt-1" />
           </div>
           <div>
             <p className="text-muted-foreground flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5" /> Created
-            </p>
+              <Calendar className="h-3.5 w-3.5" />{uiText("ui.created_8f4ef859fb")}</p>
             <p className="font-medium">
-              {new Date(request.created_at).toLocaleDateString("en-US", {
+              {new Date(request.created_at).toLocaleDateString(uiText("ui.en_us_5c49f88daf"), {
                 month: "long",
                 day: "numeric",
                 year: "numeric",
@@ -129,12 +127,11 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
           {requester && (
             <div>
               <p className="text-muted-foreground flex items-center gap-1">
-                <User className="h-3.5 w-3.5" /> Requester
-              </p>
+                <User className="h-3.5 w-3.5" />{uiText("ui.requester_a374bf6170")}</p>
               <div className="flex items-center gap-2 mt-1">
                 <Avatar className="h-6 w-6">
                   <AvatarFallback className="text-[10px]">
-                    {getInitials(requester.display_name ?? "U")}
+                    {getInitials(requester.display_name ?? uiText("ui.u_a25513c7e0"))}
                   </AvatarFallback>
                 </Avatar>
                 <span className="font-medium">
@@ -146,12 +143,11 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
           {performer ? (
             <div>
               <p className="text-muted-foreground flex items-center gap-1">
-                <User className="h-3.5 w-3.5" /> Performer
-              </p>
+                <User className="h-3.5 w-3.5" />{uiText("ui.performer_874486ad62")}</p>
               <div className="flex items-center gap-2 mt-1">
                 <Avatar className="h-6 w-6">
                   <AvatarFallback className="text-[10px]">
-                    {getInitials(performer.display_name ?? "T")}
+                    {getInitials(performer.display_name ?? uiText("ui.t_e632b7095b"))}
                   </AvatarFallback>
                 </Avatar>
                 <span className="font-medium">
@@ -162,12 +158,11 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
           ) : assignedTech ? (
             <div>
               <p className="text-muted-foreground flex items-center gap-1">
-                <User className="h-3.5 w-3.5" /> Assigned Tech
-              </p>
+                <User className="h-3.5 w-3.5" />{uiText("ui.assigned_tech_2c05b5026a")}</p>
               <div className="flex items-center gap-2 mt-1">
                 <Avatar className="h-6 w-6">
                   <AvatarFallback className="text-[10px]">
-                    {getInitials(assignedTech.display_name ?? "T")}
+                    {getInitials(assignedTech.display_name ?? uiText("ui.t_e632b7095b"))}
                   </AvatarFallback>
                 </Avatar>
                 <span className="font-medium">
@@ -178,12 +173,12 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
           ) : null}
           {submission?.submitted_at && (
             <div>
-              <p className="text-muted-foreground">Submitted</p>
+              <p className="text-muted-foreground">{uiText("ui.submitted_64900440a8")}</p>
               <p className="font-medium">{formatDate(submission.submitted_at)}</p>
             </div>
           )}
           <div>
-            <p className="text-muted-foreground">Performer Type</p>
+            <p className="text-muted-foreground">{uiText("ui.performer_type_c3101562dc")}</p>
             <p className="font-medium capitalize">{request.performer_type}</p>
           </div>
         </CardContent>
@@ -194,7 +189,7 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
         <>
           {outputs.standardized ? (
             <div className="space-y-3">
-              <h2 className="font-heading text-lg font-bold">Inspection Report</h2>
+              <h2 className="font-heading text-lg font-bold">{uiText("ui.inspection_report_76b0f91569")}</h2>
               <StandardizedOutputView
                 content={outputs.standardized.structured_content as unknown as StandardizedContent}
                 generatedAt={outputs.standardized.generated_at}
@@ -203,18 +198,16 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
             </div>
           ) : (
             <div className="space-y-3">
-              <h2 className="font-heading text-lg font-bold">Inspection Report</h2>
+              <h2 className="font-heading text-lg font-bold">{uiText("ui.inspection_report_76b0f91569")}</h2>
               <Card>
-                <CardContent className="py-6 text-center text-sm text-muted-foreground">
-                  Output not yet generated.
-                </CardContent>
+                <CardContent className="py-6 text-center text-sm text-muted-foreground">{uiText("ui.output_not_yet_generated_c21ebc7af3")}</CardContent>
               </Card>
             </div>
           )}
 
           {(outputs.vsc || outputs.standardized) && (
             <div className="space-y-3">
-              <h2 className="font-heading text-lg font-bold">VSC Coverage Determination</h2>
+              <h2 className="font-heading text-lg font-bold">{uiText("ui.vsc_coverage_determination_29de4fbf4c")}</h2>
               {outputs.vsc ? (
                 <VscCoverageView
                   coverage={outputs.vsc.coverage_data as unknown as VscCoverageData}
@@ -222,9 +215,7 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
                 />
               ) : (
                 <Card>
-                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
-                    VSC output not yet generated.
-                  </CardContent>
+                  <CardContent className="py-6 text-center text-sm text-muted-foreground">{uiText("ui.vsc_output_not_yet_generated_9224f7b5a9")}</CardContent>
                 </Card>
               )}
             </div>
@@ -236,9 +227,7 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
       {isSubmitted && sections.length > 0 && (
         <details className="group">
           <summary className="font-heading text-lg font-bold cursor-pointer list-none flex items-center gap-2">
-            <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
-            Raw Inspection Data
-          </summary>
+            <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />{uiText("ui.raw_inspection_data_79bb4dc3d1")}</summary>
           <div className="space-y-3 mt-3">
             {sections.map((section) => (
               <Card key={section.section_type}>
@@ -258,7 +247,7 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
                     ))}
                   {section.notes && (
                     <div>
-                      <p className="text-muted-foreground text-xs">Notes</p>
+                      <p className="text-muted-foreground text-xs">{uiText("ui.notes_8a7525b149")}</p>
                       <p className="font-medium">{section.notes}</p>
                     </div>
                   )}
@@ -276,9 +265,7 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
             <Badge variant="outline" className="mb-3">
               {request.status.replace(/_/g, " ")}
             </Badge>
-            <p className="text-muted-foreground text-sm">
-              This inspection has not been submitted yet. No output to display.
-            </p>
+            <p className="text-muted-foreground text-sm">{uiText("ui.this_inspection_has_not_been_submitted_yet_n_ab947a3841")}</p>
           </CardContent>
         </Card>
       )}

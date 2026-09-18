@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, LoaderCircle } from "lucide-react";
 import { usernameSchema } from "@/features/profiles/username";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 export function UsernameInput({
   value,
   onChange,
@@ -13,6 +15,7 @@ export function UsernameInput({
   onChange: (value: string) => void;
   autoFocus?: boolean;
 }) {
+  const uiText = useTranslator();
   const [availability, setAvailability] = useState<"idle" | "checking" | "available" | "taken">("idle");
 
   useEffect(() => {
@@ -63,18 +66,16 @@ export function UsernameInput({
           spellCheck={false}
           aria-describedby="username-help username-status"
           className="h-14 w-full rounded-xl border-none bg-surface-container-low px-10 font-medium text-on-surface transition-all placeholder:text-outline-variant focus:ring-2 focus:ring-on-tertiary-container/30"
-          placeholder="driver_name"
+          placeholder={uiText("ui.driver_name_62671345af")}
         />
         {availability === "checking" && <LoaderCircle className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-outline-variant" />}
         {availability === "available" && <CheckCircle2 className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-teal" />}
       </div>
-      <p id="username-help" className="text-xs leading-5 text-on-secondary-container">
-        4–16 characters. Letters, numbers, and underscores only. Usernames cannot be changed yet.
-      </p>
+      <p id="username-help" className="text-xs leading-5 text-on-secondary-container">{uiText("ui.4_16_characters_letters_numbers_and_undersco_6f5ea55055")}</p>
       <p id="username-status" aria-live="polite" className="min-h-5 text-xs font-medium">
         {validation && !validation.success && <span className="text-destructive">{validation.error.errors[0].message}</span>}
-        {validation?.success && availability === "available" && <span className="text-teal">Username is available.</span>}
-        {validation?.success && availability === "taken" && <span className="text-destructive">Username is unavailable.</span>}
+        {validation?.success && availability === "available" && <span className="text-teal">{uiText("ui.username_is_available_2e1a1c1dff")}</span>}
+        {validation?.success && availability === "taken" && <span className="text-destructive">{uiText("ui.username_is_unavailable_7c1e5e08b8")}</span>}
       </p>
     </div>
   );

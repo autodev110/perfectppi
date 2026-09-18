@@ -14,9 +14,12 @@ import type { Database } from "@/types/database";
 import { SocialPrivacyFields } from "@/components/shared/social-privacy-fields";
 import { SafetyRelationships } from "@/components/shared/safety-relationships";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 export default function ProfilePage() {
+  const uiText = useTranslator();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,32 +52,28 @@ export default function ProfilePage() {
     if (result?.error) {
       setMessage(result.error);
     } else {
-      setMessage("Profile updated.");
+      setMessage(uiText("ui.profile_updated_3a06720a52"));
     }
     setSaving(false);
   }
 
   if (loading) {
-    return <p className="text-muted-foreground">Loading...</p>;
+    return <p className="text-muted-foreground">{uiText("ui.loading_47d2a515ef")}</p>;
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-start justify-between gap-4">
-        <h1 className="font-heading text-2xl font-bold">Edit Profile</h1>
+        <h1 className="font-heading text-2xl font-bold">{uiText("ui.edit_profile_fec2ac0f4c")}</h1>
         {profile?.username && (
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline" size="sm">
               <Link href="/dashboard/profile/preview">
-                <Eye className="mr-2 h-3.5 w-3.5" />
-                View as stranger
-              </Link>
+                <Eye className="mr-2 h-3.5 w-3.5" />{uiText("ui.view_as_stranger_78ae0f21fb")}</Link>
             </Button>
             <Button asChild variant="outline" size="sm">
               <Link href={`/profile/${profile.username}`} target="_blank">
-                <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                View My Profile
-              </Link>
+                <ExternalLink className="mr-2 h-3.5 w-3.5" />{uiText("ui.view_my_profile_5f6941424f")}</Link>
             </Button>
           </div>
         )}
@@ -82,12 +81,12 @@ export default function ProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Profile Details</CardTitle>
+          <CardTitle>{uiText("ui.profile_details_65f1ee4298")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form action={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="display_name">Display Name</Label>
+              <Label htmlFor="display_name">{uiText("ui.display_name_18d67c992b")}</Label>
               <Input
                 id="display_name"
                 name="display_name"
@@ -95,20 +94,20 @@ export default function ProfilePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Username</Label>
+              <Label>{uiText("ui.username_e3b89e9d33")}</Label>
               <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
                 @{profile?.username}
               </div>
-              <p className="text-xs text-muted-foreground">Usernames cannot be changed yet.</p>
+              <p className="text-xs text-muted-foreground">{uiText("ui.usernames_cannot_be_changed_yet_a580056e04")}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="bio">Bio</Label>
+              <Label htmlFor="bio">{uiText("ui.bio_3933b18021")}</Label>
               <Textarea
                 id="bio"
                 name="bio"
                 defaultValue={profile?.bio ?? ""}
                 rows={3}
-                placeholder="Tell us about yourself..."
+                placeholder={uiText("ui.tell_us_about_yourself_697f10251d")}
               />
             </div>
             <SocialPrivacyFields profile={profile} />
@@ -120,13 +119,13 @@ export default function ProfilePage() {
               </p>
             )}
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Save Changes"}
+              {saving ? uiText("ui.saving_dc85af8f2b") : uiText("ui.save_changes_35322b5bb5")}
             </Button>
           </form>
         </CardContent>
       </Card>
       <Card>
-        <CardHeader><CardTitle>Privacy &amp; Safety</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{uiText("ui.privacy_safety_f096950eac")}</CardTitle></CardHeader>
         <CardContent><SafetyRelationships /></CardContent>
       </Card>
     </div>

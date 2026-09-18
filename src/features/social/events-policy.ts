@@ -1,3 +1,5 @@
+
+import { t as uiText } from "./../../lib/i18n/index.ts";
 export const COMMUNITY_EVENT_TYPES = [
   "car_meet",
   "track_day",
@@ -9,11 +11,11 @@ export const COMMUNITY_EVENT_TYPES = [
 export type CommunityEventType = (typeof COMMUNITY_EVENT_TYPES)[number];
 
 export const COMMUNITY_EVENT_TYPE_LABELS: Record<CommunityEventType, string> = {
-  car_meet: "Car meet",
-  track_day: "Track day",
-  car_show: "Car show",
-  shop_event: "Shop event",
-  group_drive: "Group drive",
+  car_meet: uiText("ui.car_meet_26d52b1a3f"),
+  track_day: uiText("ui.track_day_c048f69585"),
+  car_show: uiText("ui.car_show_74dbe36bee"),
+  shop_event: uiText("ui.shop_event_3462225409"),
+  group_drive: uiText("ui.group_drive_61dba33fa2"),
 };
 
 const UNSAFE_EVENT_PATTERNS: ReadonlyArray<{ id: string; pattern: RegExp }> = [
@@ -40,9 +42,9 @@ export function buildEventAnnouncement(input: {
     input.title.trim(),
     input.description.trim(),
     `${COMMUNITY_EVENT_TYPE_LABELS[input.eventType]} · ${input.startsAt.toISOString()}`,
-    `General area: ${input.generalLocation.trim()}`,
-    input.requirements?.trim() ? `Requirements: ${input.requirements.trim()}` : null,
-    "Free event. Exact instructions are shared only with Going attendees.",
+    uiText("ui.general_area_6c10d82063", { arg0: String(input.generalLocation.trim()) }),
+    input.requirements?.trim() ? uiText("ui.requirements_4711dd0adf", { arg0: String(input.requirements.trim()) }) : null,
+    uiText("ui.free_event_exact_instructions_are_shared_onl_2c81549bc5"),
   ];
   return parts.filter(Boolean).join("\n\n");
 }

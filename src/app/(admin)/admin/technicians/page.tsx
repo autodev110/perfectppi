@@ -5,35 +5,36 @@ import { getInitials, formatDate } from "@/lib/utils/formatting";
 import { TechToggles } from "./tech-toggles";
 import { CredentialReview } from "./credential-review";
 
+import { getRequestTranslator } from "@/lib/i18n/server";
+
 export default async function TechnicianManagementPage() {
+  const uiText = await getRequestTranslator();
   await requireRole(["admin"]);
   const { technicians, total } = await getAdminTechnicians();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-bold">Technician Management</h1>
-        <p className="text-muted-foreground">{total} technicians on the platform</p>
+        <h1 className="font-heading text-2xl font-bold">{uiText("ui.technician_management_2b6fa3553a")}</h1>
+        <p className="text-muted-foreground">{total}{uiText("ui.technicians_on_the_platform_46d5219116")}</p>
       </div>
 
       <div className="overflow-hidden rounded-lg border">
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/50">
             <tr>
-              <th className="px-4 py-3 text-left font-medium">Technician</th>
-              <th className="px-4 py-3 text-left font-medium">Credential review</th>
-              <th className="px-4 py-3 text-left font-medium">Organization</th>
-              <th className="px-4 py-3 text-left font-medium">Inspections</th>
-              <th className="px-4 py-3 text-left font-medium">Joined</th>
-              <th className="px-4 py-3 text-left font-medium">Moderation</th>
+              <th className="px-4 py-3 text-left font-medium">{uiText("ui.technician_9041ccc417")}</th>
+              <th className="px-4 py-3 text-left font-medium">{uiText("ui.credential_review_c7bc3dbca9")}</th>
+              <th className="px-4 py-3 text-left font-medium">{uiText("ui.organization_d764d42592")}</th>
+              <th className="px-4 py-3 text-left font-medium">{uiText("ui.inspections_20cbe85cdd")}</th>
+              <th className="px-4 py-3 text-left font-medium">{uiText("ui.joined_69318b0c6a")}</th>
+              <th className="px-4 py-3 text-left font-medium">{uiText("ui.moderation_126d441544")}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {technicians.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                  No technicians yet.
-                </td>
+                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">{uiText("ui.no_technicians_yet_534359dfa7")}</td>
               </tr>
             ) : (
               technicians.map((tech) => {
@@ -46,7 +47,7 @@ export default async function TechnicianManagementPage() {
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={profile?.avatar_url ?? ""} />
                           <AvatarFallback className="text-xs">
-                            {getInitials(profile?.display_name ?? "T")}
+                            {getInitials(profile?.display_name ?? uiText("ui.t_e632b7095b"))}
                           </AvatarFallback>
                         </Avatar>
                         <div>
@@ -61,7 +62,7 @@ export default async function TechnicianManagementPage() {
                       <CredentialReview credentials={tech.credentials} />
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {org?.name ?? <span className="italic">Independent</span>}
+                      {org?.name ?? <span className="italic">{uiText("ui.independent_6cbf0605ed")}</span>}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {tech.total_inspections}

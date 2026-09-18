@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CreditCard, CheckCircle, AlertCircle, Clock } from "lucide-react";
 
+import { getRequestTranslator } from "@/lib/i18n/server";
+
 async function getPaymentData() {
   const admin = createAdminClient();
 
@@ -52,26 +54,23 @@ function statusBadge(status: string) {
 }
 
 export default async function AdminPaymentsPage() {
+  const uiText = await getRequestTranslator();
   const { total, completedCount, failedCount, totalRevenueCents, rows } = await getPaymentData();
 
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-3xl font-extrabold tracking-tight text-on-surface mb-1">
-          Payments
-        </h1>
-        <p className="text-on-surface-variant text-sm font-medium">
-          Stripe transactions and payment status
-        </p>
+        <h1 className="text-3xl font-extrabold tracking-tight text-on-surface mb-1">{uiText("ui.payments_632e1c5839")}</h1>
+        <p className="text-on-surface-variant text-sm font-medium">{uiText("ui.stripe_transactions_and_payment_status_374037f451")}</p>
       </header>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Payments", value: String(total).padStart(2, "0"), icon: CreditCard, color: "bg-secondary-container" },
-          { label: "Completed", value: String(completedCount).padStart(2, "0"), icon: CheckCircle, color: "bg-emerald-100" },
-          { label: "Failed", value: String(failedCount).padStart(2, "0"), icon: AlertCircle, color: "bg-red-100" },
+          { label: uiText("ui.total_payments_533d529d37"), value: String(total).padStart(2, "0"), icon: CreditCard, color: "bg-secondary-container" },
+          { label: uiText("ui.completed_22a970d2e5"), value: String(completedCount).padStart(2, "0"), icon: CheckCircle, color: "bg-emerald-100" },
+          { label: uiText("ui.failed_031a8f0f65"), value: String(failedCount).padStart(2, "0"), icon: AlertCircle, color: "bg-red-100" },
           {
-            label: "Revenue",
+            label: uiText("ui.revenue_c4b7330bd9"),
             value: (totalRevenueCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }),
             icon: Clock,
             color: "bg-tertiary-container",
@@ -91,22 +90,22 @@ export default async function AdminPaymentsPage() {
 
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 overflow-hidden">
         <div className="px-6 py-4 border-b border-outline-variant/10">
-          <h2 className="font-bold text-on-surface">Transaction History</h2>
+          <h2 className="font-bold text-on-surface">{uiText("ui.transaction_history_669cd31f76")}</h2>
         </div>
         {rows.length === 0 ? (
           <div className="px-6 py-12 text-center">
-            <p className="text-sm text-on-surface-variant">No payments yet</p>
+            <p className="text-sm text-on-surface-variant">{uiText("ui.no_payments_yet_f9063c6998")}</p>
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
-                <th className="px-6 py-3">Payment ID</th>
-                <th className="px-6 py-3">Amount</th>
-                <th className="px-6 py-3">Method</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3 hidden md:table-cell">Stripe ID</th>
-                <th className="px-6 py-3">Date</th>
+                <th className="px-6 py-3">{uiText("ui.payment_id_d9c9afd836")}</th>
+                <th className="px-6 py-3">{uiText("ui.amount_49e96d7cdf")}</th>
+                <th className="px-6 py-3">{uiText("ui.method_52a0f9b65b")}</th>
+                <th className="px-6 py-3">{uiText("ui.status_920e413c7d")}</th>
+                <th className="px-6 py-3 hidden md:table-cell">{uiText("ui.stripe_id_d7aad2a8d6")}</th>
+                <th className="px-6 py-3">{uiText("ui.date_99c40ab405")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
@@ -114,7 +113,7 @@ export default async function AdminPaymentsPage() {
                 <tr key={row.id}>
                   <td className="px-6 py-3 font-mono text-xs text-on-surface-variant">{row.id.slice(0, 8)}…</td>
                   <td className="px-6 py-3 font-semibold text-on-surface">
-                    {(row.amount_cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                    {(row.amount_cents / 100).toLocaleString(uiText("ui.en_us_5c49f88daf"), { style: "currency", currency: "USD" })}
                   </td>
                   <td className="px-6 py-3 capitalize text-on-surface-variant">{row.method.replace("_", " ")}</td>
                   <td className="px-6 py-3">{statusBadge(row.status)}</td>

@@ -2,43 +2,44 @@ import { getAdminAuditLogs } from "@/features/admin/queries";
 import { requireRole } from "@/features/auth/guards";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/utils/formatting";
+import { t as uiText } from "@/lib/i18n";
+import { getRequestTranslator } from "@/lib/i18n/server";
 
 const ACTION_LABELS: Record<string, string> = {
-  inspection_edited: "Inspection Edited",
-  output_regenerated: "Output Regenerated",
-  contract_state_changed: "Contract State Changed",
-  payment_state_changed: "Payment State Changed",
-  submission_resubmitted: "Submission Resubmitted",
+  inspection_edited: uiText("ui.inspection_edited_56d9e35ac6"),
+  output_regenerated: uiText("ui.output_regenerated_5189df16b5"),
+  contract_state_changed: uiText("ui.contract_state_changed_c6df381d4a"),
+  payment_state_changed: uiText("ui.payment_state_changed_319dceb6f3"),
+  submission_resubmitted: uiText("ui.submission_resubmitted_3e3e25284d"),
 };
 
 export default async function AuditLogPage() {
+  const uiText = await getRequestTranslator();
   await requireRole(["admin"]);
   const { logs, total } = await getAdminAuditLogs();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-bold">Audit Log</h1>
-        <p className="text-muted-foreground">{total} total audit entries</p>
+        <h1 className="font-heading text-2xl font-bold">{uiText("ui.audit_log_47751f88ed")}</h1>
+        <p className="text-muted-foreground">{total}{uiText("ui.total_audit_entries_459de3eb04")}</p>
       </div>
 
       <div className="overflow-hidden rounded-lg border">
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/50">
             <tr>
-              <th className="px-4 py-3 text-left font-medium">Time</th>
-              <th className="px-4 py-3 text-left font-medium">Actor</th>
-              <th className="px-4 py-3 text-left font-medium">Action</th>
-              <th className="px-4 py-3 text-left font-medium">Target</th>
-              <th className="px-4 py-3 text-left font-medium">Metadata</th>
+              <th className="px-4 py-3 text-left font-medium">{uiText("ui.time_33b93476cf")}</th>
+              <th className="px-4 py-3 text-left font-medium">{uiText("ui.actor_449995c4fe")}</th>
+              <th className="px-4 py-3 text-left font-medium">{uiText("ui.action_64cff1319d")}</th>
+              <th className="px-4 py-3 text-left font-medium">{uiText("ui.target_978354db0c")}</th>
+              <th className="px-4 py-3 text-left font-medium">{uiText("ui.metadata_9eddf573cb")}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {logs.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  No audit log entries yet.
-                </td>
+                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">{uiText("ui.no_audit_log_entries_yet_1c349d7c04")}</td>
               </tr>
             ) : (
               logs.map((log) => {

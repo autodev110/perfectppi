@@ -1,13 +1,14 @@
 import { CheckCircle2, ClipboardCheck, MessageCircleQuestion, Wrench } from "lucide-react";
 import type { MemberContributionSummary } from "@/features/profiles/reputation";
+import { t as uiText } from "@/lib/i18n";
 
 export function MemberContributionSummaryCard({ summary }: { summary: MemberContributionSummary }) {
   const facts = [
-    { label: "Accepted answers", value: summary.accepted_answers, icon: MessageCircleQuestion },
-    { label: "Helpful marks", value: summary.helpful_marks, icon: Wrench },
-    { label: "Issues fixed", value: summary.fixed_issues, icon: CheckCircle2 },
-    { label: "Issues helped", value: summary.helped_issues, icon: Wrench },
-    { label: "Inspections completed", value: summary.completed_inspections, icon: ClipboardCheck },
+    { label: uiText("ui.accepted_answers_6d0329f8c8"), value: summary.accepted_answers, icon: MessageCircleQuestion },
+    { label: uiText("ui.helpful_marks_fa78fcc525"), value: summary.helpful_marks, icon: Wrench },
+    { label: uiText("ui.issues_fixed_38d48dbf8e"), value: summary.fixed_issues, icon: CheckCircle2 },
+    { label: uiText("ui.issues_helped_c4d8563175"), value: summary.helped_issues, icon: Wrench },
+    { label: uiText("ui.inspections_completed_3974e215d5"), value: summary.completed_inspections, icon: ClipboardCheck },
   ].filter((fact) => fact.value > 0);
 
   if (!facts.length) return null;
@@ -15,12 +16,8 @@ export function MemberContributionSummaryCard({ summary }: { summary: MemberCont
   return (
     <section aria-labelledby="community-contributions-heading">
       <div className="mb-5">
-        <h2 id="community-contributions-heading" className="font-heading text-lg font-extrabold tracking-tight text-on-surface">
-          Community contributions
-        </h2>
-        <p className="mt-1 text-sm text-on-surface-variant">
-          Current facts from active contributions visible to you, not a popularity score.
-        </p>
+        <h2 id="community-contributions-heading" className="font-heading text-lg font-extrabold tracking-tight text-on-surface">{uiText("ui.community_contributions_049d642460")}</h2>
+        <p className="mt-1 text-sm text-on-surface-variant">{uiText("ui.current_facts_from_active_contributions_visi_4326eb9196")}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {facts.map(({ label, value, icon: Icon }) => (

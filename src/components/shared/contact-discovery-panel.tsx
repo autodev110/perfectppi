@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { FriendActionButton } from "@/components/shared/friend-action-button";
 import { inviteSignupPath } from "@/lib/analytics/invite";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type PickedContact = { name?: string[]; email?: string[]; tel?: string[] };
 type ContactNavigator = Navigator & {
   contacts?: { select: (properties: string[], options: { multiple: boolean }) => Promise<PickedContact[]> };
@@ -22,6 +24,7 @@ type Match = {
 const inviteUrl = `https://www.perfectppi.com${inviteSignupPath()}`;
 
 export function ContactDiscoveryPanel() {
+  const uiText = useTranslator();
   const [matches, setMatches] = useState<Match[]>([]);
   const [inviteNames, setInviteNames] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -31,7 +34,7 @@ export function ContactDiscoveryPanel() {
     const contactApi = (navigator as ContactNavigator).contacts;
     if (!contactApi?.select || !window.isSecureContext) {
       await shareInvite();
-      setMessage("Contact matching is not supported by this browser, so the invite link was opened instead.");
+      setMessage(uiText("ui.contact_matching_is_not_supported_by_this_br_79e4fd2c2f"));
       return;
     }
     setBusy(true);
@@ -47,7 +50,7 @@ export function ContactDiscoveryPanel() {
       })));
       const hashes = [...new Set(withHashes.flatMap((contact) => contact.hashes))];
       if (!hashes.length) {
-        setMessage("The selected contacts do not include an email address or phone number to match.");
+        setMessage(uiText("ui.the_selected_contacts_do_not_include_an_emai_699dd47dd2"));
         return;
       }
       // 500 hashes per request; a large selection is checked in batches.
@@ -59,14 +62,14 @@ export function ContactDiscoveryPanel() {
           body: JSON.stringify({ hashes: hashes.slice(start, start + 500) }),
         });
         const payload = await response.json() as { data?: Match[]; error?: string };
-        if (!response.ok) throw new Error(payload.error || "Contact suggestions are unavailable.");
+        if (!response.ok) throw new Error(payload.error || uiText("ui.contact_suggestions_are_unavailable_3bcccb1007"));
         found.push(...(payload.data ?? []));
       }
       const matchedHashes = new Set(found.map((match) => match.contact_hash));
       setMatches(found.filter((match, index, all) => all.findIndex((other) => other.id === match.id) === index));
       setInviteNames(withHashes.filter((contact) => contact.hashes.every((hash) => !matchedHashes.has(hash))).map((contact) => contact.name));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Contacts could not be checked.");
+      setMessage(error instanceof Error ? error.message : uiText("ui.contacts_could_not_be_checked_ff515d945e"));
     } finally {
       setBusy(false);
     }
@@ -74,39 +77,39 @@ export function ContactDiscoveryPanel() {
 
   async function shareInvite() {
     if (navigator.share) {
-      await navigator.share({ title: "Join me on PerfectPPI", text: "Join me on PerfectPPI to share vehicles, builds, and inspections.", url: inviteUrl }).catch(() => undefined);
+      await navigator.share({ title: uiText("ui.join_me_on_perfectppi_8278cc558b"), text: uiText("ui.join_me_on_perfectppi_to_share_vehicles_buil_2da20a66d2"), url: inviteUrl }).catch(() => undefined);
     } else {
       await navigator.clipboard.writeText(inviteUrl);
-      setMessage("Invite link copied.");
+      setMessage(uiText("ui.invite_link_copied_d65176d65e"));
     }
     // KPI: an invite was shared (no recipient details are sent).
-    void fetch("/api/analytics/client-events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: "invite_shared" }), keepalive: true }).catch(() => undefined);
+    void fetch("/api/analytics/client-events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: uiText("ui.invite_shared_04f35f797d") }), keepalive: true }).catch(() => undefined);
   }
 
   return (
     <section className="space-y-3 rounded-2xl border bg-card p-5">
       <div>
-        <h2 className="font-semibold">Friends from your contacts</h2>
-        <p className="text-xs text-muted-foreground">Your browser asks which contacts to share. PerfectPPI receives one-way hashes only; unmatched contact details and names stay on your device.</p>
+        <h2 className="font-semibold">{uiText("ui.friends_from_your_contacts_671e198762")}</h2>
+        <p className="text-xs text-muted-foreground">{uiText("ui.your_browser_asks_which_contacts_to_share_pe_4b704677a9")}</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={chooseContacts} disabled={busy}>{busy ? "Checking…" : "Choose contacts"}</Button>
-        <Button type="button" variant="outline" onClick={shareInvite}>Share invite</Button>
+        <Button type="button" onClick={chooseContacts} disabled={busy}>{busy ? uiText("ui.checking_ec963ffc91") : uiText("ui.choose_contacts_81d1a4637b")}</Button>
+        <Button type="button" variant="outline" onClick={shareInvite}>{uiText("ui.share_invite_a8da10e56a")}</Button>
       </div>
       {matches.map((match) => (
         <div key={match.id} className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 p-3">
           <Link href={match.username ? `/profile/${match.username}` : "#"} className="min-w-0">
-            <p className="truncate text-sm font-semibold">{match.display_name || (match.username ? `@${match.username}` : "PerfectPPI member")}</p>
-            <p className="text-xs text-muted-foreground">From your contacts{match.mutual_friend_count ? ` · ${match.mutual_friend_count} mutual` : ""}</p>
+            <p className="truncate text-sm font-semibold">{match.display_name || (match.username ? uiText("ui.text_d513a96df3", { arg0: String(match.username) }) : uiText("ui.perfectppi_member_99bd607db6"))}</p>
+            <p className="text-xs text-muted-foreground">{uiText("ui.from_your_contacts_176ae632a1")}{match.mutual_friend_count ? uiText("ui.mutual_ba94cb8398", { arg0: String(match.mutual_friend_count) }) : ""}</p>
           </Link>
           <FriendActionButton profileId={match.id} state={match.relationship_state} compact />
         </div>
       ))}
       {inviteNames.length ? (
         <div className="rounded-xl bg-muted/50 p-3 text-sm">
-          <p className="font-semibold">Invite to PerfectPPI</p>
-          <p className="mt-1 text-muted-foreground">{inviteNames.slice(0, 8).join(", ")}{inviteNames.length > 8 ? ` and ${inviteNames.length - 8} more` : ""}</p>
-          <Button type="button" size="sm" variant="outline" className="mt-3" onClick={shareInvite}>Share invite link</Button>
+          <p className="font-semibold">{uiText("ui.invite_to_perfectppi_edc049b172")}</p>
+          <p className="mt-1 text-muted-foreground">{inviteNames.slice(0, 8).join(", ")}{inviteNames.length > 8 ? uiText("ui.and_more_2facbc5dc3", { arg0: String(inviteNames.length - 8) }) : ""}</p>
+          <Button type="button" size="sm" variant="outline" className="mt-3" onClick={shareInvite}>{uiText("ui.share_invite_link_fea0cfbcb7")}</Button>
         </div>
       ) : null}
       {message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}

@@ -18,7 +18,10 @@ import {
 import { getMarketplaceListings } from "@/features/marketplace/queries";
 import { formatCurrency, formatMileage } from "@/lib/utils/formatting";
 
+import { getRequestTranslator } from "@/lib/i18n/server";
+
 export default async function HomePage() {
+  const uiText = await getRequestTranslator();
   const recentListings = await getMarketplaceListings();
   const featuredListings = recentListings.slice(0, 3);
 
@@ -31,7 +34,7 @@ export default async function HomePage() {
           className="pointer-events-none absolute inset-0 opacity-[0.025]"
           style={{
             backgroundImage:
-              "linear-gradient(hsl(var(--on-surface)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--on-surface)) 1px, transparent 1px)",
+              uiText("ui.linear_gradient_hsl_var_on_surface_1px_trans_0c09e6daea"),
             backgroundSize: "40px 40px",
           }}
         />
@@ -40,37 +43,24 @@ export default async function HomePage() {
           {/* Copy */}
           <div className="flex-1 text-left">
             <span className="inline-flex items-center gap-2 px-3 py-1 mb-6 text-[10px] font-bold tracking-[0.12em] uppercase bg-secondary-container text-on-secondary-container rounded-full ghost-border">
-              <span className="w-1.5 h-1.5 rounded-full bg-on-tertiary-container inline-block" />
-              Guided vehicle inspection platform
-            </span>
-            <h1 className="text-5xl md:text-[4.25rem] font-extrabold tracking-tighter text-on-surface mb-6 leading-[1.06]">
-              Vehicle details,<br />
-              inspection evidence, and{" "}
-              <span className="text-on-tertiary-container">diagnostic context.</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-on-tertiary-container inline-block" />{uiText("ui.guided_vehicle_inspection_platform_59c1b6ac7b")}</span>
+            <h1 className="text-5xl md:text-[4.25rem] font-extrabold tracking-tighter text-on-surface mb-6 leading-[1.06]">{uiText("ui.vehicle_details_a43c33e24d")}<br />{uiText("ui.inspection_evidence_and_3af77c4fc0")}{" "}
+              <span className="text-on-tertiary-container">{uiText("ui.diagnostic_context_8d664fb861")}</span>
             </h1>
-            <p className="text-lg text-on-surface-variant max-w-lg mb-9 leading-relaxed">
-              PerfectPPI guides vehicle inspections, captures photos and OBD
-              results, and turns the submitted evidence into structured reports.
-            </p>
+            <p className="text-lg text-on-surface-variant max-w-lg mb-9 leading-relaxed">{uiText("ui.perfectppi_guides_vehicle_inspections_captur_09e4157672")}</p>
             <div className="flex flex-wrap gap-4">
               <Link
                 href="/signup"
                 className="bg-primary text-primary-foreground px-8 py-4 rounded-xl font-heading font-bold text-base shadow-md hover:shadow-lg hover:-translate-y-px transition-all"
-              >
-                Start an Inspection
-              </Link>
+              >{uiText("ui.start_an_inspection_657f4dfa60")}</Link>
               <Link
                 href="/marketplace"
                 className="bg-surface-container-highest text-on-surface px-8 py-4 rounded-xl font-heading font-bold text-base ghost-border hover:bg-surface-container-high transition-all"
-              >
-                Browse Marketplace
-              </Link>
+              >{uiText("ui.browse_marketplace_d319099fe0")}</Link>
               <Link
                 href="/technicians"
                 className="px-8 py-4 rounded-xl font-heading font-bold text-base ghost-border text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all"
-              >
-                Find a Technician
-              </Link>
+              >{uiText("ui.find_a_technician_8f8aff766b")}</Link>
             </div>
           </div>
 
@@ -80,7 +70,7 @@ export default async function HomePage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="https://images.unsplash.com/photo-1611821064430-0d40291d0f0b?auto=format&fit=crop&w=1080&q=80"
-                alt="Porsche 911 GT3 on city street"
+                alt={uiText("ui.porsche_911_gt3_on_city_street_dd13d5b0ec")}
                 className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-primary-container/60 via-transparent to-transparent" />
@@ -90,12 +80,8 @@ export default async function HomePage() {
                   <BadgeCheck className="h-4 w-4 text-on-tertiary-container" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Inspection record
-                  </p>
-                  <p className="text-xs font-bold text-on-surface">
-                    Full inspection completed
-                  </p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{uiText("ui.inspection_record_2c5e1e9f65")}</p>
+                  <p className="text-xs font-bold text-on-surface">{uiText("ui.full_inspection_completed_f04dbafa9e")}</p>
                 </div>
               </div>
             </div>
@@ -108,16 +94,16 @@ export default async function HomePage() {
         <div
           className="flex w-max"
           aria-hidden="true"
-          style={{ animation: "marquee 50s linear infinite" }}
+          style={{ animation: uiText("ui.marquee_50s_linear_infinite_a760c3a4f0") }}
         >
           {[...Array(4)].flatMap((_, set) =>
             [
-              { Icon: ClipboardCheck, label: "Standardized Inspections" },
-              { Icon: BadgeCheck,     label: "Technician Directory" },
-              { Icon: Shield,         label: "Private Report Access" },
-              { Icon: BarChart3,      label: "Structured Reports" },
-              { Icon: Award,          label: "OBD Diagnostic Context" },
-              { Icon: Users,          label: "12 Inspection Sections" },
+              { Icon: ClipboardCheck, label: uiText("ui.standardized_inspections_5472347fcf") },
+              { Icon: BadgeCheck,     label: uiText("ui.technician_directory_5143ce2890") },
+              { Icon: Shield,         label: uiText("ui.private_report_access_366464a057") },
+              { Icon: BarChart3,      label: uiText("ui.structured_reports_431ded7e5a") },
+              { Icon: Award,          label: uiText("ui.obd_diagnostic_context_47ba4063df") },
+              { Icon: Users,          label: uiText("ui.12_inspection_sections_a303cf0c45") },
             ].map(({ Icon, label }) => (
               <div
                 key={`${set}-${label}`}
@@ -148,29 +134,22 @@ export default async function HomePage() {
                     <div className="w-11 h-11 bg-primary-container rounded-xl flex items-center justify-center">
                       <ClipboardCheck className="h-5 w-5 text-white" />
                     </div>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 bg-surface-container px-3 py-1 rounded-full">
-                      12 Sections
-                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 bg-surface-container px-3 py-1 rounded-full">{uiText("ui.12_sections_6ea4f1f209")}</span>
                   </div>
-                  <h3 className="text-2xl font-extrabold tracking-tighter mb-2">
-                    Guided Inspections
-                  </h3>
-                  <p className="text-sm text-on-surface-variant leading-relaxed mb-auto">
-                    Step-by-step mobile-first workflow with direct camera
-                    capture across 12 standardized vehicle sections.
-                  </p>
+                  <h3 className="text-2xl font-extrabold tracking-tighter mb-2">{uiText("ui.guided_inspections_5598fa1670")}</h3>
+                  <p className="text-sm text-on-surface-variant leading-relaxed mb-auto">{uiText("ui.step_by_step_mobile_first_workflow_with_dire_ce4d19326e")}</p>
                 </div>
 
                 {/* Right: step list panel */}
                 <div className="hidden md:flex flex-col w-[200px] flex-shrink-0 bg-surface-container rounded-2xl p-4 gap-1.5">
                   {[
-                    { label: "Exterior", done: true },
-                    { label: "Engine Bay", done: true },
-                    { label: "Interior", done: true },
-                    { label: "Tires & Brakes", done: false, active: true },
-                    { label: "Fluids", done: false },
-                    { label: "Electrical", done: false },
-                    { label: "Road Test", done: false },
+                    { label: uiText("ui.exterior_cd41a1f4fd"), done: true },
+                    { label: uiText("ui.engine_bay_a1493e5309"), done: true },
+                    { label: uiText("ui.interior_25b5c8ed56"), done: true },
+                    { label: uiText("ui.tires_brakes_c7d10e5b9c"), done: false, active: true },
+                    { label: uiText("ui.fluids_aec479d376"), done: false },
+                    { label: uiText("ui.electrical_a2eefbcb6b"), done: false },
+                    { label: uiText("ui.road_test_1e7a94739e"), done: false },
                   ].map(({ label, done, active }) => (
                     <div
                       key={label}
@@ -207,15 +186,13 @@ export default async function HomePage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJLfVE7sFdzOsBsPh5PWEwzC8_4PQvhWprEuiLZO9kaSMD-gbhKBmSBKKMcUZ5tsNN4jQs1p82AgNh3qu8tIuxmOJXcdjlI7L0KPwFeIlODQMXDwFArl2opEsyIJZJG_pjFOlDy7Sy0eyYzqp0aeiVe04tv7CfYZnSPBvGlp_oTimVhrZDQY9nzYlwEWjxSEegVytZ0SxZfEs9W99jTMa6Q_QmKppDvrlJu-F2bOMZD2GMGbpNe4m2dbAhlwECmDlOQ-ty9sn0WA"
-                    alt="Technician inspecting engine"
+                    alt={uiText("ui.technician_inspecting_engine_47ef277ff7")}
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                   <div className="absolute bottom-3 left-3 flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-teal animate-pulse" />
-                    <span className="text-[10px] font-bold text-white uppercase tracking-widest">
-                      Section 4 · Tires & Brakes
-                    </span>
+                    <span className="text-[10px] font-bold text-white uppercase tracking-widest">{uiText("ui.section_4_tires_brakes_2c2f6c1726")}</span>
                   </div>
                 </div>
 
@@ -224,21 +201,19 @@ export default async function HomePage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgdtzjS5fTJaXGfw1qjCNxyg4TecV3hT-kQQsMGffHqQS7ZLjg8wos62s9qf8hYfwI7UikJM9vTW6WDqBM3tMzdLyTrpcwwNLBCSB1AqZH0DF6tLTC7DISi-6EyfL5kRE-Jr-XYHZqxMiUBzy_70ZdYJYQYPjRiu9wTCc6RYuUMR6_9yPuwtcOyO6G8vwOz0owXidWN3PZjIyconWA8l45oB4K2I6Yk3LVS6GTaA7Fhh5yfmaP9JFQN2KlyORhoYMsgDF1f6EXyg"
-                    alt="Digital diagnostic dashboard"
+                    alt={uiText("ui.digital_diagnostic_dashboard_41b0c862a2")}
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-primary-container/70 via-transparent to-transparent" />
                   <div className="absolute top-3 right-3 bg-white/15 backdrop-blur-sm rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-on-tertiary-container" />
-                    <span className="text-[9px] font-black text-white uppercase tracking-wider">
-                      AI Analysis
-                    </span>
+                    <span className="text-[9px] font-black text-white uppercase tracking-wider">{uiText("ui.ai_analysis_c8438a13b9")}</span>
                   </div>
                   <div className="absolute bottom-3 left-3 right-3">
                     <div className="h-1 w-full bg-white/20 rounded-full overflow-hidden">
                       <div className="h-full w-[67%] bg-teal rounded-full" />
                     </div>
-                    <p className="text-[9px] text-white/60 mt-1 font-bold">8 / 12 sections complete</p>
+                    <p className="text-[9px] text-white/60 mt-1 font-bold">{uiText("ui.8_12_sections_complete_016a1eb428")}</p>
                   </div>
                 </div>
               </div>
@@ -258,31 +233,26 @@ export default async function HomePage() {
                 <div className="w-11 h-11 bg-white/10 rounded-xl flex items-center justify-center mb-5 backdrop-blur">
                   <Shield className="h-5 w-5 text-white" />
                 </div>
-                <h3 className="text-xl font-extrabold tracking-tighter mb-2">
-                  Service Contracts
-                </h3>
-                <p className="text-sm text-primary-fixed-dim leading-relaxed mb-7">
-                  Where legally available, users may review service-contract
-                  options governed by an issued provider agreement.
-                </p>
+                <h3 className="text-xl font-extrabold tracking-tighter mb-2">{uiText("ui.service_contracts_969c387307")}</h3>
+                <p className="text-sm text-primary-fixed-dim leading-relaxed mb-7">{uiText("ui.where_legally_available_users_may_review_ser_75ff948d85")}</p>
 
                 {/* Tier table */}
                 <div className="space-y-0 rounded-2xl overflow-hidden ghost-border">
                   {[
                     {
-                      tier: "Bronze", abbr: "BR",
+                      tier: uiText("ui.bronze_d916515d82"), abbr: "BR",
                       color: "text-amber-300", bg: "bg-amber-400/8",
-                      items: ["Powertrain", "Engine"],
+                      items: [uiText("ui.powertrain_6e70063b0a"), uiText("ui.engine_8e75ebbdb2")],
                     },
                     {
-                      tier: "Silver", abbr: "SL",
+                      tier: uiText("ui.silver_a0b43df06f"), abbr: "SL",
                       color: "text-slate-300", bg: "bg-white/5",
                       items: ["+ Electrical", "+ AC"],
                     },
                     {
-                      tier: "Gold", abbr: "GD",
+                      tier: uiText("ui.gold_6249df4367"), abbr: "GD",
                       color: "text-yellow-300", bg: "bg-yellow-400/8",
-                      items: ["Full Coverage"],
+                      items: [uiText("ui.full_coverage_d0e25ab82b")],
                     },
                   ].map(({ tier, abbr, color, bg, items }, i) => (
                     <div
@@ -306,9 +276,7 @@ export default async function HomePage() {
                 <Link
                   href="/warranty-disclosure"
                   className="flex items-center gap-2 font-heading font-bold text-sm tracking-tight hover:gap-3 transition-all text-white/70 hover:text-white"
-                >
-                  Read Important Disclosures
-                  <ArrowRight className="h-4 w-4" />
+                >{uiText("ui.read_important_disclosures_01b695a166")}<ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
             </div>
@@ -318,18 +286,13 @@ export default async function HomePage() {
               <div className="w-11 h-11 bg-secondary-container rounded-xl flex items-center justify-center text-on-secondary-container mb-5">
                 <BadgeCheck className="h-5 w-5" />
               </div>
-              <h3 className="text-xl font-extrabold tracking-tighter mb-3">
-                Technician Directory
-              </h3>
-              <p className="text-sm text-on-surface-variant mb-5">
-                Review technician profiles, specialties, experience, and any
-                credential status recorded by the platform.
-              </p>
+              <h3 className="text-xl font-extrabold tracking-tighter mb-3">{uiText("ui.technician_directory_5143ce2890")}</h3>
+              <p className="text-sm text-on-surface-variant mb-5">{uiText("ui.review_technician_profiles_specialties_exper_9e1a873d57")}</p>
               <div className="space-y-2.5">
                 {[
-                  { label: "OEM Experience", sublabel: "Profile information", color: "text-amber-600", bg: "bg-amber-500/10 border-amber-500/20" },
-                  { label: "ASE Credential", sublabel: "Verification shown separately", color: "text-slate-600", bg: "bg-slate-300/30 border-slate-400/20" },
-                  { label: "General Technician", sublabel: "Experience and specialties", color: "text-orange-700", bg: "bg-orange-400/10 border-orange-400/20" },
+                  { label: uiText("ui.oem_experience_de75db266a"), sublabel: uiText("ui.profile_information_8cd6944d65"), color: "text-amber-600", bg: "bg-amber-500/10 border-amber-500/20" },
+                  { label: uiText("ui.ase_credential_5d74241312"), sublabel: uiText("ui.verification_shown_separately_95a9e3e5ea"), color: "text-slate-600", bg: "bg-slate-300/30 border-slate-400/20" },
+                  { label: uiText("ui.general_technician_bfc304cac6"), sublabel: uiText("ui.experience_and_specialties_dc700fe7a5"), color: "text-orange-700", bg: "bg-orange-400/10 border-orange-400/20" },
                 ].map(({ label, sublabel, color, bg }) => (
                   <div key={label} className={`flex items-center gap-3 p-3 bg-surface rounded-xl border ${bg}`}>
                     <div className={`w-7 h-7 rounded-lg ${bg} border flex items-center justify-center`}>
@@ -348,15 +311,10 @@ export default async function HomePage() {
             {/* ─ Precision Reporting ────────────────────────────── */}
             <div className="md:col-span-8 bg-surface-container-low p-8 rounded-[1.75rem] flex flex-col md:flex-row gap-8 items-center overflow-hidden">
               <div className="flex-1">
-                <h3 className="text-2xl font-extrabold tracking-tighter mb-3">
-                  Precision Reporting
-                </h3>
-                <p className="text-sm text-on-surface-variant leading-relaxed mb-5">
-                  Detailed PDF reports with high-resolution imagery and
-                  technician commentary delivered after completion.
-                </p>
+                <h3 className="text-2xl font-extrabold tracking-tighter mb-3">{uiText("ui.precision_reporting_24ea995d12")}</h3>
+                <p className="text-sm text-on-surface-variant leading-relaxed mb-5">{uiText("ui.detailed_pdf_reports_with_high_resolution_im_185ba99391")}</p>
                 <div className="flex gap-3">
-                  {["PDF Export", "Shareable Link", "Media Package"].map((f) => (
+                  {[uiText("ui.pdf_export_bdfbfdcb93"), uiText("ui.shareable_link_633cdcc3a7"), uiText("ui.media_package_8fd2abaf01")].map((f) => (
                     <span key={f} className="text-[11px] font-bold px-3 py-1 rounded-full bg-surface ghost-border text-on-surface-variant">
                       {f}
                     </span>
@@ -365,10 +323,8 @@ export default async function HomePage() {
               </div>
               <div className="flex-shrink-0 w-48 bg-white rounded-xl shadow-lg p-4 transform rotate-1">
                 <div className="flex justify-between items-center mb-3">
-                  <span className="text-[9px] font-bold text-slate-400">REPORT #9921-X</span>
-                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-bold rounded">
-                    VERIFIED
-                  </span>
+                  <span className="text-[9px] font-bold text-slate-400">{uiText("ui.report_9921_x_4ef8eaef31")}</span>
+                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-bold rounded">{uiText("ui.verified_8766e017df")}</span>
                 </div>
                 <div className="h-1.5 w-full bg-slate-100 rounded-full mb-1.5" />
                 <div className="h-1.5 w-3/4 bg-slate-100 rounded-full mb-3" />
@@ -391,18 +347,13 @@ export default async function HomePage() {
           <div className="max-w-7xl mx-auto">
             <div className="flex items-end justify-between mb-10">
               <div>
-                <h2 className="text-3xl font-extrabold tracking-tighter mb-2">
-                  Vehicles for Sale
-                </h2>
-                <p className="text-sm text-on-surface-variant max-w-md">
-                  Public listings with vehicle details and available PerfectPPI inspection records.
-                </p>
+                <h2 className="text-3xl font-extrabold tracking-tighter mb-2">{uiText("ui.vehicles_for_sale_01fae15a32")}</h2>
+                <p className="text-sm text-on-surface-variant max-w-md">{uiText("ui.public_listings_with_vehicle_details_and_ava_3087ddc117")}</p>
               </div>
               <Link
                 href="/marketplace"
                 className="flex items-center gap-1.5 text-sm font-bold text-on-tertiary-container hover:gap-3 transition-all"
-              >
-                Browse all <ArrowRight className="h-4 w-4" />
+              >{uiText("ui.browse_all_c04cc40ca0")}<ArrowRight className="h-4 w-4" />
               </Link>
             </div>
             <div className="grid gap-5 md:grid-cols-3">
@@ -433,12 +384,11 @@ export default async function HomePage() {
                       </div>
                     </div>
                     <div className="p-5">
-                      <p className="font-heading font-bold text-on-surface mb-2 truncate">{vehicleName || "Vehicle"}</p>
+                      <p className="font-heading font-bold text-on-surface mb-2 truncate">{vehicleName || uiText("ui.vehicle_a62394ba4a")}</p>
                       <div className="flex flex-wrap gap-2 text-[11px] font-bold text-on-surface-variant">
                         {vehicle?.mileage != null && (
                           <span className="flex items-center gap-1 px-2.5 py-1 bg-surface-container rounded-full ghost-border">
-                            <Gauge className="h-3 w-3" />{formatMileage(vehicle.mileage)} mi
-                          </span>
+                            <Gauge className="h-3 w-3" />{formatMileage(vehicle.mileage)}{uiText("ui.mi_3074dbe604")}</span>
                         )}
                         {listing.location && (
                           <span className="flex items-center gap-1 px-2.5 py-1 bg-surface-container rounded-full ghost-border">
@@ -447,9 +397,9 @@ export default async function HomePage() {
                         )}
                         <span className="flex items-center gap-1 px-2.5 py-1 bg-teal/10 rounded-full text-teal">
                           {listing.inspection_summary ? (
-                            <><ClipboardCheck className="h-3 w-3" />{listing.inspection_summary.scope === "dents_tires" ? "Dents & Tires inspected" : "Complete inspection"}</>
+                            <><ClipboardCheck className="h-3 w-3" />{listing.inspection_summary.scope === "dents_tires" ? uiText("ui.dents_tires_inspected_78c7c38229") : uiText("ui.complete_inspection_e53fe9cd46")}</>
                           ) : (
-                            <><Tag className="h-3 w-3" />Marketplace listing</>
+                            <><Tag className="h-3 w-3" />{uiText("ui.marketplace_listing_41f94479d2")}</>
                           )}
                         </span>
                       </div>
@@ -466,21 +416,17 @@ export default async function HomePage() {
       <section className="py-20 px-8 bg-surface-container-low">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl font-extrabold tracking-tighter mb-3">
-              How It Works
-            </h2>
-            <p className="text-sm text-on-surface-variant max-w-md mx-auto">
-              From profile setup to a structured inspection report.
-            </p>
+            <h2 className="text-3xl font-extrabold tracking-tighter mb-3">{uiText("ui.how_it_works_c1879525c7")}</h2>
+            <p className="text-sm text-on-surface-variant max-w-md mx-auto">{uiText("ui.from_profile_setup_to_a_structured_inspectio_0759e8e02b")}</p>
           </div>
           <div className="relative flex flex-col md:flex-row justify-between gap-6">
             <div className="hidden md:block absolute top-9 left-0 right-0 h-px bg-outline-variant/30 -z-10" />
             {[
-              { icon: UserCircle, label: "Profile", desc: "Create your account in seconds." },
-              { icon: Car, label: "Add Vehicle", desc: "Enter your VIN and vehicle details." },
-              { icon: Search, label: "Inspection", desc: "Self-perform or assign a technician." },
-              { icon: BarChart3, label: "Results", desc: "Receive your detailed inspection report." },
-              { icon: BadgeCheck, label: "Options", desc: "Review separate provider options where offered." },
+              { icon: UserCircle, label: uiText("ui.profile_d696a35bdd"), desc: uiText("ui.create_your_account_in_seconds_08dd73e687") },
+              { icon: Car, label: uiText("ui.add_vehicle_f10cf1da45"), desc: uiText("ui.enter_your_vin_and_vehicle_details_49de5d2405") },
+              { icon: Search, label: uiText("ui.inspection_6e4fa13da4"), desc: uiText("ui.self_perform_or_assign_a_technician_4bd6acd8e9") },
+              { icon: BarChart3, label: uiText("ui.results_219c4a6c86"), desc: uiText("ui.receive_your_detailed_inspection_report_fb47374248") },
+              { icon: BadgeCheck, label: uiText("ui.options_d0db8b5e36"), desc: uiText("ui.review_separate_provider_options_where_offer_fc1ce4fbdd") },
             ].map((step, i) => (
               <div key={step.label} className="flex-1 flex flex-col items-center text-center group">
                 <div
@@ -506,25 +452,17 @@ export default async function HomePage() {
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-14 items-center">
             <div>
-              <h2 className="text-3xl font-extrabold tracking-tighter mb-7 leading-tight">
-                Built for evidence you can review.
-              </h2>
+              <h2 className="text-3xl font-extrabold tracking-tighter mb-7 leading-tight">{uiText("ui.built_for_evidence_you_can_review_60f933b464")}</h2>
               <div className="bg-surface-container-lowest p-7 rounded-2xl ghost-border shadow-sm">
-                <p className="text-base text-on-surface-variant leading-relaxed">
-                  Inspection answers, photos, OBD snapshots, report versions,
-                  and performer information stay connected so a reader can see
-                  what the report was based on. AI-assisted summaries remain
-                  reviewable and correctable rather than being presented as a
-                  guarantee.
-                </p>
+                <p className="text-base text-on-surface-variant leading-relaxed">{uiText("ui.inspection_answers_photos_obd_snapshots_repo_72100fbb95")}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { stat: "12", label: "Inspection Sections", dark: false },
-                { stat: "PDF", label: "Downloadable Reports", dark: true },
-                { stat: "OBD", label: "Diagnostic Snapshots", dark: false, dimBg: true },
-                { stat: "AI + Human", label: "Reviewable Outputs", dark: false },
+                { stat: "12", label: uiText("ui.inspection_sections_ae7bb79c64"), dark: false },
+                { stat: uiText("ui.pdf_1d393b0081"), label: uiText("ui.downloadable_reports_45fba67c61"), dark: true },
+                { stat: uiText("ui.obd_83282e99bb"), label: uiText("ui.diagnostic_snapshots_df0dc4f6cc"), dark: false, dimBg: true },
+                { stat: "AI + Human", label: uiText("ui.reviewable_outputs_834b213296"), dark: false },
               ].map(({ stat, label, dark, dimBg }) => (
                 <div
                   key={label}
@@ -553,26 +491,17 @@ export default async function HomePage() {
       <section className="px-8 pb-20">
         <div className="max-w-7xl mx-auto bg-primary-container rounded-[2.5rem] p-14 text-center text-white relative overflow-hidden">
           <div className="relative z-10">
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tighter mb-5">
-              Ready to secure your next asset?
-            </h2>
-            <p className="text-primary-fixed-dim max-w-lg mx-auto mb-8 text-base">
-              Join the network of collectors, dealers, and technicians using the
-              new standard of vehicle trust.
-            </p>
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tighter mb-5">{uiText("ui.ready_to_secure_your_next_asset_7657432e1a")}</h2>
+            <p className="text-primary-fixed-dim max-w-lg mx-auto mb-8 text-base">{uiText("ui.join_the_network_of_collectors_dealers_and_t_7735221dd2")}</p>
             <div className="flex flex-wrap justify-center gap-3">
               <Link
                 href="/signup"
                 className="bg-white text-primary px-9 py-4 rounded-xl font-heading font-extrabold text-base shadow-lg hover:scale-105 transition-all"
-              >
-                Get Started Now
-              </Link>
+              >{uiText("ui.get_started_now_cc3666dca7")}</Link>
               <Link
                 href="/technicians"
                 className="bg-white/10 backdrop-blur text-white px-9 py-4 rounded-xl font-heading font-extrabold text-base ghost-border hover:bg-white/20 transition-all"
-              >
-                Find a Technician
-              </Link>
+              >{uiText("ui.find_a_technician_8f8aff766b")}</Link>
             </div>
           </div>
           <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />

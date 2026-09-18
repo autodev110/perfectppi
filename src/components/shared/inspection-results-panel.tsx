@@ -7,6 +7,8 @@ import { StandardizedOutputView } from "@/components/shared/standardized-output-
 import { VscCoverageView } from "@/components/shared/vsc-coverage-view";
 import type { StandardizedContent, VscCoverageData } from "@/types/api";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 // ============================================================================
 // The generated report and VSC determination, for whoever performed the
 // inspection.
@@ -21,6 +23,7 @@ import type { StandardizedContent, VscCoverageData } from "@/types/api";
 // ============================================================================
 
 export function InspectionResultsPanel({ requestId }: { requestId: string }) {
+  const uiText = useTranslator();
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [resolving, setResolving] = useState(true);
 
@@ -56,7 +59,7 @@ export function InspectionResultsPanel({ requestId }: { requestId: string }) {
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <h2 className="font-heading text-lg font-bold">Inspection Report</h2>
+        <h2 className="font-heading text-lg font-bold">{uiText("ui.inspection_report_76b0f91569")}</h2>
         {hasStandardized ? (
           <StandardizedOutputView
             content={standardized!.structured_content as unknown as StandardizedContent}
@@ -70,7 +73,7 @@ export function InspectionResultsPanel({ requestId }: { requestId: string }) {
 
       {hasStandardized && (
         <div className="space-y-3">
-          <h2 className="font-heading text-lg font-bold">VSC Coverage Determination</h2>
+          <h2 className="font-heading text-lg font-bold">{uiText("ui.vsc_coverage_determination_29de4fbf4c")}</h2>
           {hasVsc ? (
             <VscCoverageView
               coverage={vsc!.coverage_data as unknown as VscCoverageData}

@@ -9,6 +9,8 @@ import {
 } from "@/components/shared/source-badge";
 import { SendToDealerSpaceButton } from "@/components/shared/send-to-dealerspace-button";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 // ============================================================================
 // The DealerSpace card on a technician's inspection screen: where the vehicle
 // came from, what DealerSpace sent, and the control that returns the finished
@@ -29,6 +31,7 @@ interface PartnerContext {
 }
 
 export function DealerSpaceInspectionPanel({ requestId }: { requestId: string }) {
+  const uiText = useTranslator();
   const [context, setContext] = useState<PartnerContext | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -73,10 +76,10 @@ export function DealerSpaceInspectionPanel({ requestId }: { requestId: string })
 
         <dl className="grid grid-cols-2 gap-3 text-sm">
           {[
-            ["Stock number", snapshot.stockNumber],
-            ["Recon case", context.externalReconCaseId],
-            ["Exterior", snapshot.exteriorColor],
-            ["Engine", snapshot.engine],
+            [uiText("ui.stock_number_74608bd0de"), snapshot.stockNumber],
+            [uiText("ui.recon_case_c56ccf8ba9"), context.externalReconCaseId],
+            [uiText("ui.exterior_cd41a1f4fd"), snapshot.exteriorColor],
+            [uiText("ui.engine_8e75ebbdb2"), snapshot.engine],
           ]
             .filter(([, value]) => value)
             .map(([label, value]) => (
@@ -88,10 +91,7 @@ export function DealerSpaceInspectionPanel({ requestId }: { requestId: string })
         </dl>
 
         {!context.connectionActive && (
-          <p className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive">
-            This DealerSpace connection has been revoked. Reports cannot be delivered
-            until your organization manager reconnects it.
-          </p>
+          <p className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{uiText("ui.this_dealerspace_connection_has_been_revoked_babd5e31ad")}</p>
         )}
 
         {context.canSend && context.connectionActive && (

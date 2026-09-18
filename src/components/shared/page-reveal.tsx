@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 export function PageReveal({
   children,
   className,
@@ -13,6 +15,7 @@ export function PageReveal({
   className?: string;
   delayMs?: number;
 }) {
+  const uiText = useTranslator();
   const pathname = usePathname();
 
   return (
@@ -23,7 +26,7 @@ export function PageReveal({
         className,
       )}
       style={{
-        animation: `page-reveal 420ms cubic-bezier(0.22, 1, 0.36, 1) ${delayMs}ms both`,
+        animation: uiText("ui.page_reveal_420ms_cubic_bezier_0_22_1_0_36_1_7e5f35e322", { arg0: String(delayMs) }),
       }}
     >
       {children}

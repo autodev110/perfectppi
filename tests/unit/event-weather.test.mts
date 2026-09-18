@@ -1,9 +1,10 @@
+import { resolveSourceCopy } from "../helpers/localized-source.mts";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
 
 const root = process.cwd();
-const source = (path: string) => readFile(`${root}/${path}`, "utf8");
+const source = (path: string) => readFile(`${root}/${path}`, "utf8").then(resolveSourceCopy);
 
 describe("community event weather (plan 26.3)", () => {
   test("uses only the public general area and fails open when weather is unavailable", async () => {

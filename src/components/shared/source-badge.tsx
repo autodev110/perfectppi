@@ -1,4 +1,5 @@
 import { Building2 } from "lucide-react";
+import { t as uiText } from "@/lib/i18n";
 
 // ============================================================================
 // Marks an inspection that arrived from a partner system rather than from a
@@ -42,11 +43,11 @@ const DELIVERY_STYLES: Record<string, string> = {
 };
 
 const DELIVERY_LABELS: Record<string, string> = {
-  not_requested: "Not sent",
-  queued: "Queued",
-  delivering: "Sending",
-  delivered: "Delivered",
-  failed: "Delivery failed",
+  not_requested: uiText("ui.not_sent_cd5f943d58"),
+  queued: uiText("ui.queued_661ff40a07"),
+  delivering: uiText("ui.sending_e595f17fac"),
+  delivered: uiText("ui.delivered_9061156573"),
+  failed: uiText("ui.delivery_failed_b486522010"),
 };
 
 export function DeliveryStatusBadge({ status }: { status: string }) {
@@ -62,16 +63,16 @@ export function DeliveryStatusBadge({ status }: { status: string }) {
 }
 
 const INTEGRATION_LABELS: Record<string, string> = {
-  created: "Received",
-  assigned: "Assigned",
-  accepted: "Accepted",
-  in_progress: "In progress",
-  submitted: "Submitted",
-  outputs_generating: "Generating reports",
-  deliverables_ready: "Reports ready",
-  outputs_failed: "Report generation failed",
-  needs_revision: "Needs revision",
-  cancelled: "Cancelled",
+  created: uiText("ui.received_49f19beeec"),
+  assigned: uiText("ui.assigned_8191888dd9"),
+  accepted: uiText("ui.accepted_a00fb0c507"),
+  in_progress: uiText("ui.in_progress_c1f88e9d6c"),
+  submitted: uiText("ui.submitted_64900440a8"),
+  outputs_generating: uiText("ui.generating_reports_53c7122b54"),
+  deliverables_ready: uiText("ui.reports_ready_d57c328bb7"),
+  outputs_failed: uiText("ui.report_generation_failed_f15718060c"),
+  needs_revision: uiText("ui.needs_revision_575452f730"),
+  cancelled: uiText("ui.cancelled_d353a99eb4"),
 };
 
 const INTEGRATION_STYLES: Record<string, string> = {

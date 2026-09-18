@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { cn } from "@/lib/utils";
 import { credentialTypeLabel, type PublicTechnicianCredential } from "@/features/technicians/credential-types";
+import { t as uiText } from "@/lib/i18n";
+import { useTranslator } from "@/lib/i18n/client";
 
 interface TechOption {
   id: string; // technician_profiles.id
@@ -34,12 +36,13 @@ interface TechSelectorProps {
 }
 
 const CREDENTIAL_FILTER_LABELS: Record<string, string> = {
-  ase: "Reviewed ASE",
-  master: "Reviewed ASE Master",
-  oem_qualified: "Reviewed OEM training",
+  ase: uiText("ui.reviewed_ase_a491f30ea4"),
+  master: uiText("ui.reviewed_ase_master_783c7d040d"),
+  oem_qualified: uiText("ui.reviewed_oem_training_9dbaf1e574"),
 };
 
 export function TechSelector({ selectedId, onSelect }: TechSelectorProps) {
+  const uiText = useTranslator();
   const [techs, setTechs] = useState<TechOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -74,7 +77,7 @@ export function TechSelector({ selectedId, onSelect }: TechSelectorProps) {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search technicians..."
+          placeholder={uiText("ui.search_technicians_63f8a98dde")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
@@ -94,7 +97,7 @@ export function TechSelector({ selectedId, onSelect }: TechSelectorProps) {
                 : "border-border text-muted-foreground hover:border-primary/50"
             )}
           >
-            {cert === "" ? "All" : CREDENTIAL_FILTER_LABELS[cert]}
+            {cert === "" ? uiText("ui.all_a52ace420f") : CREDENTIAL_FILTER_LABELS[cert]}
           </button>
         ))}
       </div>
@@ -102,13 +105,13 @@ export function TechSelector({ selectedId, onSelect }: TechSelectorProps) {
       {/* List */}
       <div className="space-y-2 max-h-80 overflow-y-auto">
         {loading && (
-          <p className="text-sm text-muted-foreground text-center py-8">Loading...</p>
+          <p className="text-sm text-muted-foreground text-center py-8">{uiText("ui.loading_47d2a515ef")}</p>
         )}
         {!loading && filtered.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-8">No technicians found</p>
+          <p className="text-sm text-muted-foreground text-center py-8">{uiText("ui.no_technicians_found_af9864a2d8")}</p>
         )}
         {filtered.map((tech) => {
-          const name = tech.profile.display_name ?? tech.profile.username ?? "Unknown";
+          const name = tech.profile.display_name ?? tech.profile.username ?? uiText("ui.unknown_b764cdc0ea");
           const selected = selectedId === tech.id;
 
           return (
@@ -132,7 +135,7 @@ export function TechSelector({ selectedId, onSelect }: TechSelectorProps) {
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
                     {tech.credentials.length > 0
                       ? credentialTypeLabel(tech.credentials[0].credential_type)
-                      : "No reviewed credential"}
+                      : uiText("ui.no_reviewed_credential_01e61be243")}
                   </span>
                 </div>
                 {tech.organization && (
@@ -141,7 +144,7 @@ export function TechSelector({ selectedId, onSelect }: TechSelectorProps) {
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  {tech.total_inspections} inspection{tech.total_inspections !== 1 ? "s" : ""}
+                  {tech.total_inspections}{uiText("ui.inspection_6ddb257e8e")}{tech.total_inspections !== 1 ? uiText("ui.s_043a718774") : ""}
                 </p>
                 {tech.specialties?.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">

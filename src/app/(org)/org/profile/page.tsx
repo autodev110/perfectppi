@@ -13,11 +13,14 @@ import type { Database } from "@/types/database";
 import { SocialPrivacyFields } from "@/components/shared/social-privacy-fields";
 import { SafetyRelationships } from "@/components/shared/safety-relationships";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type TechProfile = Database["public"]["Tables"]["technician_profiles"]["Row"];
 type Organization = Database["public"]["Tables"]["organizations"]["Row"];
 
 export default function OrgProfilePage() {
+  const uiText = useTranslator();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [techProfile, setTechProfile] = useState<TechProfile | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -87,7 +90,7 @@ export default function OrgProfilePage() {
       return;
     }
 
-    setProfileMessage("Profile updated.");
+    setProfileMessage(uiText("ui.profile_updated_3a06720a52"));
     setProfileSaving(false);
     await fetchData();
   }
@@ -104,27 +107,27 @@ export default function OrgProfilePage() {
       return;
     }
 
-    setOrgMessage("Organization updated.");
+    setOrgMessage(uiText("ui.organization_updated_86eb8ecc0d"));
     setOrgSaving(false);
     await fetchData();
   }
 
   if (loading) {
-    return <p className="text-muted-foreground">Loading...</p>;
+    return <p className="text-muted-foreground">{uiText("ui.loading_47d2a515ef")}</p>;
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <h1 className="font-heading text-2xl font-bold">Organization Profile</h1>
+      <h1 className="font-heading text-2xl font-bold">{uiText("ui.organization_profile_8f4e0ebdaf")}</h1>
 
       <Card>
         <CardHeader>
-          <CardTitle>Manager Profile</CardTitle>
+          <CardTitle>{uiText("ui.manager_profile_06614e784b")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form action={handleProfileSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="display_name">Display Name</Label>
+              <Label htmlFor="display_name">{uiText("ui.display_name_18d67c992b")}</Label>
               <Input
                 id="display_name"
                 name="display_name"
@@ -132,14 +135,14 @@ export default function OrgProfilePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Username</Label>
+              <Label>{uiText("ui.username_e3b89e9d33")}</Label>
               <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm">
-                {profile?.username ? `@${profile.username}` : "Not assigned"}
+                {profile?.username ? uiText("ui.text_d513a96df3", { arg0: String(profile.username) }) : uiText("ui.not_assigned_13075c2336")}
               </div>
-              <p className="text-xs text-muted-foreground">Usernames cannot be changed yet.</p>
+              <p className="text-xs text-muted-foreground">{uiText("ui.usernames_cannot_be_changed_yet_a580056e04")}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="bio">Bio</Label>
+              <Label htmlFor="bio">{uiText("ui.bio_3933b18021")}</Label>
               <Textarea
                 id="bio"
                 name="bio"
@@ -152,25 +155,25 @@ export default function OrgProfilePage() {
               <p className="text-sm text-muted-foreground">{profileMessage}</p>
             )}
             <Button type="submit" disabled={profileSaving}>
-              {profileSaving ? "Saving..." : "Save Profile"}
+              {profileSaving ? uiText("ui.saving_dc85af8f2b") : uiText("ui.save_profile_a4212f1e2f")}
             </Button>
           </form>
         </CardContent>
       </Card>
       <Card>
-        <CardHeader><CardTitle>Privacy &amp; Safety</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{uiText("ui.privacy_safety_f096950eac")}</CardTitle></CardHeader>
         <CardContent><SafetyRelationships /></CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Organization Branding</CardTitle>
+          <CardTitle>{uiText("ui.organization_branding_76fb6a9582")}</CardTitle>
         </CardHeader>
         <CardContent>
           {organization ? (
             <form action={handleOrganizationSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Organization Name</Label>
+                <Label htmlFor="name">{uiText("ui.organization_name_4cbd907324")}</Label>
                 <Input
                   id="name"
                   name="name"
@@ -178,7 +181,7 @@ export default function OrgProfilePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">{uiText("ui.description_526e0087cc")}</Label>
                 <Textarea
                   id="description"
                   name="description"
@@ -187,7 +190,7 @@ export default function OrgProfilePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="logo_url">Logo URL</Label>
+                <Label htmlFor="logo_url">{uiText("ui.logo_url_7ed9aaaedf")}</Label>
                 <Input
                   id="logo_url"
                   name="logo_url"
@@ -196,8 +199,7 @@ export default function OrgProfilePage() {
                 />
               </div>
               {techProfile && (
-                <p className="text-sm text-muted-foreground">
-                  Manager profile linked via technician profile{" "}
+                <p className="text-sm text-muted-foreground">{uiText("ui.manager_profile_linked_via_technician_profil_0235fa8b77")}{" "}
                   <span className="font-medium text-foreground">
                     {techProfile.id}
                   </span>
@@ -208,13 +210,11 @@ export default function OrgProfilePage() {
                 <p className="text-sm text-muted-foreground">{orgMessage}</p>
               )}
               <Button type="submit" disabled={orgSaving}>
-                {orgSaving ? "Saving..." : "Save Organization"}
+                {orgSaving ? uiText("ui.saving_dc85af8f2b") : uiText("ui.save_organization_b4f30a3f1c")}
               </Button>
             </form>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No organization is attached to this manager account.
-            </p>
+            <p className="text-sm text-muted-foreground">{uiText("ui.no_organization_is_attached_to_this_manager__ced6196e5d")}</p>
           )}
         </CardContent>
       </Card>

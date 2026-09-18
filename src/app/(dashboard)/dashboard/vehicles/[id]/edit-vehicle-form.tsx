@@ -12,9 +12,12 @@ import { VehicleMakeModelFields } from "@/components/shared/vehicle-make-model-f
 import { CurrentBuildFields, type CurrentBuildValues } from "@/components/shared/current-build-fields";
 import type { FactorySummary } from "@/lib/vehicles/factory-spec";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 
 export function EditVehicleForm({ vehicle, factory }: { vehicle: Vehicle; factory: FactorySummary | null }) {
+  const uiText = useTranslator();
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,30 +44,30 @@ export function EditVehicleForm({ vehicle, factory }: { vehicle: Vehicle; factor
   return (
     <form action={save} className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Nickname" name="nickname" defaultValue={vehicle.nickname ?? ""} maxLength={60} />
+        <Field label={uiText("ui.nickname_d720f61c8c")} name="nickname" defaultValue={vehicle.nickname ?? ""} maxLength={60} />
         <div className="space-y-2">
-          <Label htmlFor="ownership_state">Garage relationship</Label>
+          <Label htmlFor="ownership_state">{uiText("ui.garage_relationship_e26b2f2b89")}</Label>
           <select
             id="ownership_state"
             name="ownership_state"
             defaultValue={vehicle.ownership_state}
             className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            <option value="owned">Owned</option>
+            <option value="owned">{uiText("ui.owned_17b760c41c")}</option>
             {vehicle.ownership_state === "previously_owned" && (
-              <option value="previously_owned">Previously owned</option>
+              <option value="previously_owned">{uiText("ui.previously_owned_c56be55e86")}</option>
             )}
-            <option value="considering">Shopping / considering</option>
-            <option value="project">Project</option>
+            <option value="considering">{uiText("ui.shopping_considering_2850c42eca")}</option>
+            <option value="project">{uiText("ui.project_9859597853")}</option>
           </select>
         </div>
-        <Field label="Year" name="year" type="number" value={year} onChange={(event) => setYear(event.target.value)} min={1900} max={2100} />
+        <Field label={uiText("ui.year_89f6832560")} name="year" type="number" value={year} onChange={(event) => setYear(event.target.value)} min={1900} max={2100} />
         <div />
         <VehicleMakeModelFields make={make} model={model} year={year} onMakeChange={(value) => { setMake(value); setModel(""); }} onModelChange={setModel} />
         <div className="space-y-2">
-          <Label htmlFor="trim">Trim</Label>
+          <Label htmlFor="trim">{uiText("ui.trim_aaa5478b26")}</Label>
           <Input id="trim" name="trim" defaultValue={vehicle.trim ?? ""} maxLength={100} />
-          {factory?.trim ? <p className="text-xs text-muted-foreground">Factory (VIN): <span className="font-semibold text-foreground">{factory.trim}</span></p> : null}
+          {factory?.trim ? <p className="text-xs text-muted-foreground">{uiText("ui.factory_vin_4dded2e01e")}<span className="font-semibold text-foreground">{factory.trim}</span></p> : null}
         </div>
         <CurrentBuildFields
           values={build}
@@ -72,8 +75,8 @@ export function EditVehicleForm({ vehicle, factory }: { vehicle: Vehicle; factor
           factory={factory}
           originals={{ engine: vehicle.engine_original, transmission: vehicle.transmission_original, drivetrain: vehicle.drivetrain_original }}
         />
-        <Field label="VIN" name="vin" defaultValue={vehicle.vin ?? ""} maxLength={17} />
-        <Field label="Mileage" name="mileage" type="number" defaultValue={vehicle.mileage ?? ""} />
+        <Field label={uiText("ui.vin_5e0211b12d")} name="vin" defaultValue={vehicle.vin ?? ""} maxLength={17} />
+        <Field label={uiText("ui.mileage_ffe44a0179")} name="mileage" type="number" defaultValue={vehicle.mileage ?? ""} />
         <VehicleConfigurationFields
           initialType={vehicle.configuration_type}
           initialEngineOriginal={vehicle.engine_original}
@@ -83,23 +86,23 @@ export function EditVehicleForm({ vehicle, factory }: { vehicle: Vehicle; factor
           vehicleId={vehicle.id}
         />
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="visibility">Visibility</Label>
+          <Label htmlFor="visibility">{uiText("ui.visibility_7448611d5f")}</Label>
           <select
             id="visibility"
             name="visibility"
             defaultValue={vehicle.visibility}
             className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            <option value="private">Only me</option>
-            <option value="friends">Friends</option>
-            <option value="public">Public</option>
+            <option value="private">{uiText("ui.only_me_bdc0857b99")}</option>
+            <option value="friends">{uiText("ui.friends_bd104d1b98")}</option>
+            <option value="public">{uiText("ui.public_591935b15b")}</option>
           </select>
         </div>
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex gap-3">
-        <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save Changes"}</Button>
-        <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
+        <Button type="submit" disabled={saving}>{saving ? uiText("ui.saving_dc85af8f2b") : uiText("ui.save_changes_35322b5bb5")}</Button>
+        <Button type="button" variant="outline" onClick={() => router.back()}>{uiText("ui.cancel_19766ed6cc")}</Button>
       </div>
     </form>
   );

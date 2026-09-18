@@ -13,6 +13,8 @@ import { ChevronLeft, MessageSquare, Star, TrendingUp } from "lucide-react";
 import { getOptionalProfile } from "@/features/auth/guards";
 import { ExtendedReportControl } from "@/components/shared/extended-report-control";
 
+import { getRequestTranslator } from "@/lib/i18n/server";
+
 function vehicleLabel(vehicle: {
   year: number | null;
   make: string | null;
@@ -29,6 +31,7 @@ export default async function TechnicianReviewsPublicPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const uiText = await getRequestTranslator();
   const { id } = await params;
 
   const [tech, summary, reviews, viewer] = await Promise.all([
@@ -40,7 +43,7 @@ export default async function TechnicianReviewsPublicPage({
 
   if (!tech) notFound();
 
-  const displayName = tech.profile?.display_name ?? tech.profile?.username ?? "Technician";
+  const displayName = tech.profile?.display_name ?? tech.profile?.username ?? uiText("ui.technician_9041ccc417");
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8 space-y-6">
@@ -48,23 +51,18 @@ export default async function TechnicianReviewsPublicPage({
         href={`/technicians/${id}`}
         className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-foreground"
       >
-        <ChevronLeft className="h-4 w-4" />
-        Back to Technician Profile
-      </Link>
+        <ChevronLeft className="h-4 w-4" />{uiText("ui.back_to_technician_profile_4aebdb7c47")}</Link>
 
       <header className="space-y-2">
         <h1 className="font-heading text-3xl font-bold tracking-tight text-on-surface">
-          {displayName} Reviews
-        </h1>
-        <p className="text-sm text-on-surface-variant">
-          Verified feedback from completed technician-performed inspections.
-        </p>
+          {displayName}{uiText("ui.reviews_216c4600b3")}</h1>
+        <p className="text-sm text-on-surface-variant">{uiText("ui.verified_feedback_from_completed_technician__918a9afb59")}</p>
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-5">
-            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">Average Rating</p>
+            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">{uiText("ui.average_rating_66195d7600")}</p>
             <div className="flex items-center gap-2">
               <Star className="h-4 w-4 text-amber-500" />
               <p className="text-2xl font-black">{(summary?.avgRating ?? 0).toFixed(1)}</p>
@@ -75,14 +73,14 @@ export default async function TechnicianReviewsPublicPage({
 
         <Card>
           <CardContent className="p-5">
-            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">Total Reviews</p>
+            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">{uiText("ui.total_reviews_cd63123f4a")}</p>
             <p className="text-2xl font-black">{summary?.totalReviews ?? 0}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-5">
-            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">Reputation Score</p>
+            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">{uiText("ui.reputation_score_d7a54a7e7d")}</p>
             <div className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-teal" />
               <p className="text-2xl font-black">{(summary?.reputationScore ?? 0).toFixed(2)}</p>
@@ -95,10 +93,8 @@ export default async function TechnicianReviewsPublicPage({
         <Card>
           <CardContent className="py-10 text-center">
             <MessageSquare className="h-10 w-10 text-on-surface-variant/30 mx-auto mb-3" />
-            <p className="font-bold text-on-surface">No reviews yet</p>
-            <p className="text-sm text-on-surface-variant mt-1">
-              Reviews will appear once completed inspections are rated by requesters.
-            </p>
+            <p className="font-bold text-on-surface">{uiText("ui.no_reviews_yet_8b670b7eea")}</p>
+            <p className="text-sm text-on-surface-variant mt-1">{uiText("ui.reviews_will_appear_once_completed_inspectio_e74fc20574")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -115,15 +111,15 @@ export default async function TechnicianReviewsPublicPage({
                       <Avatar className="h-9 w-9">
                         <AvatarImage src={reviewer?.avatar_url ?? ""} />
                         <AvatarFallback className="text-xs">
-                          {getInitials(reviewer?.display_name ?? reviewer?.username ?? "U")}
+                          {getInitials(reviewer?.display_name ?? reviewer?.username ?? uiText("ui.u_a25513c7e0"))}
                         </AvatarFallback>
                       </Avatar>
                       <div>
                         <p className="text-sm font-bold text-on-surface">
-                          {reviewer?.display_name ?? reviewer?.username ?? "PerfectPPI user"}
+                          {reviewer?.display_name ?? reviewer?.username ?? uiText("ui.perfectppi_user_77df1ce619")}
                         </p>
                         <p className="text-xs text-on-surface-variant">
-                          {new Date(review.created_at).toLocaleDateString("en-US", {
+                          {new Date(review.created_at).toLocaleDateString(uiText("ui.en_us_5c49f88daf"), {
                             month: "short",
                             day: "numeric",
                             year: "numeric",
@@ -137,7 +133,7 @@ export default async function TechnicianReviewsPublicPage({
                     </Badge>
                   </div>
 
-                  {viewer && review.reviewer_id !== viewer.id ? <ExtendedReportControl entityType="review" entityId={review.id} label="Review" /> : null}
+                  {viewer && review.reviewer_id !== viewer.id ? <ExtendedReportControl entityType="review" entityId={review.id} label={uiText("ui.review_aff0766a52")} /> : null}
 
                   {review.title && <p className="font-semibold text-on-surface">{review.title}</p>}
                   {review.content && (
@@ -145,8 +141,7 @@ export default async function TechnicianReviewsPublicPage({
                   )}
 
                   {vehicle && (
-                    <p className="text-xs text-on-surface-variant">
-                      Vehicle inspected: {vehicleLabel(vehicle) || "Vehicle"}
+                    <p className="text-xs text-on-surface-variant">{uiText("ui.vehicle_inspected_5d15a1d554")}{vehicleLabel(vehicle) || uiText("ui.vehicle_a62394ba4a")}
                     </p>
                   )}
                 </CardContent>

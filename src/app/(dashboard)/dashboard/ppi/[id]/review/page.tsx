@@ -16,6 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, ChevronLeft, Star } from "lucide-react";
 
+import { getRequestTranslator } from "@/lib/i18n/server";
+
 export default async function PpiReviewPage({
   params,
   searchParams,
@@ -23,6 +25,7 @@ export default async function PpiReviewPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string; dispute?: string }>;
 }) {
+  const uiText = await getRequestTranslator();
   const { id } = await params;
   const { error, dispute } = await searchParams;
 
@@ -42,7 +45,7 @@ export default async function PpiReviewPage({
 
   const vehicleName = vehicle
     ? [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(" ")
-    : "Vehicle";
+    : uiText("ui.vehicle_a62394ba4a");
 
   const existingReview = eligibility?.existingReview;
   const serviceDispute = eligibility?.serviceDispute;
@@ -53,18 +56,14 @@ export default async function PpiReviewPage({
         href={`/dashboard/ppi/${id}`}
         className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-foreground"
       >
-        <ChevronLeft className="h-4 w-4" />
-        Back to Inspection
-      </Link>
+        <ChevronLeft className="h-4 w-4" />{uiText("ui.back_to_inspection_9e8649f821")}</Link>
 
       <Card>
         <CardHeader>
           <CardTitle className="font-heading text-xl">
-            {existingReview ? "Edit Technician Review" : "Rate Your Technician"}
+            {existingReview ? uiText("ui.edit_technician_review_9ac9a1ea4c") : uiText("ui.rate_your_technician_2c9b23d348")}
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Share factual feedback for {vehicleName}. Reviews are tied to this completed inspection.
-          </p>
+          <p className="text-sm text-muted-foreground">{uiText("ui.share_factual_feedback_for_e91ffc6a38")}{vehicleName}{uiText("ui.reviews_are_tied_to_this_completed_inspectio_5669594a11")}</p>
         </CardHeader>
         <CardContent>
           {error && (
@@ -75,20 +74,20 @@ export default async function PpiReviewPage({
           )}
           {dispute && (
             <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              {dispute === "opened" ? "Your concern was submitted privately for review." : "The dispute was withdrawn."}
+              {dispute === "opened" ? uiText("ui.your_concern_was_submitted_privately_for_rev_fc37c7901b") : uiText("ui.the_dispute_was_withdrawn_0ae3aab04f")}
             </div>
           )}
 
           {!eligibility?.canReview ? (
             <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-              {eligibility?.unavailableReason ?? "Reviews can only be created by the requester after a technician-completed inspection reaches completed status."}
+              {eligibility?.unavailableReason ?? uiText("ui.reviews_can_only_be_created_by_the_requester_bd85b97d42")}
             </div>
           ) : (
             <form action={upsertTechnicianReview} className="space-y-5">
               <input type="hidden" name="ppi_request_id" value={id} />
 
               <div className="space-y-2">
-                <Label htmlFor="rating">Rating (1-5)</Label>
+                <Label htmlFor="rating">{uiText("ui.rating_1_5_c18fb0ded8")}</Label>
                 <div className="relative max-w-[160px]">
                   <Input
                     id="rating"
@@ -106,34 +105,34 @@ export default async function PpiReviewPage({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="title">Review Title (optional)</Label>
+                <Label htmlFor="title">{uiText("ui.review_title_optional_2c0af9aaf6")}</Label>
                 <Input
                   id="title"
                   name="title"
                   maxLength={120}
                   defaultValue={existingReview?.title ?? ""}
-                  placeholder="Quick summary of your experience"
+                  placeholder={uiText("ui.quick_summary_of_your_experience_0127332612")}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="content">Detailed Feedback (optional)</Label>
+                <Label htmlFor="content">{uiText("ui.detailed_feedback_optional_1feb4cb367")}</Label>
                 <Textarea
                   id="content"
                   name="content"
                   rows={6}
                   maxLength={2000}
                   defaultValue={existingReview?.content ?? ""}
-                  placeholder="What went well? What could be improved?"
+                  placeholder={uiText("ui.what_went_well_what_could_be_improved_c038961d65")}
                 />
               </div>
 
               <div className="flex items-center gap-3">
                 <Button type="submit">
-                  {existingReview ? "Update Review" : "Submit Review"}
+                  {existingReview ? uiText("ui.update_review_1d002c1e90") : uiText("ui.submit_review_f6cc12201a")}
                 </Button>
                 <Button type="button" variant="outline" asChild>
-                  <Link href={`/dashboard/ppi/${id}`}>Cancel</Link>
+                  <Link href={`/dashboard/ppi/${id}`}>{uiText("ui.cancel_19766ed6cc")}</Link>
                 </Button>
               </div>
             </form>
@@ -143,25 +142,23 @@ export default async function PpiReviewPage({
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading text-xl">Inspection concern</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            This is a private support process, not a public review. Opening a dispute temporarily hides an existing review until an administrator completes the review.
-          </p>
+          <CardTitle className="font-heading text-xl">{uiText("ui.inspection_concern_a1ad5f7396")}</CardTitle>
+          <p className="text-sm text-muted-foreground">{uiText("ui.this_is_a_private_support_process_not_a_publ_22e0aa131a")}</p>
         </CardHeader>
         <CardContent>
           {serviceDispute ? (
             <div className="space-y-4">
               <div className="rounded-lg border p-4 text-sm">
-                <p className="font-semibold">{serviceDispute.status === "open" ? "Under review" : "Dispute closed"}</p>
-                <p className="mt-1 text-muted-foreground">{SERVICE_DISPUTE_REASON_LABELS[serviceDispute.reason_code as keyof typeof SERVICE_DISPUTE_REASON_LABELS] ?? "Inspection concern"}</p>
+                <p className="font-semibold">{serviceDispute.status === "open" ? uiText("ui.under_review_9e8a3b648c") : uiText("ui.dispute_closed_d6526e458d")}</p>
+                <p className="mt-1 text-muted-foreground">{SERVICE_DISPUTE_REASON_LABELS[serviceDispute.reason_code as keyof typeof SERVICE_DISPUTE_REASON_LABELS] ?? uiText("ui.inspection_concern_a1ad5f7396")}</p>
                 <p className="mt-3 whitespace-pre-wrap">{serviceDispute.details}</p>
-                {serviceDispute.resolution_note ? <p className="mt-3 rounded-md bg-muted p-3"><span className="font-semibold">Resolution:</span> {serviceDispute.resolution_note}</p> : null}
+                {serviceDispute.resolution_note ? <p className="mt-3 rounded-md bg-muted p-3"><span className="font-semibold">{uiText("ui.resolution_7c144de0a9")}</span> {serviceDispute.resolution_note}</p> : null}
               </div>
               {serviceDispute.status === "open" ? (
                 <form action={withdrawPpiServiceDisputeAction}>
                   <input type="hidden" name="ppi_request_id" value={id} />
                   <input type="hidden" name="dispute_id" value={serviceDispute.id} />
-                  <Button type="submit" variant="outline">Withdraw dispute</Button>
+                  <Button type="submit" variant="outline">{uiText("ui.withdraw_dispute_6858ebf535")}</Button>
                 </form>
               ) : null}
             </div>
@@ -169,20 +166,20 @@ export default async function PpiReviewPage({
             <form action={openPpiServiceDisputeAction} className="space-y-4">
               <input type="hidden" name="ppi_request_id" value={id} />
               <div className="space-y-2">
-                <Label htmlFor="reason_code">Reason</Label>
+                <Label htmlFor="reason_code">{uiText("ui.reason_f81ab834de")}</Label>
                 <select id="reason_code" name="reason_code" className="h-10 w-full rounded-md border bg-background px-3 text-sm" required>
                   {SERVICE_DISPUTE_REASONS.map((reason) => <option key={reason} value={reason}>{SERVICE_DISPUTE_REASON_LABELS[reason]}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="details">What happened?</Label>
-                <Textarea id="details" name="details" minLength={20} maxLength={2000} rows={5} required placeholder="Describe the inspection concern and the outcome you are requesting." />
+                <Label htmlFor="details">{uiText("ui.what_happened_c4dc542b51")}</Label>
+                <Textarea id="details" name="details" minLength={20} maxLength={2000} rows={5} required placeholder={uiText("ui.describe_the_inspection_concern_and_the_outc_85f3e63508")} />
               </div>
-              <p className="text-xs text-muted-foreground">Submit by {eligibility.disputeDeadline ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(eligibility.disputeDeadline)) : "the end of the dispute window"}. Do not include payment-card details or unrelated sensitive information.</p>
-              <Button type="submit" variant="outline">Submit private concern</Button>
+              <p className="text-xs text-muted-foreground">{uiText("ui.submit_by_5110b3daaa")}{eligibility.disputeDeadline ? new Intl.DateTimeFormat(uiText("ui.en_dbd3a49d0d"), { dateStyle: "medium" }).format(new Date(eligibility.disputeDeadline)) : uiText("ui.the_end_of_the_dispute_window_cc70cf5a5c")}{uiText("ui.do_not_include_payment_card_details_or_unrel_9b533b13e3")}</p>
+              <Button type="submit" variant="outline">{uiText("ui.submit_private_concern_c850b761aa")}</Button>
             </form>
           ) : (
-            <p className="text-sm text-muted-foreground">No new dispute can be opened for this inspection.</p>
+            <p className="text-sm text-muted-foreground">{uiText("ui.no_new_dispute_can_be_opened_for_this_inspec_a9964d2479")}</p>
           )}
         </CardContent>
       </Card>

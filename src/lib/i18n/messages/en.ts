@@ -2,7 +2,12 @@
 // grouped by namespace; `{name}` placeholders are filled by formatMessage.
 // Add a language by copying this file: keys missing from a translation fall
 // back to English at runtime.
-export const en = {
+import { uiEn } from "./en-ui.ts";
+
+const coreEn = {
+  "format.just_now": "just now",
+  "notifications.comment_reply.title": "New reply to your comment",
+  "notifications.post_comment.title": "New comment on your post",
   // ── Report reasons (plan 16.2) — the codes are shared with the database ──
   "report.reason.spam": "Spam or misleading content",
   "report.reason.harassment": "Harassment or bullying",
@@ -169,5 +174,7 @@ export const en = {
   "share.copied": "Link copied",
   "share.copy_failed": "Copy failed",
 } as const;
+
+export const en = { ...coreEn, ...uiEn } as const;
 
 export type MessageKey = keyof typeof en;

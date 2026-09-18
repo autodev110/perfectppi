@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
+import { useTranslator } from "@/lib/i18n/client";
+
 type PackageItem = {
   type: "image" | "video" | "file";
   url: string;
@@ -29,6 +31,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function CreateMediaPackagePage() {
+  const uiText = useTranslator();
   const router = useRouter();
   const uploadRecordId = useMemo(() => crypto.randomUUID(), []);
 
@@ -62,11 +65,11 @@ export default function CreateMediaPackagePage() {
 
     if (!directRes.ok) {
       const payload = await directRes.json().catch(() => null);
-      throw new Error(payload?.error ?? `Upload failed for ${file.name}`);
+      throw new Error(payload?.error ?? uiText("ui.upload_failed_for_325ad16a5a", { arg0: String(file.name) }));
     }
 
     const payload = (await directRes.json()) as { publicUrl?: string };
-    if (!payload.publicUrl) throw new Error(`Upload failed for ${file.name}`);
+    if (!payload.publicUrl) throw new Error(uiText("ui.upload_failed_for_325ad16a5a", { arg0: String(file.name) }));
     return payload.publicUrl;
   }
 
@@ -133,12 +136,12 @@ export default function CreateMediaPackagePage() {
     setError(null);
 
     if (!title.trim()) {
-      setError("Title is required");
+      setError(uiText("ui.title_is_required_d5b06872b5"));
       return;
     }
 
     if (files.length === 0) {
-      setError("Add at least one file");
+      setError(uiText("ui.add_at_least_one_file_b988e0381f"));
       return;
     }
 
@@ -159,7 +162,7 @@ export default function CreateMediaPackagePage() {
         });
 
         if ("error" in result) {
-          setError(result.error ?? "Failed to create media package");
+          setError(result.error ?? uiText("ui.failed_to_create_media_package_46765f578d"));
           setUploadingIndex(null);
           return;
         }
@@ -169,43 +172,43 @@ export default function CreateMediaPackagePage() {
         router.refresh();
       } catch (e) {
         setUploadingIndex(null);
-        setError(e instanceof Error ? e.message : "Upload failed. Please try again.");
+        setError(e instanceof Error ? e.message : uiText("ui.upload_failed_please_try_again_35765e54d9"));
       }
     });
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="font-heading text-2xl font-bold">Create Media Package</h1>
+      <h1 className="font-heading text-2xl font-bold">{uiText("ui.create_media_package_0dabf9716b")}</h1>
 
       <Card>
         <CardHeader>
-          <CardTitle>Package Details</CardTitle>
+          <CardTitle>{uiText("ui.package_details_aa2bd98514")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
+            <Label htmlFor="title">{uiText("ui.title_7e8cd2056d")}</Label>
             <Input
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Example: 2021 Ford Escape - Buyer Package"
+              placeholder={uiText("ui.example_2021_ford_escape_buyer_package_539132a27c")}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">{uiText("ui.description_526e0087cc")}</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional package notes"
+              placeholder={uiText("ui.optional_package_notes_9c94ba69bd")}
               rows={3}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="files">Files</Label>
+            <Label htmlFor="files">{uiText("ui.files_abc7e98928")}</Label>
             <Input
               id="files"
               type="file"
@@ -213,9 +216,7 @@ export default function CreateMediaPackagePage() {
               accept={accept}
               onChange={onPickFiles}
             />
-            <p className="text-xs text-on-surface-variant">
-              Allowed: images, mp4/mov, pdf/doc/docx/txt
-            </p>
+            <p className="text-xs text-on-surface-variant">{uiText("ui.allowed_images_mp4_mov_pdf_doc_docx_txt_1541572d8b")}</p>
           </div>
 
           {files.length > 0 ? (
@@ -237,17 +238,14 @@ export default function CreateMediaPackagePage() {
                     variant="ghost"
                     onClick={() => removeFile(index)}
                     disabled={isPending}
-                  >
-                    Remove
-                  </Button>
+                  >{uiText("ui.remove_c3812fc4ac")}</Button>
                 </div>
               ))}
             </div>
           ) : null}
 
           {uploadingIndex !== null ? (
-            <p className="text-sm text-on-surface-variant">
-              Uploading file {uploadingIndex + 1} of {files.length}...
+            <p className="text-sm text-on-surface-variant">{uiText("ui.uploading_file_7c1313d51d")}{uploadingIndex + 1}{uiText("ui.of_a4282e4b22")}{files.length}...
             </p>
           ) : null}
 
@@ -255,11 +253,9 @@ export default function CreateMediaPackagePage() {
 
           <div className="flex gap-2">
             <Button onClick={handleSubmit} disabled={isPending}>
-              {isPending ? "Uploading..." : "Create Package"}
+              {isPending ? uiText("ui.uploading_72cb29c90c") : uiText("ui.create_package_0f4fd87bb3")}
             </Button>
-            <Button variant="outline" onClick={() => router.back()} disabled={isPending}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => router.back()} disabled={isPending}>{uiText("ui.cancel_19766ed6cc")}</Button>
           </div>
         </CardContent>
       </Card>

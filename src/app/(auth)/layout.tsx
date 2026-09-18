@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Shield, BadgeCheck, Fingerprint } from "lucide-react";
 import { PageReveal } from "@/components/shared/page-reveal";
+import { t as uiText } from "@/lib/i18n";
 
 export default function AuthLayout({
   children,
@@ -22,20 +23,9 @@ export default function AuthLayout({
             <Link
               href="/"
               className="text-2xl font-heading font-black tracking-tighter mb-12 block"
-            >
-              PerfectPPI
-            </Link>
-            <h1 className="font-heading font-extrabold text-5xl tracking-tight leading-none mb-6">
-              The Standard
-              <br />
-              for Verified
-              <br />
-              Vehicle Trust.
-            </h1>
-            <p className="text-on-primary-container text-lg max-w-sm font-medium leading-relaxed">
-              Verify provenance. Secure your investment. Access the industry
-              standard for Pre-Purchase Inspections.
-            </p>
+            >{uiText("ui.perfectppi_67127e136c")}</Link>
+            <h1 className="font-heading font-extrabold text-5xl tracking-tight leading-none mb-6">{uiText("ui.the_standard_9a59391ad4")}<br />{uiText("ui.for_verified_5cda6d7b86")}<br />{uiText("ui.vehicle_trust_0c94ce9428")}</h1>
+            <p className="text-on-primary-container text-lg max-w-sm font-medium leading-relaxed">{uiText("ui.verify_provenance_secure_your_investment_acc_81e5c2929a")}</p>
           </div>
 
           {/* Asymmetric image */}
@@ -43,7 +33,7 @@ export default function AuthLayout({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsNFgtjwRGmA2rZzZ_-kEuYzMsT5XGVYrAFdyNy8gLt6J-WkKYLemSgNcHWYcaaf1nOWvMb58XW9VgQxtGD4Iw_KHXhL7anXDPhKk8AHio9HQzy3LfXMDIYMkCnsvdhr_h5Acl26_U6ASbvWsAUN-imZlddqIFFraj7w0-I5MWf6844OhAHwVOK9JSlTCUGV-n5QUd4hf3hr654fe0Nz3dOw0hQsuHXmn3yv2_M6w5qG3TBEDrteGw6Wes9JIssqhr7Y8lM92UTQ"
-              alt="Sport car engine detail"
+              alt={uiText("ui.sport_car_engine_detail_537cf6d451")}
               className="absolute inset-0 w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-primary-container/80 to-transparent" />
@@ -63,9 +53,7 @@ export default function AuthLayout({
             <Link
               href="/"
               className="md:hidden text-2xl font-heading font-black tracking-tighter text-primary-container mb-8 block"
-            >
-              PerfectPPI
-            </Link>
+            >{uiText("ui.perfectppi_67127e136c")}</Link>
             {children}
           </PageReveal>
         </section>
