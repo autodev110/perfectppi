@@ -1,7 +1,7 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { productEventDedupeHash } from "./event-correlation";
 
 export const PRODUCT_EVENT_NAMES = [
   "profile_completed",
@@ -30,7 +30,7 @@ export const PRODUCT_EVENT_NAMES = [
   "custom_build_declared",
   "build_stage_created",
   // Plan 34 signals: discovery-to-join, upload completion, unwanted contact,
-  // crash-free sessions. Client-observed ones arrive via /api/analytics/client-events.
+  // reliability observations. Client ones arrive via /api/analytics/client-events.
   "group_detail_viewed",
   "media_upload_reserved",
   "media_upload_attached",
@@ -53,17 +53,20 @@ export async function recordProductEvent(input: {
   surface: ProductEventSurface;
   dedupeId?: string;
 }) {
-  const dedupeHash = input.dedupeId
-    ? createHash("sha256").update(`${input.eventName}:${input.dedupeId}`).digest("hex")
-    : null;
-  const { error } = await createAdminClient().rpc("record_product_analytics_event", {
-    p_profile_id: input.profileId,
-    p_event_name: input.eventName,
-    p_surface: input.surface,
-    p_dedupe_hash: dedupeHash,
-  });
-  if (error) {
-    console.error("product analytics event failed", { eventName: input.eventName, code: error.code });
+  const dedupeHash = productEventDedupeHash(input.eventName, input.dedupeId);
+  try {
+    const { error } = await createAdminClient().rpc("record_product_analytics_event", {
+      p_profile_id: input.profileId,
+      p_event_name: input.eventName,
+      p_surface: input.surface,
+      p_dedupe_hash: dedupeHash,
+    });
+    if (error) {
+      console.error("product analytics event failed", { eventName: input.eventName, code: error.code });
+    }
+  } catch {
+    // A measurement outage must not fail an already-completed user action.
+    console.error("product analytics event failed", { eventName: input.eventName, code: "unavailable" });
   }
 }
 

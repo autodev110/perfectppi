@@ -5868,6 +5868,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      record_client_product_event: {
+        Args: { p_profile_id: string; p_event_name: string }
+        Returns: boolean
+      }
       set_product_analytics_preference: {
         Args: { p_enabled: boolean; p_profile_id: string }
         Returns: boolean
@@ -6138,6 +6142,17 @@ export type Database = {
       edit_community_post: {
         Args: { p_actor_profile_id: string; p_post_id: string; p_content: string }
         Returns: Database["public"]["Tables"]["community_posts"]["Row"]
+      }
+      publish_community_author_edit: {
+        Args: {
+          p_actor_profile_id: string
+          p_entity_type: string
+          p_entity_id: string
+          p_content: string
+          p_moderation: Json
+          p_groups_enabled: boolean
+        }
+        Returns: Json
       }
       edit_community_comment: {
         Args: { p_actor_profile_id: string; p_comment_id: string; p_content: string }

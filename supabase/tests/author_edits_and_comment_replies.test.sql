@@ -124,6 +124,41 @@ END
 $$;
 
 -- ── Comment replies: one level, same post, parent must be visible ──────────
+-- Publication and its audit share one transaction, including after an older
+-- case closes. Its revision must never point back to that closed case.
+DO $$
+DECLARE
+  v_result jsonb;
+  v_revision uuid;
+  v_events integer;
+  v_allow jsonb := '{"decision":"allow","riskLevel":"none","provider":"test","modelVersion":"1","reasonCodes":[]}'::jsonb;
+BEGIN
+  IF has_function_privilege('authenticated', 'public.publish_community_author_edit(uuid,text,uuid,text,jsonb,boolean)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'atomic edit publication leaked to clients';
+  END IF;
+  BEGIN
+    PERFORM public.publish_community_author_edit((SELECT author_id FROM edit_ids), 'community_post',
+      (SELECT post_id FROM edit_ids), 'Rejected edit', v_allow || '{"decision":"review"}', true);
+    RAISE EXCEPTION 'unapproved edit was published';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL;
+  END;
+  v_result := public.publish_community_author_edit((SELECT author_id FROM edit_ids), 'community_post',
+    (SELECT post_id FROM edit_ids), 'Approved audited edit', v_allow, true);
+  SELECT active_revision_id INTO v_revision FROM public.community_posts WHERE id = (SELECT post_id FROM edit_ids);
+  IF NOT EXISTS (
+    SELECT 1 FROM public.moderation_events event
+    JOIN public.moderation_items item ON item.id = event.moderation_item_id
+    WHERE item.entity_id = (SELECT post_id FROM edit_ids)
+      AND event.metadata->>'authorEdit' = 'true' AND event.revision_id = v_revision AND event.case_id IS NULL
+  ) THEN RAISE EXCEPTION 'new edit audit was rebound to an older case'; END IF;
+  SELECT count(*) INTO v_events FROM public.moderation_events WHERE revision_id = v_revision;
+  PERFORM public.publish_community_author_edit((SELECT author_id FROM edit_ids), 'community_post',
+    (SELECT post_id FROM edit_ids), 'Approved audited edit', v_allow, true);
+  IF (SELECT count(*) FROM public.moderation_events WHERE revision_id = v_revision) <> v_events THEN
+    RAISE EXCEPTION 'no-op edit created another audit';
+  END IF;
+END $$;
+
 INSERT INTO public.community_comments (id, post_id, author_id, content, status, moderation_status, parent_comment_id)
 SELECT reply_id, post_id, replier_id, 'Reply to the first thought.', 'active', 'active', comment_id FROM edit_ids;
 
@@ -170,6 +205,40 @@ END
 $$;
 
 -- ── Comment edit and soft removal ──────────────────────────────────────────
+-- Access loss must suppress both new and aggregated reply notifications.
+UPDATE public.community_posts SET audience = 'friends' WHERE id = (SELECT post_id FROM edit_ids);
+UPDATE public.notifications SET read_at = now()
+WHERE type = 'comment_reply' AND user_id = (SELECT commenter_id FROM edit_ids);
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM public.notifications WHERE type = 'comment_reply'
+    AND user_id = (SELECT commenter_id FROM edit_ids) AND read_at IS NULL) THEN
+    RAISE EXCEPTION 'access-loss notification could not be marked read';
+  END IF;
+END $$;
+DELETE FROM public.notifications WHERE type = 'comment_reply' AND user_id = (SELECT commenter_id FROM edit_ids);
+UPDATE public.community_posts SET audience = 'friends' WHERE id = (SELECT post_id FROM edit_ids);
+SELECT public.upsert_comment_reply_notification((SELECT commenter_id FROM edit_ids), (SELECT replier_id FROM edit_ids),
+  (SELECT post_id FROM edit_ids), (SELECT comment_id FROM edit_ids), (SELECT reply_id FROM edit_ids));
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM public.notifications WHERE type = 'comment_reply' AND user_id = (SELECT commenter_id FROM edit_ids)) THEN
+    RAISE EXCEPTION 'reply notification leaked a now-inaccessible post';
+  END IF;
+END $$;
+UPDATE public.community_posts SET audience = 'public' WHERE id = (SELECT post_id FROM edit_ids);
+
+INSERT INTO public.profile_blocks (blocker_id, blocked_id)
+SELECT commenter_id, replier_id FROM edit_ids;
+DO $$ BEGIN
+  BEGIN
+    INSERT INTO public.community_comments (post_id, author_id, content, status, moderation_status, parent_comment_id)
+    SELECT post_id, replier_id, 'Reply across a block', 'active', 'active', comment_id FROM edit_ids;
+    RAISE EXCEPTION 'reply bypassed the parent-author block';
+  EXCEPTION WHEN check_violation THEN
+    IF SQLERRM <> 'comment_reply_parent_unavailable' THEN RAISE; END IF;
+  END;
+END $$;
+DELETE FROM public.profile_blocks WHERE blocker_id = (SELECT commenter_id FROM edit_ids);
+
 DO $$
 DECLARE
   v_comment public.community_comments%ROWTYPE;
@@ -236,8 +305,27 @@ BEGIN
   EXCEPTION WHEN check_violation THEN NULL;
   END;
   PERFORM public.set_accepted_community_answer((SELECT author_id FROM edit_ids), (SELECT question_id FROM edit_ids), (SELECT answer_id FROM edit_ids));
+  BEGIN
+    PERFORM public.set_community_comment_helpful((SELECT author_id FROM edit_ids), (SELECT answer_reply_id FROM edit_ids), true);
+    RAISE EXCEPTION 'a reply gained Helpful reputation';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
 END
 $$;
+
+SELECT public.submit_moderation_report(
+  (SELECT commenter_id FROM edit_ids), 'community_comment', (SELECT answer_reply_id FROM edit_ids),
+  (SELECT active_revision_id FROM public.community_comments WHERE id = (SELECT answer_reply_id FROM edit_ids)),
+  'spam', NULL, 'author-edit-monitoring-report', false
+);
+DO $$ BEGIN
+  BEGIN
+    PERFORM public.remove_own_community_comment((SELECT replier_id FROM edit_ids), (SELECT answer_reply_id FROM edit_ids));
+    RAISE EXCEPTION 'author removed a visible comment with an open monitoring case';
+  EXCEPTION WHEN check_violation THEN
+    IF SQLERRM <> 'comment_under_review' THEN RAISE; END IF;
+  END;
+END $$;
 
 SELECT public.submit_moderation_report(
   (SELECT replier_id FROM edit_ids), 'community_comment', (SELECT answer_id FROM edit_ids),
@@ -267,5 +355,26 @@ BEGIN
   END IF;
 END
 $$;
+
+-- Account-wide edit throttles are also enforced inside the publication RPC.
+DO $$
+DECLARE
+  v_edits integer;
+  v_index integer;
+  v_allow jsonb := '{"decision":"allow","riskLevel":"none","provider":"test","modelVersion":"1","reasonCodes":[]}'::jsonb;
+BEGIN
+  SELECT count(*) INTO v_edits FROM public.community_post_revisions
+    WHERE author_id = (SELECT author_id FROM edit_ids) AND revision_number > 1;
+  FOR v_index IN 1..(20 - v_edits) LOOP
+    PERFORM public.publish_community_author_edit((SELECT author_id FROM edit_ids), 'community_post',
+      (SELECT question_id FROM edit_ids), 'Audited edit ' || v_index, v_allow, true);
+  END LOOP;
+  BEGIN
+    PERFORM public.publish_community_author_edit((SELECT author_id FROM edit_ids), 'community_post',
+      (SELECT question_id FROM edit_ids), 'Too many edits', v_allow, true);
+    RAISE EXCEPTION 'account edit throttle bypassed';
+  EXCEPTION WHEN program_limit_exceeded THEN NULL;
+  END;
+END $$;
 
 ROLLBACK;

@@ -117,7 +117,7 @@ export function CommunityAuthorEditor({
       <div className="mt-1.5 flex flex-wrap items-center gap-1">
         <button
           type="button"
-          onClick={() => setEditing(true)}
+          onClick={() => { setContent(initialContent); setError(null); setEditing(true); }}
           disabled={busy}
           className="inline-flex min-h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
           aria-label={`Edit your ${noun}`}

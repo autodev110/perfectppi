@@ -441,13 +441,6 @@ export async function attachVehiclePhoto(input: {
   if (!claimedReservation) {
     return { error: "This vehicle upload was already attached. Please select the file again." };
   }
-  await recordProductEvent({
-    profileId: profile.profileId,
-    eventName: "media_upload_attached",
-    surface: "garage",
-    dedupeId: parsed.data.url,
-  });
-
   let bytes: Uint8Array;
   try {
     bytes = (await getObjectFromStoredUrl(parsed.data.url, {
@@ -480,6 +473,13 @@ export async function attachVehiclePhoto(input: {
     await deleteStoredObjectOrQueue(parsed.data.url, "failed_vehicle_media_record");
     return { error: "Vehicle media could not be saved" };
   }
+
+  await recordProductEvent({
+    profileId: profile.profileId,
+    eventName: "media_upload_attached",
+    surface: "garage",
+    dedupeId: parsed.data.url,
+  });
 
   let result: ModerationResult;
   let storedUrl = parsed.data.url;

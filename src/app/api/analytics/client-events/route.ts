@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiRole } from "@/features/auth/api";
-import { recordProductEvent } from "@/features/analytics/product-events";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // The few product events that only the client can observe (a share sheet
 // was used, the app came to the foreground, the OS delivered a crash
@@ -16,6 +16,19 @@ export async function POST(request: Request) {
   if ("response" in auth) return auth.response;
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Unknown event" }, { status: 400 });
-  await recordProductEvent({ profileId: auth.profile.id, eventName: parsed.data.event, surface: "profile" });
+  const { error } = await createAdminClient().rpc("record_client_product_event", {
+    p_profile_id: auth.profile.id,
+    p_event_name: parsed.data.event,
+  });
+  if (error?.code === "54000") {
+    return NextResponse.json({ error: "Please wait before sending another event." }, {
+      status: 429,
+      headers: { "Cache-Control": "no-store", "Retry-After": "300" },
+    });
+  }
+  if (error) {
+    console.error("client analytics event failed", { code: error.code });
+    return NextResponse.json({ error: "Event could not be recorded." }, { status: 503 });
+  }
   return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
 }

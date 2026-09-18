@@ -45,5 +45,8 @@ export function projectCommentThread<T extends ThreadableComment>(comments: T[])
       replies.set(comment.parent_comment_id, list);
     }
   }
-  return topLevel.flatMap((comment) => [comment, ...(replies.get(comment.id) ?? [])]);
+  return topLevel.flatMap((comment) => [
+    { ...comment, parent_comment_id: null },
+    ...(replies.get(comment.id) ?? []),
+  ]);
 }

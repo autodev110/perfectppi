@@ -1,7 +1,9 @@
 import Foundation
 import MetricKit
 
-/// Plan 34.2 "crash-free sessions" without a third-party crash SDK.
+/// Plan 34.2 reliability observations without a third-party crash SDK.
+/// Delayed diagnostics are not correlated with sessions, so no exact
+/// crash-free session rate can be inferred from these event counts.
 ///
 /// Two client-observed product events, both closed names with no payload:
 /// - `app_session_started` once per foreground while signed in;
@@ -17,10 +19,7 @@ final class AppHealthReporter: NSObject, MXMetricManagerSubscriber {
 
     private var subscribed = false
     private var lastSessionAt: Date?
-    /// Crash diagnostics that arrived before the member was signed in; sent
-    /// with the next session so a cold-start crash is not lost.
-    private var pendingCrashCount = 0
-    private var signedIn = false
+    private var activeProfileId: String?
 
     /// Foregrounds within this window count as one session (a quick app
     /// switch is not a new visit).
@@ -36,19 +35,22 @@ final class AppHealthReporter: NSObject, MXMetricManagerSubscriber {
         MXMetricManager.shared.add(self)
     }
 
-    /// Called on every scene activation; `signedIn` gates the network call
+    /// Called on every scene activation; the active account gates the call
     /// because the API only records events for an authenticated member.
-    func sceneBecameActive(signedIn: Bool) {
-        self.signedIn = signedIn
-        guard signedIn else { return }
+    func sceneBecameActive(profileId: String?) {
+        if activeProfileId != profileId {
+            activeProfileId = profileId
+            lastSessionAt = nil
+        }
+        guard let profileId else { return }
         let now = Date()
         if let last = lastSessionAt, now.timeIntervalSince(last) < sessionGap {
             return
         }
         lastSessionAt = now
         Task {
+            guard activeProfileId == profileId else { return }
             await SocialAPI.recordClientEvent("app_session_started")
-            await flushPendingCrashes()
         }
     }
 
@@ -62,17 +64,14 @@ final class AppHealthReporter: NSObject, MXMetricManagerSubscriber {
         let crashes = payloads.reduce(0) { $0 + ($1.crashDiagnostics?.count ?? 0) }
         guard crashes > 0 else { return }
         Task { @MainActor in
-            pendingCrashCount += crashes
-            await flushPendingCrashes()
-        }
-    }
-
-    private func flushPendingCrashes() async {
-        guard signedIn, pendingCrashCount > 0 else { return }
-        let count = pendingCrashCount
-        pendingCrashCount = 0
-        for _ in 0..<count {
-            await SocialAPI.recordClientEvent("app_crash_detected")
+            // Never attribute signed-out diagnostics to the next person who
+            // signs in on a shared device. Only bounded aggregate observations
+            // are sent for the current account; no crash-free rate is inferred.
+            guard let profileId = activeProfileId else { return }
+            for _ in 0..<min(crashes, 10) {
+                guard activeProfileId == profileId else { return }
+                await SocialAPI.recordClientEvent("app_crash_detected")
+            }
         }
     }
 }

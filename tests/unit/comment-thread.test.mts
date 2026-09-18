@@ -51,5 +51,6 @@ describe("comment thread projection (plan 15.1)", () => {
       live("top", "2026-09-18T10:00:00Z"),
     ]);
     assert.deepEqual(thread.map((c) => c.id), ["top", "orphan"]);
+    assert.equal(thread.find((c) => c.id === "orphan")?.parent_comment_id, null);
   });
 });

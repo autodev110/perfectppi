@@ -117,4 +117,6 @@ union all
   select '20260918101000', '20260918101000_author_edits_and_comment_replies.sql', to_regprocedure('public.edit_community_post(uuid, uuid, text)') is not null
 union all
   select '20260918110000', '20260918110000_engagement_signal_analytics.sql', to_regprocedure('public.get_product_engagement_signals(integer)') is not null
+union all
+  select '20260918162936', '20260918162936_audit_author_edits_replies_and_analytics.sql', to_regprocedure('public.publish_community_author_edit(uuid, text, uuid, text, jsonb, boolean)') is not null
 ) m order by version;

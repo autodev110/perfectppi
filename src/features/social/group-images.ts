@@ -84,7 +84,6 @@ export async function setCommunityGroupImage(input: unknown): Promise<GroupImage
     .select("id")
     .maybeSingle();
   if (!claimed) return fail("upload_invalid", "This upload was already used. Please select the image again.");
-  await recordProductEvent({ profileId: actorId, eventName: "media_upload_attached", surface: "community", dedupeId: url });
 
   let bytes: Uint8Array;
   try {
@@ -168,6 +167,7 @@ export async function setCommunityGroupImage(input: unknown): Promise<GroupImage
     console.warn("set_community_group_image failed", { code: error?.code, message: error?.message });
     return fail("failed", "The image could not be saved. Please try again.");
   }
+  await recordProductEvent({ profileId: actorId, eventName: "media_upload_attached", surface: "community", dedupeId: url });
   await recordModeration({
     entityType: "community_group_image",
     entityId: reservation.id,

@@ -62,6 +62,26 @@ UNION ALL SELECT tech_id, 'unwanted_contact_reported', 'profile', now() - interv
 UNION ALL SELECT tech_id, 'blocked_contact_attempt', 'profile', now() - interval '1 day' FROM signal_ids
 UNION ALL SELECT tech_id, 'blocked_contact_attempt', 'profile', now() - interval '1 day' FROM signal_ids;
 
+-- Funnel hashes correlate the same resource without exposing its identifier.
+UPDATE public.product_analytics_events SET dedupe_hash = repeat('a', 64)
+WHERE profile_id = (SELECT shopper_id FROM signal_ids)
+  AND event_name IN ('group_detail_viewed', 'group_joined');
+UPDATE public.product_analytics_events SET dedupe_hash = repeat('b', 64)
+WHERE profile_id = (SELECT owner_id FROM signal_ids)
+  AND event_name IN ('group_detail_viewed', 'group_joined');
+WITH reservations AS (
+  SELECT id, row_number() OVER (ORDER BY id) AS ordinal
+  FROM public.product_analytics_events WHERE event_name = 'media_upload_reserved'
+) UPDATE public.product_analytics_events event
+SET dedupe_hash = CASE reservations.ordinal WHEN 1 THEN repeat('c', 64) ELSE repeat('d', 64) END
+FROM reservations WHERE event.id = reservations.id;
+UPDATE public.product_analytics_events SET dedupe_hash = repeat('c', 64)
+WHERE event_name = 'media_upload_attached';
+-- Joining a different group and attaching an unrelated upload are not conversions.
+INSERT INTO public.product_analytics_events (profile_id, event_name, surface, dedupe_hash)
+SELECT owner_id, 'group_joined', 'community', repeat('e', 64) FROM signal_ids
+UNION ALL SELECT owner_id, 'media_upload_attached', 'community', repeat('f', 64) FROM signal_ids;
+
 SELECT set_config('test.signal_tech_id', tech_id::text, true) FROM signal_ids;
 
 SET LOCAL ROLE service_role;
@@ -88,8 +108,8 @@ BEGIN
   END IF;
 
   IF (v->'sessions'->>'sessions')::int <> 4 OR (v->'sessions'->>'crashes')::int <> 1
-     OR (v->'sessions'->>'crashFreePercent')::numeric <> 75.00 THEN
-    RAISE EXCEPTION 'crash-free sessions wrong: %', v->'sessions';
+     OR v->'sessions'->'crashFreePercent' IS DISTINCT FROM 'null'::jsonb THEN
+    RAISE EXCEPTION 'reliability observations wrong: %', v->'sessions';
   END IF;
 
   -- Intent: technician by role; owner by garage signal; shopper by listing
@@ -129,5 +149,45 @@ BEGIN
   END LOOP;
 END
 $$;
+
+-- Client observations have a closed allowlist and serialized rate limits.
+DO $$ BEGIN
+  IF has_function_privilege('authenticated', 'public.record_client_product_event(uuid,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'client telemetry RPC leaked directly to clients';
+  END IF;
+  BEGIN
+    PERFORM public.record_client_product_event(current_setting('test.signal_tech_id')::uuid, 'arbitrary_event');
+    RAISE EXCEPTION 'arbitrary client event accepted';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL;
+  END;
+  -- The allowlist loop already recorded this account's session.
+  BEGIN
+    PERFORM public.record_client_product_event(current_setting('test.signal_tech_id')::uuid, 'app_session_started');
+    RAISE EXCEPTION 'unlimited client observations accepted';
+  EXCEPTION WHEN program_limit_exceeded THEN NULL;
+  END;
+END $$;
+
+-- Opt-out applies to the message denominator, not just event collection.
+RESET ROLE;
+INSERT INTO public.friend_relationships (profile_low_id, profile_high_id, requested_by, status, responded_at)
+SELECT LEAST(shopper_id, owner_id), GREATEST(shopper_id, owner_id), shopper_id, 'friends', now() FROM signal_ids;
+DO $$
+DECLARE v_conversation record; v jsonb;
+BEGIN
+  SELECT * INTO v_conversation FROM public.create_direct_conversation_internal(
+    (SELECT shopper_id FROM signal_ids), (SELECT owner_id FROM signal_ids), NULL, 'accepted', NULL);
+  INSERT INTO public.messages (conversation_id, sender_id, content, status)
+  SELECT v_conversation.conversation_id, shopper_id, 'Opted in message', 'unread'::public.message_status FROM signal_ids
+  UNION ALL SELECT v_conversation.conversation_id, owner_id, 'Opted out message', 'unread'::public.message_status FROM signal_ids;
+  PERFORM public.set_product_analytics_preference((SELECT owner_id FROM signal_ids), false);
+  v := public.get_product_engagement_signals(30);
+  IF (v->'unwantedContact'->>'messagesSent')::integer <> 1 THEN
+    RAISE EXCEPTION 'opted-out messages entered the analytics denominator';
+  END IF;
+  IF public.record_client_product_event((SELECT owner_id FROM signal_ids), 'invite_shared') THEN
+    RAISE EXCEPTION 'client event recorded after opt-out';
+  END IF;
+END $$;
 
 ROLLBACK;

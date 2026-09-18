@@ -1050,14 +1050,6 @@ export async function addCommunityPostMedia(input: unknown) {
     }
     claimedReservationIds.push(claimed.id);
   }
-  // Plan 34.2 upload completion: the reservation was claimed by a media row.
-  await Promise.all((reservations ?? []).map((reservation) => recordProductEvent({
-    profileId: profile.profileId,
-    eventName: "media_upload_attached",
-    surface: "community",
-    dedupeId: reservation.storage_reference,
-  })));
-
   // `sort_order` is unique per post, so derive the slot server-side instead
   // of trusting client indexes, which would collide on a second call.
   const rows = [...parsed.data.items]
@@ -1085,6 +1077,13 @@ export async function addCommunityPostMedia(input: unknown) {
       .in("id", claimedReservationIds);
     return { error: friendlyDatabaseError(error, "The photos could not be attached to your post. Please try again.", "attach media") };
   }
+
+  await Promise.all((reservations ?? []).map((reservation) => recordProductEvent({
+    profileId: profile.profileId,
+    eventName: "media_upload_attached",
+    surface: "community",
+    dedupeId: reservation.storage_reference,
+  })));
 
   const scanned = (await Promise.all((data ?? []).map(async (media) => {
     let result: ModerationResult;
@@ -1451,11 +1450,11 @@ export async function createCommunityCommentFromInput(
         || parent.status !== "active" || parent.moderation_status !== "active") {
       return { error: "That comment is no longer available to reply to." };
     }
-    const { data: blocked } = await admin.rpc("social_profiles_are_blocked", {
+    const { data: blocked, error: blockError } = await admin.rpc("social_profiles_are_blocked", {
       p_first_id: profile.profileId,
       p_second_id: parent.author_id,
     });
-    if (blocked) return { error: "That comment is no longer available to reply to." };
+    if (blockError || blocked !== false) return { error: "That comment is no longer available to reply to." };
   }
 
   const launchMode = !flags.flags.automated_post_moderation;
@@ -1529,6 +1528,36 @@ export async function createCommunityCommentFromInput(
 
 export type CommunityEditData = { id: string; content: string; editedAt: string | null };
 
+const editedRowSchema = z.object({
+  id: z.string().uuid(),
+  content: z.string(),
+  edited_at: z.string().nullable(),
+  post_id: z.string().uuid().nullable(),
+});
+
+async function authorizeCommunityEdit(profileId: string, entity: "post" | "comment", entityId: string) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from(entity === "post" ? "community_posts" : "community_comments")
+    .select("id")
+    .eq("id", entityId)
+    .eq("author_id", profileId)
+    .eq("status", "active")
+    .eq("moderation_status", "active")
+    .maybeSingle();
+  if (error || !data) return { error: "This content is no longer available to edit." };
+  const { data: revisions, error: revisionError } = await admin
+    .from(entity === "post" ? "community_post_revisions" : "community_comment_revisions")
+    .select("id")
+    .eq("author_id", profileId)
+    .gt("revision_number", 1)
+    .gte("created_at", new Date(Date.now() - 10 * 60_000).toISOString())
+    .limit(20);
+  if (revisionError) return { error: "Your changes could not be saved. Please try again." };
+  if ((revisions?.length ?? 0) >= 20) return rejected("rate_limited");
+  return null;
+}
+
 /**
  * Author edit (plan 14.6): the text passes the same launch policy as a new
  * post, the RPC enforces author/live/unreported, and the revision trigger
@@ -1556,23 +1585,28 @@ export async function editCommunityPostFromInput(
     return rejected(evaluated.outcome);
   }
 
-  const admin = createAdminClient();
-  const { data, error } = await admin.rpc("edit_community_post", {
-    p_actor_profile_id: profile.profileId,
-    p_post_id: parsed.data.postId,
-    p_content: evaluated.text,
-  });
-  if (error || !data) return { error: authorEditError(error, "Your changes could not be saved. Please try again.") };
-
-  if (data.edited_at) {
-    await recordModeration({
-      entityType: "community_post",
-      entityId: data.id,
-      authorId: profile.profileId,
-      contentPreview: evaluated.text,
-      result: launchAllowResult({ linkCount: evaluated.linkCount, fingerprint: evaluated.fingerprint, edit: true }),
-    }).catch((recordError) => console.error("launch moderation record failed", recordError));
+  const authorization = await authorizeCommunityEdit(profile.profileId, "post", parsed.data.postId);
+  if (authorization) return authorization;
+  const moderation = flags.flags.automated_post_moderation
+    ? await moderateText(evaluated.text)
+    : launchAllowResult({ linkCount: evaluated.linkCount, fingerprint: evaluated.fingerprint, edit: true });
+  if (moderation.decision !== "allow") {
+    return { error: "Your changes could not be approved. Your existing post has not changed. Please revise the text or try again later." };
   }
+
+  const admin = createAdminClient();
+  const { data: rawData, error } = await admin.rpc("publish_community_author_edit", {
+    p_actor_profile_id: profile.profileId,
+    p_entity_type: "community_post",
+    p_entity_id: parsed.data.postId,
+    p_content: evaluated.text,
+    p_moderation: moderation as unknown as Json,
+    p_groups_enabled: flags.flags.groups,
+  });
+  const decoded = editedRowSchema.safeParse(rawData);
+  if (error?.code === "54000") return rejected("rate_limited");
+  if (error || !decoded.success) return { error: authorEditError(error, "Your changes could not be saved. Please try again.") };
+  const data = decoded.data;
   revalidatePath("/community");
   revalidatePath(`/community/posts/${data.id}`);
   revalidatePath("/dashboard/posts");
@@ -1601,23 +1635,28 @@ export async function editCommunityCommentFromInput(
     return rejected(evaluated.outcome);
   }
 
-  const admin = createAdminClient();
-  const { data, error } = await admin.rpc("edit_community_comment", {
-    p_actor_profile_id: profile.profileId,
-    p_comment_id: parsed.data.commentId,
-    p_content: evaluated.text,
-  });
-  if (error || !data) return { error: authorEditError(error, "Your changes could not be saved. Please try again.") };
-
-  if (data.edited_at) {
-    await recordModeration({
-      entityType: "community_comment",
-      entityId: data.id,
-      authorId: profile.profileId,
-      contentPreview: evaluated.text,
-      result: launchAllowResult({ linkCount: evaluated.linkCount, fingerprint: evaluated.fingerprint, edit: true }),
-    }).catch((recordError) => console.error("launch moderation record failed", recordError));
+  const authorization = await authorizeCommunityEdit(profile.profileId, "comment", parsed.data.commentId);
+  if (authorization) return authorization;
+  const moderation = flags.flags.automated_post_moderation
+    ? await moderateText(evaluated.text)
+    : launchAllowResult({ linkCount: evaluated.linkCount, fingerprint: evaluated.fingerprint, edit: true });
+  if (moderation.decision !== "allow") {
+    return { error: "Your changes could not be approved. Your existing comment has not changed. Please revise the text or try again later." };
   }
+
+  const admin = createAdminClient();
+  const { data: rawData, error } = await admin.rpc("publish_community_author_edit", {
+    p_actor_profile_id: profile.profileId,
+    p_entity_type: "community_comment",
+    p_entity_id: parsed.data.commentId,
+    p_content: evaluated.text,
+    p_moderation: moderation as unknown as Json,
+    p_groups_enabled: flags.flags.groups,
+  });
+  const decoded = editedRowSchema.safeParse(rawData);
+  if (error?.code === "54000") return rejected("rate_limited");
+  if (error || !decoded.success) return { error: authorEditError(error, "Your changes could not be saved. Please try again.") };
+  const data = decoded.data;
   revalidatePath("/community");
   revalidatePath(`/community/posts/${data.post_id}`);
   return { data: { id: data.id, content: data.content, editedAt: data.edited_at } };

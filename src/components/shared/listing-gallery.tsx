@@ -63,6 +63,7 @@ export function ListingGallery({ photos, alt, canReport = false }: { photos: Arr
       {canReport && visiblePhotos[index] ? (
         <div className="absolute right-3 top-3 rounded-lg bg-white/95 shadow">
           <ExtendedReportControl
+            key={visiblePhotos[index].id}
             entityType="media"
             entityId={visiblePhotos[index].id}
             label={t("gallery.photo")}

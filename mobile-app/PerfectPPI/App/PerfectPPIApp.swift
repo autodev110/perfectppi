@@ -23,12 +23,12 @@ struct PerfectPPIApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active else { return }
                     Task { await auth.refreshCapabilities() }
-                    AppHealthReporter.shared.sceneBecameActive(signedIn: auth.profile != nil)
+                    AppHealthReporter.shared.sceneBecameActive(profileId: auth.profile?.id)
                 }
                 .onChange(of: auth.profile?.id) { _, id in
                     // A sign-in after launch is the start of that member's session.
-                    guard id != nil, scenePhase == .active else { return }
-                    AppHealthReporter.shared.sceneBecameActive(signedIn: true)
+                    guard scenePhase == .active || id == nil else { return }
+                    AppHealthReporter.shared.sceneBecameActive(profileId: id)
                 }
                 .onOpenURL { url in
                     Task { await router.handle(url, authStore: auth) }

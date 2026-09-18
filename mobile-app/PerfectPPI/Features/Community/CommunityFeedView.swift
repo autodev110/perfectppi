@@ -848,6 +848,7 @@ struct CommunityPostDetailView: View {
     // editable text and "Edited" state live here after a successful save.
     @State private var content: String
     @State private var editedAt: Date?
+    @State private var mentions: [CommunityMention]?
     @State private var editingPost = false
     @State private var editingComment: CommunityComment?
     @State private var removingComment: CommunityComment?
@@ -858,6 +859,7 @@ struct CommunityPostDetailView: View {
         self.onChanged = onChanged
         _content = State(initialValue: post.content)
         _editedAt = State(initialValue: post.editedAt)
+        _mentions = State(initialValue: post.mentions)
         _comments = State(initialValue: post.comments ?? [])
         _media = State(initialValue: (post.media ?? []).sorted { $0.sortOrder < $1.sortOrder })
         _acceptedAnswerCommentId = State(initialValue: post.acceptedAnswerCommentId)
@@ -905,6 +907,7 @@ struct CommunityPostDetailView: View {
                 let result = try await CommunityAPI.editPost(id: post.id, content: text)
                 content = result.content
                 editedAt = result.editedAt ?? editedAt
+                await reloadComments()
                 onChanged()
             }
         }
@@ -995,7 +998,7 @@ struct CommunityPostDetailView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Theme.Palette.primary)
                 }
-                CommunityMentionText(content: content, mentions: post.mentions)
+                CommunityMentionText(content: content, mentions: mentions)
                     .font(.body)
                 if editedAt != nil || post.canEdit == true {
                     HStack(spacing: 12) {
@@ -1288,6 +1291,9 @@ struct CommunityPostDetailView: View {
     @MainActor
     private func reloadComments() async {
         if let fresh = try? await CommunityAPI.post(id: post.id), let freshComments = fresh.comments {
+            content = fresh.content
+            editedAt = fresh.editedAt
+            mentions = fresh.mentions
             comments = freshComments
             acceptedAnswerCommentId = fresh.acceptedAnswerCommentId
         }
