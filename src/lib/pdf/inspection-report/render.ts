@@ -1,5 +1,6 @@
 import type { InspectionScope } from "@/types/enums";
 import { CORNERS, CORNER_LABELS, type Corner } from "../../../features/ppi/inspection-schema.ts";
+import { BODY_DIAGRAM_SHAPES } from "../../../features/ppi/body-diagram.ts";
 import { LayoutOverflowError, ReportCanvas, loadLayoutAssets, type StatusName } from "./canvas.ts";
 import { blankViewModel, type ReportViewModel, type TireViewModel } from "./view-model.ts";
 
@@ -201,18 +202,21 @@ function tireCard(c: ReportCanvas, tire: TireViewModel, label: string, x: number
   }
 }
 
-/** Original simplified top-view silhouette; left/right are the vehicle's. */
+/**
+ * Original simplified top-view silhouette; left/right are the vehicle's. The
+ * shapes come from the diagram the capture editors draw, so a tapped marker
+ * lands on the same spot of the same panel here.
+ */
 function carTop(c: ReportCanvas, x: number, y: number, w: number, h: number, markers: ReportViewModel["markers"]) {
-  const bodyX = x + w * 0.23;
-  const bodyW = w * 0.54;
-  c.rect(bodyX, y + 5, bodyW, h - 10, { fill: c.C.white, stroke: c.C.muted, radius: Math.min(12, w * 0.13) });
-  for (const wheelX of [x + w * 0.11, x + w * 0.78]) {
-    for (const wheelY of [y + h * 0.19, y + h * 0.66]) {
-      c.rect(wheelX, wheelY, w * 0.11, h * 0.18, { fill: c.C.paper, stroke: c.C.muted, radius: 2 });
-    }
+  const { body, cabin, wheels, seams } = BODY_DIAGRAM_SHAPES;
+  const bodyX = x + w * body.x;
+  const bodyW = w * body.w;
+  c.rect(bodyX, y + h * body.y, bodyW, h * body.h, { fill: c.C.white, stroke: c.C.muted, radius: Math.min(12, w * 0.13) });
+  for (const wheel of wheels) {
+    c.rect(x + w * wheel.x, y + h * wheel.y, w * wheel.w, h * wheel.h, { fill: c.C.paper, stroke: c.C.muted, radius: 2 });
   }
-  c.rect(x + w * 0.3, y + h * 0.32, w * 0.4, h * 0.32, { fill: c.C.paper, stroke: c.C.muted, radius: 4 });
-  for (const fraction of [0.2, 0.28, 0.69, 0.78]) {
+  c.rect(x + w * cabin.x, y + h * cabin.y, w * cabin.w, h * cabin.h, { fill: c.C.paper, stroke: c.C.muted, radius: 4 });
+  for (const fraction of seams) {
     c.line(bodyX + 3, y + h * fraction, bodyX + bodyW - 3, y + h * fraction, c.C.line);
   }
   c.line(x + w * 0.5, y - 4, x + w * 0.5, y + 1, c.C.muted);

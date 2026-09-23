@@ -99,8 +99,8 @@ export interface Finding {
   evidence_ids: string[];
   certainty: "confirmed" | "suspected" | "insufficient_evidence";
   review_state: "accepted" | "needs_review" | "rejected";
-  /** Body-map marker in [0,1] diagram coordinates, when recorded. */
-  marker?: { x: number; y: number } | null;
+  /** Body-map marker in [0,1] top-view diagram coordinates, when recorded. */
+  marker?: { view?: "top"; x: number; y: number } | null;
 }
 
 export interface Limitation {

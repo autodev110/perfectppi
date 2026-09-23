@@ -56,7 +56,6 @@ export interface LayoutSpec {
     appendix: Record<string, number>;
   } & Record<string, number | unknown>;
   diagram: {
-    panel_markers: Record<string, [number, number]>;
     marker_radius: number;
     marker_collision_step: number;
   };

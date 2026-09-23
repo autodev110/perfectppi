@@ -19,7 +19,7 @@ import {
 // ============================================================================
 
 export const REPORT_SCHEMA_VERSION = "inspection-report/2";
-export const TEMPLATE_VERSION = "ppi-visual-1.0.0";
+export const TEMPLATE_VERSION = "ppi-visual-1.1.0";
 
 export interface OverviewBlock {
   category: Category;

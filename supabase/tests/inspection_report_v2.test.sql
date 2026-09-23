@@ -113,6 +113,7 @@ BEGIN
       ('76000000-0000-0000-0000-000000000003', '{"v":1,"state":"observed","value":{"defects":[]}}', 'empty defect list'),
       ('76000000-0000-0000-0000-000000000004', '{"v":1,"state":"observed","value":{"condition":"damage_present","defects":[]}}', 'damage without entries'),
       ('76000000-0000-0000-0000-000000000004', '{"v":1,"state":"observed","value":{"condition":"damage_present","defects":[{"id":"abcd2","type":"dent","severity":"minor","marker":{"x":2,"y":0.5}}]}}', 'marker outside the diagram'),
+      ('76000000-0000-0000-0000-000000000004', '{"v":1,"state":"observed","value":{"condition":"damage_present","defects":[{"id":"abcd2","type":"dent","severity":"minor","marker":{"view":"side","x":0.5,"y":0.5}}]}}', 'marker on an unknown diagram view'),
       ('76000000-0000-0000-0000-000000000004', '{"v":1,"state":"observed","value":{"condition":"damage_present","defects":[{"id":"abcd2","type":"dent"}]}}', 'body defect without an extent')
     ) AS cases(answer_id, observation, label)
   LOOP
@@ -127,7 +128,7 @@ $$;
 
 -- Body summaries use controlled values only, never the free-text note.
 UPDATE public.ppi_answers
-SET observation = '{"v":1,"state":"observed","value":{"condition":"damage_present","defects":[{"id":"abcd2","type":"dent","severity":"minor","note":"call me at 555-0100"}]}}'
+SET observation = '{"v":1,"state":"observed","value":{"condition":"damage_present","defects":[{"id":"abcd2","type":"dent","severity":"minor","note":"call me at 555-0100","marker":{"view":"top","x":0.5,"y":0.15}}]}}'
 WHERE id = '76000000-0000-0000-0000-000000000004';
 DO $$
 BEGIN

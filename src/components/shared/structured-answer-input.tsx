@@ -27,8 +27,11 @@ import {
   type ExceptionReasonCode,
   type ObservationDocument,
   type PerformerMode,
+  type BodyPanel,
   type StructuredFamily,
 } from "@/features/ppi/inspection-schema";
+import type { BodyMarker } from "@/features/ppi/body-diagram";
+import { BodyDiagramPicker } from "./body-diagram-picker";
 import { normalizeDecimalInput } from "@/features/ppi/inspection-units";
 import { t as uiText } from "@/lib/i18n";
 
@@ -867,16 +870,21 @@ interface DraftDefect {
   structural?: boolean | null;
   severity?: "minor" | "moderate" | "severe";
   note?: string;
+  /** Tap-placed location on the body diagram (body panels only). */
+  marker?: BodyMarker | { x: number; y: number } | null;
 }
 
 function DefectRows({
   kind,
   defects,
   onChange,
+  panel,
 }: {
   kind: "tire" | "wheel" | "body";
   defects: DraftDefect[];
   onChange: (next: DraftDefect[]) => void;
+  /** The body panel these entries belong to, for the location diagram. */
+  panel?: BodyPanel;
 }) {
   const types = kind === "tire" ? TIRE_DEFECT_TYPES : kind === "wheel" ? WHEEL_DEFECT_TYPES : BODY_DEFECT_TYPES;
   function patch(index: number, change: Partial<DraftDefect>) {
@@ -945,6 +953,14 @@ function DefectRows({
             placeholder={uiText("ui.short_note_optional_095d2cfa8a")}
             className="resize-none"
           />
+          {kind === "body" && panel ? (
+            <DefectLocation
+              panel={panel}
+              index={index}
+              defects={defects}
+              onChange={(marker) => patch(index, { marker })}
+            />
+          ) : null}
           {defectIncomplete(kind, defect) ? (
             <p className="text-xs font-medium text-amber-700">
               {kind === "body" ? uiText("ui.choose_the_damage_type_and_its_extent_6e30896ffe") : uiText("ui.choose_the_damage_type_and_whether_it_is_con_b5dede3f6f")}
@@ -988,6 +1004,31 @@ function EvidenceException({
   );
 }
 
+/** Collapsed until opened, or open when the entry already has a marker. */
+function DefectLocation({
+  panel,
+  index,
+  defects,
+  onChange,
+}: {
+  panel: BodyPanel;
+  index: number;
+  defects: DraftDefect[];
+  onChange: (marker: BodyMarker | null) => void;
+}) {
+  const marker = defects[index].marker ?? null;
+  const [open, setOpen] = useState(Boolean(marker));
+  if (!open) {
+    return (
+      <button type="button" className="text-sm font-medium text-primary" onClick={() => setOpen(true)}>{uiText("ui.mark_the_location_on_the_diagram_optional_51d7443968")}</button>
+    );
+  }
+  const others = defects.flatMap((defect, position) =>
+    position !== index && defect.marker ? [{ label: String(position + 1), x: defect.marker.x, y: defect.marker.y }] : [],
+  );
+  return <BodyDiagramPicker panel={panel} label={String(index + 1)} marker={marker} others={others} onChange={onChange} />;
+}
+
 function blankDefect(kind: "tire" | "wheel" | "body"): DraftDefect {
   // "Not sure" is a truthful location default; type and confirmation are not.
   return { id: newDefectId(), type: "", ...(kind === "tire" ? { location: "unknown" } : {}) };
@@ -1012,6 +1053,7 @@ function cleanDefects(kind: "tire" | "wheel" | "body", defects: DraftDefect[]) {
     if (kind === "body") {
       base.severity = defect.severity;
       if (defect.structural) base.structural = true;
+      if (defect.marker) base.marker = { view: "top", x: defect.marker.x, y: defect.marker.y };
     }
     return base;
   });
@@ -1088,6 +1130,8 @@ function DefectListEditor(props: EditorProps & { kind: "tire" | "wheel" }) {
 
 function PanelEditor(props: EditorProps) {
   const editor = useObservationEditor(props);
+  const info = parseStructuredKey(props.answer.question_key ?? "");
+  const panel = info?.family === "body_panel" ? info.panel : undefined;
   const initial = (editor.initial?.value ?? {}) as { condition?: string; defects?: DraftDefect[] };
   const [condition, setCondition] = useState<string | null>(editor.initial?.state === "observed" ? initial.condition ?? null : null);
   const [defects, setDefects] = useState<DraftDefect[]>(initial.defects ?? []);
@@ -1129,7 +1173,7 @@ function PanelEditor(props: EditorProps) {
           />
           {condition === "damage_present" ? (
             <>
-              <DefectRows kind="body" defects={defects} onChange={(next) => { setDefects(next); publish("damage_present", next); }} />
+              <DefectRows kind="body" panel={panel} defects={defects} onChange={(next) => { setDefects(next); publish("damage_present", next); }} />
               <EvidenceException value={exception} onChange={(next) => { setException(next); publish("damage_present", defects, next); }} />
             </>
           ) : null}

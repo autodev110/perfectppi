@@ -94,7 +94,7 @@ export interface BodyDefect {
   severity?: "minor" | "moderate" | "severe";
   structural?: boolean | null;
   note?: string | null;
-  marker?: { x: number; y: number } | null;
+  marker?: { view?: "top"; x: number; y: number } | null;
 }
 
 export type DefectListValue<D> = { none_observed?: boolean; defects?: D[] };

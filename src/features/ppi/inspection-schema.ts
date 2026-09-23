@@ -9,6 +9,7 @@ import {
   type TreadUnit,
   type PressureUnit,
 } from "./inspection-units.ts";
+import { BODY_DIAGRAM_VIEW, markerOnPanel } from "./body-diagram.ts";
 
 // ============================================================================
 // Typed inspection observations (catalog v2).
@@ -466,8 +467,13 @@ const bodyDefect = z.object({
   severity: choice(BODY_SEVERITIES, "Choose the extent of the damage."),
   structural: z.boolean().optional().nullable(),
   note: optionalText(300),
+  /** Optional tap-placed location on the generic top-view diagram. */
   marker: z
-    .object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })
+    .object({
+      view: z.literal(BODY_DIAGRAM_VIEW).default(BODY_DIAGRAM_VIEW),
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+    })
     .optional()
     .nullable(),
 });
@@ -609,6 +615,14 @@ export function validateObservation(
 
   const boundsError = checkBounds(info.family, value);
   if (boundsError) return { ok: false, error: boundsError };
+
+  if (info.family === "body_panel") {
+    // A marker is a location on its own panel, never on a neighbouring one.
+    const defects = (value.defects ?? []) as { marker?: { x: number; y: number } | null }[];
+    if (defects.some((defect) => defect.marker && !markerOnPanel(info.panel, defect.marker))) {
+      return { ok: false, error: `Place the marker on the ${PANEL_LABELS[info.panel].toLowerCase()} in the diagram.` };
+    }
+  }
 
   if (info.family === "tire_dot") {
     const dot = parseDotCode(String(value.code), options?.inspectionDate ?? new Date());

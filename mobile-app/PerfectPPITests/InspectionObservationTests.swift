@@ -35,6 +35,17 @@ final class InspectionObservationTests: XCTestCase {
         XCTAssertFalse(Observation.photoRequired(key: "tires.front_left.damage", observation: excepted))
     }
 
+    func testBodyMarkersStayOnTheirPanel() {
+        // Tapping the hood while marking the left front door lands on the door.
+        XCTAssertEqual(BodyDiagram.clamp(panel: "left_front_door", x: 0.5, y: 0.15), BodyDiagram.Point(x: 0.3, y: 0.32))
+        XCTAssertEqual(BodyDiagram.clamp(panel: "roof", x: 0.41234, y: 0.5), BodyDiagram.Point(x: 0.412, y: 0.5))
+        XCTAssertEqual(BodyDiagram.defaultMarker(panel: "left_rocker"), BodyDiagram.Point(x: 0.2, y: 0.5))
+        let stored = BodyDiagram.json(BodyDiagram.Point(x: 0.26, y: 0.4))
+        XCTAssertEqual(stored["view"]?.stringValue, "top")
+        XCTAssertEqual(BodyDiagram.point(from: stored), BodyDiagram.Point(x: 0.26, y: 0.4))
+        XCTAssertNil(BodyDiagram.point(from: nil))
+    }
+
     func testDecimalInputNormalization() {
         XCTAssertEqual(Observation.normalizeDecimal("4,5"), "4.5")
         XCTAssertEqual(Observation.normalizeDecimal("0"), "0")

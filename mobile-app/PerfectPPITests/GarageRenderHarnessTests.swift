@@ -147,4 +147,25 @@ final class GarageRenderHarnessTests: XCTestCase {
         }
         try snapshot(view, name: "inspection-editors", size: CGSize(width: 393, height: 2400))
     }
+
+    func testRenderBodyDiagramPicker() throws {
+        let damage = Observation.observed([
+            "condition": .string("damage_present"),
+            "defects": .array([
+                .object(["id": .string("lfd-1"), "type": .string("dent"), "severity": .string("moderate"),
+                         "marker": BodyDiagram.json(BodyDiagram.Point(x: 0.26, y: 0.36))]),
+                .object(["id": .string("lfd-2"), "type": .string("scratch"), "severity": .string("minor"),
+                         "marker": BodyDiagram.json(BodyDiagram.Point(x: 0.28, y: 0.45))]),
+            ]),
+        ])
+        let answer = structuredAnswer("body.left_front_door.condition", prompt: "Left front door: visible condition", type: .panelCondition, observation: damage)
+        let view = ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(answer.prompt).font(.headline)
+                StructuredAnswerEditor(answer: answer, submissionId: "sub", performerMode: "technician", latestPhotoId: nil) { _ in }
+            }
+            .padding()
+        }
+        try snapshot(view, name: "body-diagram-picker", size: CGSize(width: 393, height: 1500))
+    }
 }

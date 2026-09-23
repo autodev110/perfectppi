@@ -1,8 +1,13 @@
 {
-  "template_version": "ppi-visual-1.0.0",
+  "template_version": "ppi-visual-1.1.0",
   "purpose": "Canonical page geometry, typography, colors and content budgets for the two-page inspection report and the photo evidence appendix. The production pdf-lib renderer reads only this file; the ReportLab reference in docs/perfectppi-report-handoff was the design source for ppi-visual-1.0.0.",
   "coordinate_system": "Points from the top-left of a US Letter page; the renderer converts to PDF bottom-left coordinates.",
-  "page": { "width": 612, "height": 792, "unit": "pt", "margin": 30 },
+  "page": {
+    "width": 612,
+    "height": 792,
+    "unit": "pt",
+    "margin": 30
+  },
   "colors": {
     "navy": "14263D",
     "blue": "2A5F9E",
@@ -92,14 +97,40 @@
     "metadata_y": 100,
     "metadata_height": 68,
     "metadata_fields": {
-      "vehicle": { "x": 42, "y": 109, "width": 290 },
-      "report_reference": { "x": 354, "y": 109, "width": 216 },
-      "vin": { "x": 42, "y": 140, "width": 210 },
-      "odometer": { "x": 266, "y": 140, "width": 95 },
-      "inspection_date": { "x": 382, "y": 140, "width": 188 }
+      "vehicle": {
+        "x": 42,
+        "y": 109,
+        "width": 290
+      },
+      "report_reference": {
+        "x": 354,
+        "y": 109,
+        "width": 216
+      },
+      "vin": {
+        "x": 42,
+        "y": 140,
+        "width": 210
+      },
+      "odometer": {
+        "x": 266,
+        "y": 140,
+        "width": 95
+      },
+      "inspection_date": {
+        "x": 382,
+        "y": 140,
+        "width": 188
+      }
     },
     "legend_y": 188,
-    "legend_items_x": [30, 123, 211, 361, 445],
+    "legend_items_x": [
+      30,
+      123,
+      211,
+      361,
+      445
+    ],
     "content_top": 219,
     "content_bottom": 682,
     "certification_y": 697,
@@ -158,24 +189,6 @@
     }
   },
   "diagram": {
-    "panel_markers": {
-      "front_bumper": [0.5, 0.05],
-      "hood": [0.5, 0.15],
-      "left_front_fender": [0.25, 0.24],
-      "right_front_fender": [0.75, 0.24],
-      "left_front_door": [0.25, 0.42],
-      "right_front_door": [0.75, 0.42],
-      "left_rocker": [0.2, 0.5],
-      "right_rocker": [0.8, 0.5],
-      "roof": [0.5, 0.48],
-      "left_rear_door": [0.25, 0.58],
-      "right_rear_door": [0.75, 0.58],
-      "left_rear_quarter": [0.26, 0.75],
-      "right_rear_quarter": [0.74, 0.75],
-      "trunk_tailgate": [0.5, 0.86],
-      "rear_bumper": [0.5, 0.95],
-      "other_body_panel": [0.5, 0.66]
-    },
     "marker_radius": 6,
     "marker_collision_step": 0.075
   },

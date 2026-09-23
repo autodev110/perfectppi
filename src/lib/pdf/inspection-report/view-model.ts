@@ -3,6 +3,7 @@ import { CORNERS, PANEL_LABELS, type BodyPanel, type Corner } from "../../../fea
 import { CHECKLIST_ROWS, type DisplayStatus, type Finding } from "../../../features/ppi/inspection-rules.ts";
 import { CERTIFICATION_TEXT, HISTORICAL_CERTIFICATION_NOTE } from "../../../features/ppi/certification.ts";
 import type { InspectionReportV2 } from "../../../features/ppi/inspection-report.ts";
+import { clampToPanel, PANEL_DEFAULT_MARKERS } from "../../../features/ppi/body-diagram.ts";
 
 // ============================================================================
 // InspectionReportV2 → ReportViewModelV1: the only place facts become display
@@ -77,25 +78,21 @@ export function reportReference(submissionId: string, outputVersion: number): st
   return `PPI-${submissionId.replace(/-/g, "").slice(0, 8).toUpperCase()} / v${outputVersion}`;
 }
 
-function panelMarkers(
-  findings: Finding[],
-  positions: Record<string, [number, number]>,
-  collisionStep: number,
-): ReportViewModel["markers"] {
+function panelMarkers(findings: Finding[], collisionStep: number): ReportViewModel["markers"] {
   const used: [number, number][] = [];
+  const collides = (x: number, y: number) => used.some(([ux, uy]) => Math.abs(ux - x) < 0.06 && Math.abs(uy - y) < 0.05);
+  const s = collisionStep;
+  const offsets: [number, number][] = [[0, 0], [0, s], [0, -s], [s, 0], [-s, 0], [0, 2 * s], [0, -2 * s], [s, s], [-s, -s], [s, -s], [-s, s]];
   return findings
     .filter((finding) => finding.ref.startsWith("B"))
     .map((finding) => {
-      const panel = finding.panels[0] as BodyPanel | undefined;
-      const [x, initialY] = finding.marker ? [finding.marker.x, finding.marker.y] : positions[panel ?? "other_body_panel"] ?? [0.5, 0.66];
-      let y = initialY;
-      // Keep each marker on its own panel; nudge along the panel instead of
-      // moving it to another panel when two findings share a location.
-      let guard = 0;
-      while (used.some(([ux, uy]) => Math.abs(ux - x) < 0.06 && Math.abs(uy - y) < 0.05) && guard < 6) {
-        y = Math.min(0.97, y + collisionStep);
-        guard += 1;
-      }
+      const panel = (finding.panels[0] as BodyPanel | undefined) ?? "other_body_panel";
+      // A recorded marker is clamped onto its panel defensively; otherwise the
+      // panel's default position is used.
+      const [baseX, baseY] = finding.marker ? [finding.marker.x, finding.marker.y] : PANEL_DEFAULT_MARKERS[panel];
+      // Colliding markers move within their own panel, never onto another.
+      const candidates = offsets.map(([dx, dy]) => clampToPanel(panel, baseX + dx, baseY + dy));
+      const { x, y } = candidates.find((candidate) => !collides(candidate.x, candidate.y)) ?? candidates[0];
       used.push([x, y]);
       return { ref: finding.ref.slice(1), x, y, status: STATUS_FROM_ACTION[finding.action] ?? "unknown" };
     });
@@ -120,7 +117,7 @@ function placardShort(report: InspectionReportV2): string {
 
 export function buildReportViewModel(
   report: InspectionReportV2,
-  options: { submissionId: string; outputVersion: number; detailUrl?: string | null; sample?: boolean; diagram: { panel_markers: Record<string, [number, number]>; marker_collision_step: number } },
+  options: { submissionId: string; outputVersion: number; detailUrl?: string | null; sample?: boolean; diagram: { marker_collision_step: number } },
 ): ReportViewModel {
   const { facts, assessment } = report;
   const vehicle = [facts.vehicle.year, facts.vehicle.make, facts.vehicle.model, facts.vehicle.trim].filter(Boolean).join(" ") || "Vehicle not recorded";
@@ -200,7 +197,7 @@ export function buildReportViewModel(
     checklist: groups,
     tires,
     body,
-    markers: panelMarkers(bodyFindings, options.diagram.panel_markers, options.diagram.marker_collision_step),
+    markers: panelMarkers(bodyFindings, options.diagram.marker_collision_step),
     priority: report.priority_actions,
     priority_status: urgent ? "urgent" : "checked",
     overview: report.overview.map((block) => ({

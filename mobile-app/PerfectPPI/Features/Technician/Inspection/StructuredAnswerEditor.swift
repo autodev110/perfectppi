@@ -669,6 +669,8 @@ private struct DefectEditorView: View {
         var severity: String?
         var structural: Bool = false
         var note: String = ""
+        /// Tap-placed location on the body diagram (body panels only).
+        var marker: BodyDiagram.Point?
 
         func isComplete(body: Bool) -> Bool {
             !type.isEmpty && (body ? severity != nil : certainty != nil)
@@ -713,7 +715,8 @@ private struct DefectEditorView: View {
                 certainty: entry["certainty"]?.stringValue,
                 severity: entry["severity"]?.stringValue,
                 structural: entry["structural"]?.boolValue ?? false,
-                note: entry["note"]?.stringValue ?? ""
+                note: entry["note"]?.stringValue ?? "",
+                marker: BodyDiagram.point(from: entry["marker"])
             )
         })
         _noPhoto = State(initialValue: observation?["evidence_exception"]?.objectValue != nil)
@@ -753,6 +756,8 @@ private struct DefectEditorView: View {
             ]
         }
     }
+
+    private var panel: String? { kind == .body ? StructuredKey.parse(answer.questionKey)?.panel : nil }
 
     private var modes: [ObservationState] {
         if kind == .body {
@@ -827,6 +832,18 @@ private struct DefectEditorView: View {
                             TextField("Short note (optional)", text: $defect.note, axis: .vertical)
                                 .textFieldStyle(.roundedBorder)
                                 .onChange(of: defect.note) { _, _ in publish() }
+                            if let panel, let index = defects.firstIndex(where: { $0.id == defect.id }) {
+                                DefectLocationView(
+                                    panel: panel,
+                                    label: String(index + 1),
+                                    marker: $defect.marker,
+                                    others: defects.enumerated().compactMap { position, entry in
+                                        guard position != index, let point = entry.marker else { return nil }
+                                        return (String(position + 1), point)
+                                    },
+                                    onChange: publish
+                                )
+                            }
                             if !defect.isComplete(body: kind == .body) {
                                 Text(kind == .body ? "Choose the damage type and its extent." : "Choose the damage type and whether it is confirmed or suspected.")
                                     .font(.caption.weight(.medium))
@@ -883,6 +900,7 @@ private struct DefectEditorView: View {
                 case .body:
                     entry["severity"] = defect.severity.map(JSONValue.string) ?? .null
                     if defect.structural { entry["structural"] = .bool(true) }
+                    if let marker = defect.marker { entry["marker"] = BodyDiagram.json(marker) }
                 }
                 return .object(entry)
             }
@@ -892,6 +910,137 @@ private struct DefectEditorView: View {
         default:
             onChange(nil)
         }
+    }
+}
+
+// MARK: - Body diagram marker
+
+/// Collapsed until opened, or open when the entry already has a marker.
+private struct DefectLocationView: View {
+    let panel: String
+    let label: String
+    @Binding var marker: BodyDiagram.Point?
+    let others: [(String, BodyDiagram.Point)]
+    var onChange: () -> Void
+
+    @State private var open = false
+
+    var body: some View {
+        if open || marker != nil {
+            BodyDiagramPicker(panel: panel, label: label, marker: $marker, others: others, onChange: onChange)
+        } else {
+            Button("Mark the location on the diagram (optional)") { open = true }
+                .font(.subheadline.weight(.medium))
+        }
+    }
+}
+
+/// Tap-to-place marker on the generic top-view diagram
+/// (Core/Models/BodyDiagram.swift). The target panel is highlighted and every
+/// tap is clamped onto it, so a marker never lands on a neighbouring panel.
+struct BodyDiagramPicker: View {
+    let panel: String
+    let label: String
+    @Binding var marker: BodyDiagram.Point?
+    let others: [(String, BodyDiagram.Point)]
+    var onChange: () -> Void
+
+    /// Width / height of the diagram box; the drawing is normalized, so any
+    /// aspect keeps each position on the same panel.
+    private static let aspect: CGFloat = 100.0 / 140.0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(spacing: 2) {
+                Text("FRONT")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                GeometryReader { proxy in
+                    let size = proxy.size
+                    Canvas { context, canvasSize in
+                        draw(in: &context, size: canvasSize)
+                    }
+                    .contentShape(Rectangle())
+                    .gesture(SpatialTapGesture().onEnded { value in
+                        guard size.width > 0, size.height > 0 else { return }
+                        marker = BodyDiagram.clamp(panel: panel, x: value.location.x / size.width, y: value.location.y / size.height)
+                        onChange()
+                    })
+                }
+                .aspectRatio(Self.aspect, contentMode: .fit)
+            }
+            .padding(6)
+            .frame(maxWidth: 190)
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.3)))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Body diagram. Tap the highlighted panel to mark where the damage is."))
+            .accessibilityValue(marker == nil ? Text("No marker") : Text("Marker \(label) placed"))
+            .accessibilityAdjustableAction { direction in
+                let base = marker ?? BodyDiagram.defaultMarker(panel: panel)
+                let step = direction == .increment ? 0.02 : -0.02
+                marker = BodyDiagram.clamp(panel: panel, x: base.x, y: base.y + step)
+                onChange()
+            }
+
+            (marker == nil
+                ? Text("Optional: tap where the damage is on the highlighted panel. Without a marker, the report uses the panel's usual position.")
+                : Text("Marker \(label) is on the highlighted panel. Tap again to move it."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if marker == nil {
+                Button("Place at the panel's usual position") {
+                    marker = BodyDiagram.defaultMarker(panel: panel)
+                    onChange()
+                }
+                .font(.subheadline.weight(.medium))
+            } else {
+                Button("Clear marker") {
+                    marker = nil
+                    onChange()
+                }
+                .font(.subheadline.weight(.medium))
+            }
+        }
+    }
+
+    private func draw(in context: inout GraphicsContext, size: CGSize) {
+        func rect(_ r: BodyDiagram.Rect) -> CGRect {
+            CGRect(x: r.x * size.width, y: r.y * size.height, width: r.w * size.width, height: r.h * size.height)
+        }
+        let outline = Color.secondary.opacity(0.6)
+        let body = rect(BodyDiagram.body)
+        context.fill(Path(roundedRect: body, cornerRadius: 10), with: .color(Color(.systemBackground)))
+        context.stroke(Path(roundedRect: body, cornerRadius: 10), with: .color(outline), lineWidth: 1)
+        for wheel in BodyDiagram.wheels {
+            let path = Path(roundedRect: rect(wheel), cornerRadius: 2)
+            context.fill(path, with: .color(Color(.secondarySystemBackground)))
+            context.stroke(path, with: .color(outline), lineWidth: 1)
+        }
+        let cabin = Path(roundedRect: rect(BodyDiagram.cabin), cornerRadius: 4)
+        context.fill(cabin, with: .color(Color(.secondarySystemBackground)))
+        context.stroke(cabin, with: .color(outline), lineWidth: 1)
+        for seam in BodyDiagram.seams {
+            var line = Path()
+            line.move(to: CGPoint(x: body.minX + 3, y: seam * size.height))
+            line.addLine(to: CGPoint(x: body.maxX - 3, y: seam * size.height))
+            context.stroke(line, with: .color(Color.secondary.opacity(0.4)), lineWidth: 0.8)
+        }
+        let (x0, y0, x1, y1) = BodyDiagram.region(panel)
+        let highlight = Path(roundedRect: CGRect(x: x0 * size.width, y: y0 * size.height, width: (x1 - x0) * size.width, height: (y1 - y0) * size.height), cornerRadius: 2)
+        context.fill(highlight, with: .color(Color.accentColor.opacity(0.15)))
+        context.stroke(highlight, with: .color(Color.accentColor), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+
+        func pin(_ text: String, _ point: BodyDiagram.Point, active: Bool) {
+            let center = CGPoint(x: point.x * size.width, y: point.y * size.height)
+            let radius: CGFloat = active ? 9 : 7
+            context.fill(
+                Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)),
+                with: .color(active ? Color.accentColor : Color.secondary.opacity(0.7))
+            )
+            context.draw(Text(verbatim: text).font(.caption2.weight(.bold)).foregroundColor(.white), at: center)
+        }
+        for (text, point) in others { pin(text, point, active: false) }
+        if let marker { pin(label, marker, active: true) }
     }
 }
 

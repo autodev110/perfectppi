@@ -29,8 +29,11 @@ removed.
 ## Deploy order
 
 1. Apply `20260923100000_inspection_report_v2_enums.sql`, then
-   `20260923101000_inspection_report_v2.sql`. They are separate files because
-   new enum values must be committed before they can be used.
+   `20260923101000_inspection_report_v2.sql`, then
+   `20260923110000_inspection_body_marker_view.sql`. The first two are
+   separate because new enum values must be committed before they can be used.
+   The third only replaces the observation guard so it also checks the marker
+   view.
 2. Deploy the web app. Bearer (iOS) clients that do not send
    `X-PPI-Inspection-Catalog: 2` get `426 app_update_required` on catalog-2
    sessions. Catalog-1 sessions keep working for them.
@@ -71,8 +74,15 @@ These interpret or differ from the handoff:
 3. **Damage entries have no silent defaults.** The inspector must choose the
    type and confirmed/suspected (the extent, for body panels). The client, the
    zod schema and the database guard all reject missing values.
-4. **Body diagram markers use each panel's default position.** There is no
-   tap-to-place.
+4. **Body damage markers are tap-to-place and optional.** Each body damage
+   entry can be marked on the generic top-view diagram
+   (`src/features/ppi/body-diagram.ts`, mirrored in
+   `mobile-app/PerfectPPI/Core/Models/BodyDiagram.swift`). Markers are stored
+   as `{view: "top", x, y}`. A tap is clamped onto the entry's own panel, the
+   API rejects an off-panel marker, and the renderer clamps again. Colliding
+   markers spread out within their panel. Entries without a marker use the
+   panel's default position. The top view shows a side panel as a narrow
+   strip, so a marker there gives position along the car, not height.
 5. **iOS review has no "report will flag" preview.** The web review screen
    has it.
 6. **The appendix is built by the output worker tick.** It also starts right

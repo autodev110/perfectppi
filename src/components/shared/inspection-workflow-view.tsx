@@ -469,7 +469,8 @@ export function InspectionWorkflowView({
             <Button
               type="button"
               variant="outline"
-              className="w-full"
+              // Wraps on phones instead of clipping the sentence.
+              className="h-auto min-h-9 w-full py-2 whitespace-normal"
               onClick={() => {
                 for (const answer of unansweredPanels) {
                   workflow.setObservation(answer.id, {
