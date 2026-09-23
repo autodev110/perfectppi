@@ -41,11 +41,12 @@ export async function inspectStoredMedia(storageReference: string): Promise<Medi
 }
 
 /**
- * Records content facts for one attached upload if they are missing. Safe to
- * call repeatedly and concurrently: the update only applies to a row that
- * still has no hash.
+ * Records content facts for one attached upload if they are missing. With
+ * `force`, reads the bytes again and proves they still match the stored facts.
+ * Safe to call repeatedly and concurrently: the update only applies to a row
+ * that still has no hash.
  */
-export async function verifyMediaContent(mediaId: string): Promise<
+export async function verifyMediaContent(mediaId: string, options: { force?: boolean } = {}): Promise<
   { ok: true; facts: MediaContentFacts } | { ok: false; error: string }
 > {
   const admin = createAdminClient();
@@ -56,7 +57,7 @@ export async function verifyMediaContent(mediaId: string): Promise<
     .maybeSingle();
   if (error) return { ok: false, error: error.message };
   if (!media) return { ok: false, error: "Upload not found" };
-  if (media.content_sha256 && media.byte_size && media.content_type) {
+  if (media.content_sha256 && media.byte_size !== null && media.content_type && !options.force) {
     return {
       ok: true,
       facts: {
@@ -75,6 +76,17 @@ export async function verifyMediaContent(mediaId: string): Promise<
     facts = await inspectStoredMedia(media.url);
   } catch (inspectError) {
     return { ok: false, error: inspectError instanceof Error ? inspectError.message : String(inspectError) };
+  }
+
+  if (media.content_sha256 && media.byte_size !== null && media.content_type) {
+    if (
+      facts.sha256 !== media.content_sha256
+      || facts.byte_size !== media.byte_size
+      || facts.content_type !== media.content_type
+    ) {
+      return { ok: false, error: "Stored upload changed after verification" };
+    }
+    return { ok: true, facts };
   }
 
   const { data: updated, error: updateError } = await admin
@@ -120,14 +132,13 @@ export async function verifyMediaContent(mediaId: string): Promise<
   };
 }
 
-/** Verifies every upload of a submission that has no content facts yet. */
+/** Reads every upload immediately before certification and verifies its bytes. */
 export async function verifySubmissionMedia(submissionId: string): Promise<{ verified: number; failed: { id: string; error: string }[] }> {
   const admin = createAdminClient();
   const { data: rows, error } = await admin
     .from("ppi_media")
     .select("id, section:ppi_sections!inner(ppi_submission_id)")
-    .eq("section.ppi_submission_id", submissionId)
-    .is("content_sha256", null);
+    .eq("section.ppi_submission_id", submissionId);
   if (error) return { verified: 0, failed: [{ id: submissionId, error: error.message }] };
 
   const ids = (rows ?? []).map((row) => row.id);
@@ -135,7 +146,7 @@ export async function verifySubmissionMedia(submissionId: string): Promise<{ ver
   let verified = 0;
   for (let start = 0; start < ids.length; start += VERIFY_CONCURRENCY) {
     const batch = ids.slice(start, start + VERIFY_CONCURRENCY);
-    const results = await Promise.all(batch.map((id) => verifyMediaContent(id)));
+    const results = await Promise.all(batch.map((id) => verifyMediaContent(id, { force: true })));
     results.forEach((result, index) => {
       if (result.ok) verified += 1;
       else failed.push({ id: batch[index], error: result.error });

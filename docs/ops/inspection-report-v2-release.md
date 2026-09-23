@@ -34,13 +34,18 @@ removed.
    `20260923113406_ppi_pressure_recheck_validation.sql`, then
    `20260923120000_output_review_audit_action.sql`, then
    `20260923120715_inspection_output_table_privileges.sql`, then
+   `20260923122342_certification_source_integrity.sql`, then
+   `20260923124446_database_advisor_cleanup.sql`, then
    `20260923130000_ppi_media_content_hashes.sql`. The first two are separate
    because new enum values must be committed before they can be used. The
    third only replaces the observation guard so it also checks the marker
    view. The fourth requires a second reading and elapsed interval when a
    pressure recheck is claimed. The fifth adds the `output_review_released`
    audit action. The sixth makes legacy output/audit grants explicit for fresh
-   databases. The seventh adds per-photo content facts and replaces
+   databases. The seventh preserves prompt-versioned extraction provenance
+   and revalidates draft source claims at certification. The eighth fixes the
+   shared timestamp trigger's search path and removes two duplicate indexes.
+   The ninth adds per-photo content facts and replaces
    `submit_ppi_certified` so the manifest freezes them.
 2. Deploy the web app. Bearer (iOS) clients that do not send
    `X-PPI-Inspection-Catalog: 2` get `426 app_update_required` on catalog-2
@@ -139,11 +144,13 @@ content type, and image dimensions and EXIF orientation. They are stored on
 `ppi_media` and frozen into every certified media manifest entry.
 
 - **When:** the server reads the stored object back right after it is attached
-  (in the background). Submit fills in any still missing just before
-  certifying.
+  (in the background). Submit reads every object again and refuses certification
+  if its current bytes differ from the recorded facts.
 - **Rules:** clients cannot set these fields, and a recorded hash can never
-  change, even for the service role. Recording one does not bump the
-  inspection revision.
+  change, even for the service role. Presigned uploads carry a signed
+  `If-None-Match: *` header, so the upload key is create-only even while its
+  URL remains valid. Recording or rechecking facts does not bump the inspection
+  revision.
 - **Certification:** the RPC refuses a photo without a hash
   (`media_unverified`). The submit route returns 503 with `Retry-After`. The
   web and iOS apps say the photos are still being verified.
@@ -158,10 +165,10 @@ content type, and image dimensions and EXIF orientation. They are stored on
 
 - The appendix is not exposed to partners or the marketplace. This is
   intentional: the redacted projection is unchanged.
-- Certified photos use immutable, server-verified private object references
-  rather than duplicate content-addressed copies. Submitted-media guards stop
-  ordinary replacement/deletion; explicit whole-inspection deletion remains
-  the retention-policy boundary.
+- Certified photos use create-only, server-verified private object references
+  rather than duplicate content-addressed copies. Submit rechecks every object,
+  and submitted-media guards stop database replacement/deletion. Explicit
+  whole-inspection deletion remains the retention-policy boundary.
 
 ## Follow-up gaps closed
 
@@ -176,7 +183,7 @@ content type, and image dimensions and EXIF orientation. They are stored on
 ## Verification done
 
 - `npm run typecheck`, `npm run lint`, `npm run i18n:check`,
-  `npm run test:unit` (438), `next build`. The build confirms that the layout
+  `npm run test:unit` (439), `next build`. The build confirms that the layout
   spec and fonts are traced.
 - All 71 SQL tests pass on a fresh replay of every migration, including
   `supabase/tests/inspection_report_v2.test.sql`.

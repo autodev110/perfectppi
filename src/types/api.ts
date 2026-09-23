@@ -146,6 +146,7 @@ export interface PresignedUrlRequest {
 export interface PresignedUrlResponse {
   uploadUrl: string;
   publicUrl: string;
+  uploadHeaders?: Record<string, string>;
 }
 
 // --- PPI ---

@@ -31,6 +31,7 @@ const presignSchema = z.object({
 });
 
 const QUARANTINED = new Set(["community_post", "vehicle_media", "community_group"]);
+const CREATE_ONLY_UPLOAD_HEADERS = { "If-None-Match": "*" } as const;
 
 
 // Refusals are logged with metadata only (Renditions doc: diagnostics), so a
@@ -167,7 +168,11 @@ export async function POST(request: Request) {
         dedupeId: result.storageReference,
       });
       // Keep the response shape compatible with existing web/iOS uploaders.
-      return NextResponse.json({ uploadUrl: result.uploadUrl, publicUrl: result.storageReference });
+      return NextResponse.json({
+        uploadUrl: result.uploadUrl,
+        publicUrl: result.storageReference,
+        uploadHeaders: CREATE_ONLY_UPLOAD_HEADERS,
+      });
     }
 
     if (["ppi_media", "media_package", "message_attachment", "vehicle_document"].includes(parsed.data.entity)) {
@@ -176,7 +181,11 @@ export async function POST(request: Request) {
         contentType: parsed.data.contentType,
         contentLength: parsed.data.size,
       });
-      return NextResponse.json({ uploadUrl: result.uploadUrl, publicUrl: result.storageReference });
+      return NextResponse.json({
+        uploadUrl: result.uploadUrl,
+        publicUrl: result.storageReference,
+        uploadHeaders: CREATE_ONLY_UPLOAD_HEADERS,
+      });
     }
 
     return NextResponse.json({ error: "Unsupported upload destination" }, { status: 400 });

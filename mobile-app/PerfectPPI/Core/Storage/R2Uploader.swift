@@ -35,6 +35,7 @@ enum R2Uploader {
                 urlString: presigned.uploadUrl,
                 data: data,
                 contentType: contentType,
+                uploadHeaders: presigned.uploadHeaders,
                 onProgress: onProgress
             )
             onProgress?(1)
@@ -63,6 +64,7 @@ enum R2Uploader {
         urlString: String,
         data: Data,
         contentType: String,
+        uploadHeaders: [String: String]?,
         onProgress: ProgressHandler?
     ) async throws {
         guard let url = URL(string: urlString) else {
@@ -72,6 +74,9 @@ enum R2Uploader {
         var req = URLRequest(url: url)
         req.httpMethod = "PUT"
         req.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        for (name, value) in uploadHeaders ?? [:] {
+            req.setValue(value, forHTTPHeaderField: name)
+        }
 
         let (_, response) = try await URLSession.shared.upload(
             for: req,

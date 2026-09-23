@@ -9,6 +9,10 @@ BEGIN
       RAISE EXCEPTION 'service_role lacks output-worker privileges on %', v_table;
     END IF;
 
+    IF has_table_privilege('service_role', format('public.%I', v_table), 'TRUNCATE, REFERENCES, TRIGGER') THEN
+      RAISE EXCEPTION 'service_role has ownership-level privileges on %', v_table;
+    END IF;
+
     IF NOT has_table_privilege('authenticated', format('public.%I', v_table), 'SELECT, INSERT') THEN
       RAISE EXCEPTION 'authenticated lacks the RLS-governed privileges on %', v_table;
     END IF;

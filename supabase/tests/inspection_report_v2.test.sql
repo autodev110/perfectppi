@@ -276,6 +276,94 @@ SET LOCAL ROLE authenticated;
 
 SELECT set_config('request.jwt.claims', '{"sub":"71000000-0000-0000-0000-000000000002","role":"authenticated"}', true);
 
+-- Simulate a draft pressure claim written before the additive NOT VALID
+-- recheck constraint existed. Certification must revalidate old rows rather
+-- than treating "held pressure" without a second reading as complete.
+RESET ROLE;
+ALTER TABLE public.ppi_answers
+  DROP CONSTRAINT ppi_answers_pressure_recheck_complete;
+SET LOCAL ROLE authenticated;
+UPDATE public.ppi_answers
+SET observation = '{"v":1,"state":"observed","value":{"reading":"34","unit":"psi","context":"cold","method":"pressure_gauge","pressure_loss":"not_observed_during_test"},"source":"inspector_entry"}'
+WHERE id = '76000000-0000-0000-0000-000000000002';
+RESET ROLE;
+ALTER TABLE public.ppi_answers
+  ADD CONSTRAINT ppi_answers_pressure_recheck_complete
+  CHECK (public.ppi_pressure_recheck_valid(question_key, observation))
+  NOT VALID;
+SET LOCAL ROLE authenticated;
+
+DO $$
+BEGIN
+  PERFORM public.submit_ppi_certified(
+    '74000000-0000-0000-0000-000000000001',
+    (SELECT revision FROM public.ppi_submissions WHERE id = '74000000-0000-0000-0000-000000000001'),
+    'inspection_accuracy/1', true
+  );
+  RAISE EXCEPTION 'legacy pressure claim without a recheck was certified';
+EXCEPTION WHEN invalid_parameter_value THEN
+  IF SQLERRM <> 'pressure_recheck_required' THEN RAISE; END IF;
+END;
+$$;
+
+UPDATE public.ppi_answers
+SET observation = '{"v":1,"state":"observed","value":{"reading":"34","unit":"psi","context":"cold","method":"pressure_gauge","pressure_loss":"not_observed_during_test","recheck":{"reading":"34","minutes_elapsed":"15"}},"source":"inspector_entry"}'
+WHERE id = '76000000-0000-0000-0000-000000000002';
+
+-- Prompt-only extraction releases keep separate provenance rows. A tampered
+-- confirmation whose extraction target does not match the answer family is
+-- rejected at certification even if it belongs to this inspection.
+SET LOCAL ROLE service_role;
+INSERT INTO public.ppi_media_extractions (
+  id, ppi_media_id, target, model, schema_version, prompt_version,
+  status, candidates, requested_by
+)
+SELECT
+  '77000000-0000-0000-0000-000000000001', media_row.id, 'tire_dot',
+  'gemini-2.5-flash', 'tire-extraction/1', 'prompt/old',
+  'extracted', '{"code":"0224"}', tech_profile.id
+FROM public.ppi_media AS media_row
+CROSS JOIN public.profiles AS tech_profile
+WHERE media_row.ppi_answer_id = '76000000-0000-0000-0000-000000000001'
+  AND tech_profile.auth_user_id = '71000000-0000-0000-0000-000000000002'
+LIMIT 1;
+
+INSERT INTO public.ppi_media_extractions (
+  id, ppi_media_id, target, model, schema_version, prompt_version,
+  status, candidates, requested_by
+)
+SELECT
+  '77000000-0000-0000-0000-000000000002', media_row.id, 'tire_dot',
+  'gemini-2.5-flash', 'tire-extraction/1', 'prompt/new',
+  'extracted', '{"code":"0224"}', tech_profile.id
+FROM public.ppi_media AS media_row
+CROSS JOIN public.profiles AS tech_profile
+WHERE media_row.ppi_answer_id = '76000000-0000-0000-0000-000000000001'
+  AND tech_profile.auth_user_id = '71000000-0000-0000-0000-000000000002'
+LIMIT 1;
+SET LOCAL ROLE authenticated;
+
+UPDATE public.ppi_answers
+SET observation = '{"v":1,"state":"observed","value":{"reading":"34","unit":"psi","context":"cold","method":"pressure_gauge","pressure_loss":"not_observed_during_test","recheck":{"reading":"34","minutes_elapsed":"15"}},"source":"confirmed_extraction","extraction_id":"77000000-0000-0000-0000-000000000002"}'
+WHERE id = '76000000-0000-0000-0000-000000000002';
+
+DO $$
+BEGIN
+  PERFORM public.submit_ppi_certified(
+    '74000000-0000-0000-0000-000000000001',
+    (SELECT revision FROM public.ppi_submissions WHERE id = '74000000-0000-0000-0000-000000000001'),
+    'inspection_accuracy/1', true
+  );
+  RAISE EXCEPTION 'mismatched photo extraction was certified';
+EXCEPTION WHEN invalid_parameter_value THEN
+  IF SQLERRM <> 'invalid_extraction_reference' THEN RAISE; END IF;
+END;
+$$;
+
+UPDATE public.ppi_answers
+SET observation = '{"v":1,"state":"observed","value":{"reading":"34","unit":"psi","context":"cold","method":"pressure_gauge","pressure_loss":"not_observed_during_test","recheck":{"reading":"34","minutes_elapsed":"15"}},"source":"inspector_entry"}'
+WHERE id = '76000000-0000-0000-0000-000000000002';
+
 CREATE TEMP TABLE v2_result ON COMMIT DROP AS
 SELECT public.submit_ppi_certified(
   '74000000-0000-0000-0000-000000000001',

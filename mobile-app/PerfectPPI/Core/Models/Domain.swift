@@ -1874,6 +1874,7 @@ struct CreateShareLinkResult: Codable, Identifiable, Hashable {
 struct PresignedUploadResponse: Codable {
     let uploadUrl: String
     let publicUrl: String
+    let uploadHeaders: [String: String]?
 }
 
 struct PresignedUploadRequest: Codable {

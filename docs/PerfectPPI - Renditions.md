@@ -89,7 +89,7 @@ Repository verification completed on September 15, 2026:
 No Renditions feature implementation remains. The following are release checks, not unfinished code:
 
 - Test multi-photo selection, camera permission denial/recovery, HEIC selection, airplane-mode capture, automatic retry, manual retry, removal, and submission on at least one physical iPhone running the oldest supported iOS version and one current iPhone/iOS version.
-- Confirm the production R2 bucket credentials and browser CORS policy allow `PUT` from `https://www.perfectppi.com` and `https://perfectppi.com`. The server fallback keeps inspection uploads functional if direct browser upload is unavailable, but correct CORS avoids the extra hop.
+- Confirm the production R2 bucket credentials and browser CORS policy allow `PUT` from `https://www.perfectppi.com` and `https://perfectppi.com`, including the `Content-Type` and `If-None-Match` request headers. The server fallback keeps uploads functional if direct browser upload is unavailable, but correct CORS avoids the extra hop.
 - Confirm upload-refusal and client-failure events appear in production logs without filenames, URLs, object keys, image bytes, VINs, or user identifiers.
 - Confirm the current Supabase migration set is applied before releasing Factory Spec, Current Build, contact discovery, build progression, or KPI surfaces.
 

@@ -51,6 +51,10 @@ export function certifiedSubmitErrorMessage(code: string): string {
       return "This inspection was already submitted.";
     case "media_unverified":
       return "Some photos are still being verified. Try submitting again in a moment.";
+    case "pressure_recheck_required":
+      return "A pressure retention result needs a second reading and elapsed time.";
+    case "invalid_extraction_reference":
+      return "A confirmed photo reading is no longer valid for that check. Review the suggested values again.";
     default:
       return "Could not submit the inspection. Please try again.";
   }

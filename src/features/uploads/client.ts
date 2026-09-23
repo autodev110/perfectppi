@@ -8,6 +8,7 @@ export type UploadProgress = (fraction: number) => void;
 type PresignedUpload = {
   uploadUrl?: string;
   publicUrl?: string;
+  uploadHeaders?: Record<string, string>;
   error?: string;
 };
 
@@ -100,7 +101,7 @@ export async function uploadFile(
           method: "PUT",
           url: payload.uploadUrl,
           body: file,
-          headers: { "Content-Type": file.type },
+          headers: { "Content-Type": file.type, ...payload.uploadHeaders },
           onProgress,
         });
         if (uploadResponse.ok) {

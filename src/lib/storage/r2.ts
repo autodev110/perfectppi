@@ -78,6 +78,7 @@ export async function generatePresignedUrl(params: {
     Key: params.key,
     ContentType: params.contentType,
     ContentLength: params.contentLength,
+    IfNoneMatch: "*",
   });
 
   const uploadUrl = await getSignedUrl(client, command, {
@@ -105,6 +106,7 @@ export async function generateQuarantinePresignedUrl(params: {
     Key: key,
     ContentType: params.contentType,
     ContentLength: params.contentLength,
+    IfNoneMatch: "*",
   });
   const uploadUrl = await getSignedUrl(getS3Client(), command, {
     expiresIn: params.expiresIn ?? 600,
@@ -128,6 +130,7 @@ export async function generatePrivatePresignedUrl(params: {
     Key: key,
     ContentType: params.contentType,
     ContentLength: params.contentLength,
+    IfNoneMatch: "*",
   });
   const uploadUrl = await getSignedUrl(getS3Client(), command, {
     expiresIn: params.expiresIn ?? 600,

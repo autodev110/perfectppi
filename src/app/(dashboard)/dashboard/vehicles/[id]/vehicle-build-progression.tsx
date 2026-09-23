@@ -403,8 +403,16 @@ function DocumentUploader({ vehicleId, entryId, stageId, onDone, onError }: { ve
       });
       let reference: string;
       if (presign.ok) {
-        const { uploadUrl, publicUrl } = await presign.json() as { uploadUrl: string; publicUrl: string };
-        const put = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } }).catch(() => null);
+        const { uploadUrl, publicUrl, uploadHeaders } = await presign.json() as {
+          uploadUrl: string;
+          publicUrl: string;
+          uploadHeaders?: Record<string, string>;
+        };
+        const put = await fetch(uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": file.type || "application/octet-stream", ...uploadHeaders },
+        }).catch(() => null);
         reference = put?.ok ? publicUrl : await uploadDirect(file);
       } else if (presign.status === 400 || presign.status === 404) {
         throw new Error(await uploadFailureMessage(presign, uiText("ui.the_document_could_not_be_uploaded_071247b5c9")));

@@ -154,13 +154,24 @@ export async function uploadPhoto(input: {
 
     let publicUrl: string;
     if (presignRes.ok) {
-      const presigned = (await presignRes.json()) as { uploadUrl?: string; publicUrl?: string };
+      const presigned = (await presignRes.json()) as {
+        uploadUrl?: string;
+        publicUrl?: string;
+        uploadHeaders?: Record<string, string>;
+      };
       if (!presigned.uploadUrl || !presigned.publicUrl) {
         publicUrl = await uploadViaServer();
       } else {
         try {
           progress("uploading", 0);
-          const put = await send("PUT", presigned.uploadUrl, file, { "Content-Type": contentType }, (percent) => progress("uploading", percent), 120_000);
+          const put = await send(
+            "PUT",
+            presigned.uploadUrl,
+            file,
+            { "Content-Type": contentType, ...presigned.uploadHeaders },
+            (percent) => progress("uploading", percent),
+            120_000,
+          );
           if (put.status >= 200 && put.status < 300) {
             publicUrl = presigned.publicUrl;
           } else {

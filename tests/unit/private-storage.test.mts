@@ -17,6 +17,7 @@ const {
   isStoredObjectConfigured,
   privateStorageReference,
   buildStorageKey,
+  generatePrivatePresignedUrl,
 } = await import("../../src/lib/storage/r2.ts");
 
 afterEach(() => {
@@ -66,6 +67,21 @@ describe("private partner artifact storage", () => {
     };
     const keys = new Set(Array.from({ length: 100 }, () => buildStorageKey(params)));
     assert.equal(keys.size, 100);
+  });
+
+  test("signs private uploads as create-only writes", async () => {
+    process.env.R2_ENDPOINT = "https://example.invalid";
+    process.env.R2_ACCESS_KEY_ID = "access";
+    process.env.R2_SECRET_ACCESS_KEY = "secret";
+    process.env.R2_PRIVATE_BUCKET_NAME = "private-artifacts";
+
+    const signed = await generatePrivatePresignedUrl({
+      key: "ppi_media/owner/submission/photo.jpg",
+      contentType: "image/jpeg",
+      contentLength: 123,
+    });
+    const signedHeaders = new URL(signed.uploadUrl).searchParams.get("X-Amz-SignedHeaders") ?? "";
+    assert.match(signedHeaders, /(?:^|;)if-none-match(?:;|$)/);
   });
 });
 

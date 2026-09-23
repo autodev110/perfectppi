@@ -92,6 +92,7 @@ export default function CreateMediaPackagePage() {
       const payload = (await presignRes.json()) as {
         uploadUrl?: string;
         publicUrl?: string;
+        uploadHeaders?: Record<string, string>;
       };
 
       if (payload.uploadUrl && payload.publicUrl) {
@@ -100,7 +101,10 @@ export default function CreateMediaPackagePage() {
           const uploadRes = await fetch(payload.uploadUrl, {
             method: "PUT",
             body: file,
-            headers: { "Content-Type": file.type || "application/octet-stream" },
+            headers: {
+              "Content-Type": file.type || "application/octet-stream",
+              ...payload.uploadHeaders,
+            },
           });
           if (!uploadRes.ok) {
             publicUrl = await uploadViaServer(file);

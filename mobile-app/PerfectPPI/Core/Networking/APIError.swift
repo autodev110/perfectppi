@@ -77,7 +77,9 @@ enum APIError: LocalizedError {
             "app_update_required": String(localized: "Update the PerfectPPI app to open and submit this inspection."),
             "certification_required": String(localized: "Confirm the accuracy certification to submit."),
             "stale_revision": String(localized: "This inspection changed after you reviewed it. Review it again before certifying."),
-            "media_unverified": String(localized: "Some photos are still being verified. Try submitting again in a moment.")
+            "media_unverified": String(localized: "Some photos are still being verified. Try submitting again in a moment."),
+            "pressure_recheck_required": String(localized: "A pressure retention result needs a second reading and elapsed time."),
+            "invalid_extraction_reference": String(localized: "A confirmed photo reading is no longer valid for that check. Review the suggested values again.")
         ]
         if let code, let message = knownCodes[code] { return message }
 

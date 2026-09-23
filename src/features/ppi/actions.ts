@@ -14,6 +14,7 @@ import {
 import { catalogQuestions, type CatalogVersion } from "./inspection-catalog";
 import {
   isStructuredAnswerType,
+  parseStructuredKey,
   parseObservation,
   requirementError,
   structuredPhotoRequired,
@@ -502,15 +503,20 @@ export async function saveAnswers(submissionId: string, answers: SaveAnswerInput
     .map((answer) => (answer.observation as { source?: string; extraction_id?: string } | null | undefined))
     .filter((observation) => observation?.source === "confirmed_extraction" && observation.extraction_id)
     .map((observation) => observation!.extraction_id!))];
-  const knownExtractions = new Set<string>();
+  const knownExtractions = new Map<string, { status: string; target: string }>();
   if (extractionIds.length) {
     const { data: extractions } = await supabase
       .from("ppi_media_extractions")
-      .select("id, media:ppi_media!inner(section:ppi_sections!inner(ppi_submission_id))")
+      .select("id, status, target, media:ppi_media!inner(section:ppi_sections!inner(ppi_submission_id))")
       .in("id", extractionIds);
     for (const extraction of extractions ?? []) {
       const media = extraction.media as { section: { ppi_submission_id: string } | null } | null;
-      if (media?.section?.ppi_submission_id === parsed.data.submissionId) knownExtractions.add(extraction.id);
+      if (media?.section?.ppi_submission_id === parsed.data.submissionId) {
+        knownExtractions.set(extraction.id, {
+          status: extraction.status,
+          target: extraction.target,
+        });
+      }
     }
   }
 
@@ -531,9 +537,20 @@ export async function saveAnswers(submissionId: string, answers: SaveAnswerInput
         }
         if (
           validation.observation.source === "confirmed_extraction"
-          && !knownExtractions.has(validation.observation.extraction_id ?? "")
+          && (() => {
+            const extraction = knownExtractions.get(validation.observation.extraction_id ?? "");
+            const family = parseStructuredKey(row.question_key ?? "")?.family;
+            const expectedTarget = family === "tire_sidewall"
+              ? "tire_sidewall"
+              : family === "tire_dot"
+                ? "tire_dot"
+                : family === "tire_placard"
+                  ? "tire_placard"
+                  : null;
+            return !extraction || extraction.status !== "extracted" || extraction.target !== expectedTarget;
+          })()
         ) {
-          invalid.push({ answerId, error: "That photo reading is not part of this inspection." });
+          invalid.push({ answerId, error: "That photo reading is unavailable or does not match this check." });
           return null;
         }
         update.observation = validation.observation as unknown as Json;
@@ -720,8 +737,9 @@ export async function submitPpi(submissionId: string, certification: SubmitCerti
   }
 
   // The certified manifest freezes each upload's content hash. Verification
-  // normally finished right after upload; anything still missing is read back
-  // from storage now. This never changes the reviewed revision.
+  // normally finished right after upload; every object is read back now so a
+  // stale upload token cannot certify bytes different from the reviewed hash.
+  // This never changes the reviewed revision.
   const verification = await verifySubmissionMedia(submissionId);
   if (verification.failed.length > 0) {
     console.error("submit: media verification failed", verification.failed);

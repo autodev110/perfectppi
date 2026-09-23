@@ -198,7 +198,7 @@ export async function extractFromPhoto(params: {
     };
     const { data: stored, error } = await admin
       .from("ppi_media_extractions")
-      .upsert(cloned, { onConflict: "ppi_media_id,target,schema_version,model" })
+      .upsert(cloned, { onConflict: "ppi_media_id,target,schema_version,prompt_version,model" })
       .select("id")
       .single();
     if (error || !stored) throw new Error(error?.message ?? "Could not store the photo reading.");
@@ -244,7 +244,7 @@ export async function extractFromPhoto(params: {
   };
   const { data: stored, error } = cached
     ? await admin.from("ppi_media_extractions").update(row).eq("id", cached.id).select("id").single()
-    : await admin.from("ppi_media_extractions").upsert(row, { onConflict: "ppi_media_id,target,schema_version,model" }).select("id").single();
+    : await admin.from("ppi_media_extractions").upsert(row, { onConflict: "ppi_media_id,target,schema_version,prompt_version,model" }).select("id").single();
   if (error || !stored) throw new Error(error?.message ?? "Could not store the photo reading.");
 
   return { extraction_id: stored.id, status, candidates, cached: false };
