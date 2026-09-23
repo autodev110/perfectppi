@@ -558,7 +558,9 @@ function tireFindings(facts: InspectionFactsV2, corner: Corner, inspectionDate: 
           observation: `Cold pressure ${formatPressure(pressure.reading, pressure.unit)}; placard ${formatPressure(target.pressure, target.unit ?? "psi")}.`,
           significance: "Incorrect pressure affects wear, handling and fuel use.",
           next_step: `Set the ${lower} tire to the placard pressure and recheck.`,
-          action: "monitor",
+          // A confirmed cold-pressure discrepancy is a service item (spec
+          // PRESSURE-002); no tolerance band is invented.
+          action: "service_recommended",
           rule_id: "PRESSURE-002",
           fact_ids: [tire.pressure.fact_id, facts.placard.fact_id],
           evidence_ids: tire.pressure.evidence_ids,

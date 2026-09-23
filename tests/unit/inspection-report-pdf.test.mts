@@ -74,6 +74,7 @@ describe("two-page inspection report", () => {
       }),
       [`tires.${corner}.cracking`]: observed({ level: "severe" }),
       [`tires.${corner}.tread`]: observed({ reading: "1", unit: "thirty_seconds_inch", method: "tread_depth_gauge" }),
+      [`tires.${corner}.pressure`]: observed({ reading: "26", unit: "psi", context: "cold", method: "pressure_gauge" }),
       [`wheels.${corner}.damage`]: observed({ defects: [{ id: `${corner.replace("_", "")}-w`, type: "cracked" }] }),
     });
     const observations = {
@@ -93,6 +94,9 @@ describe("two-page inspection report", () => {
     // Every corner is named, either individually or as "all four".
     assert.match(report.priority_actions, /Replace all four tires/);
     assert.match(report.priority_actions, /all four wheel and tire assemblies/);
+    // A service step shared by several tires is one sentence, not one per tire.
+    assert.equal(report.priority_actions.match(/placard pressure/g)?.length, 1);
+    assert.match(report.priority_actions, /Set all four tires to the placard pressure and recheck\./);
     if (overflow.length === 0) {
       assert.equal(await pageCount(await renderInspectionReportPdf(vm)), 2);
     } else {

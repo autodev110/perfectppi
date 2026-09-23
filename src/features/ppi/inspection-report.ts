@@ -140,9 +140,8 @@ function reasonShort(finding: Finding): string {
 export function composePriorityActionVariants(findings: Finding[]): string[] {
   const accepted = findings.filter((finding) => finding.review_state !== "rejected");
   const urgent = accepted.filter((finding) => finding.action === "urgent");
-  const serviceSteps = unique(
-    accepted.filter((finding) => finding.action === "service_recommended").map((finding) => finding.next_step),
-  );
+  // The same service action at several tires is one step naming each of them.
+  const serviceSteps = groupedSteps(accepted.filter((finding) => finding.action === "service_recommended"));
 
   if (urgent.length === 0) {
     if (serviceSteps.length === 0) {

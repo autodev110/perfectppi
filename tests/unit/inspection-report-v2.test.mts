@@ -368,6 +368,17 @@ describe("deterministic tire rules", () => {
     assert.equal(assessment.findings.some((finding) => finding.rule_id === "FITMENT-001"), false);
   });
 
+  test("a confirmed cold pressure that differs from the placard is a service recommendation", () => {
+    const { assessment } = assess("dents_tires", {
+      ...cleanObservations("dents_tires"),
+      "tires.front_left.pressure": observed({ reading: "30", unit: "psi", context: "cold", method: "pressure_gauge" }),
+    });
+    const finding = assessment.findings.find((entry) => entry.rule_id === "PRESSURE-002");
+    assert.equal(finding?.action, "service_recommended");
+    assert.deepEqual(finding?.corners, ["front_left"]);
+    assert.match(finding?.observation ?? "", /Cold pressure 30 psi; placard \d+ psi\./);
+  });
+
   test("warm pressure is disclosed, not corrected against the cold target", () => {
     const { assessment } = assess("dents_tires", {
       ...cleanObservations("dents_tires"),

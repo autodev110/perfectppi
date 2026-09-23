@@ -62,11 +62,10 @@ removed.
 
 These interpret or differ from the handoff:
 
-1. **PRESSURE-002 is `monitor`.** The handoff says "service recommended".
-   Any non-zero cold-pressure difference from the placard triggers it, and the
-   spec forbids an invented cutoff. At service level, a 1 psi difference would
-   read as a service item. To change it, edit the one `action` line in
-   `src/features/ppi/inspection-rules.ts`.
+1. **PRESSURE-002 is `service_recommended`, as the spec says.** There is no
+   tolerance band, so any confirmed cold-pressure difference from the placard
+   is a service item, including a 1 psi difference. When several tires need
+   it, the priority box shows one grouped step.
 2. **A VIN that differs from intake is `service_recommended`** on checklist
    row R01.
 3. **Damage entries have no silent defaults.** The inspector must choose the
@@ -92,7 +91,7 @@ These interpret or differ from the handoff:
 ## Verification done
 
 - `npm run typecheck`, `npm run lint`, `npm run i18n:check`,
-  `npm run test:unit` (416), `next build`. The build confirms that the layout
+  `npm run test:unit` (417), `next build`. The build confirms that the layout
   spec and fonts are traced.
 - All 69 SQL tests pass on a fresh replay of every migration, including
   `supabase/tests/inspection_report_v2.test.sql`.
