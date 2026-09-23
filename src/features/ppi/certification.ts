@@ -49,6 +49,8 @@ export function certifiedSubmitErrorMessage(code: string): string {
       return "Only the assigned inspector can certify and submit this inspection.";
     case "submission_not_editable":
       return "This inspection was already submitted.";
+    case "media_unverified":
+      return "Some photos are still being verified. Try submitting again in a moment.";
     default:
       return "Could not submit the inspection. Please try again.";
   }

@@ -53,6 +53,10 @@ export async function POST(
   });
   if ("error" in result) {
     const code = (result as { code?: string }).code;
+    // Photo verification is a transient storage condition: retry, not a fix.
+    if (code === "media_unverified") {
+      return NextResponse.json({ error: result.error, code }, { status: 503, headers: { "Retry-After": "5" } });
+    }
     return NextResponse.json(
       { error: result.error, code, missingAnswerIds: (result as { missingAnswerIds?: string[] }).missingAnswerIds },
       { status: code === "stale_revision" ? 409 : 400 }

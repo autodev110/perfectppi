@@ -3539,37 +3539,58 @@ export type Database = {
       }
       ppi_media: {
         Row: {
+          byte_size: number | null
           caption: string | null
           captured_at: string | null
+          content_sha256: string | null
+          content_type: string | null
+          content_verified_at: string | null
+          height: number | null
           id: string
           media_type: string
           metadata: Json | null
+          orientation: number | null
           ppi_answer_id: string | null
           ppi_section_id: string
           uploaded_at: string
           url: string
+          width: number | null
         }
         Insert: {
+          byte_size?: number | null
           caption?: string | null
           captured_at?: string | null
+          content_sha256?: string | null
+          content_type?: string | null
+          content_verified_at?: string | null
+          height?: number | null
           id?: string
           media_type: string
           metadata?: Json | null
+          orientation?: number | null
           ppi_answer_id?: string | null
           ppi_section_id: string
           uploaded_at?: string
           url: string
+          width?: number | null
         }
         Update: {
+          byte_size?: number | null
           caption?: string | null
           captured_at?: string | null
+          content_sha256?: string | null
+          content_type?: string | null
+          content_verified_at?: string | null
+          height?: number | null
           id?: string
           media_type?: string
           metadata?: Json | null
+          orientation?: number | null
           ppi_answer_id?: string | null
           ppi_section_id?: string
           uploaded_at?: string
           url?: string
+          width?: number | null
         }
         Relationships: [
           {

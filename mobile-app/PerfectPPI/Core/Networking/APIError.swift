@@ -76,7 +76,8 @@ enum APIError: LocalizedError {
             "unsupported_media": String(localized: "Video posts are not available yet. Please choose photos only."),
             "app_update_required": String(localized: "Update the PerfectPPI app to open and submit this inspection."),
             "certification_required": String(localized: "Confirm the accuracy certification to submit."),
-            "stale_revision": String(localized: "This inspection changed after you reviewed it. Review it again before certifying.")
+            "stale_revision": String(localized: "This inspection changed after you reviewed it. Review it again before certifying."),
+            "media_unverified": String(localized: "Some photos are still being verified. Try submitting again in a moment.")
         ]
         if let code, let message = knownCodes[code] { return message }
 

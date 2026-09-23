@@ -8,7 +8,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { observeOperationalOperation } from "../../features/operations/telemetry.ts";
 
 // Cloudflare R2 presigned URL generation
@@ -538,6 +538,77 @@ export async function getObjectFromStoredUrl(
     bytes,
     contentType: response.ContentType ?? "application/octet-stream",
     etag: response.ETag,
+  };
+}
+
+/**
+ * Reads a stored object once, hashing as it streams: SHA-256, exact byte
+ * count, the leading bytes (for type sniffing) and — only when the whole
+ * object fits `keepBytesUpTo` — the bytes themselves, so a large video is
+ * hashed without being held in memory.
+ */
+export async function digestStoredObject(
+  storedValue: string,
+  options: { maxBytes: number; keepBytesUpTo: number },
+): Promise<{
+  sha256: string;
+  byteSize: number;
+  declaredContentType: string;
+  head: Uint8Array;
+  bytes: Uint8Array | null;
+}> {
+  const client = getS3Client();
+  const { bucket, key } = resolveStoredObject(storedValue);
+  const response = await observeOperationalOperation("storage_get", () => client.send(
+    new GetObjectCommand({ Bucket: bucket, Key: key })
+  ));
+  if (response.ContentLength !== undefined && response.ContentLength > options.maxBytes) {
+    throw new Error("Stored object exceeds the allowed size");
+  }
+  const body = response.Body;
+  if (!body) throw new Error("Empty response body from R2");
+
+  const hash = createHash("sha256");
+  const kept: Uint8Array[] = [];
+  let keeping = true;
+  let byteSize = 0;
+  let head = new Uint8Array(0);
+  for await (const chunk of body as AsyncIterable<Uint8Array>) {
+    hash.update(chunk);
+    byteSize += chunk.length;
+    if (byteSize > options.maxBytes) throw new Error("Stored object exceeds the allowed size");
+    if (head.length < 64) {
+      const merged = new Uint8Array(Math.min(64, head.length + chunk.length));
+      merged.set(head);
+      merged.set(chunk.subarray(0, merged.length - head.length), head.length);
+      head = merged;
+    }
+    if (keeping) {
+      if (byteSize > options.keepBytesUpTo) {
+        keeping = false;
+        kept.length = 0;
+      } else {
+        kept.push(chunk);
+      }
+    }
+  }
+  if (byteSize === 0) throw new Error("Stored object is empty");
+
+  let bytes: Uint8Array | null = null;
+  if (keeping) {
+    bytes = new Uint8Array(byteSize);
+    let offset = 0;
+    for (const chunk of kept) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+  }
+  return {
+    sha256: hash.digest("hex"),
+    byteSize,
+    declaredContentType: response.ContentType ?? "application/octet-stream",
+    head,
+    bytes,
   };
 }
 

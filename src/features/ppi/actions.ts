@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -32,6 +33,7 @@ import { isOwnedPrivateUploadReference, uploadedUrlSchema } from "@/features/upl
 import { deleteStoredObjectOrQueue } from "@/features/uploads/cleanup";
 import { inspectionAnswerValidationError } from "./answer-validation";
 import { hasActiveCertifiedCredential } from "@/features/technicians/credentials";
+import { verifyMediaContent, verifySubmissionMedia } from "./media-verification";
 
 // ============================================================================
 // Helpers
@@ -717,6 +719,15 @@ export async function submitPpi(submissionId: string, certification: SubmitCerti
     };
   }
 
+  // The certified manifest freezes each upload's content hash. Verification
+  // normally finished right after upload; anything still missing is read back
+  // from storage now. This never changes the reviewed revision.
+  const verification = await verifySubmissionMedia(submissionId);
+  if (verification.failed.length > 0) {
+    console.error("submit: media verification failed", verification.failed);
+    return { error: certifiedSubmitErrorMessage("media_unverified"), code: "media_unverified" };
+  }
+
   const { data: result, error: submitError } = await supabase.rpc("submit_ppi_certified", {
     p_submission_id: submissionId,
     p_expected_revision: certification.expectedRevision,
@@ -1059,6 +1070,13 @@ export async function attachMedia(submissionId: string, data: unknown) {
     .single();
 
   if (error) return { error: error.message };
+
+  // Record the stored bytes' hash, size and type once the response is sent;
+  // submit repeats this for anything that did not finish.
+  after(async () => {
+    const verified = await verifyMediaContent(media.id);
+    if (!verified.ok) console.error("attachMedia: content verification deferred", media.id, verified.error);
+  });
   return { data: media };
 }
 

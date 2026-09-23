@@ -23,6 +23,7 @@ import { APPENDIX_TEMPLATE_VERSION, renderEvidenceAppendixPdf, type AppendixView
 import { formatReportDate, reportReference } from "@/lib/pdf/inspection-report/view-model";
 import type { StatusName } from "@/lib/pdf/inspection-report/canvas";
 import { HISTORICAL_CERTIFICATION_NOTE } from "@/features/ppi/certification";
+import { matchesCertifiedContent, shortHash } from "@/features/ppi/media-content";
 import type { Json } from "@/types/database";
 import type { StandardizedContent } from "@/types/api";
 import type { InspectionScope, SectionType } from "@/types/enums";
@@ -166,12 +167,19 @@ interface ManifestEntry {
   caption: string | null;
   captured_at: string | null;
   uploaded_at: string | null;
+  sha256?: string | null;
+  byte_size?: number | null;
 }
 
 async function prepareImage(entry: ManifestEntry): Promise<{ jpeg: Uint8Array; width: number; height: number } | { error: string }> {
   if (!isStoredObjectConfigured(entry.storage_reference)) return { error: "Stored photo location is not available." };
   try {
     const { bytes } = await getObjectFromStoredUrl(entry.storage_reference, { maxBytes: 40 * 1024 * 1024 });
+    // Print only the certified bytes: a changed object is shown as unavailable
+    // rather than silently substituted.
+    if (matchesCertifiedContent(bytes, entry) === "mismatch") {
+      return { error: "The stored photo does not match the certified copy (content hash differs)." };
+    }
     // Upright from EXIF, bounded for print, re-encoded as JPEG so every upload
     // format (HEIC, PNG, WebP) embeds the same way. The original stays in storage.
     const { data, info } = await sharp(Buffer.from(bytes), { failOn: "none" })
@@ -432,6 +440,7 @@ export async function processEvidenceAppendixExport(exportId: string, workerId: 
             entry.captured_at ? `device-reported capture time ${formatReportDate(entry.captured_at, tz, true)}` : null,
             extractionByMedia.get(entry.id)?.join(", ") ?? "Not analyzed individually",
             `Media ID ${entry.id}`,
+            entry.sha256 ? `SHA-256 ${shortHash(entry.sha256)}` : null,
           ].filter(Boolean).join(" · "),
           image: prepared && "jpeg" in prepared ? prepared : null,
           unavailable_reason: prepared && "error" in prepared ? prepared.error : null,

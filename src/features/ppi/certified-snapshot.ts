@@ -38,6 +38,13 @@ export interface CertifiedSnapshot {
     caption: string | null;
     captured_at: string | null;
     uploaded_at: string | null;
+    /** Server-verified content facts; absent in manifests certified before they existed. */
+    sha256?: string | null;
+    byte_size?: number | null;
+    content_type?: string | null;
+    width?: number | null;
+    height?: number | null;
+    orientation?: number | null;
   }[];
 }
 

@@ -263,6 +263,15 @@ EXCEPTION WHEN insufficient_privilege THEN NULL;
 END;
 $$;
 
+-- The server records each photo's content facts (normally right after upload);
+-- certification freezes them into the manifest.
+SET LOCAL ROLE service_role;
+UPDATE public.ppi_media
+SET content_sha256 = encode(sha256(convert_to(url, 'UTF8')), 'hex'), byte_size = 2048,
+    content_type = 'image/jpeg', content_verified_at = now()
+WHERE ppi_section_id = '75000000-0000-0000-0000-000000000001';
+SET LOCAL ROLE authenticated;
+
 SELECT set_config('request.jwt.claims', '{"sub":"71000000-0000-0000-0000-000000000002","role":"authenticated"}', true);
 
 CREATE TEMP TABLE v2_result ON COMMIT DROP AS
@@ -294,8 +303,10 @@ BEGIN
   IF v_cert.performer_mode <> 'technician' THEN
     RAISE EXCEPTION 'performer mode not derived from the request';
   END IF;
-  IF jsonb_array_length(v_cert.media_manifest) <> 2 THEN
-    RAISE EXCEPTION 'media manifest not frozen';
+  IF jsonb_array_length(v_cert.media_manifest) <> 2
+    OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_cert.media_manifest) AS entry WHERE entry->>'sha256' IS NULL)
+  THEN
+    RAISE EXCEPTION 'media manifest not frozen with content hashes';
   END IF;
   -- The stored hash is reproducible from the stored snapshot.
   IF encode(sha256(convert_to(v_cert.facts_snapshot::text, 'UTF8')), 'hex') <> v_cert.facts_hash THEN

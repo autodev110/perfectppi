@@ -31,10 +31,13 @@ removed.
 1. Apply `20260923100000_inspection_report_v2_enums.sql`, then
    `20260923101000_inspection_report_v2.sql`, then
    `20260923110000_inspection_body_marker_view.sql`, then
-   `20260923120000_output_review_audit_action.sql`. The first two are
-   separate because new enum values must be committed before they can be used.
-   The third only replaces the observation guard so it also checks the marker
-   view. The fourth adds the `output_review_released` audit action.
+   `20260923120000_output_review_audit_action.sql`, then
+   `20260923130000_ppi_media_content_hashes.sql`. The first two are separate
+   because new enum values must be committed before they can be used. The
+   third only replaces the observation guard so it also checks the marker
+   view. The fourth adds the `output_review_released` audit action. The fifth
+   adds per-photo content facts and replaces `submit_ppi_certified` so the
+   manifest freezes them.
 2. Deploy the web app. Bearer (iOS) clients that do not send
    `X-PPI-Inspection-Catalog: 2` get `426 app_update_required` on catalog-2
    sessions. Catalog-1 sessions keep working for them.
@@ -120,13 +123,37 @@ A render failure outside the editable text, such as a page-1 tire card, cannot
 be fixed here. The check reports the same error, and it needs an engineering
 fix.
 
+## Photo content hashes
+
+Each attached upload has a server-verified SHA-256, exact byte size, sniffed
+content type, and image dimensions and EXIF orientation. They are stored on
+`ppi_media` and frozen into every certified media manifest entry.
+
+- **When:** the server reads the stored object back right after it is attached
+  (in the background). Submit fills in any still missing just before
+  certifying.
+- **Rules:** clients cannot set these fields, and a recorded hash can never
+  change, even for the service role. Recording one does not bump the
+  inspection revision.
+- **Certification:** the RPC refuses a photo without a hash
+  (`media_unverified`). The submit route returns 503 with `Retry-After`. The
+  web and iOS apps say the photos are still being verified.
+- **Appendix:** the evidence appendix checks each photo's bytes against the
+  certified hash and size. A changed object is shown as unavailable ("does
+  not match the certified copy") and the appendix is marked incomplete. Each
+  printed photo shows the first 16 characters of its hash.
+- **Older manifests:** manifests certified before this change have no hashes.
+  The appendix prints them without a check.
+
 ## Known gaps
 
-- The media manifest hash covers the media list, not each file's bytes. No
-  per-file content hashes are stored.
 - The appendix is not exposed to partners or the marketplace. This is
   intentional: the redacted projection is unchanged.
 - The pressure-loss recheck UI is minimal.
+- Photo reading suggestions are still cached per media ID, not per content
+  hash (05 §301).
+- Certified photos rely on existing retention rules to keep their stored
+  objects. There is no content-addressed copy of the originals.
 
 ## Verification done
 
