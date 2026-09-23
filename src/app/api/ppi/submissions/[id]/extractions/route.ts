@@ -54,7 +54,6 @@ export async function POST(
   try {
     const result = await extractFromPhoto({
       mediaId: media.id,
-      mediaUrl: media.url,
       target: parsed.data.target,
       requestedBy: auth.profile.id,
     });

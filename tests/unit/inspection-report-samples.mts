@@ -20,7 +20,7 @@ export function completeSample() {
   const observations = {
     ...cleanObservations("complete"),
     "tires.front_left.damage": observed({ defects: [{ id: "t1-object", type: "foreign_object", location: "tread", note: "Screw head visible in the center tread." }] }),
-    "tires.front_left.pressure": observed({ reading: "34", unit: "psi", context: "cold", method: "pressure_gauge", pressure_loss: "not_observed_during_test" }),
+    "tires.front_left.pressure": observed({ reading: "34", unit: "psi", context: "cold", method: "pressure_gauge", pressure_loss: "not_observed_during_test", recheck: { reading: "34", minutes_elapsed: "15" } }),
     "tires.front_left.tread": observed({ reading: "5", unit: "thirty_seconds_inch", method: "tread_depth_gauge" }),
     "wheels.front_left.damage": observed({ defects: [{ id: "w1-rash", type: "scratch_curb_rash" }] }),
     ...cleanCorner("rear_left", {

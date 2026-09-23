@@ -43,7 +43,15 @@ before(async () => {
   ({ digestStoredObject } = await import("../../src/lib/storage/r2.ts"));
 });
 
-after(() => server.close());
+after(async () => {
+  const closed = new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+  // The AWS client keeps its HTTP socket alive. Explicitly close it so the
+  // test worker cannot linger after every assertion has completed.
+  server.closeAllConnections();
+  await closed;
+});
 
 const sha = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 

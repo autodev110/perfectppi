@@ -142,6 +142,8 @@ private struct MeasurementEditorView: View {
     @State private var method: String
     @State private var context: String
     @State private var pressureLoss: String
+    @State private var recheckReading: String
+    @State private var recheckMinutes: String
     @State private var result: String
     @State private var reason: ExceptionReason?
     @State private var explanation: String
@@ -162,6 +164,8 @@ private struct MeasurementEditorView: View {
         _method = State(initialValue: value?["method"]?.stringValue ?? (family == .tireTread ? "tread_depth_gauge" : family == .tirePressure ? "pressure_gauge" : family == .batteryTest ? "battery_tester" : "caliper_gauge"))
         _context = State(initialValue: value?["context"]?.stringValue ?? "")
         _pressureLoss = State(initialValue: value?["pressure_loss"]?.stringValue ?? "not_tested")
+        _recheckReading = State(initialValue: value?["recheck"]?["reading"]?.stringValue ?? "")
+        _recheckMinutes = State(initialValue: value?["recheck"]?["minutes_elapsed"]?.stringValue ?? "")
         _result = State(initialValue: value?["result"]?.stringValue ?? "")
         _reason = State(initialValue: observation?["reason"]?["code"]?.stringValue.flatMap(ExceptionReason.init(rawValue:)))
         _explanation = State(initialValue: observation?["reason"]?["explanation"]?.stringValue ?? "")
@@ -242,6 +246,31 @@ private struct MeasurementEditorView: View {
                         pressureLoss = id
                         publish()
                     }
+                    if pressureLoss == "observed" || pressureLoss == "not_observed_during_test" {
+                        Text("Pressure recheck").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        HStack(alignment: .top, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Recheck reading").font(.caption2).foregroundStyle(.secondary)
+                                HStack {
+                                    TextField("Reading", text: $recheckReading)
+                                        .keyboardType(.decimalPad)
+                                        .textFieldStyle(.roundedBorder)
+                                    Text(unitLabel).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                }
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Minutes elapsed").font(.caption2).foregroundStyle(.secondary)
+                                HStack {
+                                    TextField("Minutes", text: $recheckMinutes)
+                                        .keyboardType(.decimalPad)
+                                        .textFieldStyle(.roundedBorder)
+                                    Text("min").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .onChange(of: recheckReading) { _, _ in publish() }
+                        .onChange(of: recheckMinutes) { _, _ in publish() }
+                    }
                 }
                 if family == .batteryTest {
                     ChoiceChips(options: [("good", String(localized: "Good")), ("marginal", String(localized: "Marginal")), ("replace", String(localized: "Replace")), ("inconclusive", String(localized: "Inconclusive"))], selected: result) { id in
@@ -306,6 +335,24 @@ private struct MeasurementEditorView: View {
             }
             value["context"] = .string(context)
             value["pressure_loss"] = .string(pressureLoss)
+            if pressureLoss == "observed" || pressureLoss == "not_observed_during_test" {
+                guard
+                    let normalizedRecheck = Observation.normalizeDecimal(recheckReading),
+                    let recheckNumber = Double(normalizedRecheck),
+                    recheckNumber <= limit,
+                    let normalizedMinutes = Observation.normalizeDecimal(recheckMinutes),
+                    let elapsedMinutes = Double(normalizedMinutes),
+                    elapsedMinutes > 0
+                else {
+                    error = String(localized: "Enter the recheck reading and elapsed time.")
+                    onChange(nil)
+                    return
+                }
+                value["recheck"] = .object([
+                    "reading": .string(normalizedRecheck),
+                    "minutes_elapsed": .string(normalizedMinutes),
+                ])
+            }
         }
         if family == .batteryTest {
             guard !result.isEmpty else {

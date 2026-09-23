@@ -233,6 +233,9 @@ function MeasurementEditor(props: EditorProps & { family: StructuredFamily }) {
   const [method, setMethod] = useState(String(value.method ?? (isTread ? "tread_depth_gauge" : isPressure ? "pressure_gauge" : isBattery ? "battery_tester" : "caliper_gauge")));
   const [context, setContext] = useState<string>(String(value.context ?? ""));
   const [loss, setLoss] = useState(String(value.pressure_loss ?? "not_tested"));
+  const recheck = (value.recheck ?? {}) as Record<string, string>;
+  const [recheckReading, setRecheckReading] = useState(recheck.reading ?? "");
+  const [recheckMinutes, setRecheckMinutes] = useState(recheck.minutes_elapsed ?? "");
   const positions = (value.positions ?? {}) as Record<string, string>;
   const [showPositions, setShowPositions] = useState(Boolean(value.positions));
   const [inner, setInner] = useState(positions.inner ?? "");
@@ -263,6 +266,8 @@ function MeasurementEditor(props: EditorProps & { family: StructuredFamily }) {
       method: String(overrides.method ?? method),
       context: String(overrides.context ?? context),
       loss: String(overrides.loss ?? loss),
+      recheckReading: String(overrides.recheckReading ?? recheckReading),
+      recheckMinutes: String(overrides.recheckMinutes ?? recheckMinutes),
       inner: String(overrides.inner ?? inner),
       center: String(overrides.center ?? center),
       outer: String(overrides.outer ?? outer),
@@ -287,6 +292,16 @@ function MeasurementEditor(props: EditorProps & { family: StructuredFamily }) {
     if (isPressure) {
       observed.context = next.context || undefined;
       observed.pressure_loss = next.loss;
+      if (
+        ["observed", "not_observed_during_test"].includes(next.loss)
+        && next.recheckReading
+        && next.recheckMinutes
+      ) {
+        observed.recheck = {
+          reading: normalizeDecimalInput(next.recheckReading) ?? next.recheckReading.trim(),
+          minutes_elapsed: normalizeDecimalInput(next.recheckMinutes) ?? next.recheckMinutes.trim(),
+        };
+      }
     }
     if (isBattery) {
       observed.result = next.result || undefined;
@@ -404,6 +419,30 @@ function MeasurementEditor(props: EditorProps & { family: StructuredFamily }) {
                   onChange={(next) => { setLoss(next); publish({ loss: next }); }}
                 />
               </Field>
+              {["observed", "not_observed_during_test"].includes(loss) ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Field label={uiText("ui.recheck_reading_b272f20252")} hint={`Use the same unit as the initial reading (${unitLabel}).`}>
+                    <DecimalInput
+                      value={recheckReading}
+                      unit={unitLabel}
+                      onChange={(next) => {
+                        setRecheckReading(next);
+                        publish({ recheckReading: next });
+                      }}
+                    />
+                  </Field>
+                  <Field label={uiText("ui.minutes_elapsed_5a14065958")}>
+                    <DecimalInput
+                      value={recheckMinutes}
+                      unit="min"
+                      onChange={(next) => {
+                        setRecheckMinutes(next);
+                        publish({ recheckMinutes: next });
+                      }}
+                    />
+                  </Field>
+                </div>
+              ) : null}
             </>
           ) : null}
           {isBattery ? (
@@ -1373,4 +1412,3 @@ export function StructuredAnswerInput(props: EditorProps) {
       return <PlacardEditor key={key} {...props} />;
   }
 }
-

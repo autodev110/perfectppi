@@ -211,6 +211,10 @@ function observationDetail(questionKey: string | null, observation: unknown, fal
   if (positions) parts.push(`Readings: ${Object.entries(positions).map(([position, reading]) => `${position} ${reading}`).join(", ")} (${value.unit === "mm" ? "mm" : "/32 in"})`);
   if (value.method) parts.push(`Method: ${String(value.method).replace(/_/g, " ")}`);
   if (value.pressure_loss) parts.push(`Pressure loss: ${String(value.pressure_loss).replace(/_/g, " ")}`);
+  const recheck = value.recheck as { reading?: string; minutes_elapsed?: string } | undefined;
+  if (recheck?.reading && recheck.minutes_elapsed) {
+    parts.push(`Recheck: ${recheck.reading} ${value.unit === "kpa" ? "kPa" : "psi"} after ${recheck.minutes_elapsed} min`);
+  }
   if (value.raw) parts.push(`Sidewall text as entered: ${value.raw}`);
   if (value.documented_alternative) parts.push(`Documented alternative: ${value.documented_alternative}`);
   if (doc.evidence_exception) {

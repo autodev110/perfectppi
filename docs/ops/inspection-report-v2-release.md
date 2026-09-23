@@ -31,13 +31,17 @@ removed.
 1. Apply `20260923100000_inspection_report_v2_enums.sql`, then
    `20260923101000_inspection_report_v2.sql`, then
    `20260923110000_inspection_body_marker_view.sql`, then
+   `20260923113406_ppi_pressure_recheck_validation.sql`, then
    `20260923120000_output_review_audit_action.sql`, then
+   `20260923120715_inspection_output_table_privileges.sql`, then
    `20260923130000_ppi_media_content_hashes.sql`. The first two are separate
    because new enum values must be committed before they can be used. The
    third only replaces the observation guard so it also checks the marker
-   view. The fourth adds the `output_review_released` audit action. The fifth
-   adds per-photo content facts and replaces `submit_ppi_certified` so the
-   manifest freezes them.
+   view. The fourth requires a second reading and elapsed interval when a
+   pressure recheck is claimed. The fifth adds the `output_review_released`
+   audit action. The sixth makes legacy output/audit grants explicit for fresh
+   databases. The seventh adds per-photo content facts and replaces
+   `submit_ppi_certified` so the manifest freezes them.
 2. Deploy the web app. Bearer (iOS) clients that do not send
    `X-PPI-Inspection-Catalog: 2` get `426 app_update_required` on catalog-2
    sessions. Catalog-1 sessions keep working for them.
@@ -91,6 +95,11 @@ These interpret or differ from the handoff:
    has it.
 6. **The appendix is built by the output worker tick.** It also starts right
    away through `after()` when requested.
+7. **Certified originals follow the inspection retention lifecycle.** Submitted
+   media cannot be edited or removed independently. Its verified private
+   object is retained for the frozen manifest until the owner legitimately
+   deletes the underlying inspection, at which point the inspection records,
+   reports and evidence objects are deleted together.
 
 ## Held reports
 
@@ -145,25 +154,34 @@ content type, and image dimensions and EXIF orientation. They are stored on
 - **Older manifests:** manifests certified before this change have no hashes.
   The appendix prints them without a check.
 
-## Known gaps
+## Deliberate boundaries
 
 - The appendix is not exposed to partners or the marketplace. This is
   intentional: the redacted projection is unchanged.
-- The pressure-loss recheck UI is minimal.
-- Photo reading suggestions are still cached per media ID, not per content
-  hash (05 §301).
-- Certified photos rely on existing retention rules to keep their stored
-  objects. There is no content-addressed copy of the originals.
+- Certified photos use immutable, server-verified private object references
+  rather than duplicate content-addressed copies. Submitted-media guards stop
+  ordinary replacement/deletion; explicit whole-inspection deletion remains
+  the retention-policy boundary.
+
+## Follow-up gaps closed
+
+- Web and iOS collect the pressure recheck reading and elapsed interval
+  whenever loss or retention was observed. Schema and database validation
+  enforce the same claim, and the evidence appendix prints the values.
+- Photo reading suggestions reuse an exact-byte match by SHA-256 only when
+  target, model, schema and prompt versions all match. A reused result is
+  cloned to the current media record so inspector confirmation provenance
+  remains local to that upload.
 
 ## Verification done
 
 - `npm run typecheck`, `npm run lint`, `npm run i18n:check`,
-  `npm run test:unit` (417), `next build`. The build confirms that the layout
+  `npm run test:unit` (438), `next build`. The build confirms that the layout
   spec and fonts are traced.
-- All 69 SQL tests pass on a fresh replay of every migration, including
+- All 71 SQL tests pass on a fresh replay of every migration, including
   `supabase/tests/inspection_report_v2.test.sql`.
-- iOS: the simulator build, 14 XCTests, the editor render snapshot, and
-  `sync-string-catalog.py --check`.
+- iOS: the simulator build, 16 XCTests, one UI test, the editor render
+  snapshot, and `sync-string-catalog.py --check`.
 - A local API run against a throwaway Supabase stack checked:
   - 426 for old clients.
   - Catalog-2 seeding.
@@ -178,7 +196,4 @@ content type, and image dimensions and EXIF orientation. They are stored on
 
 - Print both pages in grayscale. Status words and symbols must stay distinct.
 - Capture on a physical iPhone, including offline queueing of typed answers.
-- Make sure the hosted database has the grants the output pipeline needs.
-  A fresh local replay needed manual grants on `standardized_outputs`,
-  `vsc_outputs` and `audit_logs` (pre-existing and tracked separately).
 - Set `R2_PRIVATE_BUCKET_NAME` and, if Jev is wanted, `TYPESAFE_API_KEY`.

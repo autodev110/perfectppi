@@ -144,6 +144,22 @@ describe("observation validation and role requirements", () => {
     assert.equal(validateObservation("tires.front_left.tread", observed({ reading: "25.4", unit: "mm", method: "tread_depth_gauge" })).ok, true);
   });
 
+  test("observed pressure retention results require a reading and positive elapsed interval", () => {
+    const base = { reading: "34", unit: "psi", context: "cold", method: "pressure_gauge" };
+    assert.equal(validateObservation("tires.front_left.pressure", observed({ ...base, pressure_loss: "observed" })).ok, false);
+    assert.equal(validateObservation("tires.front_left.pressure", observed({
+      ...base,
+      pressure_loss: "not_observed_during_test",
+      recheck: { reading: "34", minutes_elapsed: "0" },
+    })).ok, false);
+    assert.equal(validateObservation("tires.front_left.pressure", observed({
+      ...base,
+      pressure_loss: "not_observed_during_test",
+      recheck: { reading: "34", minutes_elapsed: "15" },
+    })).ok, true);
+    assert.equal(validateObservation("tires.front_left.pressure", observed({ ...base, pressure_loss: "reported" })).ok, true);
+  });
+
   test("none observed is exclusive with defect entries", () => {
     assert.equal(validateObservation("tires.front_left.damage", observed({ none_observed: true, defects: [{ id: "abcd1", type: "cut" }] })).ok, true, "extra keys are stripped by the exclusive branch");
     const parsed = validateObservation("tires.front_left.damage", observed({ none_observed: true, defects: [{ id: "abcd1", type: "cut" }] }));

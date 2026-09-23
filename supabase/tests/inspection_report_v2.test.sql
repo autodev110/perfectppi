@@ -107,6 +107,8 @@ BEGIN
       ('76000000-0000-0000-0000-000000000001', '{"v":1,"state":"outside_scope","reason":{"code":"other","explanation":"skip"}}', 'inspector-selected outside scope'),
       ('76000000-0000-0000-0000-000000000001', '{"v":1,"state":"not_recorded","reason":{"code":"other","explanation":"skip"}}', 'inspector-selected not recorded'),
       ('76000000-0000-0000-0000-000000000002', '{"v":1,"state":"observed","value":{"reading":"34","unit":"psi","context":"hot","method":"pressure_gauge"}}', 'pressure context'),
+      ('76000000-0000-0000-0000-000000000002', '{"v":1,"state":"observed","value":{"reading":"34","unit":"psi","context":"cold","method":"pressure_gauge","pressure_loss":"observed"}}', 'pressure loss without a recheck'),
+      ('76000000-0000-0000-0000-000000000002', '{"v":1,"state":"observed","value":{"reading":"34","unit":"psi","context":"cold","method":"pressure_gauge","pressure_loss":"not_observed_during_test","recheck":{"reading":"34","minutes_elapsed":"0"}}}', 'pressure recheck without elapsed time'),
       ('76000000-0000-0000-0000-000000000003', '{"v":1,"state":"observed","value":{"none_observed":true,"defects":[{"id":"abcd1","type":"puncture"}]}}', 'none observed with defects'),
       ('76000000-0000-0000-0000-000000000003', '{"v":1,"state":"observed","value":{"defects":[{"id":"abcd1","type":"scratch_curb_rash","certainty":"confirmed"}]}}', 'wheel defect type on a tire'),
       ('76000000-0000-0000-0000-000000000003', '{"v":1,"state":"observed","value":{"defects":[{"id":"abcd1","type":"puncture","location":"tread"}]}}', 'defect without a confirmation state'),
@@ -120,7 +122,7 @@ BEGIN
     BEGIN
       UPDATE public.ppi_answers SET observation = v_case.observation WHERE id = v_case.answer_id;
       RAISE EXCEPTION 'invalid observation accepted: %', v_case.label;
-    EXCEPTION WHEN invalid_parameter_value THEN NULL;
+    EXCEPTION WHEN invalid_parameter_value OR check_violation THEN NULL;
     END;
   END LOOP;
 END;
@@ -226,7 +228,7 @@ END;
 $$;
 
 UPDATE public.ppi_answers
-SET observation = '{"v":1,"state":"observed","value":{"reading":"34","unit":"psi","context":"cold","method":"pressure_gauge","pressure_loss":"not_observed_during_test"}}'
+SET observation = '{"v":1,"state":"observed","value":{"reading":"34","unit":"psi","context":"cold","method":"pressure_gauge","pressure_loss":"not_observed_during_test","recheck":{"reading":"34","minutes_elapsed":"15"}}}'
 WHERE id = '76000000-0000-0000-0000-000000000002';
 
 -- Tread reading, declared tire damage and body damage each need a photo.

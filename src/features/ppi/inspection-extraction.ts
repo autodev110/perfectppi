@@ -1,9 +1,11 @@
 import sharp from "sharp";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { generateStructuredOutput, isGeminiConfigured } from "@/lib/ai/gemini";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getObjectFromStoredUrl } from "@/lib/storage/r2";
 import type { Json } from "@/types/database";
+import { verifyMediaContent } from "./media-verification";
 
 // ============================================================================
 // Photo reading suggestions for tire markings, DOT codes and the placard.
@@ -117,17 +119,36 @@ export interface ExtractionResult {
  */
 export async function extractFromPhoto(params: {
   mediaId: string;
-  mediaUrl: string;
   target: ExtractionTarget;
   requestedBy: string;
 }): Promise<ExtractionResult> {
   const admin = createAdminClient();
+  const verification = await verifyMediaContent(params.mediaId);
+  if (!verification.ok) throw new Error(verification.error);
+
+  const { data: media, error: mediaError } = await admin
+    .from("ppi_media")
+    .select("id, url")
+    .eq("id", params.mediaId)
+    .single();
+  if (mediaError || !media) throw new Error(mediaError?.message ?? "Photo not found");
+
+  // Bind this request to the verified bytes before considering a cached
+  // result. A still-valid presigned PUT must not let overwritten object bytes
+  // inherit an extraction produced for the prior object.
+  const storedObject = await getObjectFromStoredUrl(media.url, { maxBytes: 15 * 1024 * 1024 });
+  const currentSha256 = createHash("sha256").update(storedObject.bytes).digest("hex");
+  if (currentSha256 !== verification.facts.sha256) {
+    throw new Error("The uploaded photo changed after verification. Remove it and upload it again.");
+  }
+
   const { data: cached } = await admin
     .from("ppi_media_extractions")
     .select("id, status, candidates")
     .eq("ppi_media_id", params.mediaId)
     .eq("target", params.target)
     .eq("schema_version", EXTRACTION_SCHEMA_VERSION)
+    .eq("prompt_version", EXTRACTION_PROMPT_VERSION)
     .eq("model", EXTRACTION_MODEL)
     .maybeSingle();
   if (cached && cached.status !== "failed") {
@@ -139,16 +160,65 @@ export async function extractFromPhoto(params: {
     };
   }
 
+  const { data: identicalMedia, error: identicalMediaError } = await admin
+    .from("ppi_media")
+    .select("id")
+    .eq("content_sha256", verification.facts.sha256)
+    .neq("id", params.mediaId)
+    .limit(50);
+  if (identicalMediaError) throw new Error(identicalMediaError.message);
+
+  const identicalIds = (identicalMedia ?? []).map(({ id }) => id);
+  const { data: reusable, error: reusableError } = identicalIds.length
+    ? await admin
+        .from("ppi_media_extractions")
+        .select("status, candidates")
+        .in("ppi_media_id", identicalIds)
+        .eq("target", params.target)
+        .eq("schema_version", EXTRACTION_SCHEMA_VERSION)
+        .eq("prompt_version", EXTRACTION_PROMPT_VERSION)
+        .eq("model", EXTRACTION_MODEL)
+        .in("status", ["extracted", "unreadable"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (reusableError) throw new Error(reusableError.message);
+  if (reusable) {
+    const cloned = {
+      ppi_media_id: params.mediaId,
+      target: params.target,
+      model: EXTRACTION_MODEL,
+      schema_version: EXTRACTION_SCHEMA_VERSION,
+      prompt_version: EXTRACTION_PROMPT_VERSION,
+      status: reusable.status,
+      candidates: reusable.candidates,
+      error: null,
+      requested_by: params.requestedBy,
+    };
+    const { data: stored, error } = await admin
+      .from("ppi_media_extractions")
+      .upsert(cloned, { onConflict: "ppi_media_id,target,schema_version,model" })
+      .select("id")
+      .single();
+    if (error || !stored) throw new Error(error?.message ?? "Could not store the photo reading.");
+    return {
+      extraction_id: stored.id,
+      status: reusable.status as ExtractionResult["status"],
+      candidates: reusable.candidates as Record<string, string | null>,
+      cached: true,
+    };
+  }
+
   let status: ExtractionResult["status"] = "failed";
   let candidates: Record<string, string | null> = {};
   let errorMessage: string | null = null;
 
   try {
     if (!isGeminiConfigured()) throw new Error("Photo reading is not configured.");
-    const { bytes } = await getObjectFromStoredUrl(params.mediaUrl, { maxBytes: 15 * 1024 * 1024 });
     // Upright, bounded JPEG: orientation from EXIF, enough detail for small
     // sidewall print without sending the full-resolution original.
-    const image = await sharp(Buffer.from(bytes)).rotate().resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 88 }).toBuffer();
+    const image = await sharp(Buffer.from(storedObject.bytes)).rotate().resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 88 }).toBuffer();
     const schema = SCHEMAS[params.target] as z.ZodType<Record<string, unknown>>;
     const raw = await generateStructuredOutput(PROMPTS[params.target], schema, {
       model: EXTRACTION_MODEL,

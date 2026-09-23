@@ -378,17 +378,34 @@ const treadValue = z.object({
     .nullable(),
 });
 
-const pressureValue = z.object({
-  reading: decimal,
-  unit: choice(["psi", "kpa"] as const, "Choose psi or kPa."),
-  context: choice(PRESSURE_CONTEXTS, "Choose whether the tires were cold, warm or you are not sure."),
-  method: choice(PRESSURE_METHODS, "Choose what the pressure was measured with."),
-  pressure_loss: choice(PRESSURE_LOSS_STATES, "Choose the pressure-loss result.").default("not_tested"),
-  recheck: z
-    .object({ reading: decimal, minutes_elapsed: decimal })
-    .optional()
-    .nullable(),
-});
+const pressureValue = z
+  .object({
+    reading: decimal,
+    unit: choice(["psi", "kpa"] as const, "Choose psi or kPa."),
+    context: choice(PRESSURE_CONTEXTS, "Choose whether the tires were cold, warm or you are not sure."),
+    method: choice(PRESSURE_METHODS, "Choose what the pressure was measured with."),
+    pressure_loss: choice(PRESSURE_LOSS_STATES, "Choose the pressure-loss result.").default("not_tested"),
+    recheck: z
+      .object({ reading: decimal, minutes_elapsed: decimal })
+      .optional()
+      .nullable(),
+  })
+  .superRefine((value, context) => {
+    if (["observed", "not_observed_during_test"].includes(value.pressure_loss) && !value.recheck) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["recheck"],
+        message: "Enter the recheck reading and elapsed time.",
+      });
+    }
+    if (value.recheck && Number(value.recheck.minutes_elapsed) <= 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["recheck", "minutes_elapsed"],
+        message: "Elapsed time must be greater than zero.",
+      });
+    }
+  });
 
 const brakePadValue = z.object({
   reading: decimal,
