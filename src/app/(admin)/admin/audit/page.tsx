@@ -11,6 +11,7 @@ const ACTION_LABELS: Record<string, string> = {
   contract_state_changed: uiText("ui.contract_state_changed_c6df381d4a"),
   payment_state_changed: uiText("ui.payment_state_changed_319dceb6f3"),
   submission_resubmitted: uiText("ui.submission_resubmitted_3e3e25284d"),
+  output_review_released: uiText("ui.output_review_released_55d49163c8"),
 };
 
 export default async function AuditLogPage() {

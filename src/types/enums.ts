@@ -176,7 +176,8 @@ export type AuditAction =
   | "output_regenerated"
   | "contract_state_changed"
   | "payment_state_changed"
-  | "submission_resubmitted";
+  | "submission_resubmitted"
+  | "output_review_released";
 
 // Factual inspection-source labels. Avoid ranking or endorsement language.
 export const PPI_TRUST_TIERS = {

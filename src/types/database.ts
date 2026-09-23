@@ -7743,6 +7743,7 @@ export type Database = {
         | "contract_state_changed"
         | "payment_state_changed"
         | "submission_resubmitted"
+        | "output_review_released"
       certification_level: "none" | "ase" | "master" | "oem_qualified"
       contact_identifier_kind: "email" | "phone"
       community_content_status: "active" | "hidden" | "archived"
@@ -8011,6 +8012,7 @@ export const Constants = {
         "contract_state_changed",
         "payment_state_changed",
         "submission_resubmitted",
+        "output_review_released",
       ],
       certification_level: ["none", "ase", "master", "oem_qualified"],
       contact_identifier_kind: ["email", "phone"],

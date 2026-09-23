@@ -66,6 +66,16 @@ export interface InspectionReportV2 {
   };
   status: "ready" | "needs_review";
   review_reasons: string[];
+  /**
+   * Set when an administrator released a held report after rewriting the
+   * overflowing text (features/ppi/report-review.ts). Who released it lives in
+   * audit_logs, not in this partner-visible document.
+   */
+  review_resolution?: {
+    resolved_at: string;
+    edited_regions: string[];
+    resolved_reasons: string[];
+  };
 }
 
 export const CATEGORY_TITLES: Record<Category, string> = {
@@ -562,7 +572,8 @@ export function buildInspectionReport(input: {
   };
 }
 
-const FORBIDDEN_PHRASES = /\b(AI|artificial intelligence|machine learning|model|LLM|generated)\b|\$\s?\d|\bUSD\b|\bdollars?\b|\bpass(?:ed)?\b|\bfail(?:ed|s)?\b/i;
+/** Wording no printed report text may use: AI/model labels, prices, pass/fail. */
+export const FORBIDDEN_PHRASES = /\b(AI|artificial intelligence|machine learning|model|LLM|generated)\b|\$\s?\d|\bUSD\b|\bdollars?\b|\bpass(?:ed)?\b|\bfail(?:ed|s)?\b/i;
 
 /**
  * Accepts model-written category text only when it keeps the deterministic

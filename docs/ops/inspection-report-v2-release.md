@@ -30,10 +30,11 @@ removed.
 
 1. Apply `20260923100000_inspection_report_v2_enums.sql`, then
    `20260923101000_inspection_report_v2.sql`, then
-   `20260923110000_inspection_body_marker_view.sql`. The first two are
+   `20260923110000_inspection_body_marker_view.sql`, then
+   `20260923120000_output_review_audit_action.sql`. The first two are
    separate because new enum values must be committed before they can be used.
    The third only replaces the observation guard so it also checks the marker
-   view.
+   view. The fourth adds the `output_review_released` audit action.
 2. Deploy the web app. Bearer (iOS) clients that do not send
    `X-PPI-Inspection-Catalog: 2` get `426 app_update_required` on catalog-2
    sessions. Catalog-1 sessions keep working for them.
@@ -88,12 +89,41 @@ These interpret or differ from the handoff:
 6. **The appendix is built by the output worker tick.** It also starts right
    away through `after()` when requested.
 
+## Held reports
+
+When every urgent action cannot fit after approved consolidation, the output
+version is held (`needs_review`) and downloads return 409. It is not truncated.
+Admin → Outputs lists held reports under **Held for review**. It also lists
+outputs whose final render failed with a layout error.
+
+The review page (`/admin/outputs/<id>/review`) shows why the report was held
+and every finding, urgent first. The admin may rewrite only the printed summary
+text: the priority box, the category blocks and the scope line. Findings,
+statuses and actions are certified and cannot be changed. Release requires all
+of the following, and the server checks them again:
+
+- Edited text cites every urgent finding by reference, such as `[T1, T4]`. The
+  priority box cites all of them, and each category block cites its own.
+- Edited text does not cite unknown findings or use AI or model labels,
+  prices, or pass/fail wording, and stays within the length limits.
+- Every region fits its measured space, and both pages render.
+- The admin ticks the faithfulness confirmation (`report_review/1`).
+
+Release updates the stored report in place for the same output version (no
+PDF existed yet). The update is guarded against concurrent or stale releases.
+Release then records an `output_review_released` audit entry with the previous
+text and re-queues that version's job to store the files. The stored report
+keeps a `review_resolution` record (when, which regions, which reasons), but
+not who released it; the audit log holds that.
+
+A render failure outside the editable text, such as a page-1 tire card, cannot
+be fixed here. The check reports the same error, and it needs an engineering
+fix.
+
 ## Known gaps
 
 - The media manifest hash covers the media list, not each file's bytes. No
   per-file content hashes are stored.
-- No admin tool resolves `needs_review` (layout overflow) outputs. Downloads
-  return 409 until a new output version is generated.
 - The appendix is not exposed to partners or the marketplace. This is
   intentional: the redacted projection is unchanged.
 - The pressure-loss recheck UI is minimal.

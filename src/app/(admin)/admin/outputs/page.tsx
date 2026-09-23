@@ -1,4 +1,7 @@
+import Link from "next/link";
 import { getAdminOutputs } from "@/features/admin/queries";
+import { listHeldReports } from "@/features/outputs/report-review";
+import { regionLabel } from "@/features/ppi/report-review";
 import { requireRole } from "@/features/auth/guards";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/utils/formatting";
@@ -13,7 +16,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "dest
 export default async function OutputsPage() {
   const uiText = await getRequestTranslator();
   await requireRole(["admin"]);
-  const { outputs, totalStandardized, totalVsc, pendingVsc } = await getAdminOutputs();
+  const [{ outputs, totalStandardized, totalVsc, pendingVsc }, held] = await Promise.all([getAdminOutputs(), listHeldReports()]);
 
   return (
     <div className="space-y-6">
@@ -22,6 +25,37 @@ export default async function OutputsPage() {
         <p className="text-muted-foreground">
           {totalStandardized}{uiText("ui.standardized_outputs_d0bddd71c4")}{totalVsc}{uiText("ui.vsc_outputs_cbe01da5ea")}{pendingVsc}{uiText("ui.waiting_for_vsc_34b9633a5a")}</p>
       </div>
+
+      {held.length > 0 ? (
+        <section className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <div>
+            <h2 className="font-semibold">{uiText("ui.held_for_review_a08b6757bc")}{held.length})</h2>
+            <p className="text-sm text-muted-foreground">{uiText("ui.these_reports_did_not_fit_the_two_page_layou_e8e7afdb4c")}</p>
+          </div>
+          <ul className="divide-y rounded-md border bg-background">
+            {held.map((report) => (
+              <li key={report.outputId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+                <div className="min-w-0 space-y-0.5">
+                  <p className="font-medium">
+                    {report.vehicleLabel}{uiText("ui.v_63e470a096")}{report.outputVersion}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {report.hold === "needs_review"
+                      ? report.report.review_reasons
+                          .filter((reason) => reason.startsWith("layout_overflow:"))
+                          .map((reason) => regionLabel(reason.replace("layout_overflow:", "")))
+                          .join(", ")
+                      : report.job?.error ?? uiText("ui.final_render_failed_bef2b817ff")}
+                    {" · "}
+                    {formatDateTime(report.generatedAt)}
+                  </p>
+                </div>
+                <Link href={`/admin/outputs/${report.outputId}/review`} className="font-medium text-primary">{uiText("ui.review_aff0766a52")}</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <div className="overflow-hidden rounded-lg border">
         <table className="w-full text-sm">
