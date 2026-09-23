@@ -77,6 +77,19 @@ struct AnswerEditor: View {
                         .font(.caption)
                         .foregroundStyle(Theme.Palette.danger)
                 }
+
+            default:
+                // Structured answers use StructuredAnswerEditor; an unknown
+                // type from a newer server is shown read-only.
+                Group {
+                    if let value = answer.answerValue, !value.isEmpty {
+                        Text(verbatim: value)
+                    } else {
+                        Text("Update the app to answer this question.")
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             }
         }
     }

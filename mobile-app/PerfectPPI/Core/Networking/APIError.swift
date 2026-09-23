@@ -73,7 +73,10 @@ enum APIError: LocalizedError {
             "posting_restricted": String(localized: "Community posting is currently unavailable for this account."),
             "unauthorized_audience": String(localized: "You cannot publish to the selected audience."),
             "posting_unavailable": String(localized: "Community posting is temporarily unavailable. Please try again later."),
-            "unsupported_media": String(localized: "Video posts are not available yet. Please choose photos only.")
+            "unsupported_media": String(localized: "Video posts are not available yet. Please choose photos only."),
+            "app_update_required": String(localized: "Update the PerfectPPI app to open and submit this inspection."),
+            "certification_required": String(localized: "Confirm the accuracy certification to submit."),
+            "stale_revision": String(localized: "This inspection changed after you reviewed it. Review it again before certifying.")
         ]
         if let code, let message = knownCodes[code] { return message }
 

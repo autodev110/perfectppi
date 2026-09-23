@@ -270,6 +270,31 @@ enum AnswerType: String, Codable {
     case yesNo = "yes_no"
     case select
     case number
+    // Catalog-2 structured observations (value in PpiAnswer.observation).
+    case measurement
+    case tireMarkings = "tire_markings"
+    case dotCode = "dot_code"
+    case conditionScale = "condition_scale"
+    case defectList = "defect_list"
+    case tirePlacard = "tire_placard"
+    case panelCondition = "panel_condition"
+    /// A type this build does not know; shown read-only instead of failing
+    /// to decode the whole inspection.
+    case unsupported
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = AnswerType(rawValue: raw) ?? .unsupported
+    }
+
+    var isStructured: Bool {
+        switch self {
+        case .measurement, .tireMarkings, .dotCode, .conditionScale, .defectList, .tirePlacard, .panelCondition:
+            return true
+        case .text, .yesNo, .select, .number, .unsupported:
+            return false
+        }
+    }
 }
 
 enum WarrantyOrderStatus: String, Codable {

@@ -204,6 +204,7 @@ export default async function InspectionDetailPage({ params }: PageProps) {
                 content={outputs.standardized.structured_content as unknown as StandardizedContent}
                 generatedAt={outputs.standardized.generated_at}
                 documentUrl={`/api/outputs/${outputs.standardized.id}/pdf`}
+                outputId={outputs.standardized.id}
               />
             </div>
           ) : (

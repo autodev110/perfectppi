@@ -6,6 +6,7 @@ import {
 } from "@/features/partner/constants";
 import { setIntegrationStatus } from "@/features/partner/events";
 import { OutputJobError, runOutputGenerationJob } from "./pipeline";
+import { runEvidenceAppendixTick } from "./evidence-appendix";
 import type { Json } from "@/types/database";
 
 // ============================================================================
@@ -155,6 +156,14 @@ export async function runOutputWorkerTick(options?: {
         error: jobError.message,
       });
     }
+  }
+
+  // Optional photo evidence appendices ride the same tick but are independent:
+  // their failures never affect report jobs or partner readiness.
+  try {
+    await runEvidenceAppendixTick({ limit: 1 });
+  } catch (error) {
+    console.error("outputs: appendix tick failed", error);
   }
 
   return result;

@@ -1,0 +1,46 @@
+{
+  "template_version": "ppi-visual-1.0.0",
+  "purpose": "Versioned reference geometry and typography for both scope-specific PDFs",
+  "page": {"width": 612, "height": 792, "unit": "pt", "margin": 30},
+  "colors": {
+    "navy": "14263D", "blue": "2A5F9E", "ink": "203247", "muted": "657486",
+    "line": "D9E1E8", "paper": "F3F6F9", "white": "FFFFFF",
+    "checked": "087F68", "monitor": "A47700", "service": "BD570C", "urgent": "B82736",
+    "unknown": "64748B"
+  },
+  "fonts": {"regular": "assets/fonts/LiberationSans-Regular.ttf", "bold": "assets/fonts/LiberationSans-Bold.ttf"},
+  "typography": {
+    "brand_pt": 16.5, "title_pt": 21, "section_pt": 9.2,
+    "body_pt": 9, "metadata_value_pt": 9.4,
+    "compact_measurement_pt": 8.1, "checklist_pt": 8.4,
+    "caption_pt": 9.5, "footer_pt": 7.1,
+    "small_label_min_pt": 6.5, "overview_leading_pt": 11.5,
+    "note": "Detailed offsets and small typographic variants remain in render_reports.py; port them into the shared production specification before the Node renderer is finalized."
+  },
+  "content_budgets": {
+    "overview_category_count_max": 6,
+    "overview_observation_height_pt": 35,
+    "overview_action_height_pt": 30,
+    "priority_height_pt": 31,
+    "body_note_height_pt": 29,
+    "appendix_caption_first_height_pt": 70,
+    "main_text_overflow_behavior": "Raise for reviewed consolidation; never clip, truncate or silently add a third page."
+  },
+  "geometry": {
+    "header_title_y": 57, "metadata_y": 100, "metadata_height": 68,
+    "legend_y": 188, "content_top": 219, "content_bottom": 682,
+    "certification_y": 697, "footer_y": 764,
+    "complete": {"checklist_x": 30, "checklist_width": 252, "right_x": 299, "right_width": 283, "tire_y": 251, "tire_card_height": 134, "tire_gap": 8, "damage_y": 536, "damage_height": 146},
+    "dents_tires": {"tire_y": 257, "tire_card_height": 141, "tire_gap": 12, "damage_y": 565, "damage_height": 117},
+    "overview": {"priority_y": 219, "priority_height": 66, "categories_y": 300, "category_height": 111, "column_gap": 14, "row_gap": 10},
+    "appendix": {"content_top": 160, "content_bottom": 730, "photo_box_height": 370}
+  },
+  "rules": {
+    "main_report_pages": 2,
+    "appendix_page_limit": null,
+    "status_text_required": true,
+    "font_shrink_to_fit": false,
+    "critical_findings_may_be_truncated": false,
+    "physical_left_right": "Vehicle left/right from the seated driver's perspective"
+  }
+}

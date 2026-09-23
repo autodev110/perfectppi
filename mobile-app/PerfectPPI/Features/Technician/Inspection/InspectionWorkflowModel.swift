@@ -17,6 +17,11 @@ final class InspectionWorkflowModel: ObservableObject {
     @Published private(set) var skippedAnswerIds: Set<String> = []
     /// Drives the scanner gate: Dents & Tires uses the adapter for the VIN only.
     @Published private(set) var inspectionScope: InspectionScope = .complete
+    /// "self" or "technician" from the request; technicians must measure tread and pressure.
+    @Published private(set) var performerMode: String = "technician"
+    @Published private(set) var catalogVersion: Int = 1
+    /// Server revision the review screen showed; the certification binds to it.
+    @Published private(set) var reviewedRevision: Int?
 
     private var submissionId: String?
     private let treadDepthPrompts: Set<String> = [
@@ -42,21 +47,62 @@ final class InspectionWorkflowModel: ObservableObject {
         currentAnswer?.prompt
     }
 
+    /// Answers shown together with the current one (a wheel card or body zone).
+    var currentStepRange: Range<Int> {
+        stepRange(containing: currentIndex)
+    }
+
+    var currentStepAnswers: [PpiAnswer] {
+        guard !answers.isEmpty else { return [] }
+        return Array(answers[currentStepRange])
+    }
+
+    var currentStepTitle: String? {
+        guard currentStepAnswers.count > 1 || StructuredKey.parse(currentAnswer?.questionKey)?.stepGroupId != nil else { return nil }
+        return StructuredKey.parse(currentAnswer?.questionKey)?.stepGroupLabel
+    }
+
+    private func groupId(at index: Int) -> String? {
+        guard answers.indices.contains(index) else { return nil }
+        let answer = answers[index]
+        guard let group = StructuredKey.parse(answer.questionKey)?.stepGroupId else { return nil }
+        return "\(answer.ppiSectionId):\(group)"
+    }
+
+    private func stepRange(containing index: Int) -> Range<Int> {
+        guard answers.indices.contains(index) else { return index..<index }
+        guard let group = groupId(at: index) else { return index..<(index + 1) }
+        var lower = index
+        while lower > 0 && groupId(at: lower - 1) == group { lower -= 1 }
+        var upper = index + 1
+        while upper < answers.count && groupId(at: upper) == group { upper += 1 }
+        return lower..<upper
+    }
+
+    private var stepStarts: [Int] {
+        var starts: [Int] = []
+        var index = 0
+        while index < answers.count {
+            starts.append(index)
+            index = stepRange(containing: index).upperBound
+        }
+        return starts
+    }
+
     var currentOBDSnapshot: OBDSnapshotRecord? {
         obdSnapshots.first
     }
 
-    var progressIndex: Int { currentIndex }
-    var progressTotal: Int { answers.count }
-    var atFirst: Bool { currentIndex == 0 }
-    var atLast: Bool { currentIndex >= answers.count - 1 }
+    var progressIndex: Int { stepStarts.firstIndex(of: currentStepRange.lowerBound) ?? 0 }
+    var progressTotal: Int { stepStarts.count }
+    var atFirst: Bool { currentStepRange.lowerBound == 0 }
+    var atLast: Bool { currentStepRange.upperBound >= answers.count }
     var currentWasSkipped: Bool {
-        guard let answer = currentAnswer else { return false }
-        return skippedAnswerIds.contains(answer.id)
+        currentStepAnswers.contains { skippedAnswerIds.contains($0.id) }
     }
     var canSkipCurrent: Bool {
-        guard let answer = currentAnswer else { return false }
-        return !atLast && !hasAnswerValue(answer) && !skippedAnswerIds.contains(answer.id)
+        guard !currentStepAnswers.isEmpty, !atLast, !currentWasSkipped else { return false }
+        return !currentStepAnswers.allSatisfy { isComplete($0) }
     }
     var currentRequiresPhoto: Bool {
         guard let answer = currentAnswer else { return false }
@@ -67,12 +113,21 @@ final class InspectionWorkflowModel: ObservableObject {
         return hasPhoto(for: answer.id)
     }
 
-    /// True when the current answer is filled (if required) or optional.
+    /// True when every row in the current step is answered (if required) and
+    /// has the photos its answer calls for.
     var canAdvance: Bool {
-        guard let a = currentAnswer else { return false }
+        guard !currentStepAnswers.isEmpty else { return false }
+        return currentStepAnswers.allSatisfy { isComplete($0) }
+    }
+
+    func isComplete(_ a: PpiAnswer) -> Bool {
         let answerSatisfied = a.isRequired != true || hasAnswerValue(a)
         let photoSatisfied = !requiresPhoto(a) || hasPhoto(for: a.id)
         return answerSatisfied && photoSatisfied
+    }
+
+    func needsPhoto(_ answer: PpiAnswer) -> Bool {
+        requiresPhoto(answer) && !hasPhoto(for: answer.id)
     }
 
     /// IDs of required answers that are still empty — used to gate submit.
@@ -182,7 +237,10 @@ final class InspectionWorkflowModel: ObservableObject {
             self.answers = canonicalAnswers.filter { !deferredIds.contains($0.id) } + deferredAnswers
             self.allMedia = try await media
             self.obdSnapshots = try await obd
-            self.inspectionScope = (try? await submission)?.inspectionScope ?? .complete
+            let loadedSubmission = try? await submission
+            self.inspectionScope = loadedSubmission?.inspectionScope ?? .complete
+            self.performerMode = loadedSubmission?.performerMode ?? "technician"
+            self.catalogVersion = loadedSubmission?.catalogVersion ?? 1
             self.currentIndex = 0
             self.skippedAnswerIds = deferredIds
         } catch {
@@ -192,41 +250,65 @@ final class InspectionWorkflowModel: ObservableObject {
     }
 
     func next() {
-        if currentIndex < answers.count - 1 {
-            currentIndex += 1
+        let upper = currentStepRange.upperBound
+        if upper < answers.count {
+            currentIndex = upper
         }
     }
 
     func previous() {
-        if currentIndex > 0 {
-            currentIndex -= 1
+        let lower = currentStepRange.lowerBound
+        if lower > 0 {
+            currentIndex = stepRange(containing: lower - 1).lowerBound
         }
+    }
+
+    /// Jump to the step containing an answer (from the review list).
+    func jump(toAnswerId answerId: String) {
+        guard let index = answers.firstIndex(where: { $0.id == answerId }) else { return }
+        currentIndex = stepRange(containing: index).lowerBound
     }
 
     func skipCurrent() async throws {
         guard canSkipCurrent, let submissionId else { return }
-        let current = answers[currentIndex]
-        let payload = PpiAPI.SaveAnswerPayload(
-            answerId: current.id,
-            value: current.answerValue ?? "",
-            deferred: true
-        )
-        if OfflineQueue.shared.isOnline {
-            do {
-                _ = try await PpiAPI.saveAnswer(submissionId: submissionId, payload: payload)
-            } catch {
+        let range = currentStepRange
+        let members = Array(answers[range])
+        for current in members {
+            let payload = PpiAPI.SaveAnswerPayload(
+                answerId: current.id,
+                value: current.answerType.isStructured ? "" : (current.answerValue ?? ""),
+                deferred: true
+            )
+            if OfflineQueue.shared.isOnline {
+                do {
+                    _ = try await PpiAPI.saveAnswer(submissionId: submissionId, payload: payload)
+                } catch {
+                    try OfflineQueue.shared.enqueueAnswer(submissionId: submissionId, payload: payload)
+                }
+            } else {
                 try OfflineQueue.shared.enqueueAnswer(submissionId: submissionId, payload: payload)
             }
-        } else {
-            try OfflineQueue.shared.enqueueAnswer(submissionId: submissionId, payload: payload)
         }
 
-        let skipped = answerCopy(current, answerValue: current.answerValue, deferredAt: Date())
-        answers.remove(at: currentIndex)
-        answers.append(skipped)
-        skippedAnswerIds.insert(skipped.id)
-        // Keep the cursor in place: removing the current item shifts the next
-        // normal question into this slot while the skipped one moves to the end.
+        // The whole card moves to the end together so it stays one step.
+        let skipped = members.map { answerCopy($0, answerValue: $0.answerValue, deferredAt: Date()) }
+        answers.removeSubrange(range)
+        answers.append(contentsOf: skipped)
+        skipped.forEach { skippedAnswerIds.insert($0.id) }
+        currentIndex = min(range.lowerBound, max(answers.count - 1, 0))
+        // Keep the cursor in place: the next step slides into this position.
+    }
+
+    /// Reloads the server copy right before review so the certification binds
+    /// to exactly what is stored.
+    func prepareReview() async throws {
+        guard let submissionId else { return }
+        let submission = try await PpiAPI.getSubmission(id: submissionId)
+        reviewedRevision = submission.revision ?? 0
+        let loadedAnswers = try await PpiAPI.answers(submissionId: submissionId)
+        let byId = Dictionary(uniqueKeysWithValues: loadedAnswers.map { ($0.id, $0) })
+        answers = answers.map { byId[$0.id] ?? $0 }
+        allMedia = try await PpiAPI.media(submissionId: submissionId)
     }
 
     func addMedia(_ media: PpiMedia) {
@@ -272,14 +354,27 @@ final class InspectionWorkflowModel: ObservableObject {
         let previousSkippedAnswerIds = skippedAnswerIds
         // Optimistic local update.
         if let idx = answers.firstIndex(where: { $0.id == payload.answerId }) {
-            let clearsDeferral = !payload.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            answers[idx] = answerCopy(
-                answers[idx],
-                answerValue: payload.value,
-                deferredAt: clearsDeferral ? nil : answers[idx].deferredAt
-            )
-            if clearsDeferral {
-                skippedAnswerIds.remove(payload.answerId)
+            let answer = answers[idx]
+            if answer.answerType.isStructured {
+                let observation = payload.observation == .null ? nil : payload.observation
+                let clearsDeferral = observation != nil
+                answers[idx] = answerCopy(
+                    answer,
+                    answerValue: answer.answerValue,
+                    deferredAt: clearsDeferral ? nil : answer.deferredAt,
+                    observation: .some(observation)
+                )
+                if clearsDeferral { skippedAnswerIds.remove(payload.answerId) }
+            } else {
+                let clearsDeferral = !payload.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                answers[idx] = answerCopy(
+                    answer,
+                    answerValue: payload.value,
+                    deferredAt: clearsDeferral ? nil : answer.deferredAt
+                )
+                if clearsDeferral {
+                    skippedAnswerIds.remove(payload.answerId)
+                }
             }
         }
 
@@ -310,6 +405,15 @@ final class InspectionWorkflowModel: ObservableObject {
     }
 
     private func hasAnswerValue(_ answer: PpiAnswer) -> Bool {
+        if answer.answerType.isStructured {
+            guard answer.observation != nil else { return false }
+            return Observation.requirementMet(
+                key: answer.questionKey,
+                observation: answer.observation,
+                required: answer.isRequired == true,
+                performerMode: performerMode
+            )
+        }
         let v = (answer.answerValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !v.isEmpty else { return false }
 
@@ -327,6 +431,10 @@ final class InspectionWorkflowModel: ObservableObject {
             return options.contains(v)
         case .text:
             return true
+        case .unsupported:
+            return false
+        default:
+            return false
         }
     }
 
@@ -344,14 +452,17 @@ final class InspectionWorkflowModel: ObservableObject {
     private func answerCopy(
         _ answer: PpiAnswer,
         answerValue: String?,
-        deferredAt: Date?
+        deferredAt: Date?,
+        observation: JSONValue?? = .none
     ) -> PpiAnswer {
         PpiAnswer(
             id: answer.id,
             ppiSectionId: answer.ppiSectionId,
             prompt: answer.prompt,
+            questionKey: answer.questionKey,
             answerType: answer.answerType,
             answerValue: answerValue,
+            observation: observation ?? answer.observation,
             deferredAt: deferredAt,
             options: answer.options,
             isRequired: answer.isRequired,
@@ -373,7 +484,8 @@ final class InspectionWorkflowModel: ObservableObject {
     /// scopes deliberately share tread wording while differing on whether every
     /// corner needs its own photo, which a set keyed on prompt cannot express.
     private func requiresPhoto(_ answer: PpiAnswer) -> Bool {
-        answer.requiresPhoto ?? false
+        (answer.requiresPhoto ?? false) ||
+        Observation.photoRequired(key: answer.questionKey, observation: answer.observation)
     }
 
     private func hasPhoto(for answerId: String) -> Bool {

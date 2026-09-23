@@ -41,6 +41,9 @@ struct InspectionWorkflowView: View {
     @State private var deletingPhotoId: String?
     @State private var scannerEntryChoice: ScannerEntryChoice?
     @State private var recentlyUploadedMediaIds: Set<String> = []
+    /// The row a camera capture belongs to (a step can hold several rows).
+    @State private var captureAnswerId: String?
+    @State private var showReview = false
 
     var body: some View {
         Group {
@@ -74,7 +77,7 @@ struct InspectionWorkflowView: View {
             switch destination {
             case .inspectionPhoto:
                 CameraCaptureView(
-                    prompt: model.currentPrompt,
+                    prompt: model.answers.first(where: { $0.id == captureAnswerId })?.photoPrompt ?? model.currentPrompt,
                     onCapture: { data in
                         fullScreenDestination = nil
                         Task { await capture(data) }
@@ -83,7 +86,7 @@ struct InspectionWorkflowView: View {
                 )
             case .vinScanner:
                 VINScannerView { decoded in
-                    guard let answer = model.currentAnswer else { return }
+                    guard let answer = model.currentStepAnswers.first(where: { $0.prompt == "Confirm the VIN on the vehicle" }) ?? model.currentAnswer else { return }
                     Task {
                         do {
                             try await model.upsertAnswer(.init(answerId: answer.id, value: decoded.vin))
@@ -126,6 +129,23 @@ struct InspectionWorkflowView: View {
         } message: {
             Text("This removes the photo from the inspection. It cannot be undone.")
         }
+        .sheet(isPresented: $showReview) {
+            NavigationStack {
+                InspectionReviewView(
+                    model: model,
+                    submissionId: submissionId,
+                    onJump: { answerId in
+                        showReview = false
+                        model.jump(toAnswerId: answerId)
+                    },
+                    onSubmitted: {
+                        showReview = false
+                        onSubmitted()
+                        showSubmittedAlert = true
+                    }
+                )
+            }
+        }
         .alert("Inspection submitted", isPresented: $showSubmittedAlert) {
             Button("Done") { dismiss() }
         }
@@ -147,13 +167,13 @@ struct InspectionWorkflowView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
 
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(answer.prompt)
+                    if let title = model.currentStepTitle {
+                        Text(title)
                             .font(.title3.bold())
-                        if answer.isRequired == true {
-                            Text("*")
-                                .font(.title3.bold())
-                                .foregroundStyle(Theme.Palette.danger)
+                        if StructuredKey.parse(answer.questionKey)?.corner != nil {
+                            Text("Work around the car front left → rear left → rear right → front right. Left and right are as seen from the driver's seat.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
                     }
 
@@ -163,50 +183,117 @@ struct InspectionWorkflowView: View {
                             .foregroundStyle(Theme.Palette.warning)
                     }
 
-                    AnswerEditor(answer: answer) { updated in
-                        Task {
-                            do {
-                                try await model.upsertAnswer(updated)
-                            } catch {
-                                errorMessage = "This answer could not be saved offline. Please try again."
-                            }
-                        }
+                    let unansweredPanels = model.currentStepAnswers.filter {
+                        StructuredKey.parse($0.questionKey)?.family == .bodyPanel && $0.isRequired == true && $0.observation == nil
                     }
-                    .id(answer.id)
-
-                    if answer.prompt == "Confirm the VIN on the vehicle" {
+                    if !unansweredPanels.isEmpty {
                         Button {
-                            fullScreenDestination = .vinScanner
+                            for panel in unansweredPanels {
+                                save(panel, observation: Observation.observed(["condition": .string("no_visible_damage")]))
+                            }
                         } label: {
-                            Label(
-                                (answer.answerValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                    ? "Scan VIN"
-                                    : "Rescan VIN",
-                                systemImage: "camera.viewfinder"
-                            )
+                            Text("Mark the \(unansweredPanels.count) unanswered panel(s) here as no visible damage")
+                                .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(OutlineButtonStyle())
                     }
 
-                    photosGrid
-
-                    if model.currentRequiresPhoto && !model.currentHasRequiredPhoto {
-                        Label("Photo required for this question", systemImage: "camera.fill")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(Theme.Palette.warning)
+                    ForEach(model.currentStepAnswers) { stepAnswer in
+                        answerBlock(stepAnswer, grouped: model.currentStepTitle != nil)
                     }
-
-                    Button {
-                        fullScreenDestination = .inspectionPhoto
-                    } label: {
-                        Label("Capture Photo", systemImage: "camera")
-                    }
-                    .buttonStyle(OutlineButtonStyle())
                 }
                 .padding()
             }
 
             navBar
+        }
+    }
+
+    @ViewBuilder
+    private func answerBlock(_ answer: PpiAnswer, grouped: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(answer.prompt)
+                    .font(grouped ? .headline : .title3.bold())
+                if answer.isRequired == true {
+                    Text("*")
+                        .font(.title3.bold())
+                        .foregroundStyle(Theme.Palette.danger)
+                }
+            }
+
+            if answer.answerType.isStructured {
+                StructuredAnswerEditor(
+                    answer: answer,
+                    submissionId: submissionId,
+                    performerMode: model.performerMode,
+                    latestPhotoId: model.media(for: answer.id).last?.id
+                ) { observation in
+                    save(answer, observation: observation)
+                }
+                .id(answer.id)
+            } else {
+                AnswerEditor(answer: answer) { updated in
+                    Task {
+                        do {
+                            try await model.upsertAnswer(updated)
+                        } catch {
+                            errorMessage = "This answer could not be saved offline. Please try again."
+                        }
+                    }
+                }
+                .id(answer.id)
+            }
+
+            if answer.prompt == "Confirm the VIN on the vehicle" {
+                Button {
+                    fullScreenDestination = .vinScanner
+                } label: {
+                    Label(
+                        (answer.answerValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            ? "Scan VIN"
+                            : "Rescan VIN",
+                        systemImage: "camera.viewfinder"
+                    )
+                }
+                .buttonStyle(OutlineButtonStyle())
+            }
+
+            photosGrid(for: answer.id)
+
+            if model.needsPhoto(answer) {
+                Label("Photo required for this question", systemImage: "camera.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.Palette.warning)
+            }
+
+            Button {
+                captureAnswerId = answer.id
+                fullScreenDestination = .inspectionPhoto
+            } label: {
+                Label(answer.photoPrompt ?? String(localized: "Capture Photo"), systemImage: "camera")
+            }
+            .buttonStyle(OutlineButtonStyle())
+        }
+        .padding(grouped ? 12 : 0)
+        .overlay {
+            if grouped {
+                RoundedRectangle(cornerRadius: 14).stroke(Color.secondary.opacity(0.25))
+            }
+        }
+    }
+
+    private func save(_ answer: PpiAnswer, observation: JSONValue?) {
+        Task {
+            do {
+                try await model.upsertAnswer(.init(
+                    answerId: answer.id,
+                    value: "",
+                    observation: observation ?? .null
+                ))
+            } catch {
+                errorMessage = "This answer could not be saved offline. Please try again."
+            }
         }
     }
 
@@ -368,10 +455,10 @@ struct InspectionWorkflowView: View {
     }
 
     @ViewBuilder
-    private var photosGrid: some View {
-        let photos = model.media(for: model.currentAnswer?.id)
+    private func photosGrid(for answerId: String) -> some View {
+        let photos = model.media(for: answerId)
         let pending = offlineQueue.pendingMedia.filter {
-            $0.submissionId == submissionId && $0.answerId == model.currentAnswer?.id
+            $0.submissionId == submissionId && $0.answerId == answerId
         }
         if !photos.isEmpty || !pending.isEmpty {
             LazyVGrid(columns: [
@@ -457,13 +544,13 @@ struct InspectionWorkflowView: View {
 
             if model.atLast {
                 Button {
-                    Task { await submit() }
+                    Task { await openReview() }
                 } label: {
-                    Text(submitting ? "Submitting…" : "Submit")
+                    Text(submitting ? "Preparing…" : "Review & submit")
                 }
                 .buttonStyle(PrimaryButtonStyle(isLoading: submitting))
-                .frame(maxWidth: 200)
-                .disabled(submitting || !model.canAdvance)
+                .frame(maxWidth: 220)
+                .disabled(submitting)
             } else {
                 Button {
                     model.next()
@@ -490,8 +577,8 @@ struct InspectionWorkflowView: View {
 
     private func capture(_ data: Data) async {
         let captured = Date()
-        guard let section = model.currentSection,
-              let answer = model.currentAnswer else { return }
+        guard let answer = model.answers.first(where: { $0.id == captureAnswerId }) ?? model.currentAnswer,
+              let section = model.sections.first(where: { $0.id == answer.ppiSectionId }) else { return }
 
         let filename = "capture-\(Int(captured.timeIntervalSince1970)).jpg"
 
@@ -553,26 +640,22 @@ struct InspectionWorkflowView: View {
         }
     }
 
-    private func submit() async {
+    /// Syncs everything, reloads the stored copy, then shows the review and
+    /// certification sheet. Submission itself happens from the sheet.
+    private func openReview() async {
         guard !submitting else { return }
-        if let message = model.missingRequirementMessage {
-            errorMessage = message
-            model.jumpToFirstMissingRequirement()
-            return
-        }
         submitting = true
         defer { submitting = false }
+        await OfflineQueue.shared.drain()
+        guard !hasPendingOfflineItemsForSubmission else {
+            errorMessage = OfflineQueue.shared.isOnline
+                ? "Please wait for saved answers and photos to finish syncing before submitting."
+                : "Reconnect to the internet so saved answers and photos can sync before submitting."
+            return
+        }
         do {
-            await OfflineQueue.shared.drain()
-            guard !hasPendingOfflineItemsForSubmission else {
-                errorMessage = OfflineQueue.shared.isOnline
-                    ? "Please wait for saved answers and photos to finish syncing before submitting."
-                    : "Reconnect to the internet so saved answers and photos can sync before submitting."
-                return
-            }
-            _ = try await PpiAPI.submit(submissionId: submissionId)
-            onSubmitted()
-            showSubmittedAlert = true
+            try await model.prepareReview()
+            showReview = true
         } catch {
             errorMessage = error.localizedDescription
         }

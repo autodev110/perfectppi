@@ -95,8 +95,8 @@ final class APIClient {
         await tokenProvider()
     }
 
-    func bytes(_ path: String) async throws -> (Data, String?) {
-        let req = try await buildRequest(method: "GET", path: path, query: [], body: Optional<Empty>.none, encoder: encoder)
+    func bytes(_ path: String, query: [URLQueryItem] = []) async throws -> (Data, String?) {
+        let req = try await buildRequest(method: "GET", path: path, query: query, body: Optional<Empty>.none, encoder: encoder)
         let (data, response) = try await session.data(for: req)
         try assertStatus(response: response, body: data)
         let mime = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type")
@@ -162,6 +162,10 @@ final class APIClient {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Accept")
+        // This build renders and submits typed (catalog 2) inspections with the
+        // accuracy certification; older builds omit the header and keep the
+        // original question set.
+        req.setValue("2", forHTTPHeaderField: "X-PPI-Inspection-Catalog")
 
         if let token = await tokenProvider() {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

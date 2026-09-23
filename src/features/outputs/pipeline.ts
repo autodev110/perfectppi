@@ -21,7 +21,12 @@ import type { Json } from "@/types/database";
 import type { StandardizedContent, VscCoverageData } from "@/types/api";
 import type { InspectionScope, SectionType } from "@/types/enums";
 import { loadInspectionPhotos } from "./inspection-photos";
-import { evaluateDentsTiresCoverage } from "@/features/warranty/dents-tires-coverage";
+import {
+  evaluateDentsTiresCoverage,
+  evaluateDentsTiresCoverageFromFacts,
+} from "@/features/warranty/dents-tires-coverage";
+import { buildReportV2, renderReportV2Pdf, type CertifiedSnapshot } from "./report-v2";
+import type { InspectionReportV2 } from "@/features/ppi/inspection-report";
 
 // ============================================================================
 // Output generation, as a resumable job.
@@ -38,7 +43,10 @@ export type OutputJobFailureCategory =
   | "ai_generation"
   | "storage"
   | "database"
-  | "configuration";
+  | "configuration"
+  // The two-page report could not hold every required statement legibly;
+  // the output version is held instead of publishing clipped text.
+  | "layout_review";
 
 export class OutputJobError extends Error {
   constructor(
@@ -103,11 +111,11 @@ export async function runOutputGenerationJob(params: {
     .from("ppi_submissions")
     .select(
       `
-      id, ppi_request_id, performer_id, version, status, submitted_at,
+      id, ppi_request_id, performer_id, version, status, submitted_at, catalog_version, revision,
       sections:ppi_sections(
         id, section_type, notes, sort_order,
-        answers:ppi_answers(id, prompt, answer_value, answer_type, requires_photo, sort_order),
-        media:ppi_media(id, ppi_answer_id, url, media_type, caption, uploaded_at)
+        answers:ppi_answers(id, prompt, question_key, answer_value, observation, answer_type, is_required, requires_photo, sort_order),
+        media:ppi_media(id, ppi_answer_id, url, media_type, caption, captured_at, uploaded_at)
       )
     `,
     )
@@ -183,11 +191,23 @@ export async function runOutputGenerationJob(params: {
         .map((answer) => ({
           id: answer.id,
           prompt: answer.prompt,
+          question_key: answer.question_key,
           answer_value: answer.answer_value,
+          observation: answer.observation,
           answer_type: answer.answer_type,
+          is_required: answer.is_required,
           requires_photo: answer.requires_photo,
         })),
     }));
+
+  // The certified snapshot is the frozen source of facts for the report; older
+  // inspections submitted before certification have none.
+  const { data: certificationRow } = await admin
+    .from("ppi_submission_certifications")
+    .select("facts_hash, certified_at, certification_text, text_version, performer_mode, facts_snapshot, media_manifest")
+    .eq("ppi_submission_id", submissionId)
+    .maybeSingle();
+  const certification = (certificationRow as unknown as CertifiedSnapshot | null) ?? null;
 
   const scope = (request.inspection_scope ?? "complete") as InspectionScope;
 
@@ -296,6 +316,53 @@ export async function runOutputGenerationJob(params: {
       );
     }
 
+    // The redesigned two-page report travels with the stage-1 row as an
+    // additive field, so the JSON artifact and the PDF come from one snapshot.
+    try {
+      const report = await buildReportV2({
+        scope,
+        catalogVersion: submission.catalog_version ?? 1,
+        performerMode: request.performer_type === "self" ? "self" : "technician",
+        inspectorName: performer?.display_name ?? null,
+        submission: {
+          id: submission.id,
+          version: submission.version,
+          submitted_at: submission.submitted_at,
+          revision: submission.revision ?? null,
+        },
+        vehicle: {
+          year: vehicle?.year ?? null,
+          make: vehicle?.make ?? null,
+          model: vehicle?.model ?? null,
+          trim: vehicle?.trim ?? null,
+          vin: vehicle?.vin ?? null,
+          mileage: vehicle?.mileage ?? null,
+          mileage_unit: "mi",
+          body_class: factorySpec?.body_class ?? null,
+        },
+        sections: sortedSections,
+        certification,
+        diagnostics: obdSnapshot
+          ? {
+              present: true,
+              mil_on: obdSnapshot.mil_on ?? null,
+              stored_dtcs: obdSnapshot.stored_dtcs ?? [],
+              pending_dtcs: obdSnapshot.pending_dtcs ?? [],
+              permanent_dtcs: (obdSnapshot.permanent_dtcs as string[] | null) ?? [],
+              incomplete_monitor_count: obdSnapshot.incomplete_monitor_count ?? 0,
+              vin: obdSnapshot.vin ?? null,
+            }
+          : null,
+        generatedAt: new Date().toISOString(),
+      });
+      standardizedContent = { ...standardizedContent, report_v2: withoutStoragePaths(report) };
+    } catch (error) {
+      throw new OutputJobError(
+        "ai_generation",
+        `Inspection report assembly failed: ${asMessage(error)}`,
+      );
+    }
+
     const { data: inserted, error: insertError } = await admin
       .from("standardized_outputs")
       .insert({
@@ -346,7 +413,11 @@ export async function runOutputGenerationJob(params: {
     coverageData = existingVsc.coverage_data as unknown as VscCoverageData;
     vscOutputId = existingVsc.id;
   } else {
-    if (scope === "dents_tires") {
+    const typedFacts = standardizedContent.report_v2?.facts;
+    if (scope === "dents_tires" && typedFacts && typedFacts.catalog_version >= 2) {
+      // Same policy as below, read from typed facts instead of prompt text.
+      coverageData = evaluateDentsTiresCoverageFromFacts(typedFacts);
+    } else if (scope === "dents_tires") {
       // Deterministic: the rules are stated as if-then by the business, and the
       // Stage 2 prompt hardcodes nine mechanical categories with tires listed as
       // an always-excluded wear item — the opposite of what this product covers.
@@ -417,9 +488,20 @@ export async function runOutputGenerationJob(params: {
 
   const generatedAt = new Date().toISOString();
 
+  const reportV2: InspectionReportV2 | undefined = standardizedContent.report_v2;
+  if (reportV2?.status === "needs_review") {
+    // Hold this output version: never publish a clipped or incomplete summary.
+    throw new OutputJobError(
+      "layout_review",
+      `Report held for review: ${reportV2.review_reasons.join(", ")}`,
+      true,
+    );
+  }
+
   // Built on demand. A retry that finds all four artifacts already stored must
-  // not re-render two PDFs just to throw them away.
-  const buildBody: Record<ArtifactType, () => Buffer> = {
+  // not re-render two PDFs just to throw them away. Outputs created before the
+  // redesign keep the legacy renderer; new outputs use the two-page layout.
+  const buildBody: Record<ArtifactType, () => Promise<Buffer> | Buffer> = {
     inspection_report_json: () =>
       canonicalJsonBytes({
         submissionId,
@@ -427,7 +509,10 @@ export async function runOutputGenerationJob(params: {
         generatedAt,
         report: standardizedContent,
       }),
-    inspection_report_pdf: () => generateStandardizedReportPdf(standardizedContent),
+    inspection_report_pdf: () =>
+      reportV2
+        ? renderReportV2Pdf(reportV2, { submissionId, outputVersion, requestId: request.id })
+        : generateStandardizedReportPdf(standardizedContent),
     vsc_determination_json: () =>
       canonicalJsonBytes({
         submissionId,
@@ -470,7 +555,17 @@ export async function runOutputGenerationJob(params: {
       continue;
     }
 
-    const bytes = buildBody[artifactType]();
+    let bytes: Buffer;
+    try {
+      bytes = await buildBody[artifactType]();
+    } catch (error) {
+      const layout = error instanceof Error && error.name === "LayoutOverflowError";
+      throw new OutputJobError(
+        layout ? "layout_review" : "ai_generation",
+        `Failed to build ${artifactType}: ${asMessage(error)}`,
+        layout,
+      );
+    }
     const checksum = sha256OfBytes(bytes);
     const extension = artifactType.endsWith("_pdf") ? "pdf" : "json";
     // The digest in the key makes concurrent writes non-destructive: workers
@@ -574,6 +669,21 @@ export async function runOutputGenerationJob(params: {
     vscOutputId,
     artifactIds,
     reusedArtifacts,
+  };
+}
+
+/**
+ * The stored report keeps media ids and metadata but not private storage
+ * paths; exports resolve bytes from the certified manifest after their own
+ * authorization checks.
+ */
+function withoutStoragePaths(report: InspectionReportV2): InspectionReportV2 {
+  return {
+    ...report,
+    facts: {
+      ...report.facts,
+      media: report.facts.media.map((media) => ({ ...media, url: "" })),
+    },
   };
 }
 

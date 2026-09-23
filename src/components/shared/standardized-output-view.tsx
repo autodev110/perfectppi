@@ -5,11 +5,15 @@ import { cn } from "@/lib/utils";
 import type { StandardizedContent, StandardizedSection, StandardizedFinding } from "@/types/api";
 import { AlertTriangle, CheckCircle2, Download, Info, XCircle } from "lucide-react";
 import { t as uiText } from "@/lib/i18n";
+import { ReportDownloads } from "@/components/shared/report-downloads";
+import { ReportV2Findings } from "@/components/shared/report-v2-findings";
 
 interface StandardizedOutputViewProps {
   content: StandardizedContent;
   generatedAt: string;
   documentUrl?: string | null;
+  /** When set, downloads offer the optional photo evidence appendix. */
+  outputId?: string | null;
 }
 
 const ratingConfig: Record<
@@ -34,7 +38,7 @@ const severityConfig: Record<
   critical: { icon: XCircle, color: "text-red-600" },
 };
 
-export function StandardizedOutputView({ content, generatedAt, documentUrl }: StandardizedOutputViewProps) {
+export function StandardizedOutputView({ content, generatedAt, documentUrl, outputId }: StandardizedOutputViewProps) {
   const { vehicle, performer, sections, diagnostics, overall_summary, notable_findings } = content;
 
   const vehicleName = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim]
@@ -53,7 +57,7 @@ export function StandardizedOutputView({ content, generatedAt, documentUrl }: St
             </div>
             <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
               <CheckCircle2 className="h-3 w-3 mr-1" />{uiText("ui.ai_generated_3049a7c3c5")}</Badge>
-            {documentUrl ? (
+            {documentUrl && !outputId ? (
               <a
                 href={documentUrl}
                 target="_blank"
@@ -95,6 +99,10 @@ export function StandardizedOutputView({ content, generatedAt, documentUrl }: St
           </div>
         </CardContent>
       </Card>
+
+      {outputId ? <ReportDownloads outputId={outputId} /> : null}
+
+      {content.report_v2 ? <ReportV2Findings report={content.report_v2} /> : null}
 
       {/* Overall Summary */}
       <Card>

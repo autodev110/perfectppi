@@ -75,17 +75,43 @@ enum PpiAPI {
         let answerId: String
         let value: String
         let deferred: Bool?
+        /// Typed observation for structured answers. `.null` clears it; nil
+        /// leaves it unchanged (for example a deferral-only update).
+        let observation: JSONValue?
 
-        init(answerId: String, value: String, deferred: Bool? = nil) {
+        init(answerId: String, value: String, deferred: Bool? = nil, observation: JSONValue? = nil) {
             self.answerId = answerId
             self.value = value
             self.deferred = deferred
+            self.observation = observation
         }
 
         enum CodingKeys: String, CodingKey {
             case answerId
             case value
             case deferred
+            case observation
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            answerId = try container.decode(String.self, forKey: .answerId)
+            value = try container.decode(String.self, forKey: .value)
+            deferred = try container.decodeIfPresent(Bool.self, forKey: .deferred)
+            // Keep an explicit null (clear) distinct from an absent key.
+            observation = container.contains(.observation)
+                ? try container.decode(JSONValue.self, forKey: .observation)
+                : nil
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(answerId, forKey: .answerId)
+            try container.encode(value, forKey: .value)
+            try container.encodeIfPresent(deferred, forKey: .deferred)
+            if let observation {
+                try container.encode(observation, forKey: .observation)
+            }
         }
     }
 
@@ -163,11 +189,71 @@ enum PpiAPI {
         )
     }
 
-    static func submit(submissionId: String) async throws -> Empty {
+    struct Certification: Encodable {
+        let accepted: Bool
+        let textVersion: String
+        let expectedRevision: Int
+        let locale: String
+    }
+
+    private struct SubmitPayload: Encodable {
+        let certification: Certification
+    }
+
+    /// The accuracy certification the inspector accepted on the review screen.
+    static let certificationTextVersion = "inspection_accuracy/1"
+    static let certificationText = String(localized: "I certify that the observations and answers in this inspection are accurate to the best of my knowledge and ability.")
+
+    /// Submits with the inspector's certification for the reviewed revision.
+    /// The server records the signer and time and refuses a stale revision.
+    static func submit(submissionId: String, expectedRevision: Int) async throws -> Empty {
         try await APIClient.shared.post(
             "/api/ppi/submissions/\(submissionId)/submit",
-            body: Empty()
+            body: SubmitPayload(certification: .init(
+                accepted: true,
+                textVersion: certificationTextVersion,
+                expectedRevision: expectedRevision,
+                locale: Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
+            ))
         )
+    }
+
+    struct ExtractionResult: Decodable {
+        let extractionId: String
+        let status: String
+        let candidates: [String: String?]
+    }
+
+    private struct ExtractionRequest: Encodable {
+        let mediaId: String
+        let target: String
+    }
+
+    /// Suggested readings from one photo; never a fact until the inspector uses them.
+    static func readPhoto(submissionId: String, mediaId: String, target: String) async throws -> ExtractionResult {
+        try await APIClient.shared.post(
+            "/api/ppi/submissions/\(submissionId)/extractions",
+            body: ExtractionRequest(mediaId: mediaId, target: target)
+        )
+    }
+
+    struct AppendixStatus: Decodable {
+        let status: String
+        let photoCountExpected: Int?
+        let photoCountRendered: Int?
+        let missingCount: Int
+        let error: String?
+    }
+
+    private struct AppendixRequest: Encodable { let retry: Bool }
+
+    /// Optional, separate photo evidence appendix for a report version.
+    static func appendixStatus(outputId: String) async throws -> AppendixStatus {
+        try await APIClient.shared.get("/api/outputs/\(outputId)/appendix")
+    }
+
+    static func requestAppendix(outputId: String, retry: Bool = false) async throws -> AppendixStatus {
+        try await APIClient.shared.post("/api/outputs/\(outputId)/appendix", body: AppendixRequest(retry: retry))
     }
 
     // Outputs

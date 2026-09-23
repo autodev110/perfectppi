@@ -65,6 +65,7 @@ export function InspectionResultsPanel({ requestId }: { requestId: string }) {
             content={standardized!.structured_content as unknown as StandardizedContent}
             generatedAt={standardized!.generated_at}
             documentUrl={`/api/outputs/${standardized!.id}/pdf`}
+            outputId={standardized!.id}
           />
         ) : (
           !loading && <OutputGenerationStatus submissionId={submissionId} />

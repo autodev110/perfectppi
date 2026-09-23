@@ -1,0 +1,53 @@
+For the “dents and scratches”, and the “complete inspection”
+We need to update the output pdf.
+The first page is a structured visual inspection report like the example I provided.
+I don't want an exact clone with all the same exact things to check, we might add some things or omit some from it, but it should be pretty close to the example.
+I need you to make a visual inspection report one pager pdf template that we will use.
+It should be pretty similar, I just don't want to copy it exactly, you can even make it look a little nicer visually. (omit the made in the usa statement in the top right corner you will see, and the item number in the top left)
+We will need to update the system so that it auto fills all the answers and selections based on the completed inspection to produce a filled out version of it. On the second page of the report, It will contain another one pager of an ai overview/analysis. (dont call it AI analysis on the report itself thats produced, dont say explicitly on the pdf output itself that it is ai generated, the disclaimer will be handled later on)
+Come up with a plan on how to make the template, then how to make it so that it fills it out and produces the two page output, figure out and identify exactly what needs to be edited/ added in the actual inspection flow / questions. Below I also have some pretty raw notes I took for some things we need. 
+Output pdf of the inspection report:
+
+Page 1 is a one pager graphical overview
+
+
+
+
+
+
+The second page is grouped by categories, a smart overview by ai that has insights basically:
+
+For example:
+
+For tires, they are quantitative and qualitative, the measurements will be there on page 1, for example showing the tread level mm/32, the production its a 4 digit date (the first 2 digits are the number week out of 52 and the second 2 are the year like second week 2024 is 0224
+Then the size of the tire labeled on every tire and the load rating of the tire signified by 1 or 2 letters like z, y, zr, w, etc. Then also a speed rating, then also a visual identification of dry rot it should be in 4 levels - green - zero dry rot, yellow starting to dry rot not a big deal doesn't mean absolutely change but to be noted, orange means decent amount of dry rot recommended to change, red means dangerous dry rot absolutely need to change, the dry rot will typically align with the year of tires there is some correlation. If a tire is 2024 (2 year old tire) and it has red dry rot level so it shows something is wrong.
+Uneven tire wear (uneven wear or not, green (even), yellow(not immediately concerning but look if theres suspension stuff making them wear bad or alignment issues), red means there should probably some other issues to look into)
+Tire damage - cuts, missing rubber, bubbles, chunks missing from wheel, or foreign objects in tires like nails screws etc. and innards of tire coming out like steel wires exposed 
+Bubble, wires exposed, rubber missing, foreign object in tire plus tire not holding pressure - all replace tire immediately 
+If foreign object but hold air still and no leak - either patch it or replace
+Oem fitment - yes or no? Every car has a tire sticker on the door of the car that needs to take a picture and if the sticker doesn’t match the tire then there needs to be an alert (mismatched tires vs sticker) recommending matching tires to match stickers. Does not fail ppi but recommends to change tires.
+
+
+Take a picture, ai try to extract all it can and look for damages.
+
+At the end of inspection - check box for user that basically says i certify this is all true and to the best of my ability i certify its accurate.
+
+Check for damages and scratches on the actual rim. Too.
+
+First, inspect the current report generations and inspection questions/ flow for the two inspections - dents and tires, and the complete one.
+
+Then clean up my request and understand it. And plan out the things that are clear.
+Compare what I want with what exists and formulate a plan that is specific and identifies what needs to be done.
+
+Then ask me any clarifying questions before proceeding,
+
+After I provide you with those,
+You will update the plan, create the actual template to use,
+Identify what questions to update / how to update the inspection question flow, how to update the report generation pipeline, etc. Then finally create a complete developer handoff.
+The handoff will contain a markdown of all the instructions and guidelines and needs - everything needed to hand off to someone like a dev or ai agent to complete the update, and it will also contain the template you made itself.
+
+I also want you to research car inspection workflows and similar tools and solutions to this stuff and give me suggestions. See if there are ways to make the inspection flow easier for users and be more user friendly.
+
+I want to use jev (typesafe ai) model in the report valuation part since jev is really good at categorizing, come up with exactly the best fit for it to improve speed and efficiency in the ai reasoning. I have a jev api key, I will hand that off myself securely.
+
+

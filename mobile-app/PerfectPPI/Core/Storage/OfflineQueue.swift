@@ -70,7 +70,18 @@ final class OfflineQueue: ObservableObject {
         if let idx = pendingAnswers.firstIndex(where: {
             $0.submissionId == submissionId && $0.payload.answerId == payload.answerId
         }) {
-            pendingAnswers[idx] = PendingAnswer(submissionId: submissionId, payload: payload)
+            // A deferral-only update carries no observation; keep a queued,
+            // not-yet-synced observation instead of silently dropping it.
+            let queued = pendingAnswers[idx].payload
+            let merged = payload.observation == nil && queued.observation != nil
+                ? PpiAPI.SaveAnswerPayload(
+                    answerId: payload.answerId,
+                    value: payload.value,
+                    deferred: payload.deferred,
+                    observation: queued.observation
+                )
+                : payload
+            pendingAnswers[idx] = PendingAnswer(submissionId: submissionId, payload: merged)
         } else {
             pendingAnswers.append(PendingAnswer(submissionId: submissionId, payload: payload))
         }

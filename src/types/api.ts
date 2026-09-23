@@ -174,8 +174,13 @@ export interface PpiAnswerItem {
   id: string;
   ppi_section_id: string;
   prompt: string;
+  /** Stable semantic key (catalog 2; also set on newly seeded catalog-1 rows). */
+  question_key?: string | null;
   answer_type: AnswerType;
+  /** For structured types this is a derived, read-only summary. */
   answer_value: string | null;
+  /** Typed observation document for structured answer types. */
+  observation?: unknown;
   deferred_at: string | null;
   options: string[] | null;
   is_required: boolean;
@@ -207,7 +212,22 @@ export interface PpiSubmissionResponse {
   created_at: string;
   /** Denormalized from the parent request so clients need one fetch, not two. */
   inspection_scope: InspectionScope;
+  /** 1 = original prompt catalog, 2 = typed observations with certification. */
+  catalog_version: number;
+  /** Increments on every answer, photo or note change; certification binds to it. */
+  revision: number;
+  /** Actual performer mode from the request; decides measurement requirements. */
+  performer_mode: "self" | "technician";
+  certification: PpiSubmissionCertification | null;
   sections: PpiSectionItem[];
+}
+
+export interface PpiSubmissionCertification {
+  certified_at: string;
+  text_version: string;
+  certification_text: string;
+  facts_hash: string;
+  submission_revision: number;
 }
 
 export interface PpiRequestResponse {
@@ -355,6 +375,11 @@ export interface StandardizedContent {
   diagnostics?: StandardizedDiagnostics | null;
   overall_summary: string;
   notable_findings: string[];
+  /**
+   * Additive redesign payload (inspection-report/2). Present for outputs
+   * generated after the report redesign; older outputs omit it.
+   */
+  report_v2?: import("@/features/ppi/inspection-report").InspectionReportV2;
 }
 
 export interface StandardizedReadinessMonitor {

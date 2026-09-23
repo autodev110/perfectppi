@@ -3483,10 +3483,12 @@ export type Database = {
           deferred_at: string | null
           id: string
           is_required: boolean
+          observation: Json | null
           options: Json | null
           photo_prompt: string | null
           ppi_section_id: string
           prompt: string
+          question_key: string | null
           requires_photo: boolean
           sort_order: number
           updated_at: string
@@ -3498,10 +3500,12 @@ export type Database = {
           deferred_at?: string | null
           id?: string
           is_required?: boolean
+          observation?: Json | null
           options?: Json | null
           photo_prompt?: string | null
           ppi_section_id: string
           prompt: string
+          question_key?: string | null
           requires_photo?: boolean
           sort_order?: number
           updated_at?: string
@@ -3513,10 +3517,12 @@ export type Database = {
           deferred_at?: string | null
           id?: string
           is_required?: boolean
+          observation?: Json | null
           options?: Json | null
           photo_prompt?: string | null
           ppi_section_id?: string
           prompt?: string
+          question_key?: string | null
           requires_photo?: boolean
           sort_order?: number
           updated_at?: string
@@ -3668,6 +3674,244 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppi_certification_texts: {
+        Row: {
+          body: string
+          created_at: string
+          locale: string
+          version: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          locale: string
+          version: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          locale?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      ppi_submission_certifications: {
+        Row: {
+          catalog_version: number
+          certification_text: string
+          certified_at: string
+          certified_by: string
+          facts_hash: string
+          facts_snapshot: Json
+          id: string
+          locale: string
+          media_manifest: Json
+          media_manifest_hash: string
+          performer_mode: string
+          ppi_submission_id: string
+          submission_revision: number
+          text_version: string
+        }
+        Insert: {
+          catalog_version: number
+          certification_text: string
+          certified_at?: string
+          certified_by: string
+          facts_hash: string
+          facts_snapshot: Json
+          id?: string
+          locale: string
+          media_manifest: Json
+          media_manifest_hash: string
+          performer_mode: string
+          ppi_submission_id: string
+          submission_revision: number
+          text_version: string
+        }
+        Update: {
+          catalog_version?: number
+          certification_text?: string
+          certified_at?: string
+          certified_by?: string
+          facts_hash?: string
+          facts_snapshot?: Json
+          id?: string
+          locale?: string
+          media_manifest?: Json
+          media_manifest_hash?: string
+          performer_mode?: string
+          ppi_submission_id?: string
+          submission_revision?: number
+          text_version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppi_submission_certifications_ppi_submission_id_fkey"
+            columns: ["ppi_submission_id"]
+            isOneToOne: true
+            referencedRelation: "ppi_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppi_media_extractions: {
+        Row: {
+          candidates: Json
+          created_at: string
+          error: string | null
+          id: string
+          model: string
+          ppi_media_id: string
+          prompt_version: string
+          requested_by: string | null
+          schema_version: string
+          status: string
+          target: string
+        }
+        Insert: {
+          candidates?: Json
+          created_at?: string
+          error?: string | null
+          id?: string
+          model: string
+          ppi_media_id: string
+          prompt_version: string
+          requested_by?: string | null
+          schema_version: string
+          status: string
+          target: string
+        }
+        Update: {
+          candidates?: Json
+          created_at?: string
+          error?: string | null
+          id?: string
+          model?: string
+          ppi_media_id?: string
+          prompt_version?: string
+          requested_by?: string | null
+          schema_version?: string
+          status?: string
+          target?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppi_media_extractions_ppi_media_id_fkey"
+            columns: ["ppi_media_id"]
+            isOneToOne: false
+            referencedRelation: "ppi_media"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspection_output_exports: {
+        Row: {
+          attempt_count: number
+          completed_at: string | null
+          created_at: string
+          export_type: string
+          facts_hash: string | null
+          finding_count: number | null
+          id: string
+          last_error: Json | null
+          locale: string
+          lock_expires_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          media_manifest_hash: string | null
+          missing_media: Json
+          next_attempt_at: string
+          output_version: number
+          page_count: number | null
+          photo_count_expected: number | null
+          photo_count_rendered: number | null
+          ppi_submission_id: string
+          requested_by: string | null
+          sha256: string | null
+          size_bytes: number | null
+          standardized_output_id: string
+          status: string
+          storage_key: string | null
+          template_version: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          completed_at?: string | null
+          created_at?: string
+          export_type: string
+          facts_hash?: string | null
+          finding_count?: number | null
+          id?: string
+          last_error?: Json | null
+          locale?: string
+          lock_expires_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          media_manifest_hash?: string | null
+          missing_media?: Json
+          next_attempt_at?: string
+          output_version: number
+          page_count?: number | null
+          photo_count_expected?: number | null
+          photo_count_rendered?: number | null
+          ppi_submission_id: string
+          requested_by?: string | null
+          sha256?: string | null
+          size_bytes?: number | null
+          standardized_output_id: string
+          status?: string
+          storage_key?: string | null
+          template_version: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          completed_at?: string | null
+          created_at?: string
+          export_type?: string
+          facts_hash?: string | null
+          finding_count?: number | null
+          id?: string
+          last_error?: Json | null
+          locale?: string
+          lock_expires_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          media_manifest_hash?: string | null
+          missing_media?: Json
+          next_attempt_at?: string
+          output_version?: number
+          page_count?: number | null
+          photo_count_expected?: number | null
+          photo_count_rendered?: number | null
+          ppi_submission_id?: string
+          requested_by?: string | null
+          sha256?: string | null
+          size_bytes?: number | null
+          standardized_output_id?: string
+          status?: string
+          storage_key?: string | null
+          template_version?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_output_exports_standardized_output_id_fkey"
+            columns: ["standardized_output_id"]
+            isOneToOne: false
+            referencedRelation: "standardized_outputs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_output_exports_ppi_submission_id_fkey"
+            columns: ["ppi_submission_id"]
+            isOneToOne: false
+            referencedRelation: "ppi_submissions"
             referencedColumns: ["id"]
           },
         ]
@@ -3853,34 +4097,40 @@ export type Database = {
       }
       ppi_submissions: {
         Row: {
+          catalog_version: number
           completed_at: string | null
           created_at: string
           id: string
           is_current: boolean
           performer_id: string
           ppi_request_id: string
+          revision: number
           status: Database["public"]["Enums"]["submission_status"]
           submitted_at: string | null
           version: number
         }
         Insert: {
+          catalog_version?: number
           completed_at?: string | null
           created_at?: string
           id?: string
           is_current?: boolean
           performer_id: string
           ppi_request_id: string
+          revision?: number
           status?: Database["public"]["Enums"]["submission_status"]
           submitted_at?: string | null
           version?: number
         }
         Update: {
+          catalog_version?: number
           completed_at?: string | null
           created_at?: string
           id?: string
           is_current?: boolean
           performer_id?: string
           ppi_request_id?: string
+          revision?: number
           status?: Database["public"]["Enums"]["submission_status"]
           submitted_at?: string | null
           version?: number
@@ -6389,6 +6639,20 @@ export type Database = {
         Args: { p_submission_id: string; p_submitted_at: string }
         Returns: string
       }
+      submit_ppi_certified: {
+        Args: {
+          p_submission_id: string
+          p_expected_revision: number
+          p_text_version: string
+          p_accepted: boolean
+          p_locale?: string
+        }
+        Returns: Json
+      }
+      claim_inspection_output_exports: {
+        Args: { p_worker_id: string; p_limit?: number; p_lease_seconds?: number }
+        Returns: Database["public"]["Tables"]["inspection_output_exports"]["Row"][]
+      }
       dev_switch_role: {
         Args: { p_role: Database["public"]["Enums"]["user_role"] }
         Returns: Database["public"]["Enums"]["user_role"]
@@ -7461,7 +7725,18 @@ export type Database = {
       }
     }
     Enums: {
-      answer_type: "text" | "yes_no" | "select" | "number"
+      answer_type:
+        | "text"
+        | "yes_no"
+        | "select"
+        | "number"
+        | "measurement"
+        | "tire_markings"
+        | "dot_code"
+        | "condition_scale"
+        | "defect_list"
+        | "tire_placard"
+        | "panel_condition"
       audit_action:
         | "inspection_edited"
         | "output_regenerated"
@@ -7717,7 +7992,19 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      answer_type: ["text", "yes_no", "select", "number"],
+      answer_type: [
+        "text",
+        "yes_no",
+        "select",
+        "number",
+        "measurement",
+        "tire_markings",
+        "dot_code",
+        "condition_scale",
+        "defect_list",
+        "tire_placard",
+        "panel_condition",
+      ],
       audit_action: [
         "inspection_edited",
         "output_regenerated",

@@ -1500,6 +1500,12 @@ struct PpiSubmission: Codable, Identifiable, Hashable {
     let createdAt: Date?
     /// Denormalized from the parent request so the workflow needs one fetch.
     let inspectionScope: InspectionScope?
+    /// 1 = original questions, 2 = typed observations with certification.
+    var catalogVersion: Int? = nil
+    /// Changes whenever answers, photos or notes change; certification binds to it.
+    var revision: Int? = nil
+    /// "self" or "technician": decides whether measurements may be unavailable.
+    var performerMode: String? = nil
 }
 
 /// Org-wide inspection row returned by `GET /api/organizations/me/inspections`.
@@ -1540,8 +1546,13 @@ struct PpiAnswer: Codable, Identifiable, Hashable {
     let id: String
     let ppiSectionId: String
     let prompt: String
+    /// Stable semantic key (catalog 2); nil on older rows.
+    var questionKey: String? = nil
     let answerType: AnswerType
+    /// For structured types this is a server-derived read-only summary.
     let answerValue: String?
+    /// Typed observation document for structured answer types.
+    var observation: JSONValue? = nil
     let deferredAt: Date?
     let options: [String]?
     let isRequired: Bool?

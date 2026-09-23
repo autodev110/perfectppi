@@ -1,4 +1,6 @@
 import type { VscCoverageData, VscComponentDetermination } from "@/types/api";
+import type { InspectionFactsV2 } from "../ppi/inspection-facts.ts";
+import { formatTread, treadAtOrBelowReplacementThreshold } from "../ppi/inspection-units.ts";
 
 /**
  * Coverage for a Dents & Tires inspection is decided here, in code, rather than
@@ -209,6 +211,136 @@ export function evaluateDentsTiresCoverage(
       covered.length > 0
         ? `${covered.length} component${covered.length === 1 ? "" : "s"} qualify for coverage: ${covered
             .map((c) => c.component)
+            .join(", ")}. Bumper damage is excluded.`
+        : "No tire wear or body damage qualifying for coverage was reported. Bumper damage is excluded.",
+    components,
+  };
+}
+
+// ============================================================================
+// Catalog-2 adapter: the same coverage policy, read from typed facts.
+//
+// Tread uses the exact 2/32 in (1.5875 mm) threshold before any rounding. An
+// unavailable reading is never zero tread. Wheel coverage comes only from
+// recorded wheel/rim defects; tire punctures and other tire-condition rules
+// (report recommendations) never grant coverage. Precise panels roll up into
+// the existing six body groups and bumpers stay excluded.
+// ============================================================================
+
+const V2_TIRES: { corner: "front_left" | "front_right" | "rear_left" | "rear_right"; component: DentsTiresComponent }[] = [
+  { corner: "front_left", component: "Front Left Tire" },
+  { corner: "front_right", component: "Front Right Tire" },
+  { corner: "rear_left", component: "Rear Left Tire" },
+  { corner: "rear_right", component: "Rear Right Tire" },
+];
+
+const PANEL_GROUP: Record<string, DentsTiresComponent> = {
+  left_front_fender: "Left Front Fender",
+  right_front_fender: "Right Front Fender",
+  hood: "Hood",
+  left_front_door: "Left Door",
+  left_rear_door: "Left Door",
+  right_front_door: "Right Door",
+  right_rear_door: "Right Door",
+  roof: "Body Panels",
+  trunk_tailgate: "Body Panels",
+  left_rear_quarter: "Body Panels",
+  right_rear_quarter: "Body Panels",
+  left_rocker: "Body Panels",
+  right_rocker: "Body Panels",
+  other_body_panel: "Body Panels",
+  front_bumper: "Bumper",
+  rear_bumper: "Bumper",
+};
+
+export function evaluateDentsTiresCoverageFromFacts(facts: InspectionFactsV2): VscCoverageData {
+  const components: VscComponentDetermination[] = [];
+
+  for (const tire of V2_TIRES) {
+    const tread = facts.tires[tire.corner].tread;
+    const value = tread.observation_state === "observed" ? tread.value : null;
+    if (!value) {
+      components.push({
+        component: tire.component,
+        category: "Tires",
+        determination: "excluded",
+        reasoning: tread.observation_state === "unable_to_assess"
+          ? "Tread depth was not measured for this tire, so eligibility could not be established."
+          : "Tread depth was not reported for this tire.",
+        conditions: [],
+      });
+      continue;
+    }
+    const readings = [value.reading, value.positions?.inner, value.positions?.center, value.positions?.outer]
+      .filter((reading): reading is string => Boolean(reading));
+    const worn = readings.some((reading) => treadAtOrBelowReplacementThreshold(reading, value.unit));
+    const lowest = readings.find((reading) => treadAtOrBelowReplacementThreshold(reading, value.unit)) ?? value.reading;
+    components.push({
+      component: tire.component,
+      category: "Tires",
+      determination: worn ? "covered" : "excluded",
+      reasoning: worn
+        ? `Tread measured ${formatTread(lowest, value.unit)}, at or below the ${TREAD_COVERAGE_THRESHOLD_32NDS}/32 replacement threshold.`
+        : `Tread measured ${formatTread(value.reading, value.unit)}, above the ${TREAD_COVERAGE_THRESHOLD_32NDS}/32 replacement threshold.`,
+      conditions: [],
+    });
+  }
+
+  const damagedWheels = V2_TIRES.filter(({ corner }) => {
+    const wheel = facts.wheels[corner].damage;
+    return wheel.observation_state === "observed"
+      && (wheel.value?.defects ?? []).some((defect) => defect.certainty !== "suspected");
+  });
+  const suspectedWheels = V2_TIRES.filter(({ corner }) => (facts.wheels[corner].damage.value?.defects ?? []).length > 0);
+  components.push({
+    component: "Wheels / Rims",
+    category: "Wheels",
+    determination: damagedWheels.length > 0 ? "covered" : "excluded",
+    reasoning: damagedWheels.length > 0
+      ? `Rim or wheel damage was recorded at the ${damagedWheels.map(({ corner }) => corner.replace("_", " ")).join(", ")} wheel${damagedWheels.length === 1 ? "" : "s"}.`
+      : suspectedWheels.length > 0
+        ? "Possible wheel damage was noted but not confirmed."
+        : "No rim or wheel damage was reported.",
+    conditions: [],
+  });
+
+  const damagedGroups = new Set<DentsTiresComponent>();
+  for (const [panel, fact] of Object.entries(facts.body)) {
+    if (fact.observation_state !== "observed") continue;
+    const value = fact.value as { condition?: string; defects?: unknown[] } | null;
+    if (value?.condition === "damage_present" && (value.defects ?? []).length > 0) {
+      const group = PANEL_GROUP[panel];
+      if (group && group !== "Bumper") damagedGroups.add(group);
+    }
+  }
+  for (const area of BODY_COMPONENTS) {
+    const covered = damagedGroups.has(area.component);
+    components.push({
+      component: area.component,
+      category: "Body",
+      determination: covered ? "covered" : "excluded",
+      reasoning: covered
+        ? "Scratches or dents were reported for this area."
+        : "No scratches or dents were reported for this area.",
+      conditions: [],
+    });
+  }
+
+  components.push({
+    component: "Bumper",
+    category: "Body",
+    determination: "excluded",
+    reasoning: "Bumpers are excluded from Dents & Tires coverage.",
+    conditions: [],
+  });
+
+  const covered = components.filter((component) => component.determination === "covered");
+  return {
+    overall_eligibility: covered.length > 0 ? "eligible" : "ineligible",
+    eligibility_summary:
+      covered.length > 0
+        ? `${covered.length} component${covered.length === 1 ? "" : "s"} qualify for coverage: ${covered
+            .map((component) => component.component)
             .join(", ")}. Bumper damage is excluded.`
         : "No tire wear or body damage qualifying for coverage was reported. Bumper damage is excluded.",
     components,

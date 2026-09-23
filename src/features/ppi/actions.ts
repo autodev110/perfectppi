@@ -4,14 +4,28 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
-  SECTION_QUESTION_TEMPLATES,
   getSectionOrder,
   VEHICLE_BASICS_ODOMETER_PROMPT,
   VEHICLE_BASICS_VIN_PROMPT,
   canonicalInspectionPrompt,
   isValidTransition,
 } from "./constants";
-import type { InspectionScope, PpiRequestStatus, SectionType } from "@/types/enums";
+import { catalogQuestions, type CatalogVersion } from "./inspection-catalog";
+import {
+  isStructuredAnswerType,
+  parseObservation,
+  requirementError,
+  structuredPhotoRequired,
+  validateObservation,
+  type PerformerMode,
+} from "./inspection-schema";
+import {
+  certifiedSubmitErrorMessage,
+  databaseErrorCode,
+  type SubmitCertificationInput,
+} from "./certification";
+import { seedCatalogVersion } from "./client-capability";
+import type { AnswerType, InspectionScope, PpiRequestStatus, SectionType } from "@/types/enums";
 import type { Database, Json } from "@/types/database";
 import { syncPartnerLifecycle } from "@/features/partner/events";
 import { isOwnedPrivateUploadReference, uploadedUrlSchema } from "@/features/uploads/url";
@@ -206,6 +220,10 @@ export async function createSubmission(
       .eq("is_current", true);
   }
 
+  // Catalog 2 (typed observations + certification) for every client that can
+  // render it; older native builds keep the original question set.
+  const catalogVersion: CatalogVersion = await seedCatalogVersion();
+
   // Create the new submission
   const { data: submission, error: subError } = await supabase
     .from("ppi_submissions")
@@ -215,6 +233,7 @@ export async function createSubmission(
       version: nextVersion,
       is_current: true,
       status: "draft",
+      catalog_version: catalogVersion,
     })
     .select()
     .single();
@@ -241,11 +260,13 @@ export async function createSubmission(
     return { error: secError?.message ?? "Failed to seed sections" };
   }
 
-  // Seed answers for each section
+  // Seed answers for each section. Every row carries its stable semantic key so
+  // validation, rules and coverage never depend on prompt wording.
   const allAnswerInserts: {
     ppi_section_id: string;
     prompt: string;
-    answer_type: "text" | "yes_no" | "select" | "number";
+    question_key: string;
+    answer_type: AnswerType;
     options: string[] | null;
     is_required: boolean;
     requires_photo: boolean;
@@ -254,17 +275,17 @@ export async function createSubmission(
   }[] = [];
 
   for (const section of sections) {
-    const templates =
-      SECTION_QUESTION_TEMPLATES[section.section_type as SectionType] ?? [];
-    templates.forEach((template, idx) => {
+    const questions = catalogQuestions(scope, section.section_type as SectionType, catalogVersion);
+    questions.forEach((question, idx) => {
       allAnswerInserts.push({
         ppi_section_id: section.id,
-        prompt: template.prompt,
-        answer_type: template.answerType,
-        options: template.options ?? null,
-        is_required: template.isRequired,
-        requires_photo: template.requiresPhoto ?? false,
-        photo_prompt: template.photoPrompt ?? null,
+        prompt: question.prompt,
+        question_key: question.questionKey,
+        answer_type: question.answerType,
+        options: question.options ?? null,
+        is_required: question.isRequired,
+        requires_photo: question.requiresPhoto ?? false,
+        photo_prompt: question.photoPrompt ?? null,
         sort_order: idx + 1,
       });
     });
@@ -431,39 +452,126 @@ const saveAnswersSchema = z.object({
   answers: z.array(
     z.object({
       answerId: z.string().uuid(),
-      value: z.string(),
+      value: z.string().optional().default(""),
+      /** Typed observation for catalog-2 structured answers; null clears it. */
+      observation: z.unknown().optional(),
       deferred: z.boolean().optional(),
     })
-  ),
+  ).max(200),
 });
 
-export async function saveAnswers(
-  submissionId: string,
-  answers: { answerId: string; value: string; deferred?: boolean }[]
-) {
+export interface SaveAnswerInput {
+  answerId: string;
+  value?: string;
+  observation?: unknown;
+  deferred?: boolean;
+}
+
+export async function saveAnswers(submissionId: string, answers: SaveAnswerInput[]) {
   const parsed = saveAnswersSchema.safeParse({ submissionId, answers });
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
   const supabase = await createClient();
 
-  // Update each answer individually (no batch upsert without conflict target on id)
-  const updates = parsed.data.answers.map(({ answerId, value, deferred }) => {
-    const update: Database["public"]["Tables"]["ppi_answers"]["Update"] = {
-      answer_value: value,
-    };
-    if (deferred === true) {
-      update.deferred_at = new Date().toISOString();
-    } else if (deferred === false || value.trim() !== "") {
-      update.deferred_at = null;
+  // Every answer must belong to this submission; a stray id from another
+  // inspection is refused instead of silently written through RLS.
+  const answerIds = [...new Set(parsed.data.answers.map((answer) => answer.answerId))];
+  if (answerIds.length === 0) return { success: true, invalid: [] as { answerId: string; error: string }[] };
+  const { data: rows, error: rowsError } = await supabase
+    .from("ppi_answers")
+    .select("id, question_key, answer_type, section:ppi_sections!inner(ppi_submission_id)")
+    .in("id", answerIds);
+  if (rowsError) return { error: rowsError.message };
+  const rowById = new Map(
+    (rows ?? [])
+      .filter((row) => (row.section as { ppi_submission_id: string } | null)?.ppi_submission_id === parsed.data.submissionId)
+      .map((row) => [row.id, row]),
+  );
+  if (rowById.size !== answerIds.length) {
+    return { error: "One or more answers do not belong to this inspection" };
+  }
+
+  const invalid: { answerId: string; error: string }[] = [];
+  const now = new Date();
+
+  // A value adopted from a photo reading must reference a reading of a photo
+  // in this same inspection; otherwise it is an ordinary manual entry.
+  const extractionIds = [...new Set(parsed.data.answers
+    .map((answer) => (answer.observation as { source?: string; extraction_id?: string } | null | undefined))
+    .filter((observation) => observation?.source === "confirmed_extraction" && observation.extraction_id)
+    .map((observation) => observation!.extraction_id!))];
+  const knownExtractions = new Set<string>();
+  if (extractionIds.length) {
+    const { data: extractions } = await supabase
+      .from("ppi_media_extractions")
+      .select("id, media:ppi_media!inner(section:ppi_sections!inner(ppi_submission_id))")
+      .in("id", extractionIds);
+    for (const extraction of extractions ?? []) {
+      const media = extraction.media as { section: { ppi_submission_id: string } | null } | null;
+      if (media?.section?.ppi_submission_id === parsed.data.submissionId) knownExtractions.add(extraction.id);
     }
+  }
+
+  const updates = parsed.data.answers.map(({ answerId, value, observation, deferred }) => {
+    const row = rowById.get(answerId)!;
+    const update: Database["public"]["Tables"]["ppi_answers"]["Update"] = {};
+
+    if (isStructuredAnswerType(row.answer_type)) {
+      if (observation === undefined) {
+        // Only a deferral toggle; a structured answer never takes a raw string.
+      } else if (observation === null) {
+        update.observation = null;
+      } else {
+        const validation = validateObservation(row.question_key ?? "", observation, { inspectionDate: now });
+        if (!validation.ok) {
+          invalid.push({ answerId, error: validation.error });
+          return null;
+        }
+        if (
+          validation.observation.source === "confirmed_extraction"
+          && !knownExtractions.has(validation.observation.extraction_id ?? "")
+        ) {
+          invalid.push({ answerId, error: "That photo reading is not part of this inspection." });
+          return null;
+        }
+        update.observation = validation.observation as unknown as Json;
+      }
+      if (deferred === true) {
+        update.deferred_at = now.toISOString();
+      } else if (deferred === false || (observation !== undefined && observation !== null)) {
+        update.deferred_at = null;
+      }
+    } else {
+      if (observation !== undefined && observation !== null) {
+        invalid.push({ answerId, error: "This question does not take a structured answer." });
+        return null;
+      }
+      update.answer_value = value;
+      if (deferred === true) {
+        update.deferred_at = now.toISOString();
+      } else if (deferred === false || value.trim() !== "") {
+        update.deferred_at = null;
+      }
+    }
+
+    if (Object.keys(update).length === 0) return null;
     return supabase.from("ppi_answers").update(update).eq("id", answerId);
   });
 
-  const results = await Promise.all(updates);
+  const results = await Promise.all(updates.filter((update) => update !== null));
   const failed = results.find((r) => r.error);
-  if (failed?.error) return { error: failed.error.message };
+  if (failed?.error) {
+    return {
+      error: databaseErrorCode(failed.error.message) === "submission_finalized"
+        ? "This inspection was already submitted and can no longer be edited."
+        : failed.error.message,
+    };
+  }
+  if (invalid.length > 0) {
+    return { error: invalid[0].error, invalid };
+  }
 
-  return { success: true };
+  return { success: true, invalid };
 }
 
 // ============================================================================
@@ -520,23 +628,47 @@ export async function updateSectionState(
 // submitPpi — validate required answers, finalize submission
 // ============================================================================
 
-export async function submitPpi(submissionId: string) {
+export async function submitPpi(submissionId: string, certification: SubmitCertificationInput | null) {
+  if (!z.string().uuid().safeParse(submissionId).success) return { error: "Invalid inspection" };
+  if (!certification?.accepted) {
+    return { error: certifiedSubmitErrorMessage("certification_required"), code: "certification_required" };
+  }
+
   const supabase = await createClient();
+
+  const { data: submission } = await supabase
+    .from("ppi_submissions")
+    .select("id, revision, request:ppi_requests!ppi_submissions_ppi_request_id_fkey(performer_type)")
+    .eq("id", submissionId)
+    .maybeSingle();
+  if (!submission) return { error: "Submission not found" };
+  const performerMode: PerformerMode =
+    (submission.request as { performer_type?: string } | null)?.performer_type === "self" ? "self" : "technician";
 
   // Load all answers for this submission to validate required fields
   const { data: sections } = await supabase
     .from("ppi_sections")
     .select(
-      "id, answers:ppi_answers(id, prompt, answer_type, options, is_required, requires_photo, answer_value), media:ppi_media(ppi_answer_id, media_type)",
+      "id, answers:ppi_answers(id, prompt, question_key, answer_type, options, is_required, requires_photo, answer_value, observation), media:ppi_media(ppi_answer_id, media_type)",
     )
     .eq("ppi_submission_id", submissionId);
 
   if (!sections) return { error: "Submission not found" };
 
-  // Check required answers
+  // Check required answers. The database repeats every check below inside the
+  // certified transaction; these exist to return the exact question ids.
   const missing: string[] = [];
   for (const section of sections) {
     for (const answer of section.answers ?? []) {
+      if (isStructuredAnswerType(answer.answer_type)) {
+        if (requirementError(answer.question_key ?? "", parseObservation(answer.observation), {
+          required: answer.is_required,
+          performerMode,
+        })) {
+          missing.push(answer.id);
+        }
+        continue;
+      }
       const options = Array.isArray(answer.options)
         ? answer.options.filter((option): option is string => typeof option === "string")
         : null;
@@ -559,8 +691,8 @@ export async function submitPpi(submissionId: string) {
     };
   }
 
-  // Photo requirements were client-only until requires_photo became a column,
-  // which meant a client could submit past them. Enforce them here too.
+  // Photo requirements: fixed per-question rules plus evidence the typed
+  // answers imply (a tread reading, declared damage, the placard).
   const missingPhotos: string[] = [];
   for (const section of sections) {
     const photographedAnswerIds = new Set(
@@ -570,7 +702,9 @@ export async function submitPpi(submissionId: string) {
         .filter((id): id is string => Boolean(id)),
     );
     for (const answer of section.answers ?? []) {
-      if (!answer.requires_photo) continue;
+      const needsPhoto = answer.requires_photo
+        || structuredPhotoRequired(answer.question_key ?? "", parseObservation(answer.observation));
+      if (!needsPhoto) continue;
       if (photographedAnswerIds.has(answer.id)) continue;
       missingPhotos.push(answer.id);
     }
@@ -583,21 +717,33 @@ export async function submitPpi(submissionId: string) {
     };
   }
 
-  const now = new Date().toISOString();
-
-  const { data: requestId, error: submitError } = await supabase.rpc("submit_ppi_atomic", {
+  const { data: result, error: submitError } = await supabase.rpc("submit_ppi_certified", {
     p_submission_id: submissionId,
-    p_submitted_at: now,
+    p_expected_revision: certification.expectedRevision,
+    p_text_version: certification.textVersion,
+    p_accepted: certification.accepted,
+    p_locale: certification.locale ?? "en-US",
   });
-  if (submitError || !requestId) return { error: submitError?.message ?? "Failed to submit" };
+  if (submitError || !result) {
+    const code = databaseErrorCode(submitError?.message);
+    return { error: certifiedSubmitErrorMessage(code), code };
+  }
+  const requestId = (result as { request_id?: string }).request_id;
+  if (!requestId) return { error: "Failed to submit" };
 
-  await syncPartnerLifecycle(requestId, "submitted", { submissionId });
+  if (!(result as { replayed?: boolean }).replayed) {
+    await syncPartnerLifecycle(requestId, "submitted", { submissionId });
+  }
 
   revalidatePath(`/dashboard/ppi/${requestId}`);
   revalidatePath("/dashboard/ppi");
   revalidatePath("/tech/ppi");
 
-  return { success: true, requestId };
+  return {
+    success: true,
+    requestId,
+    certification: result as { certification_id: string; facts_hash: string; revision: number; certified_at: string },
+  };
 }
 
 // ============================================================================
@@ -622,10 +768,10 @@ export async function resubmitPpi(requestId: string) {
     .from("ppi_submissions")
     .select(
       `
-      id, version, performer_id,
+      id, version, performer_id, catalog_version,
       sections:ppi_sections(
         id, section_type, notes, sort_order,
-        answers:ppi_answers(id, prompt, answer_type, answer_value, options, is_required, requires_photo, photo_prompt, sort_order, deferred_at),
+        answers:ppi_answers(id, prompt, question_key, answer_type, answer_value, observation, options, is_required, requires_photo, photo_prompt, sort_order, deferred_at),
         media:ppi_media(id, ppi_answer_id, url, media_type, caption, captured_at, metadata)
       )
     `
@@ -659,6 +805,9 @@ export async function resubmitPpi(requestId: string) {
       version: currentSub.version + 1,
       is_current: true,
       status: "in_progress",
+      // A revision keeps the question set it was answered with; certification
+      // is never copied and must be given again for the new revision.
+      catalog_version: currentSub.catalog_version,
     })
     .select()
     .single();
@@ -699,8 +848,10 @@ export async function resubmitPpi(requestId: string) {
       const answerInserts = orderedAnswers.map(
         (a: {
           prompt: string;
-          answer_type: "text" | "yes_no" | "select" | "number";
+          question_key: string | null;
+          answer_type: AnswerType;
           answer_value: string | null;
+          observation: Json | null;
           deferred_at: string | null;
           options: Json | null;
           is_required: boolean;
@@ -710,8 +861,11 @@ export async function resubmitPpi(requestId: string) {
         }) => ({
           ppi_section_id: newSection.id,
           prompt: canonicalInspectionPrompt(a.prompt),
+          question_key: a.question_key,
           answer_type: a.answer_type,
-          answer_value: a.answer_value,
+          // Structured rows derive answer_value from the observation in the DB.
+          answer_value: isStructuredAnswerType(a.answer_type) ? null : a.answer_value,
+          observation: a.observation,
           deferred_at: a.deferred_at,
           options: a.options as Json,
           is_required: a.is_required,

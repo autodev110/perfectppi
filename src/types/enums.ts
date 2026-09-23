@@ -94,7 +94,19 @@ export type SectionType =
   | "body_damage";
 
 export type CompletionState = "not_started" | "in_progress" | "completed";
-export type AnswerType = "text" | "yes_no" | "select" | "number";
+export type AnswerType =
+  | "text"
+  | "yes_no"
+  | "select"
+  | "number"
+  // Catalog 2 structured observations; the value lives in ppi_answers.observation.
+  | "measurement"
+  | "tire_markings"
+  | "dot_code"
+  | "condition_scale"
+  | "defect_list"
+  | "tire_placard"
+  | "panel_condition";
 
 // Domain D: Warranty
 export type WarrantyOptionStatus =

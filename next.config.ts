@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The inspection report renderer reads its versioned layout spec and the
+  // embedded fonts from disk at runtime; ship them with every server route.
+  outputFileTracingIncludes: {
+    "/**/*": ["./src/lib/pdf/inspection-report/layout-spec.json", "./src/lib/pdf/inspection-report/fonts/**/*"],
+  },
   async headers() {
     const scriptSrc = process.env.NODE_ENV === "production"
       ? "'self' 'unsafe-inline'"

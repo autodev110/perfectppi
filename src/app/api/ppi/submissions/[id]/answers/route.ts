@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
 import { saveAnswers } from "@/features/ppi/actions";
+import { APP_UPDATE_REQUIRED, clientSupportsCatalog } from "@/features/ppi/client-capability";
 
 export async function GET(
   _request: Request,
@@ -11,6 +12,15 @@ export async function GET(
 
   const { id } = await params;
   const { supabase } = auth;
+
+  const { data: submission } = await supabase
+    .from("ppi_submissions")
+    .select("catalog_version")
+    .eq("id", id)
+    .maybeSingle();
+  if (submission && !(await clientSupportsCatalog(submission.catalog_version))) {
+    return NextResponse.json(APP_UPDATE_REQUIRED, { status: 426 });
+  }
 
   const { data: sections } = await supabase
     .from("ppi_sections")
@@ -56,7 +66,8 @@ export async function POST(
 
   const result = await saveAnswers(id, body.answers);
   if ("error" in result) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    const invalid = (result as { invalid?: { answerId: string; error: string }[] }).invalid;
+    return NextResponse.json({ error: result.error, invalid }, { status: invalid?.length ? 422 : 400 });
   }
 
   return NextResponse.json({ success: true });

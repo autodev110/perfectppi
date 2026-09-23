@@ -462,6 +462,7 @@ private struct NativeReportView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(PrimaryButtonStyle())
+            EvidenceAppendixControl(outputId: output.id)
             HStack {
                 Button("Refresh") { onRefresh() }
                     .buttonStyle(.bordered)
@@ -491,6 +492,109 @@ private struct NativeReportView: View {
         case "moderate": return Theme.Palette.warning
         case "minor": return Theme.Palette.primary
         default: return .secondary
+        }
+    }
+}
+
+
+/// Optional, separate photo evidence appendix. Unchecked by default; checking
+/// it never changes the two-page report.
+private struct EvidenceAppendixControl: View {
+    let outputId: String
+
+    @State private var include = false
+    @State private var status: PpiAPI.AppendixStatus?
+    @State private var working = false
+    @State private var errorMessage: String?
+    @State private var showingAppendix = false
+
+    private var inProgress: Bool {
+        ["queued", "running", "retryable_failure"].contains(status?.status ?? "")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: $include) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Include photo evidence appendix").font(.subheadline.weight(.medium))
+                    Text("Create a separate PDF with all findings and every uploaded inspection photo. The appendix has no page limit.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if include || (status.map { $0.status != "not_requested" } ?? false) {
+                if status == nil || status?.status == "not_requested" {
+                    Button(working ? "Requesting…" : "Create photo evidence appendix") {
+                        Task { await request(retry: false) }
+                    }
+                    .buttonStyle(OutlineButtonStyle())
+                    .disabled(working)
+                }
+                if inProgress {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Preparing the photo evidence appendix…").font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                if status?.status == "incomplete" {
+                    Text("Appendix incomplete — \(status?.missingCount ?? 0) photo(s) unavailable. The PDF lists each missing photo.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.Palette.warning)
+                }
+                if status?.status == "failed" {
+                    Text("The appendix could not be created.").font(.footnote).foregroundStyle(Theme.Palette.danger)
+                }
+                if status?.status == "ready" || status?.status == "incomplete" {
+                    Button("View photo evidence appendix") { showingAppendix = true }
+                        .buttonStyle(OutlineButtonStyle())
+                }
+                if status?.status == "incomplete" || status?.status == "failed" {
+                    Button("Retry appendix") { Task { await request(retry: true) } }
+                        .buttonStyle(.bordered)
+                        .disabled(working)
+                }
+            }
+            if let errorMessage {
+                Text(errorMessage).font(.footnote).foregroundStyle(Theme.Palette.danger)
+            }
+        }
+        .task { await refresh() }
+        .task(id: inProgress) {
+            // Poll while the export is being prepared.
+            while inProgress && !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                await refresh()
+            }
+        }
+        .sheet(isPresented: $showingAppendix) {
+            NavigationStack {
+                PDFViewer(
+                    path: "/api/outputs/\(outputId)/appendix",
+                    query: [URLQueryItem(name: "download", value: "1")],
+                    fileName: "PerfectPPI-Photo-Evidence-Appendix-\(outputId).pdf",
+                    title: "Photo evidence"
+                )
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { showingAppendix = false }
+                    }
+                }
+            }
+        }
+    }
+
+    private func refresh() async {
+        status = try? await PpiAPI.appendixStatus(outputId: outputId)
+    }
+
+    private func request(retry: Bool) async {
+        working = true
+        defer { working = false }
+        do {
+            status = try await PpiAPI.requestAppendix(outputId: outputId, retry: retry)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }

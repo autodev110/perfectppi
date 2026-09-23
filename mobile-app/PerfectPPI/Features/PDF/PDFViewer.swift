@@ -6,6 +6,10 @@ import PDFKit
 /// so private R2 redirects work transparently.
 struct PDFViewer: View {
     let path: String
+    var query: [URLQueryItem] = []
+    /// Shared file name; defaults to the report name for the output id.
+    var fileName: String? = nil
+    var title: LocalizedStringKey = "Report"
 
     @State private var data: Data?
     @State private var fileURL: URL?
@@ -25,7 +29,7 @@ struct PDFViewer: View {
             }
         }
         .task { await load() }
-        .navigationTitle("Report")
+        .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let fileURL {
@@ -40,14 +44,14 @@ struct PDFViewer: View {
 
     private func load() async {
         do {
-            let (bytes, _) = try await APIClient.shared.bytes(path)
+            let (bytes, _) = try await APIClient.shared.bytes(path, query: query)
             self.data = bytes
             self.error = nil
 
             let outputId = path.split(separator: "/").dropLast().last.map(String.init)
                 ?? UUID().uuidString
             let destination = FileManager.default.temporaryDirectory
-                .appendingPathComponent("PerfectPPI-Inspection-\(outputId).pdf")
+                .appendingPathComponent(fileName ?? "PerfectPPI-Inspection-\(outputId).pdf")
             if (try? bytes.write(to: destination, options: .atomic)) != nil {
                 self.fileURL = destination
             }

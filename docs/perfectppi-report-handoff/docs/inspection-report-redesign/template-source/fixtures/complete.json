@@ -1,0 +1,432 @@
+{
+  "scope": "complete",
+  "sample": true,
+  "report_id": "PPI-DEMO-2026-001 / v1",
+  "vehicle": "2021 Sample Touring Sedan",
+  "vin": "SAMPLE - NO REAL VIN",
+  "mileage": "48,210 mi",
+  "date": "Sep 22, 2026",
+  "inspector": "Jordan Lee | Technician (fictional)",
+  "certified": true,
+  "certification_time": "Sep 22, 2026 10:24 ET | Sample only",
+  "placard_short": "225/50R17 | F/R 34 psi cold",
+  "checks": {
+    "identity": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "paint": {
+      "status": "monitor",
+      "coverage": "complete"
+    },
+    "windshield": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "lamps": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "seats": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "carpet": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "odors": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "windows": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "climate": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "electrical": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "starting": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "braking": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "drivability": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "warnings": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "diagnostics": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "leaks": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "idle": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "belt": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "battery": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "fluids": {
+      "status": "unknown",
+      "coverage": "partial"
+    },
+    "brakes": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "steering": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "suspension": {
+      "status": "checked",
+      "coverage": "complete"
+    },
+    "underbody": {
+      "status": "unknown",
+      "coverage": "partial"
+    },
+    "modifications": {
+      "status": "checked",
+      "coverage": "complete"
+    }
+  },
+  "tires": {
+    "front_left": {
+      "status": "urgent",
+      "tread": "5/32 in | 4.0 mm",
+      "pressure": "34 psi (cold)",
+      "size": "225/50R17",
+      "service": "98 / V",
+      "dot": "0224",
+      "identity_short": "98 / V / 0224",
+      "cracking": "None",
+      "wear": "Even",
+      "condition_short": "None / even",
+      "damage_short": "Object / rash",
+      "fitment": "Matches placard",
+      "cracking_status": "checked",
+      "wear_status": "checked"
+    },
+    "front_right": {
+      "status": "checked",
+      "tread": "6/32 in | 4.8 mm",
+      "pressure": "34 psi (cold)",
+      "size": "225/50R17",
+      "service": "98 / V",
+      "dot": "0224",
+      "identity_short": "98 / V / 0224",
+      "cracking": "None",
+      "wear": "Even",
+      "condition_short": "None / even",
+      "damage_short": "None / none",
+      "fitment": "Matches placard",
+      "cracking_status": "checked",
+      "wear_status": "checked"
+    },
+    "rear_left": {
+      "status": "service",
+      "tread": "3/32 in | 2.4 mm",
+      "pressure": "34 psi (cold)",
+      "size": "215/50R17",
+      "service": "98 / V",
+      "dot": "0519",
+      "identity_short": "98 / V / 0519",
+      "cracking": "Significant",
+      "wear": "Mild uneven",
+      "condition_short": "Signif. / mild",
+      "damage_short": "None / none",
+      "fitment": "Differs from placard",
+      "cracking_status": "service",
+      "wear_status": "monitor"
+    },
+    "rear_right": {
+      "status": "checked",
+      "tread": "6/32 in | 4.8 mm",
+      "pressure": "34 psi (cold)",
+      "size": "225/50R17",
+      "service": "98 / V",
+      "dot": "0224",
+      "identity_short": "98 / V / 0224",
+      "cracking": "None",
+      "wear": "Even",
+      "condition_short": "None / even",
+      "damage_short": "None / none",
+      "fitment": "Matches placard",
+      "cracking_status": "checked",
+      "wear_status": "checked"
+    }
+  },
+  "body": [
+    {
+      "id": "1",
+      "panel": "Left front fender",
+      "status": "monitor",
+      "text": "Shallow dent; finish intact."
+    },
+    {
+      "id": "2",
+      "panel": "Right front door",
+      "status": "monitor",
+      "text": "Surface scratch; no bare metal."
+    }
+  ],
+  "markers": [
+    {
+      "id": "1",
+      "x": 0.22,
+      "y": 0.23,
+      "status": "monitor"
+    },
+    {
+      "id": "2",
+      "x": 0.78,
+      "y": 0.46,
+      "status": "monitor"
+    }
+  ],
+  "priority": "Replace the front-left tire: a foreign object is confirmed. Schedule replacement of the rear-left tire for significant cracking; verify its fitment.",
+  "overview": [
+    {
+      "title": "TIRES & WHEELS",
+      "status": "urgent",
+      "observation": "Front-left foreign object [T1]. Rear-left cracking and size mismatch [T2]. Left-front rim has cosmetic rash.",
+      "action": "Replace front-left tire. Rear-left replacement recommended; verify fitment."
+    },
+    {
+      "title": "BODY & EXTERIOR",
+      "status": "monitor",
+      "observation": "Shallow dent at the left front fender [B1]; surface scratch at the right front door [B2].",
+      "action": "Monitor or arrange cosmetic repair. See damage map 1 and 2."
+    },
+    {
+      "title": "INTERIOR & CONTROLS",
+      "status": "checked",
+      "observation": "Seats, windows, locks, climate controls and interior lights operated during the recorded checks.",
+      "action": "No action indicated by the completed checks."
+    },
+    {
+      "title": "ENGINE & FLUIDS",
+      "status": "unknown",
+      "observation": "No visible engine-bay leak recorded. Transmission fluid could not be checked on this visit.",
+      "action": "Have transmission fluid checked using the applicable service procedure."
+    },
+    {
+      "title": "BRAKES & CHASSIS",
+      "status": "unknown",
+      "observation": "Pad life estimated at 50-75%; rotor surfaces appeared normal. Underbody access was incomplete.",
+      "action": "Brake thickness was not measured. Arrange an underside review."
+    },
+    {
+      "title": "ROAD TEST & DIAGNOSTICS",
+      "status": "checked",
+      "observation": "No pulling or abnormal vibration recorded. No stored codes reported; supported monitors completed.",
+      "action": "No additional action indicated by this test record."
+    }
+  ],
+  "limitations": "Complete scope; transmission-fluid and full underbody checks were unavailable. No measured brake lining or battery capacity test. Tire pressure recorded cold. Findings describe observed conditions, not future performance.",
+  "photos": [
+    {
+      "id": "E01",
+      "title": "Front-left tire - foreign object",
+      "association": "T1 | tires.front_left.damage | tread close-up",
+      "path": null,
+      "state": "layout placeholder; no actual photo",
+      "caption": "In a completed inspection, this page displays the original uploaded close-up associated with the confirmed foreign object. A retained-pressure observation does not change the report policy: replacement is required."
+    },
+    {
+      "id": "E02",
+      "title": "Rear-left tire - cracking and marking",
+      "association": "T2 | tires.rear_left.cracking / size | sidewall view",
+      "path": null,
+      "state": "layout placeholder; no actual photo",
+      "caption": "This slot demonstrates a sidewall evidence record. The inspector confirms visible cracking, size and DOT markings separately. The original image is retained even if extraction fails."
+    },
+    {
+      "id": "E03",
+      "title": "Left front fender - shallow dent",
+      "association": "B1 | body.left_front_fender.condition | context view",
+      "path": null,
+      "state": "layout placeholder; no actual photo",
+      "caption": "This context image is associated with damage-map marker 1. Every uploaded photo receives a manifest entry, including additional views not selected by a model."
+    }
+  ],
+  "full_findings": [
+    {
+      "title": "T1 | Front-left tire - foreign object",
+      "status": "urgent",
+      "text": "A foreign object was confirmed in the tread. Replacement is required under this report program policy, whether or not the tire retains pressure. Measured tread: 5/32 in (3.96875 mm before display rounding). Pressure: 34 psi, cold. Rim: cosmetic curb rash. Evidence E01."
+    },
+    {
+      "title": "T2 | Rear-left tire - cracking and fitment",
+      "status": "service",
+      "text": "Significant visible cracking was confirmed. Replacement is recommended. Installed size 215/50R17 differs from the confirmed 225/50R17 rear placard reference; verify fitment before replacement. Tread: 3/32 in (2.38125 mm). DOT: 0519. Mild uneven wear suggests a follow-up alignment/pressure review; it does not establish suspension failure. Evidence E02."
+    },
+    {
+      "title": "B1 | Left front fender - damage marker 1",
+      "status": "monitor",
+      "text": "Shallow dent with intact finish, recorded as cosmetic damage. Consider cosmetic repair if desired. Evidence E03."
+    },
+    {
+      "title": "B2 | Right front door - damage marker 2",
+      "status": "monitor",
+      "text": "Surface scratch without exposed metal. Cosmetic repair is optional. No photo was supplied in this fictional example."
+    },
+    {
+      "title": "C01 | Identity / title / history",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C02 | Paint / body",
+      "status": "monitor",
+      "text": "See B1 and B2 for complete recorded body observations."
+    },
+    {
+      "title": "C03 | Windshield",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C04 | Lamps / lenses",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C05 | Seats / upholstery",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C06 | Carpet / mats",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C07 | Interior odors",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C08 | Windows / locks",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C09 | Climate controls",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C10 | Other electrical",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C11 | Starting / transmission",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C12 | Road-test braking",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C13 | Road vibration / noise",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C14 | Warning lamps",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C15 | Diagnostic scan",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C16 | Engine-bay leaks",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C17 | Idle / engine",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C18 | Drive belt",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C19 | Battery terminals",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C20 | Fluids",
+      "status": "unknown",
+      "text": "Oil, coolant and brake-fluid observations completed; transmission fluid unavailable. No green status is assigned to the unavailable observation."
+    },
+    {
+      "title": "C21 | Pad estimate / rotors",
+      "status": "checked",
+      "text": "Pad life estimated at 50-75%; visible rotors appeared normal. Optional pad-thickness measurement was not performed. This completed row covers the reported estimate and visible rotor observation only."
+    },
+    {
+      "title": "C22 | Steering / tracking",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C23 | Suspension / ride",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "C24 | Underbody",
+      "status": "unknown",
+      "text": "Full underbody access was unavailable. A complete underside check remains outstanding."
+    },
+    {
+      "title": "C25 | Modifications",
+      "status": "checked",
+      "text": "Recorded checks in this group had no reported concern. This fictional fixture is for layout review only."
+    },
+    {
+      "title": "Front Right tire - recorded measurements",
+      "status": "checked",
+      "text": "Tread 6/32 in (4.7625 mm), cold pressure 34 psi, tire size 225/50R17, load index 98, speed rating V, DOT 0224. No visible cracking, uneven wear, tire damage or wheel damage recorded; size matches the confirmed reference."
+    },
+    {
+      "title": "Rear Right tire - recorded measurements",
+      "status": "checked",
+      "text": "Tread 6/32 in (4.7625 mm), cold pressure 34 psi, tire size 225/50R17, load index 98, speed rating V, DOT 0224. No visible cracking, uneven wear, tire damage or wheel damage recorded; size matches the confirmed reference."
+    }
+  ]
+}

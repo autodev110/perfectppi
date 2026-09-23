@@ -22,6 +22,33 @@ describe("redacted inspection report (plan 25.3)", () => {
     assert.equal(parseInspectionReport(null), null);
   });
 
+  test("typed (catalog 2) answers arrive as their plain summaries", () => {
+    const report = parseInspectionReport({
+      request_id: "6d2a4c1e-6a8e-4d3f-9a4a-1c9b0f1e2a3b",
+      scope: "dents_tires",
+      inspected_at: "2026-09-22T10:00:00Z",
+      performer_kind: "self",
+      performed_by: "Owner self-inspection",
+      sections: [{
+        section_type: "wheels_tires",
+        completion_state: "completed",
+        items: [
+          { prompt: "Measure the front left tire tread depth", answer_type: "measurement", value: "5/32 in" },
+          { prompt: "Front left tire: damage or foreign objects", answer_type: "defect_list", value: "Puncture" },
+          { prompt: "Hood: visible condition", answer_type: "panel_condition", value: "No visible damage" },
+        ],
+        withheld: [],
+        notes_withheld: false,
+        media_count: 0,
+      }],
+      withheld_count: 0,
+      media_count: 0,
+    });
+    assert.ok(report, "structured answer types must not hide the whole report");
+    assert.equal(formatAnswer(report.sections[0].items[0]), "5/32 in");
+    assert.equal(parseInspectionReport(null), null);
+  });
+
   test("age is plain and flags anything a year or older as stale", () => {
     const now = new Date("2026-09-12T00:00:00Z");
     assert.deepEqual(inspectionAge("2026-09-12T00:00:00Z", now).label, "today");

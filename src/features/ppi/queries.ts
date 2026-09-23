@@ -164,7 +164,8 @@ export async function getSubmission(submissionId: string) {
     .select(
       `
       *,
-      request:ppi_requests!ppi_submissions_ppi_request_id_fkey(inspection_scope),
+      request:ppi_requests!ppi_submissions_ppi_request_id_fkey(inspection_scope, performer_type),
+      certification:ppi_submission_certifications(certified_at, text_version, certification_text, facts_hash, submission_revision),
       sections:ppi_sections(
         *,
         answers:ppi_answers(*),
@@ -177,11 +178,14 @@ export async function getSubmission(submissionId: string) {
 
   if (!data) return null;
 
-  const requestScope = (data.request as { inspection_scope?: string } | null)?.inspection_scope;
+  const request = data.request as { inspection_scope?: string; performer_type?: string } | null;
+  const certification = Array.isArray(data.certification) ? data.certification[0] ?? null : data.certification ?? null;
 
   const sorted = {
     ...data,
-    inspection_scope: requestScope ?? "complete",
+    inspection_scope: request?.inspection_scope ?? "complete",
+    performer_mode: request?.performer_type === "self" ? "self" : "technician",
+    certification,
     sections: (data.sections ?? [])
       .sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order)
       .map((s: { answers: { sort_order: number }[]; [key: string]: unknown }) => ({

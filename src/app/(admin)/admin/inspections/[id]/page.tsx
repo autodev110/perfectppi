@@ -194,6 +194,7 @@ export default async function AdminInspectionDetailPage({ params }: PageProps) {
                 content={outputs.standardized.structured_content as unknown as StandardizedContent}
                 generatedAt={outputs.standardized.generated_at}
                 documentUrl={outputs.standardized.document_url ? `/api/outputs/${outputs.standardized.id}/pdf` : null}
+                outputId={outputs.standardized.document_url ? outputs.standardized.id : null}
               />
             </div>
           ) : (

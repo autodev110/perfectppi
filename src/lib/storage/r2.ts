@@ -446,11 +446,19 @@ export function extractKeyFromStoredUrl(storedPublicUrl: string): string {
 export async function generatePresignedGetUrl(
   storedPublicUrl: string,
   expiresIn = 3600,
+  options: { downloadName?: string } = {},
 ): Promise<string> {
   const client = getS3Client();
   const { bucket, key } = resolveStoredObject(storedPublicUrl);
 
-  const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+  const command = new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    // A friendly attachment name instead of the content-addressed key.
+    ...(options.downloadName
+      ? { ResponseContentDisposition: `attachment; filename="${options.downloadName.replace(/[^A-Za-z0-9._-]/g, "-")}"` }
+      : {}),
+  });
   return getSignedUrl(client, command, { expiresIn });
 }
 

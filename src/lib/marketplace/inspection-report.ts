@@ -8,7 +8,20 @@ import { SECTION_LABELS } from "../../features/ppi/constants.ts";
 
 const itemSchema = z.object({
   prompt: z.string(),
-  answer_type: z.enum(["text", "yes_no", "select", "number"]),
+  // Structured (catalog 2) answers arrive as their derived plain summary.
+  answer_type: z.enum([
+    "text",
+    "yes_no",
+    "select",
+    "number",
+    "measurement",
+    "tire_markings",
+    "dot_code",
+    "condition_scale",
+    "defect_list",
+    "tire_placard",
+    "panel_condition",
+  ]),
   value: z.string(),
 });
 

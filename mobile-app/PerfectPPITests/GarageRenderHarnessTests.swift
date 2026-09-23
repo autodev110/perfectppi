@@ -108,4 +108,43 @@ final class GarageRenderHarnessTests: XCTestCase {
         )
         try snapshot(NavigationStack { MessageThreadView(preview: short, currentProfileId: "me") }, name: "messages-thread-short")
     }
+
+    private func structuredAnswer(_ key: String, prompt: String, type: AnswerType, observation: JSONValue? = nil) -> PpiAnswer {
+        PpiAnswer(
+            id: key, ppiSectionId: "s", prompt: prompt, questionKey: key, answerType: type,
+            answerValue: nil, observation: observation, deferredAt: nil, options: nil,
+            isRequired: true, requiresPhoto: false, photoPrompt: nil, sortOrder: 1
+        )
+    }
+
+    func testRenderInspectionEditors() throws {
+        let puncture = Observation.observed(["defects": .array([.object([
+            "id": .string("abcd1"), "type": .string("puncture"), "location": .string("tread"), "certainty": .string("confirmed"),
+        ])])])
+        let pressure = Observation.observed([
+            "reading": .string("34"), "unit": .string("psi"), "context": .string("cold"),
+            "method": .string("pressure_gauge"), "pressure_loss": .string("not_tested"),
+        ])
+        let rows: [(PpiAnswer, String)] = [
+            (structuredAnswer("tires.front_left.tread", prompt: "Measure the front left tire tread depth", type: .measurement), "technician"),
+            (structuredAnswer("tires.rear_left.tread", prompt: "Measure the rear left tire tread depth", type: .measurement,
+                              observation: Observation.exception(.unableToAssess, reason: .noGauge, explanation: nil)), "self"),
+            (structuredAnswer("tires.front_left.pressure", prompt: "Measure the front left tire pressure", type: .measurement, observation: pressure), "technician"),
+            (structuredAnswer("tires.front_left.cracking", prompt: "Front left tire: visible cracking / dry rot", type: .conditionScale,
+                              observation: Observation.observed(["level": .string("starting")])), "technician"),
+            (structuredAnswer("tires.front_left.damage", prompt: "Front left tire: damage or foreign objects", type: .defectList, observation: puncture), "technician"),
+        ]
+        let view = ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                ForEach(rows, id: \.0.id) { row in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(row.0.prompt).font(.headline)
+                        StructuredAnswerEditor(answer: row.0, submissionId: "sub", performerMode: row.1, latestPhotoId: nil) { _ in }
+                    }
+                }
+            }
+            .padding()
+        }
+        try snapshot(view, name: "inspection-editors", size: CGSize(width: 393, height: 2400))
+    }
 }

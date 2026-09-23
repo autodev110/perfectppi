@@ -7,7 +7,10 @@ import {
   isStoredObjectConfigured,
 } from "@/lib/storage/r2";
 import { generateStandardizedReportPdf } from "@/lib/pdf/standardized-report-pdf";
+import { renderReportV2Pdf } from "@/features/outputs/report-v2";
 import type { StandardizedContent } from "@/types/api";
+
+export const runtime = "nodejs";
 
 export async function GET(
   _req: NextRequest,
@@ -26,7 +29,7 @@ export async function GET(
   const supabase = auth.profile.role === "admin" ? createAdminClient() : auth.supabase;
   const { data: output } = await supabase
     .from("standardized_outputs")
-    .select("document_url, structured_content")
+    .select("document_url, structured_content, version, ppi_submission_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -38,9 +41,21 @@ export async function GET(
   // PDF on demand. This keeps download available while private artifact upload
   // is delayed or not configured.
   if (!output.document_url && output.structured_content) {
-    const pdf = generateStandardizedReportPdf(
-      output.structured_content as unknown as StandardizedContent
-    );
+    // Same version switch as the pipeline: outputs created with the redesign
+    // render the two-page report; older outputs keep the legacy layout.
+    const content = output.structured_content as unknown as StandardizedContent;
+    if (content.report_v2?.status === "needs_review") {
+      return new NextResponse("The report is being reviewed and is not available yet.", { status: 409 });
+    }
+    let pdf: Buffer;
+    try {
+      pdf = content.report_v2
+        ? await renderReportV2Pdf(content.report_v2, { submissionId: output.ppi_submission_id, outputVersion: output.version })
+        : generateStandardizedReportPdf(content);
+    } catch (error) {
+      console.error("[outputs/pdf] fallback render failed", error);
+      return new NextResponse("The report is being reviewed and is not available yet.", { status: 409 });
+    }
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
