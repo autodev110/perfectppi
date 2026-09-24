@@ -40,3 +40,7 @@ yarn-error.log*
 .vscode/
 *.pem
 .env*
+
+# Private: business model and personal correspondence stay local.
+docs/business/
+docs/perfectppi-report-handoff/EMAIL_TO_ANZO.txt

@@ -119,4 +119,22 @@ union all
   select '20260918110000', '20260918110000_engagement_signal_analytics.sql', to_regprocedure('public.get_product_engagement_signals(integer)') is not null
 union all
   select '20260918162936', '20260918162936_audit_author_edits_replies_and_analytics.sql', to_regprocedure('public.publish_community_author_edit(uuid, text, uuid, text, jsonb, boolean)') is not null
+union all
+  select '20260923100000', '20260923100000_inspection_report_v2_enums.sql', exists (select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='answer_type' and e.enumlabel='panel_condition')
+union all
+  select '20260923101000', '20260923101000_inspection_report_v2.sql', to_regprocedure('public.claim_inspection_output_exports(text, integer, integer)') is not null
+union all
+  select '20260923110000', '20260923110000_inspection_body_marker_view.sql', coalesce(pg_get_functiondef(to_regprocedure('public.ppi_observation_error(public.answer_type, text, jsonb)')), '') like '%{marker,view}%'
+union all
+  select '20260923113406', '20260923113406_ppi_pressure_recheck_validation.sql', exists (select 1 from pg_constraint where conname='ppi_answers_pressure_recheck_complete')
+union all
+  select '20260923120000', '20260923120000_output_review_audit_action.sql', exists (select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='audit_action' and e.enumlabel='output_review_released')
+union all
+  select '20260923120715', '20260923120715_inspection_output_table_privileges.sql', has_table_privilege('service_role', 'public.standardized_outputs', 'UPDATE') and not has_table_privilege('authenticated', 'public.standardized_outputs', 'UPDATE')
+union all
+  select '20260923122342', '20260923122342_certification_source_integrity.sql', exists (select 1 from pg_trigger where tgname='ppi_submission_certification_source_guard') and not has_table_privilege('service_role', 'public.standardized_outputs', 'TRUNCATE')
+union all
+  select '20260923124446', '20260923124446_database_advisor_cleanup.sql', exists (select 1 from pg_proc where oid=to_regprocedure('public.handle_updated_at()') and proconfig @> array['search_path=""']) and to_regclass('public.community_post_saves_profile_cursor_idx') is null and to_regclass('public.marketplace_listing_saves_profile_cursor_idx') is null
+union all
+  select '20260923130000', '20260923130000_ppi_media_content_hashes.sql', exists (select 1 from information_schema.columns where table_schema='public' and table_name='ppi_media' and column_name='content_sha256') and coalesce(pg_get_functiondef(to_regprocedure('public.submit_ppi_certified(uuid, integer, text, boolean, text)')), '') like '%media_unverified%'
 ) m order by version;
