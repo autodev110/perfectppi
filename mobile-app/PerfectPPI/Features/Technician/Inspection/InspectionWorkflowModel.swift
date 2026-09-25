@@ -282,6 +282,8 @@ final class InspectionWorkflowModel: ObservableObject {
             if OfflineQueue.shared.isOnline {
                 do {
                     _ = try await PpiAPI.saveAnswer(submissionId: submissionId, payload: payload)
+                } catch let error as APIError where error.isPermanentRejection {
+                    throw error
                 } catch {
                     try OfflineQueue.shared.enqueueAnswer(submissionId: submissionId, payload: payload)
                 }
@@ -385,6 +387,10 @@ final class InspectionWorkflowModel: ObservableObject {
                         submissionId: submissionId,
                         payload: payload
                     )
+                } catch let error as APIError where error.isPermanentRejection {
+                    // Queuing a refused answer would retry it forever and
+                    // block submit behind "still syncing"; show why instead.
+                    throw error
                 } catch {
                     try OfflineQueue.shared.enqueueAnswer(
                         submissionId: submissionId,

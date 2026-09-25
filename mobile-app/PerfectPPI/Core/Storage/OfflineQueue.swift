@@ -29,6 +29,15 @@ final class OfflineQueue: ObservableObject {
         var uploadedReference: String? = nil
     }
 
+    /// An answer saved while offline that the server refused once back online.
+    /// It leaves the queue (resending cannot succeed) and is reported instead.
+    struct RejectedAnswer: Codable, Identifiable {
+        var id: String { "\(submissionId):\(answerId)" }
+        let submissionId: String
+        let answerId: String
+        let message: String
+    }
+
     struct PendingOBDSnapshot: Codable, Identifiable {
         let id: String
         let submissionId: String
@@ -39,6 +48,7 @@ final class OfflineQueue: ObservableObject {
     @Published private(set) var pendingAnswers: [PendingAnswer] = []
     @Published private(set) var pendingMedia: [PendingMedia] = []
     @Published private(set) var pendingOBDSnapshots: [PendingOBDSnapshot] = []
+    @Published private(set) var rejectedAnswers: [RejectedAnswer] = []
     @Published private(set) var mediaUploadProgress: [String: Double] = [:]
     @Published private(set) var mediaUploadErrors: [String: String] = [:]
     @Published private(set) var mediaSyncRevision = 0
@@ -175,6 +185,13 @@ final class OfflineQueue: ObservableObject {
         }
     }
 
+    /// Clears reported rejections once the inspector has seen them.
+    func acknowledgeRejections(submissionId: String) {
+        guard rejectedAnswers.contains(where: { $0.submissionId == submissionId }) else { return }
+        rejectedAnswers.removeAll { $0.submissionId == submissionId }
+        save()
+    }
+
     /// Discard a retained photo that has not reached the inspection record.
     func removeMedia(id: String) async throws {
         guard let entry = pendingMedia.first(where: { $0.id == id }) else { return }
@@ -240,7 +257,9 @@ final class OfflineQueue: ObservableObject {
     func drain() async {
         guard isOnline else { return }
 
-        // Drain answers first.
+        // Drain answers first. Connectivity and server errors stay queued; an
+        // answer the server refuses is reported once instead of blocking the
+        // inspection forever behind "still syncing".
         var stillPendingAnswers: [PendingAnswer] = []
         for entry in pendingAnswers {
             do {
@@ -248,6 +267,13 @@ final class OfflineQueue: ObservableObject {
                     submissionId: entry.submissionId,
                     payload: entry.payload
                 )
+            } catch let error as APIError where error.isPermanentRejection {
+                rejectedAnswers.removeAll { $0.id == entry.id }
+                rejectedAnswers.append(RejectedAnswer(
+                    submissionId: entry.submissionId,
+                    answerId: entry.payload.answerId,
+                    message: error.localizedDescription
+                ))
             } catch {
                 stillPendingAnswers.append(entry)
             }
@@ -287,6 +313,7 @@ final class OfflineQueue: ObservableObject {
         let pendingAnswers: [PendingAnswer]
         let pendingMedia: [PendingMedia]
         let pendingOBDSnapshots: [PendingOBDSnapshot]?
+        let rejectedAnswers: [RejectedAnswer]?
     }
 
     private func save() {
@@ -302,7 +329,8 @@ final class OfflineQueue: ObservableObject {
         let snapshot = Snapshot(
             pendingAnswers: pendingAnswers,
             pendingMedia: pendingMedia,
-            pendingOBDSnapshots: pendingOBDSnapshots
+            pendingOBDSnapshots: pendingOBDSnapshots,
+            rejectedAnswers: rejectedAnswers
         )
         let data = try JSONEncoder().encode(snapshot)
         try data.write(to: storeURL, options: [.atomic, .completeFileProtection])
@@ -314,6 +342,7 @@ final class OfflineQueue: ObservableObject {
         pendingAnswers = snapshot.pendingAnswers
         pendingMedia = snapshot.pendingMedia
         pendingOBDSnapshots = snapshot.pendingOBDSnapshots ?? []
+        rejectedAnswers = snapshot.rejectedAnswers ?? []
     }
 
     // MARK: - Reachability

@@ -36,6 +36,20 @@ enum APIError: LocalizedError {
         }
     }
 
+    /// The server understood the request and refused it, so resending the same
+    /// payload cannot succeed (validation, conflict, gone, update required).
+    /// Timeouts, rate limits, sign-in and server errors stay retryable.
+    var isPermanentRejection: Bool {
+        switch self {
+        case .forbidden, .notFound, .duplicateVehicle:
+            return true
+        case .server(let status, _), .serverResponse(let status, _, _, _):
+            return (400..<500).contains(status) && ![401, 408, 425, 429].contains(status)
+        default:
+            return false
+        }
+    }
+
     static func userFacingServerMessage(
         status: Int,
         code: String? = nil,

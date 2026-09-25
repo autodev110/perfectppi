@@ -91,7 +91,7 @@ struct InspectionWorkflowView: View {
                         do {
                             try await model.upsertAnswer(.init(answerId: answer.id, value: decoded.vin))
                         } catch {
-                            errorMessage = "The VIN could not be saved offline. Please try again."
+                            errorMessage = saveFailureMessage(error, fallback: "The VIN could not be saved offline. Please try again.")
                         }
                     }
                 }
@@ -238,7 +238,7 @@ struct InspectionWorkflowView: View {
                         do {
                             try await model.upsertAnswer(updated)
                         } catch {
-                            errorMessage = "This answer could not be saved offline. Please try again."
+                            errorMessage = saveFailureMessage(error, fallback: "This answer could not be saved offline. Please try again.")
                         }
                     }
                 }
@@ -292,7 +292,7 @@ struct InspectionWorkflowView: View {
                     observation: observation ?? .null
                 ))
             } catch {
-                errorMessage = "This answer could not be saved offline. Please try again."
+                errorMessage = saveFailureMessage(error, fallback: "This answer could not be saved offline. Please try again.")
             }
         }
     }
@@ -535,7 +535,7 @@ struct InspectionWorkflowView: View {
                         do {
                             try await model.skipCurrent()
                         } catch {
-                            errorMessage = "This skipped answer could not be saved offline. Please try again."
+                            errorMessage = saveFailureMessage(error, fallback: "This skipped answer could not be saved offline. Please try again.")
                         }
                     }
                 }
@@ -646,11 +646,27 @@ struct InspectionWorkflowView: View {
         guard !submitting else { return }
         submitting = true
         defer { submitting = false }
-        await OfflineQueue.shared.drain()
-        guard !hasPendingOfflineItemsForSubmission else {
-            errorMessage = OfflineQueue.shared.isOnline
-                ? "Please wait for saved answers and photos to finish syncing before submitting."
-                : "Reconnect to the internet so saved answers and photos can sync before submitting."
+        let queue = OfflineQueue.shared
+        await queue.drain()
+
+        // Answers saved offline that the server refused: say why, reload the
+        // stored copy and open the first one so it can be answered again.
+        let rejected = queue.rejectedAnswers.filter { $0.submissionId == submissionId }
+        if let first = rejected.first {
+            queue.acknowledgeRejections(submissionId: submissionId)
+            try? await model.prepareReview()
+            model.jump(toAnswerId: first.answerId)
+            let prompt = model.answers.first(where: { $0.id == first.answerId })?.prompt ?? String(localized: "An answer")
+            let reason = Self.sentence(first.message)
+            errorMessage = rejected.count == 1
+                ? String(localized: "\(prompt) was not saved: \(reason) Answer it again, then submit.")
+                : String(localized: "\(rejected.count) answers were not saved. \(prompt): \(reason) Answer them again, then submit.")
+            return
+        }
+
+        if let blocker = submissionBlocker() {
+            if let answerId = blocker.answerId { model.jump(toAnswerId: answerId) }
+            errorMessage = blocker.message
             return
         }
         do {
@@ -661,10 +677,54 @@ struct InspectionWorkflowView: View {
         }
     }
 
-    private var hasPendingOfflineItemsForSubmission: Bool {
-        return OfflineQueue.shared.pendingAnswers.contains { $0.submissionId == submissionId } ||
-        OfflineQueue.shared.pendingMedia.contains { $0.submissionId == submissionId } ||
-        OfflineQueue.shared.pendingOBDSnapshots.contains { $0.submissionId == submissionId }
+    /// What still has to sync before this inspection can be certified, named
+    /// specifically and pointing at the question the inspector can act on.
+    private func submissionBlocker() -> (message: String, answerId: String?)? {
+        let queue = OfflineQueue.shared
+        let media = queue.pendingMedia.filter { $0.submissionId == submissionId }
+        let answers = queue.pendingAnswers.filter { $0.submissionId == submissionId }
+        let scanner = queue.pendingOBDSnapshots.contains { $0.submissionId == submissionId }
+        guard !media.isEmpty || !answers.isEmpty || scanner else { return nil }
+
+        guard queue.isOnline else {
+            return (String(localized: "Reconnect to the internet so saved answers and photos can sync before submitting."), media.first?.answerId)
+        }
+        let failed = media.filter { queue.mediaUploadErrors[$0.id] != nil }
+        if let first = failed.first {
+            let reason = Self.sentence(queue.mediaUploadErrors[first.id] ?? "")
+            return (failed.count == 1
+                ? String(localized: "A photo could not be uploaded: \(reason) Retry or remove it on its question.")
+                : String(localized: "\(failed.count) photos could not be uploaded: \(reason) Retry or remove them on their questions."),
+                first.answerId)
+        }
+        if let first = media.first {
+            return (media.count == 1
+                ? String(localized: "A photo is still uploading. Keep the app open and try again in a moment.")
+                : String(localized: "\(media.count) photos are still uploading. Keep the app open and try again in a moment."),
+                first.answerId)
+        }
+        if let first = answers.first {
+            return (answers.count == 1
+                ? String(localized: "An answer could not be saved yet. Try again in a moment.")
+                : String(localized: "\(answers.count) answers could not be saved yet. Try again in a moment."),
+                first.payload.answerId)
+        }
+        return (String(localized: "The scanner session has not synced yet. Try again in a moment."), nil)
+    }
+
+    /// The server's reason for refusing a save, or the local fallback when the
+    /// save failed for another reason (it was kept for retry instead).
+    private func saveFailureMessage(_ error: Error, fallback: String) -> String {
+        if let apiError = error as? APIError, apiError.isPermanentRejection {
+            return apiError.localizedDescription
+        }
+        return fallback
+    }
+
+    private static func sentence(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let last = trimmed.last else { return "" }
+        return ".!?".contains(last) ? trimmed : trimmed + "."
     }
 
     private var shouldPromptForScannerAtStart: Bool {
