@@ -58,6 +58,10 @@ interface EditorProps {
   latestPhotoId?: string | null;
   /** Confirmed sidewall markings from the previous corner, for "Same as previous". */
   previousMarkings?: Record<string, unknown> | null;
+  /** Photos are read together for the whole step, so hide per-photo reading. */
+  hideSuggestion?: boolean;
+  /** Bumped after answers are filled from photos, so editors reload them. */
+  fillVersion?: number;
 }
 
 function parseValue(value: string): ObservationDocument | null {
@@ -626,6 +630,7 @@ function MarkingsEditor(props: EditorProps) {
       value: trimmed,
       source: nextExtraction ? "confirmed_extraction" : "inspector_entry",
       extraction_id: nextExtraction,
+      extraction_ids: nextExtraction && nextExtraction === editor.initial?.extraction_id ? editor.initial?.extraction_ids ?? null : null,
     });
   }
 
@@ -644,28 +649,30 @@ function MarkingsEditor(props: EditorProps) {
       />
       {editor.mode === "observed" ? (
         <>
-          <SuggestionPanel
-            state={suggestion}
-            fields={[
-              { key: "size", label: uiText("ui.size_1af8519073") },
-              { key: "load_index", label: uiText("ui.load_index_f969c15757") },
-              { key: "speed_rating", label: uiText("ui.speed_rating_d74d0984f8") },
-              { key: "brand", label: uiText("ui.brand_090ed4316f") },
-            ]}
-            onUse={(result) => {
-              const next = {
-                ...fields,
-                ...Object.fromEntries(
-                  Object.entries(result.candidates)
-                    .filter(([key, value]) => value && key in fields)
-                    .map(([key, value]) => [key, String(value)]),
-                ),
-              };
-              setFields(next);
-              setExtractionId(result.extraction_id);
-              publish(next, "observed", result.extraction_id);
-            }}
-          />
+          {props.hideSuggestion ? null : (
+            <SuggestionPanel
+              state={suggestion}
+              fields={[
+                { key: "size", label: uiText("ui.size_1af8519073") },
+                { key: "load_index", label: uiText("ui.load_index_f969c15757") },
+                { key: "speed_rating", label: uiText("ui.speed_rating_d74d0984f8") },
+                { key: "brand", label: uiText("ui.brand_090ed4316f") },
+              ]}
+              onUse={(result) => {
+                const next = {
+                  ...fields,
+                  ...Object.fromEntries(
+                    Object.entries(result.candidates)
+                      .filter(([key, value]) => value && key in fields)
+                      .map(([key, value]) => [key, String(value)]),
+                  ),
+                };
+                setFields(next);
+                setExtractionId(result.extraction_id);
+                publish(next, "observed", result.extraction_id);
+              }}
+            />
+          )}
           {props.previousMarkings ? (
             <button
               type="button"
@@ -750,6 +757,7 @@ function DotEditor(props: EditorProps) {
       value: digits ? { code: digits } : null,
       source: nextExtraction ? "confirmed_extraction" : "inspector_entry",
       extraction_id: nextExtraction,
+      extraction_ids: nextExtraction && nextExtraction === editor.initial?.extraction_id ? editor.initial?.extraction_ids ?? null : null,
     });
   }
 
@@ -758,16 +766,18 @@ function DotEditor(props: EditorProps) {
       <ModeSelector modes={["observed", "unable_to_assess"]} mode={editor.mode} onChange={(mode) => { editor.setMode(mode); publish(code, mode); }} />
       {editor.mode === "observed" ? (
         <>
-          <SuggestionPanel
-            state={suggestion}
-            fields={[{ key: "code", label: uiText("ui.date_code_39f501d4da") }]}
-            onUse={(result) => {
-              const next = String(result.candidates.code ?? "");
-              setCode(next);
-              setExtractionId(result.extraction_id);
-              publish(next, "observed", result.extraction_id);
-            }}
-          />
+          {props.hideSuggestion ? null : (
+            <SuggestionPanel
+              state={suggestion}
+              fields={[{ key: "code", label: uiText("ui.date_code_39f501d4da") }]}
+              onUse={(result) => {
+                const next = String(result.candidates.code ?? "");
+                setCode(next);
+                setExtractionId(result.extraction_id);
+                publish(next, "observed", result.extraction_id);
+              }}
+            />
+          )}
           <Input
             value={code}
             inputMode="numeric"
@@ -1279,6 +1289,7 @@ function PlacardEditor(props: EditorProps) {
       },
       source: nextExtraction ? "confirmed_extraction" : "inspector_entry",
       extraction_id: nextExtraction,
+      extraction_ids: nextExtraction && nextExtraction === editor.initial?.extraction_id ? editor.initial?.extraction_ids ?? null : null,
     });
   }
 
@@ -1293,28 +1304,30 @@ function PlacardEditor(props: EditorProps) {
       <ModeSelector modes={["observed", "unable_to_assess"]} mode={editor.mode} onChange={(mode) => { editor.setMode(mode); publish(fields, mode); }} />
       {editor.mode === "observed" ? (
         <>
-          <SuggestionPanel
-            state={suggestion}
-            fields={[
-              { key: "front_size", label: uiText("ui.front_size_f4c9ef374f") },
-              { key: "front_pressure", label: uiText("ui.front_cold_pressure_fbd77b5828") },
-              { key: "rear_size", label: uiText("ui.rear_size_25efb0de18") },
-              { key: "rear_pressure", label: uiText("ui.rear_cold_pressure_03e2eada95") },
-            ]}
-            onUse={(result) => {
-              const next = {
-                ...fields,
-                ...Object.fromEntries(
-                  Object.entries(result.candidates)
-                    .filter(([key, value]) => value && key in fields)
-                    .map(([key, value]) => [key, String(value)]),
-                ),
-              };
-              setFields(next);
-              setExtractionId(result.extraction_id);
-              publish(next, "observed", result.extraction_id);
-            }}
-          />
+          {props.hideSuggestion ? null : (
+            <SuggestionPanel
+              state={suggestion}
+              fields={[
+                { key: "front_size", label: uiText("ui.front_size_f4c9ef374f") },
+                { key: "front_pressure", label: uiText("ui.front_cold_pressure_fbd77b5828") },
+                { key: "rear_size", label: uiText("ui.rear_size_25efb0de18") },
+                { key: "rear_pressure", label: uiText("ui.rear_cold_pressure_03e2eada95") },
+              ]}
+              onUse={(result) => {
+                const next = {
+                  ...fields,
+                  ...Object.fromEntries(
+                    Object.entries(result.candidates)
+                      .filter(([key, value]) => value && key in fields)
+                      .map(([key, value]) => [key, String(value)]),
+                  ),
+                };
+                setFields(next);
+                setExtractionId(result.extraction_id);
+                publish(next, "observed", result.extraction_id);
+              }}
+            />
+          )}
           <div className="grid grid-cols-2 gap-2">
             <Field label={uiText("ui.front_tire_size_09f282cc55")}>
               <Input value={fields.front_size} onChange={(event) => update("front_size", event.target.value)} placeholder={uiText("ui.e_g_225_50r17_615bb8c474")} />
@@ -1387,8 +1400,9 @@ export function StructuredAnswerInput(props: EditorProps) {
   if (!info) {
     return <p className="text-sm text-destructive">{uiText("ui.this_question_cannot_be_edited_in_this_versi_e3e24748ed")}</p>;
   }
-  // Remount when the underlying row changes so drafts never leak between rows.
-  const key = props.answer.id;
+  // Remount when the underlying row changes so drafts never leak between rows,
+  // and after a fill from photos so the editor shows the filled values.
+  const key = `${props.answer.id}:${props.fillVersion ?? 0}`;
   switch (info.family) {
     case "tire_tread":
     case "tire_pressure":

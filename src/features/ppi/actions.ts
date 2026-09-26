@@ -500,9 +500,12 @@ export async function saveAnswers(submissionId: string, answers: SaveAnswerInput
   // A value adopted from a photo reading must reference a reading of a photo
   // in this same inspection; otherwise it is an ordinary manual entry.
   const extractionIds = [...new Set(parsed.data.answers
-    .map((answer) => (answer.observation as { source?: string; extraction_id?: string } | null | undefined))
+    .map((answer) => (answer.observation as { source?: string; extraction_id?: string; extraction_ids?: unknown } | null | undefined))
     .filter((observation) => observation?.source === "confirmed_extraction" && observation.extraction_id)
-    .map((observation) => observation!.extraction_id!))];
+    .flatMap((observation) => [
+      observation!.extraction_id!,
+      ...(Array.isArray(observation!.extraction_ids) ? observation!.extraction_ids.filter((id): id is string => typeof id === "string") : []),
+    ]))];
   const knownExtractions = new Map<string, { status: string; target: string }>();
   if (extractionIds.length) {
     const { data: extractions } = await supabase
@@ -538,7 +541,6 @@ export async function saveAnswers(submissionId: string, answers: SaveAnswerInput
         if (
           validation.observation.source === "confirmed_extraction"
           && (() => {
-            const extraction = knownExtractions.get(validation.observation.extraction_id ?? "");
             const family = parseStructuredKey(row.question_key ?? "")?.family;
             const expectedTarget = family === "tire_sidewall"
               ? "tire_sidewall"
@@ -547,7 +549,11 @@ export async function saveAnswers(submissionId: string, answers: SaveAnswerInput
                 : family === "tire_placard"
                   ? "tire_placard"
                   : null;
-            return !extraction || extraction.status !== "extracted" || extraction.target !== expectedTarget;
+            const referenced = [validation.observation.extraction_id ?? "", ...(validation.observation.extraction_ids ?? [])];
+            return referenced.some((id) => {
+              const extraction = knownExtractions.get(id);
+              return !extraction || extraction.status !== "extracted" || extraction.target !== expectedTarget;
+            });
           })()
         ) {
           invalid.push({ answerId, error: "That photo reading is unavailable or does not match this check." });

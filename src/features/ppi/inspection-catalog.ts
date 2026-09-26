@@ -324,7 +324,19 @@ export function catalogQuestions(
     return keyedLegacy(sectionType);
   }
 
-  const wheels = [PLACARD_QUESTION, ...CAPTURE_CORNER_ORDER.flatMap(wheelCard)];
+  const perCorner = CAPTURE_CORNER_ORDER.flatMap(wheelCard);
+  const tirePhotoQuestions = perCorner.filter((question) => {
+    const family = parseStructuredKey(question.questionKey)?.family;
+    return family === "tire_sidewall" || family === "tire_dot";
+  });
+  const handsOnQuestions = perCorner.filter((question) => {
+    const family = parseStructuredKey(question.questionKey)?.family;
+    return family !== "tire_sidewall" && family !== "tire_dot";
+  });
+  // Keep the placard and every sidewall/DOT row physically contiguous. This
+  // makes the first tire page one capture pass even in clients whose step
+  // navigator groups adjacent rows rather than gathering by group id.
+  const wheels = [PLACARD_QUESTION, ...tirePhotoQuestions, ...handsOnQuestions];
 
   if (scope === "dents_tires") {
     if (sectionType === "wheels_tires") return wheels;
@@ -354,10 +366,12 @@ export function catalogQuestions(
 // Capture steps: rows that the UI presents together on one card
 // ---------------------------------------------------------------------------
 
+export const TIRE_PHOTOS_GROUP_ID = "tires:photos";
+
 export interface StepGroup {
   id: string;
   label: string;
-  kind: "wheel" | "body_zone" | "brake_measurements";
+  kind: "tire_photos" | "wheel" | "body_zone" | "brake_measurements";
   corner?: Corner;
   zone?: string;
 }
@@ -377,6 +391,12 @@ export function stepGroupForKey(questionKey: string | null | undefined): StepGro
   }
   if (info.family === "brake_pad") {
     return { id: "brakes:measurements", label: "Brake pad measurements", kind: "brake_measurements" };
+  }
+  // The placard and every tire's sidewall/DOT markings are photographed and
+  // read together on the first tire step; the wheel cards keep the checks
+  // that need hands on the tire.
+  if (info.family === "tire_placard" || info.family === "tire_sidewall" || info.family === "tire_dot") {
+    return { id: TIRE_PHOTOS_GROUP_ID, label: "Tire labels & sidewalls", kind: "tire_photos" };
   }
   if ("corner" in info) {
     return { id: `wheel:${info.corner}`, label: `${CORNER_LABELS[info.corner]} wheel`, kind: "wheel", corner: info.corner };

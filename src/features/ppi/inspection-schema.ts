@@ -549,6 +549,11 @@ export interface ObservationDocument<V = Record<string, unknown>> {
   source: "inspector_entry" | "confirmed_extraction";
   /** Extraction record the inspector accepted or corrected, when used. */
   extraction_id?: string | null;
+  /**
+   * Every photo reading combined into this answer (tire photos read together).
+   * Always includes extraction_id; absent for a single-photo reading.
+   */
+  extraction_ids?: string[] | null;
   /** Why a normally expected photo could not be taken. */
   evidence_exception?: { code: ExceptionReasonCode; explanation?: string | null } | null;
 }
@@ -560,6 +565,7 @@ const envelope = z.object({
   reason: reasonSchema.optional().nullable(),
   source: z.enum(["inspector_entry", "confirmed_extraction"]).default("inspector_entry"),
   extraction_id: z.string().uuid().optional().nullable(),
+  extraction_ids: z.array(z.string().uuid()).max(40).optional().nullable(),
   evidence_exception: reasonSchema.optional().nullable(),
 });
 
@@ -671,6 +677,12 @@ export function validateObservation(
   if (doc.source === "confirmed_extraction" && !doc.extraction_id) {
     return { ok: false, error: "Confirmed photo readings must reference their extraction." };
   }
+  const extractionIds = doc.source === "confirmed_extraction" && doc.extraction_ids?.length
+    ? [...new Set(doc.extraction_ids)]
+    : null;
+  if (extractionIds && !extractionIds.includes(doc.extraction_id!)) {
+    return { ok: false, error: "Confirmed photo readings must reference their extraction." };
+  }
 
   return {
     ok: true,
@@ -681,6 +693,7 @@ export function validateObservation(
       reason: null,
       source: doc.source,
       extraction_id: doc.source === "confirmed_extraction" ? doc.extraction_id ?? null : null,
+      ...(extractionIds ? { extraction_ids: extractionIds } : {}),
       evidence_exception: doc.evidence_exception
         ? {
             code: doc.evidence_exception.code,

@@ -229,7 +229,7 @@ final class InspectionWorkflowModel: ObservableObject {
                 loadedAnswers
                     .filter { $0.ppiSectionId == section.id }
                     .sorted { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) }
-            }
+            }.groupingTirePhotoQuestions()
             let deferredAnswers = canonicalAnswers
                 .filter { $0.deferredAt != nil }
                 .sorted { ($0.deferredAt ?? .distantPast) < ($1.deferredAt ?? .distantPast) }
@@ -323,6 +323,44 @@ final class InspectionWorkflowModel: ObservableObject {
         if let media = try? await PpiAPI.media(submissionId: submissionId) {
             allMedia = media
         }
+    }
+
+    /// Reads every persisted placard/sidewall photo and refreshes the answers
+    /// the server filled. Queued answers or photos must sync first so an older
+    /// server draft can never overwrite newer work on the device.
+    func readTirePhotos() async -> [PpiAPI.TirePhotoReadOutcome] {
+        guard let submissionId else { return [] }
+        let queue = OfflineQueue.shared
+        guard queue.isOnline else {
+            return PpiAPI.TireReadingSlot.allCases.map {
+                .init(slot: $0, result: nil, error: String(localized: "Reconnect to read the tire photos."))
+            }
+        }
+
+        await queue.drain()
+        let hasPendingAnswers = queue.pendingAnswers.contains { $0.submissionId == submissionId }
+        let hasPendingMedia = queue.pendingMedia.contains { $0.submissionId == submissionId }
+        if hasPendingAnswers || hasPendingMedia {
+            let message = String(localized: "Wait for the saved answers and photos to finish syncing, then try again.")
+            return PpiAPI.TireReadingSlot.allCases.map { .init(slot: $0, result: nil, error: message) }
+        }
+
+        var outcomes: [PpiAPI.TirePhotoReadOutcome] = []
+        for slot in PpiAPI.TireReadingSlot.allCases {
+            do {
+                let result = try await PpiAPI.readTirePhotos(submissionId: submissionId, slot: slot)
+                outcomes.append(.init(slot: slot, result: result, error: nil))
+            } catch {
+                outcomes.append(.init(slot: slot, result: nil, error: error.localizedDescription))
+            }
+        }
+
+        if let loadedAnswers = try? await PpiAPI.answers(submissionId: submissionId) {
+            let byId = Dictionary(uniqueKeysWithValues: loadedAnswers.map { ($0.id, $0) })
+            answers = answers.map { byId[$0.id] ?? $0 }
+        }
+        await refreshMedia()
+        return outcomes
     }
 
     func clearLocalPhotoIfNeeded(answerId: String) {
@@ -498,5 +536,21 @@ final class InspectionWorkflowModel: ObservableObject {
         localPhotoAnswerIds.contains(answerId) ||
         allMedia.contains { $0.ppiAnswerId == answerId && $0.mediaType == "image" } ||
         OfflineQueue.shared.pendingMedia.contains { $0.answerId == answerId }
+    }
+}
+
+private extension Array where Element == PpiAnswer {
+    /// Catalog 2 now stores these rows together, but older in-progress drafts
+    /// retain their original sort order. Gather them at the first tire-label
+    /// row so those drafts receive the same one-page capture flow.
+    func groupingTirePhotoQuestions() -> [PpiAnswer] {
+        let tirePhotos = filter { StructuredKey.parse($0.questionKey)?.stepGroupId == "tires:photos" }
+        guard tirePhotos.count > 1,
+              let firstIndex = firstIndex(where: { StructuredKey.parse($0.questionKey)?.stepGroupId == "tires:photos" })
+        else { return self }
+        var remaining = filter { StructuredKey.parse($0.questionKey)?.stepGroupId != "tires:photos" }
+        let insertion = Swift.min(firstIndex, remaining.count)
+        remaining.insert(contentsOf: tirePhotos, at: insertion)
+        return remaining
     }
 }

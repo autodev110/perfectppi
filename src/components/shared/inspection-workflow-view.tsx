@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { Fragment, useState, useEffect, useMemo } from "react";
 import { uploadFailureMessage } from "@/lib/uploads/prepare-image";
 import { UPLOAD_HINT, UploadError, uploadPhoto, type UploadStage } from "@/lib/uploads/upload-photo";
 import { PhotoUploadSlot, type PendingUpload } from "@/components/shared/photo-upload-slot";
@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { InspectionStepCard } from "@/components/shared/inspection-step-card";
 import { AnswerInput } from "@/components/shared/answer-input";
 import { StructuredAnswerInput } from "@/components/shared/structured-answer-input";
+import { TirePhotosReader } from "@/components/shared/tire-photos-reader";
 import { ProgressTracker } from "@/components/shared/progress-tracker";
 import { CameraCapture } from "@/components/shared/camera-capture";
 import { VinScanButton } from "@/components/shared/vin-scan-button";
@@ -20,7 +21,7 @@ import {
 } from "@/features/ppi/constants";
 import { CERTIFICATION_TEXT, CERTIFICATION_TEXT_VERSION } from "@/features/ppi/certification";
 import { BODY_ZONES } from "@/features/ppi/inspection-catalog";
-import { CAPTURE_CORNER_ORDER, isStructuredAnswerType, parseStructuredKey } from "@/features/ppi/inspection-schema";
+import { CAPTURE_CORNER_ORDER, isStructuredAnswerType, parseStructuredKey, type Corner } from "@/features/ppi/inspection-schema";
 import { buildInspectionFacts } from "@/features/ppi/inspection-facts";
 import { evaluateInspection } from "@/features/ppi/inspection-rules";
 import type { SectionType, AnswerType } from "@/types/enums";
@@ -60,6 +61,25 @@ export function InspectionWorkflowView({
   // In-flight and failed photos stay visible in place with progress, retry,
   // and remove (Renditions doc: upload-state feedback, preserved context).
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
+  // Bumped after tire details are filled from photos so the editors reload.
+  const [tireFillVersion, setTireFillVersion] = useState(0);
+
+  const tireHeading = (corner: Corner): string => {
+    switch (corner) {
+      case "front_left": return uiText("ui.front_left_tire_dd20734a3e");
+      case "front_right": return uiText("ui.front_right_tire_5b7c00c16b");
+      case "rear_left": return uiText("ui.rear_left_tire_5b9aa120f5");
+      case "rear_right": return uiText("ui.rear_right_tire_39b0dfb355");
+    }
+  };
+  const sidewallCaptureLabel = (corner: Corner): string => {
+    switch (corner) {
+      case "front_left": return uiText("ui.add_front_left_sidewall_dot_photos_5ed7fad643");
+      case "front_right": return uiText("ui.add_front_right_sidewall_dot_photos_9075206073");
+      case "rear_left": return uiText("ui.add_rear_left_sidewall_dot_photos_ef732674c7");
+      case "rear_right": return uiText("ui.add_rear_right_sidewall_dot_photos_37c32795aa");
+    }
+  };
 
   const workflow = useInspectionWorkflow(submissionId);
 
@@ -461,6 +481,16 @@ export function InspectionWorkflowView({
         }
       >
         <div className="space-y-6">
+          {currentGroup?.kind === "tire_photos" ? (
+            <TirePhotosReader
+              photoCount={currentSection.media.filter(
+                (item) => item.media_type === "image" && currentStepAnswers.some((answer) => answer.id === item.ppi_answer_id),
+              ).length}
+              onRead={() => workflow.readTirePhotos()}
+              onFilled={() => setTireFillVersion((version) => version + 1)}
+            />
+          ) : null}
+
           {currentGroup?.kind === "wheel" ? (
             <p className="text-sm text-muted-foreground">{uiText("ui.work_around_the_car_front_left_rear_left_rea_2fbff08ad7")}</p>
           ) : null}
@@ -485,12 +515,24 @@ export function InspectionWorkflowView({
             >{uiText("ui.mark_the_f3d2cedb83")}{unansweredPanels.length}{uiText("ui.unanswered_panel_s_here_as_no_visible_damage_ccfc495793")}</Button>
           ) : null}
 
-          {currentStepAnswers.map((answer) => (
+          {currentStepAnswers.map((answer) => {
+            const tirePhotos = currentGroup?.kind === "tire_photos";
+            const key = parseStructuredKey(answer.question_key ?? "");
+            const corner = key && "corner" in key ? key.corner : null;
+            return (
+            <Fragment key={answer.id}>
+            {tirePhotos && key?.family === "tire_sidewall" && corner ? (
+              <h3 className="pt-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">{tireHeading(corner)}</h3>
+            ) : null}
             <AnswerBlock
-              key={answer.id}
               answer={answer}
               section={currentSection}
               grouped={Boolean(currentGroup)}
+              hideSuggestion={tirePhotos}
+              fillVersion={tirePhotos ? tireFillVersion : undefined}
+              // One photo set per tire covers both its markings and its DOT code.
+              hideCapture={tirePhotos && key?.family === "tire_dot"}
+              captureLabel={tirePhotos && key?.family === "tire_sidewall" && corner ? sidewallCaptureLabel(corner) : undefined}
               value={workflow.state.answers.get(answer.id) ?? ""}
               workflow={workflow}
               submissionId={submissionId}
@@ -507,7 +549,9 @@ export function InspectionWorkflowView({
               }}
               onDeletePhoto={(mediaId) => deleteCapturedPhoto(currentSection.id, mediaId)}
             />
-          ))}
+            </Fragment>
+            );
+          })}
 
           {preparingReview ? (
             <p className="text-center text-sm text-muted-foreground">{uiText("ui.saving_and_preparing_your_review_c94c5c9506")}</p>
@@ -565,6 +609,10 @@ function AnswerBlock({
   answer,
   section,
   grouped,
+  hideSuggestion,
+  fillVersion,
+  hideCapture,
+  captureLabel,
   value,
   workflow,
   submissionId,
@@ -577,6 +625,10 @@ function AnswerBlock({
   answer: PpiAnswerItem;
   section: PpiSectionItem;
   grouped: boolean;
+  hideSuggestion?: boolean;
+  fillVersion?: number;
+  hideCapture?: boolean;
+  captureLabel?: string;
   value: string;
   workflow: Workflow;
   submissionId: string;
@@ -617,6 +669,8 @@ function AnswerBlock({
           submissionId={submissionId}
           latestPhotoId={latestPhotoId}
           previousMarkings={previousCornerMarkings(section, answer, workflow)}
+          hideSuggestion={hideSuggestion}
+          fillVersion={fillVersion}
         />
       ) : (
         <>
@@ -640,7 +694,7 @@ function AnswerBlock({
 
       {/* Camera capture — offered on every row; whether it gates Continue
           depends on the row's rule and, for typed rows, on the answer. */}
-      <button
+      {hideCapture ? null : <button
         type="button"
         onClick={onCapture}
         className={cn(
@@ -650,8 +704,8 @@ function AnswerBlock({
         )}
       >
         <Camera className="h-5 w-5" />
-        {answer.photo_prompt ?? uiText("ui.capture_photo_d312fd29a2")}
-      </button>
+        {captureLabel ?? answer.photo_prompt ?? uiText("ui.capture_photo_d312fd29a2")}
+      </button>}
 
       {(media.length > 0 || pendingUploads.length > 0) && (
         <div className="grid grid-cols-2 gap-3">

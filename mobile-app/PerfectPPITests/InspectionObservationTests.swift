@@ -10,7 +10,9 @@ final class InspectionObservationTests: XCTestCase {
         XCTAssertEqual(StructuredKey.parse("tires.front_left.tread")?.stepGroupId, "wheel:front_left")
         XCTAssertEqual(StructuredKey.parse("wheels.front_left.damage")?.stepGroupId, "wheel:front_left")
         XCTAssertEqual(StructuredKey.parse("body.left_rear_door.condition")?.stepGroupId, "body:left")
-        XCTAssertNil(StructuredKey.parse("tires.placard")?.stepGroupId)
+        XCTAssertEqual(StructuredKey.parse("tires.placard")?.stepGroupId, "tires:photos")
+        XCTAssertEqual(StructuredKey.parse("tires.front_left.sidewall")?.stepGroupId, "tires:photos")
+        XCTAssertEqual(StructuredKey.parse("tires.front_left.dot_date")?.stepGroupId, "tires:photos")
         XCTAssertNil(StructuredKey.parse("tires.fl.tread"), "aliases are not canonical corners")
         XCTAssertNil(StructuredKey.parse("Front left tire tread depth (in 32nds of an inch)"))
     }

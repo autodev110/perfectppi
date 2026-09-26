@@ -10,16 +10,33 @@ struct StructuredAnswerEditor: View {
     let submissionId: String
     let performerMode: String
     let latestPhotoId: String?
+    let hidePhotoSuggestion: Bool
     var onChange: (JSONValue?) -> Void
+
+    init(
+        answer: PpiAnswer,
+        submissionId: String,
+        performerMode: String,
+        latestPhotoId: String?,
+        hidePhotoSuggestion: Bool = false,
+        onChange: @escaping (JSONValue?) -> Void
+    ) {
+        self.answer = answer
+        self.submissionId = submissionId
+        self.performerMode = performerMode
+        self.latestPhotoId = latestPhotoId
+        self.hidePhotoSuggestion = hidePhotoSuggestion
+        self.onChange = onChange
+    }
 
     var body: some View {
         switch StructuredKey.parse(answer.questionKey)?.family {
         case .tireTread?, .tirePressure?, .brakePad?, .batteryTest?:
             MeasurementEditorView(answer: answer, performerMode: performerMode, onChange: onChange)
         case .tireSidewall?:
-            MarkingsEditorView(answer: answer, submissionId: submissionId, latestPhotoId: latestPhotoId, onChange: onChange)
+            MarkingsEditorView(answer: answer, submissionId: submissionId, latestPhotoId: latestPhotoId, hidePhotoSuggestion: hidePhotoSuggestion, onChange: onChange)
         case .tireDot?:
-            DotEditorView(answer: answer, submissionId: submissionId, latestPhotoId: latestPhotoId, onChange: onChange)
+            DotEditorView(answer: answer, submissionId: submissionId, latestPhotoId: latestPhotoId, hidePhotoSuggestion: hidePhotoSuggestion, onChange: onChange)
         case .tireCracking?, .tireWear?:
             ScaleEditorView(answer: answer, onChange: onChange)
         case .tireDamage?:
@@ -29,7 +46,7 @@ struct StructuredAnswerEditor: View {
         case .bodyPanel?:
             DefectEditorView(answer: answer, kind: .body, onChange: onChange)
         case .tirePlacard?:
-            PlacardEditorView(answer: answer, submissionId: submissionId, latestPhotoId: latestPhotoId, onChange: onChange)
+            PlacardEditorView(answer: answer, submissionId: submissionId, latestPhotoId: latestPhotoId, hidePhotoSuggestion: hidePhotoSuggestion, onChange: onChange)
         case nil:
             Label("Update the app to answer this question.", systemImage: "exclamationmark.triangle")
                 .font(.footnote)
@@ -440,6 +457,7 @@ private struct MarkingsEditorView: View {
     let answer: PpiAnswer
     let submissionId: String
     let latestPhotoId: String?
+    let hidePhotoSuggestion: Bool
     var onChange: (JSONValue?) -> Void
 
     @State private var mode: ObservationState
@@ -447,15 +465,19 @@ private struct MarkingsEditorView: View {
     @State private var loadIndex: String
     @State private var speedRating: String
     @State private var brand: String
+    @State private var model: String
+    @State private var extraMarking: String
     @State private var extractionId: String?
+    @State private var extractionIds: [String]
     @State private var reason: ExceptionReason?
     @State private var explanation: String
     @State private var error: String?
 
-    init(answer: PpiAnswer, submissionId: String, latestPhotoId: String?, onChange: @escaping (JSONValue?) -> Void) {
+    init(answer: PpiAnswer, submissionId: String, latestPhotoId: String?, hidePhotoSuggestion: Bool, onChange: @escaping (JSONValue?) -> Void) {
         self.answer = answer
         self.submissionId = submissionId
         self.latestPhotoId = latestPhotoId
+        self.hidePhotoSuggestion = hidePhotoSuggestion
         self.onChange = onChange
         let value = Observation.value(answer.observation)
         _mode = State(initialValue: Observation.state(answer.observation) ?? .observed)
@@ -463,7 +485,10 @@ private struct MarkingsEditorView: View {
         _loadIndex = State(initialValue: value?["load_index"]?.stringValue ?? "")
         _speedRating = State(initialValue: value?["speed_rating"]?.stringValue ?? "")
         _brand = State(initialValue: value?["brand"]?.stringValue ?? "")
+        _model = State(initialValue: value?["model"]?.stringValue ?? "")
+        _extraMarking = State(initialValue: value?["extra_marking"]?.stringValue ?? "")
         _extractionId = State(initialValue: answer.observation?["extraction_id"]?.stringValue)
+        _extractionIds = State(initialValue: answer.observation?["extraction_ids"]?.arrayValue?.compactMap(\.stringValue) ?? [])
         _reason = State(initialValue: answer.observation?["reason"]?["code"]?.stringValue.flatMap(ExceptionReason.init(rawValue:)))
         _explanation = State(initialValue: answer.observation?["reason"]?["explanation"]?.stringValue ?? "")
     }
@@ -475,30 +500,39 @@ private struct MarkingsEditorView: View {
                 publish()
             }
             if mode == .observed {
-                SuggestFromPhoto(
-                    submissionId: submissionId,
-                    mediaId: latestPhotoId,
-                    target: "tire_sidewall",
-                    fields: [("size", String(localized: "Size")), ("load_index", String(localized: "Load index")), ("speed_rating", String(localized: "Speed rating")), ("brand", String(localized: "Brand"))]
-                ) { result in
-                    size = (result.candidates["size"] ?? nil) ?? size
-                    loadIndex = (result.candidates["load_index"] ?? nil) ?? loadIndex
-                    speedRating = (result.candidates["speed_rating"] ?? nil) ?? speedRating
-                    brand = (result.candidates["brand"] ?? nil) ?? brand
-                    extractionId = result.extractionId
-                    publish()
+                if !hidePhotoSuggestion {
+                    SuggestFromPhoto(
+                        submissionId: submissionId,
+                        mediaId: latestPhotoId,
+                        target: "tire_sidewall",
+                        fields: [("size", String(localized: "Size")), ("load_index", String(localized: "Load index")), ("speed_rating", String(localized: "Speed rating")), ("brand", String(localized: "Brand"))]
+                    ) { result in
+                        size = (result.candidates["size"] ?? nil) ?? size
+                        loadIndex = (result.candidates["load_index"] ?? nil) ?? loadIndex
+                        speedRating = (result.candidates["speed_rating"] ?? nil) ?? speedRating
+                        brand = (result.candidates["brand"] ?? nil) ?? brand
+                        model = (result.candidates["model"] ?? nil) ?? model
+                        extraMarking = (result.candidates["extra_marking"] ?? nil) ?? extraMarking
+                        extractionId = result.extractionId
+                        extractionIds = [result.extractionId]
+                        publish()
+                    }
                 }
                 Group {
                     TextField("Tire size, e.g. 225/50R17", text: $size)
                     TextField("Load index (number, e.g. 98)", text: $loadIndex).keyboardType(.numberPad)
                     TextField("Speed rating (letter, e.g. V)", text: $speedRating).textInputAutocapitalization(.characters)
                     TextField("Brand (optional)", text: $brand)
+                    TextField("Model (optional)", text: $model)
+                    TextField("XL / LT marking (optional)", text: $extraMarking)
                 }
                 .textFieldStyle(.roundedBorder)
                 .onChange(of: size) { _, _ in publish() }
                 .onChange(of: loadIndex) { _, _ in publish() }
                 .onChange(of: speedRating) { _, _ in publish() }
                 .onChange(of: brand) { _, _ in publish() }
+                .onChange(of: model) { _, _ in publish() }
+                .onChange(of: extraMarking) { _, _ in publish() }
                 Text("Leave a field blank if it cannot be read; it is reported as unknown, never as matching.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -536,8 +570,12 @@ private struct MarkingsEditorView: View {
         if !speed.isEmpty { value["speed_rating"] = .string(speed) }
         let brandValue = brand.trimmingCharacters(in: .whitespaces)
         if !brandValue.isEmpty { value["brand"] = .string(brandValue) }
+        let modelValue = model.trimmingCharacters(in: .whitespaces)
+        if !modelValue.isEmpty { value["model"] = .string(modelValue) }
+        let extraMarkingValue = extraMarking.trimmingCharacters(in: .whitespaces)
+        if !extraMarkingValue.isEmpty { value["extra_marking"] = .string(extraMarkingValue) }
         error = nil
-        onChange(Observation.observed(value, extractionId: extractionId))
+        onChange(Observation.observed(value, extractionId: extractionId, extractionIds: extractionIds.isEmpty ? nil : extractionIds))
     }
 }
 
@@ -547,23 +585,27 @@ private struct DotEditorView: View {
     let answer: PpiAnswer
     let submissionId: String
     let latestPhotoId: String?
+    let hidePhotoSuggestion: Bool
     var onChange: (JSONValue?) -> Void
 
     @State private var mode: ObservationState
     @State private var code: String
     @State private var extractionId: String?
+    @State private var extractionIds: [String]
     @State private var reason: ExceptionReason?
     @State private var explanation: String
     @State private var error: String?
 
-    init(answer: PpiAnswer, submissionId: String, latestPhotoId: String?, onChange: @escaping (JSONValue?) -> Void) {
+    init(answer: PpiAnswer, submissionId: String, latestPhotoId: String?, hidePhotoSuggestion: Bool, onChange: @escaping (JSONValue?) -> Void) {
         self.answer = answer
         self.submissionId = submissionId
         self.latestPhotoId = latestPhotoId
+        self.hidePhotoSuggestion = hidePhotoSuggestion
         self.onChange = onChange
         _mode = State(initialValue: Observation.state(answer.observation) ?? .observed)
         _code = State(initialValue: Observation.value(answer.observation)?["code"]?.stringValue ?? "")
         _extractionId = State(initialValue: answer.observation?["extraction_id"]?.stringValue)
+        _extractionIds = State(initialValue: answer.observation?["extraction_ids"]?.arrayValue?.compactMap(\.stringValue) ?? [])
         _reason = State(initialValue: answer.observation?["reason"]?["code"]?.stringValue.flatMap(ExceptionReason.init(rawValue:)))
         _explanation = State(initialValue: answer.observation?["reason"]?["explanation"]?.stringValue ?? "")
     }
@@ -575,10 +617,13 @@ private struct DotEditorView: View {
                 publish()
             }
             if mode == .observed {
-                SuggestFromPhoto(submissionId: submissionId, mediaId: latestPhotoId, target: "tire_dot", fields: [("code", String(localized: "Date code"))]) { result in
-                    code = (result.candidates["code"] ?? nil) ?? code
-                    extractionId = result.extractionId
-                    publish()
+                if !hidePhotoSuggestion {
+                    SuggestFromPhoto(submissionId: submissionId, mediaId: latestPhotoId, target: "tire_dot", fields: [("code", String(localized: "Date code"))]) { result in
+                        code = (result.candidates["code"] ?? nil) ?? code
+                        extractionId = result.extractionId
+                        extractionIds = [result.extractionId]
+                        publish()
+                    }
                 }
                 TextField("WWYY", text: $code)
                     .keyboardType(.numberPad)
@@ -587,6 +632,7 @@ private struct DotEditorView: View {
                     .textFieldStyle(.roundedBorder)
                     .onChange(of: code) { _, _ in
                         extractionId = nil
+                        extractionIds = []
                         publish()
                     }
                 Text("The last four digits after “DOT”: week then year. 0224 means week 2 of 2024. Keep leading zeros.")
@@ -615,7 +661,7 @@ private struct DotEditorView: View {
             return
         }
         error = nil
-        onChange(Observation.observed(["code": .string(digits)], extractionId: extractionId))
+        onChange(Observation.observed(["code": .string(digits)], extractionId: extractionId, extractionIds: extractionIds.isEmpty ? nil : extractionIds))
     }
 }
 
@@ -1097,6 +1143,7 @@ private struct PlacardEditorView: View {
     let answer: PpiAnswer
     let submissionId: String
     let latestPhotoId: String?
+    let hidePhotoSuggestion: Bool
     var onChange: (JSONValue?) -> Void
 
     @State private var mode: ObservationState
@@ -1105,14 +1152,19 @@ private struct PlacardEditorView: View {
     @State private var rearSize: String
     @State private var rearPressure: String
     @State private var unit: String
+    @State private var loadIndex: String
+    @State private var speedRating: String
+    @State private var documentedAlternative: String
     @State private var extractionId: String?
+    @State private var extractionIds: [String]
     @State private var reason: ExceptionReason?
     @State private var explanation: String
 
-    init(answer: PpiAnswer, submissionId: String, latestPhotoId: String?, onChange: @escaping (JSONValue?) -> Void) {
+    init(answer: PpiAnswer, submissionId: String, latestPhotoId: String?, hidePhotoSuggestion: Bool, onChange: @escaping (JSONValue?) -> Void) {
         self.answer = answer
         self.submissionId = submissionId
         self.latestPhotoId = latestPhotoId
+        self.hidePhotoSuggestion = hidePhotoSuggestion
         self.onChange = onChange
         let value = Observation.value(answer.observation)
         _mode = State(initialValue: Observation.state(answer.observation) ?? .observed)
@@ -1121,7 +1173,11 @@ private struct PlacardEditorView: View {
         _rearSize = State(initialValue: value?["rear"]?["size"]?.stringValue ?? "")
         _rearPressure = State(initialValue: value?["rear"]?["pressure"]?.stringValue ?? "")
         _unit = State(initialValue: value?["front"]?["unit"]?.stringValue ?? "psi")
+        _loadIndex = State(initialValue: value?["load_index"]?.stringValue ?? "")
+        _speedRating = State(initialValue: value?["speed_rating"]?.stringValue ?? "")
+        _documentedAlternative = State(initialValue: value?["documented_alternative"]?.stringValue ?? "")
         _extractionId = State(initialValue: answer.observation?["extraction_id"]?.stringValue)
+        _extractionIds = State(initialValue: answer.observation?["extraction_ids"]?.arrayValue?.compactMap(\.stringValue) ?? [])
         _reason = State(initialValue: answer.observation?["reason"]?["code"]?.stringValue.flatMap(ExceptionReason.init(rawValue:)))
         _explanation = State(initialValue: answer.observation?["reason"]?["explanation"]?.stringValue ?? "")
     }
@@ -1133,30 +1189,41 @@ private struct PlacardEditorView: View {
                 publish()
             }
             if mode == .observed {
-                SuggestFromPhoto(
-                    submissionId: submissionId,
-                    mediaId: latestPhotoId,
-                    target: "tire_placard",
-                    fields: [("front_size", String(localized: "Front size")), ("front_pressure", String(localized: "Front cold pressure")), ("rear_size", String(localized: "Rear size")), ("rear_pressure", String(localized: "Rear cold pressure"))]
-                ) { result in
-                    frontSize = (result.candidates["front_size"] ?? nil) ?? frontSize
-                    frontPressure = (result.candidates["front_pressure"] ?? nil) ?? frontPressure
-                    rearSize = (result.candidates["rear_size"] ?? nil) ?? rearSize
-                    rearPressure = (result.candidates["rear_pressure"] ?? nil) ?? rearPressure
-                    extractionId = result.extractionId
-                    publish()
+                if !hidePhotoSuggestion {
+                    SuggestFromPhoto(
+                        submissionId: submissionId,
+                        mediaId: latestPhotoId,
+                        target: "tire_placard",
+                        fields: [("front_size", String(localized: "Front size")), ("front_pressure", String(localized: "Front cold pressure")), ("rear_size", String(localized: "Rear size")), ("rear_pressure", String(localized: "Rear cold pressure")), ("load_index", String(localized: "Load index")), ("speed_rating", String(localized: "Speed rating"))]
+                    ) { result in
+                        frontSize = (result.candidates["front_size"] ?? nil) ?? frontSize
+                        frontPressure = (result.candidates["front_pressure"] ?? nil) ?? frontPressure
+                        rearSize = (result.candidates["rear_size"] ?? nil) ?? rearSize
+                        rearPressure = (result.candidates["rear_pressure"] ?? nil) ?? rearPressure
+                        loadIndex = (result.candidates["load_index"] ?? nil) ?? loadIndex
+                        speedRating = (result.candidates["speed_rating"] ?? nil) ?? speedRating
+                        extractionId = result.extractionId
+                        extractionIds = [result.extractionId]
+                        publish()
+                    }
                 }
                 Group {
                     TextField("Front tire size", text: $frontSize)
                     TextField("Front cold pressure", text: $frontPressure).keyboardType(.decimalPad)
                     TextField("Rear tire size", text: $rearSize)
                     TextField("Rear cold pressure", text: $rearPressure).keyboardType(.decimalPad)
+                    TextField("Load index (if shown)", text: $loadIndex).keyboardType(.numberPad)
+                    TextField("Speed rating (if shown)", text: $speedRating).textInputAutocapitalization(.characters)
+                    TextField("Approved alternative fitment (optional)", text: $documentedAlternative, axis: .vertical)
                 }
                 .textFieldStyle(.roundedBorder)
                 .onChange(of: frontSize) { _, _ in publish() }
                 .onChange(of: frontPressure) { _, _ in publish() }
                 .onChange(of: rearSize) { _, _ in publish() }
                 .onChange(of: rearPressure) { _, _ in publish() }
+                .onChange(of: loadIndex) { _, _ in publish() }
+                .onChange(of: speedRating) { _, _ in publish() }
+                .onChange(of: documentedAlternative) { _, _ in publish() }
                 Button("Rear is the same as front") {
                     rearSize = frontSize
                     rearPressure = frontPressure
@@ -1187,10 +1254,21 @@ private struct PlacardEditorView: View {
             if let normalized = Observation.normalizeDecimal(pressure) { entry["pressure"] = .string(normalized) }
             return .object(entry)
         }
-        onChange(Observation.observed([
+        var value: [String: JSONValue] = [
             "front": axle(front, frontPressure),
             "rear": axle(rear, rearPressure),
             "location": .string("driver_door_jamb"),
-        ], extractionId: extractionId))
+        ]
+        let load = loadIndex.trimmingCharacters(in: .whitespaces)
+        if !load.isEmpty { value["load_index"] = .string(load) }
+        let speed = speedRating.trimmingCharacters(in: .whitespaces).uppercased()
+        if !speed.isEmpty { value["speed_rating"] = .string(speed) }
+        let alternative = documentedAlternative.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !alternative.isEmpty { value["documented_alternative"] = .string(alternative) }
+        onChange(Observation.observed(
+            value,
+            extractionId: extractionId,
+            extractionIds: extractionIds.isEmpty ? nil : extractionIds
+        ))
     }
 }

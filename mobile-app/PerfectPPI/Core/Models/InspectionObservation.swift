@@ -70,10 +70,13 @@ struct StructuredKey: Sendable {
         }
     }
 
-    /// Rows presented together on one card: a wheel, a body zone, or the
-    /// optional brake measurements. Nil means a single-question step.
+    /// Rows presented together on one card: the initial tire-photo pass, a
+    /// wheel, a body zone, or the optional brake measurements. Nil means a
+    /// single-question step.
     var stepGroupId: String? {
         switch family {
+        case .tirePlacard, .tireSidewall, .tireDot:
+            return "tires:photos"
         case .bodyPanel:
             guard let panel else { return nil }
             if ["hood", "front_bumper"].contains(panel) { return "body:front" }
@@ -82,7 +85,7 @@ struct StructuredKey: Sendable {
             return panel.hasPrefix("left_") ? "body:left" : "body:right"
         case .brakePad:
             return "brakes:measurements"
-        case .tirePlacard, .batteryTest:
+        case .batteryTest:
             return nil
         default:
             return corner.map { "wheel:\($0.rawValue)" }
@@ -92,6 +95,7 @@ struct StructuredKey: Sendable {
     var stepGroupLabel: String? {
         guard let id = stepGroupId else { return nil }
         switch id {
+        case "tires:photos": return String(localized: "Tire labels & sidewalls")
         case "body:front": return String(localized: "Body — front")
         case "body:rear": return String(localized: "Body — rear")
         case "body:top": return String(localized: "Body — roof & other")
@@ -156,7 +160,12 @@ enum Observation {
         return value
     }
 
-    static func observed(_ value: [String: JSONValue], extractionId: String? = nil, evidenceException: ExceptionReason? = nil) -> JSONValue {
+    static func observed(
+        _ value: [String: JSONValue],
+        extractionId: String? = nil,
+        extractionIds: [String]? = nil,
+        evidenceException: ExceptionReason? = nil
+    ) -> JSONValue {
         var document: [String: JSONValue] = [
             "v": .number(1),
             "state": .string(ObservationState.observed.rawValue),
@@ -165,6 +174,10 @@ enum Observation {
             "source": .string(extractionId == nil ? "inspector_entry" : "confirmed_extraction"),
         ]
         if let extractionId { document["extraction_id"] = .string(extractionId) }
+        if let extractionId, let extractionIds {
+            let unique = Array(Set(extractionIds + [extractionId])).sorted()
+            document["extraction_ids"] = .array(unique.map(JSONValue.string))
+        }
         if let evidenceException {
             document["evidence_exception"] = .object(["code": .string(evidenceException.rawValue)])
         }

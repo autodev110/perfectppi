@@ -44,6 +44,9 @@ struct InspectionWorkflowView: View {
     /// The row a camera capture belongs to (a step can hold several rows).
     @State private var captureAnswerId: String?
     @State private var showReview = false
+    @State private var readingTirePhotos = false
+    @State private var tirePhotoOutcomes: [PpiAPI.TirePhotoReadOutcome] = []
+    @State private var tireFillVersion = 0
 
     var body: some View {
         Group {
@@ -156,6 +159,7 @@ struct InspectionWorkflowView: View {
 
     @ViewBuilder
     private func workflowBody(section: PpiSection, answer: PpiAnswer) -> some View {
+        let tirePhotoStep = StructuredKey.parse(answer.questionKey)?.stepGroupId == "tires:photos"
         VStack(spacing: 0) {
             progressHeader
 
@@ -183,6 +187,10 @@ struct InspectionWorkflowView: View {
                             .foregroundStyle(Theme.Palette.warning)
                     }
 
+                    if tirePhotoStep {
+                        tirePhotosReader
+                    }
+
                     let unansweredPanels = model.currentStepAnswers.filter {
                         StructuredKey.parse($0.questionKey)?.family == .bodyPanel && $0.isRequired == true && $0.observation == nil
                     }
@@ -199,7 +207,16 @@ struct InspectionWorkflowView: View {
                     }
 
                     ForEach(model.currentStepAnswers) { stepAnswer in
-                        answerBlock(stepAnswer, grouped: model.currentStepTitle != nil)
+                        if tirePhotoStep,
+                           let key = StructuredKey.parse(stepAnswer.questionKey),
+                           key.family == .tireSidewall,
+                           let corner = key.corner {
+                            Text(corner.label.uppercased())
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 4)
+                        }
+                        answerBlock(stepAnswer, grouped: model.currentStepTitle != nil, tirePhotoStep: tirePhotoStep)
                     }
                 }
                 .padding()
@@ -210,7 +227,8 @@ struct InspectionWorkflowView: View {
     }
 
     @ViewBuilder
-    private func answerBlock(_ answer: PpiAnswer, grouped: Bool) -> some View {
+    private func answerBlock(_ answer: PpiAnswer, grouped: Bool, tirePhotoStep: Bool) -> some View {
+        let structuredKey = StructuredKey.parse(answer.questionKey)
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(answer.prompt)
@@ -227,11 +245,12 @@ struct InspectionWorkflowView: View {
                     answer: answer,
                     submissionId: submissionId,
                     performerMode: model.performerMode,
-                    latestPhotoId: model.media(for: answer.id).last?.id
+                    latestPhotoId: model.media(for: answer.id).last?.id,
+                    hidePhotoSuggestion: tirePhotoStep
                 ) { observation in
                     save(answer, observation: observation)
                 }
-                .id(answer.id)
+                .id("\(answer.id):\(tirePhotoStep ? tireFillVersion : 0)")
             } else {
                 AnswerEditor(answer: answer) { updated in
                     Task {
@@ -267,19 +286,166 @@ struct InspectionWorkflowView: View {
                     .foregroundStyle(Theme.Palette.warning)
             }
 
-            Button {
-                captureAnswerId = answer.id
-                fullScreenDestination = .inspectionPhoto
-            } label: {
-                Label(answer.photoPrompt ?? String(localized: "Capture Photo"), systemImage: "camera")
+            if !(tirePhotoStep && structuredKey?.family == .tireDot) {
+                Button {
+                    captureAnswerId = answer.id
+                    fullScreenDestination = .inspectionPhoto
+                } label: {
+                    Label(tireCaptureLabel(for: structuredKey) ?? answer.photoPrompt ?? String(localized: "Capture Photo"), systemImage: "camera")
+                }
+                .buttonStyle(OutlineButtonStyle())
             }
-            .buttonStyle(OutlineButtonStyle())
         }
         .padding(grouped ? 12 : 0)
         .overlay {
             if grouped {
                 RoundedRectangle(cornerRadius: 14).stroke(Color.secondary.opacity(0.25))
             }
+        }
+    }
+
+    @ViewBuilder
+    private var tirePhotosReader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Photograph the door placard and each tire sidewall, including its DOT code. Add as many close-up photos as needed, then read them together to fill the details below.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Button {
+                Task { await readAllTirePhotos() }
+            } label: {
+                HStack {
+                    if readingTirePhotos { ProgressView().tint(.white) }
+                    Label(
+                        readingTirePhotos ? "Reading photos…" : "Read photos and fill in details",
+                        systemImage: "text.viewfinder"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(readingTirePhotos || tirePhotoCount == 0)
+
+            if tirePhotoCount == 0 {
+                Text("Add at least one placard or sidewall photo first.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(tirePhotoOutcomes) { outcome in
+                tirePhotoOutcome(outcome)
+            }
+        }
+        .padding(12)
+        .background(Theme.Palette.subtle, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    @ViewBuilder
+    private func tirePhotoOutcome(_ outcome: PpiAPI.TirePhotoReadOutcome) -> some View {
+        if let error = outcome.error {
+            Label("\(outcome.slot.label): \(error)", systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(Theme.Palette.warning)
+                .font(.footnote)
+        } else if let result = outcome.result {
+            if result.photoCount == 0 {
+                Text("\(outcome.slot.label): no photos yet.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                let filled = result.answers.flatMap(\.filled)
+                if !filled.isEmpty {
+                    Label(
+                        "\(outcome.slot.label) filled: \(filled.map(tireFieldLabel).joined(separator: ", "))",
+                        systemImage: "checkmark.circle.fill"
+                    )
+                    .foregroundStyle(Theme.Palette.success)
+                    .font(.footnote)
+                }
+                ForEach(result.answers, id: \.answerId) { answer in
+                    ForEach(answer.conflicts, id: \.field) { conflict in
+                        let values = conflict.read.map(\.value).joined(separator: " / ")
+                        Label(
+                            conflict.entered.map {
+                                "\(outcome.slot.label), \(tireFieldLabel(conflict.field)): photos show \(values), but you entered \($0). Check the value."
+                            } ?? "\(outcome.slot.label), \(tireFieldLabel(conflict.field)): photos disagree (\(values)). Check and enter the correct value.",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .foregroundStyle(Theme.Palette.warning)
+                        .font(.footnote)
+                    }
+                    if answer.kept != nil {
+                        Text("\(outcome.slot.label): kept your answer that this could not be checked.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let error = answer.error {
+                        Label("\(outcome.slot.label): \(error)", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Theme.Palette.warning)
+                            .font(.footnote)
+                    }
+                }
+                if !result.readings.contains(where: { $0.status == "extracted" }) {
+                    Label(
+                        "\(outcome.slot.label): the photos could not be read. Take a closer photo or enter the details.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .foregroundStyle(Theme.Palette.warning)
+                    .font(.footnote)
+                } else if filled.isEmpty && result.answers.allSatisfy({ $0.conflicts.isEmpty && $0.error == nil }) {
+                    Text("\(outcome.slot.label): nothing new to fill in.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func readAllTirePhotos() async {
+        guard !readingTirePhotos else { return }
+        readingTirePhotos = true
+        defer { readingTirePhotos = false }
+        tirePhotoOutcomes = await model.readTirePhotos()
+        if tirePhotoOutcomes.contains(where: { $0.result != nil }) {
+            tireFillVersion &+= 1
+        }
+    }
+
+    private var tirePhotoCount: Int {
+        let ids = Set(model.currentStepAnswers.map(\.id))
+        let saved = model.allMedia.filter { media in
+            media.mediaType == "image" && media.ppiAnswerId.map(ids.contains) == true
+        }.count
+        let queued = offlineQueue.pendingMedia.filter { pending in
+            pending.submissionId == submissionId && pending.answerId.map(ids.contains) == true
+        }.count
+        return saved + queued
+    }
+
+    private func tireCaptureLabel(for key: StructuredKey?) -> String? {
+        guard key?.family == .tireSidewall, let corner = key?.corner else { return nil }
+        switch corner {
+        case .frontLeft: return String(localized: "Add front left sidewall & DOT photos")
+        case .frontRight: return String(localized: "Add front right sidewall & DOT photos")
+        case .rearLeft: return String(localized: "Add rear left sidewall & DOT photos")
+        case .rearRight: return String(localized: "Add rear right sidewall & DOT photos")
+        }
+    }
+
+    private func tireFieldLabel(_ field: String) -> String {
+        switch field {
+        case "size": return String(localized: "Size")
+        case "load_index": return String(localized: "Load index")
+        case "speed_rating": return String(localized: "Speed rating")
+        case "brand": return String(localized: "Brand")
+        case "model": return String(localized: "Model")
+        case "extra_marking": return String(localized: "XL / LT marking")
+        case "code": return String(localized: "DOT date code")
+        case "front_size": return String(localized: "Front size")
+        case "front_pressure": return String(localized: "Front pressure")
+        case "rear_size": return String(localized: "Rear size")
+        case "rear_pressure": return String(localized: "Rear pressure")
+        case "unit": return String(localized: "Pressure unit")
+        default: return field
         }
     }
 

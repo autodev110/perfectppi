@@ -12,6 +12,7 @@ import type {
 import type { InspectionScope, CompletionState } from "@/types/enums";
 import { inspectionAnswerValidationError } from "@/features/ppi/answer-validation";
 import { stepGroupForKey } from "@/features/ppi/inspection-catalog";
+import { TIRE_SLOTS, type SlotFillResult, type TireSlot } from "@/features/ppi/tire-readings";
 import {
   isStructuredAnswerType,
   parseObservation,
@@ -917,6 +918,44 @@ export function useInspectionWorkflow(submissionId: string) {
     }
   }
 
+  /**
+   * Reads every placard and sidewall photo and fills the blank tire details.
+   * Pending edits are saved first so an entered value is never overwritten,
+   * then the stored answers are reloaded. Slots are read a few at a time.
+   */
+  async function readTirePhotos(): Promise<(SlotFillResult | { slot: TireSlot; error: string })[] | null> {
+    const flushSucceeded = await immediateFlush();
+    if (!flushSucceeded) return null;
+    const readSlot = async (slot: TireSlot): Promise<SlotFillResult | { slot: TireSlot; error: string }> => {
+      try {
+        const res = await fetch(`/api/ppi/submissions/${submissionId}/tire-readings`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slot }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) return { slot, error: json.error ?? "Could not read these photos." };
+        return json.data as SlotFillResult;
+      } catch {
+        return { slot, error: "Network error. Please try again." };
+      }
+    };
+    const results: (SlotFillResult | { slot: TireSlot; error: string })[] = [];
+    for (let start = 0; start < TIRE_SLOTS.length; start += 3) {
+      results.push(...(await Promise.all(TIRE_SLOTS.slice(start, start + 3).map(readSlot))));
+    }
+    try {
+      const res = await fetch(`/api/ppi/submissions/${submissionId}`, { cache: "no-store" });
+      if (res.ok) {
+        const { data }: { data: PpiSubmissionResponse } = await res.json();
+        dispatch({ type: "REFRESH", submission: data });
+      }
+    } catch {
+      // The fill is saved; the next save or reload shows it.
+    }
+    return results;
+  }
+
   async function submitInspection(certification: { accepted: boolean; textVersion: string }) {
     const flushSucceeded = await immediateFlush();
     if (!flushSucceeded) {
@@ -1084,6 +1123,7 @@ export function useInspectionWorkflow(submissionId: string) {
     jumpToSection,
     jumpToAnswer,
     prepareReview,
+    readTirePhotos,
     submitInspection,
   };
 }

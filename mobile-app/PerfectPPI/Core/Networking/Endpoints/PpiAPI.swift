@@ -237,6 +237,78 @@ enum PpiAPI {
         )
     }
 
+    enum TireReadingSlot: String, Codable, CaseIterable, Sendable {
+        case placard
+        case frontLeft = "front_left"
+        case rearLeft = "rear_left"
+        case rearRight = "rear_right"
+        case frontRight = "front_right"
+
+        var label: String {
+            switch self {
+            case .placard: return String(localized: "Door placard")
+            case .frontLeft: return String(localized: "Front left tire")
+            case .rearLeft: return String(localized: "Rear left tire")
+            case .rearRight: return String(localized: "Rear right tire")
+            case .frontRight: return String(localized: "Front right tire")
+            }
+        }
+    }
+
+    struct TireReadingOption: Decodable, Sendable {
+        let value: String
+        let mediaIds: [String]
+    }
+
+    struct TireReadingConflict: Decodable, Sendable {
+        let field: String
+        let read: [TireReadingOption]
+        let entered: String?
+    }
+
+    struct TireReadingAnswer: Decodable, Sendable {
+        let answerId: String
+        let questionKey: String
+        let filled: [String]
+        let conflicts: [TireReadingConflict]
+        let kept: String?
+        let error: String?
+    }
+
+    struct TirePhotoReading: Decodable, Sendable {
+        let mediaId: String
+        let target: String
+        let status: String
+        let error: String?
+    }
+
+    struct TireSlotFillResult: Decodable, Sendable {
+        let slot: TireReadingSlot
+        let photoCount: Int
+        let readings: [TirePhotoReading]
+        let answers: [TireReadingAnswer]
+    }
+
+    struct TirePhotoReadOutcome: Identifiable, Sendable {
+        var id: String { slot.rawValue }
+        let slot: TireReadingSlot
+        let result: TireSlotFillResult?
+        let error: String?
+    }
+
+    private struct TireReadingRequest: Encodable {
+        let slot: TireReadingSlot
+    }
+
+    /// Reads all photos attached to one tire (or the door placard). The server
+    /// merges values across photos and fills only fields that are still blank.
+    static func readTirePhotos(submissionId: String, slot: TireReadingSlot) async throws -> TireSlotFillResult {
+        try await APIClient.shared.post(
+            "/api/ppi/submissions/\(submissionId)/tire-readings",
+            body: TireReadingRequest(slot: slot)
+        )
+    }
+
     struct AppendixStatus: Decodable {
         let status: String
         let photoCountExpected: Int?

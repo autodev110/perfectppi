@@ -231,6 +231,17 @@ describe("catalogs", () => {
   test("catalog 2 captures every corner in walk-around order and keeps bumpers out of Dents & Tires", () => {
     const wheels = catalogQuestions("dents_tires", "wheels_tires", 2).map((question) => question.questionKey);
     assert.equal(wheels[0], "tires.placard");
+    assert.deepEqual(wheels.slice(0, 9), [
+      "tires.placard",
+      "tires.front_left.sidewall",
+      "tires.front_left.dot_date",
+      "tires.rear_left.sidewall",
+      "tires.rear_left.dot_date",
+      "tires.rear_right.sidewall",
+      "tires.rear_right.dot_date",
+      "tires.front_right.sidewall",
+      "tires.front_right.dot_date",
+    ]);
     const treadOrder = wheels.filter((key) => key.endsWith(".tread"));
     assert.deepEqual(treadOrder, ["tires.front_left.tread", "tires.rear_left.tread", "tires.rear_right.tread", "tires.front_right.tread"]);
     const body = catalogQuestions("dents_tires", "body_damage", 2).map((question) => question.questionKey);
@@ -251,7 +262,7 @@ describe("catalogs", () => {
     assert.equal(stepGroupForKey("tires.front_left.tread")?.id, "wheel:front_left");
     assert.equal(stepGroupForKey("wheels.front_left.damage")?.id, "wheel:front_left");
     assert.equal(stepGroupForKey("body.left_front_door.condition")?.id, "body:left");
-    assert.equal(stepGroupForKey("tires.placard"), null);
+    assert.equal(stepGroupForKey("tires.placard")?.id, "tires:photos");
   });
 });
 
