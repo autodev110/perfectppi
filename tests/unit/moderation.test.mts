@@ -137,6 +137,31 @@ describe("moderation policy", () => {
     }
   });
 
+  test("scanner rejects oversized or ambiguous responses and refuses redirects", async () => {
+    const endpoint = process.env.CHILD_SAFETY_SCANNER_URL;
+    const token = process.env.CHILD_SAFETY_SCANNER_TOKEN;
+    const originalFetch = globalThis.fetch;
+    process.env.CHILD_SAFETY_SCANNER_URL = "https://scanner.example.test/scan";
+    process.env.CHILD_SAFETY_SCANNER_TOKEN = "test-token";
+    try {
+      globalThis.fetch = async (_url, options) => {
+        assert.equal(options?.redirect, "error");
+        return new Response("x".repeat(16_385));
+      };
+      await assert.rejects(scanForKnownIllegalContent(new Uint8Array([1]), "image/jpeg"), /too large/);
+      globalThis.fetch = async () => new Response(JSON.stringify({ verdict: "unknown", provider: "fixture" }));
+      await assert.rejects(scanForKnownIllegalContent(new Uint8Array([1]), "image/jpeg"));
+      process.env.CHILD_SAFETY_SCANNER_URL = "https://user:password@scanner.example.test/scan";
+      await assert.rejects(scanForKnownIllegalContent(new Uint8Array([1]), "image/jpeg"), /credentials/);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (endpoint) process.env.CHILD_SAFETY_SCANNER_URL = endpoint;
+      else delete process.env.CHILD_SAFETY_SCANNER_URL;
+      if (token) process.env.CHILD_SAFETY_SCANNER_TOKEN = token;
+      else delete process.env.CHILD_SAFETY_SCANNER_TOKEN;
+    }
+  });
+
   test("places a specialist hash match on legal hold", async () => {
     const endpoint = process.env.CHILD_SAFETY_SCANNER_URL;
     const token = process.env.CHILD_SAFETY_SCANNER_TOKEN;

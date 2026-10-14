@@ -55,6 +55,7 @@ export default async function ModerationRetentionPage({ searchParams }: PageProp
       <Card>
         <CardHeader><CardTitle className="text-base">{uiText("ui.approved_retention_periods_ceca642c14")}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">{uiText("ui.partner_delivery_logs_use_the_basis_ab20e27414")}<code>{uiText("ui.partner_delivery_e6eab3f99e")}</code>{uiText("ui.expired_account_link_attempts_use_3720dcfe26")}<code>{uiText("ui.partner_link_transactions_b08ae2d451")}</code>{uiText("ui.record_an_approved_period_for_each_with_no_p_9b43188e37")}</p>
           {(policies ?? []).length === 0 ? <p className="text-sm text-muted-foreground">{uiText("ui.none_recorded_ef49549a5e")}</p> : null}
           {(policies ?? []).map((policy) => (
             <div key={policy.basis} className="flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2">

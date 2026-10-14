@@ -37,7 +37,7 @@ The tracked project spec is the production/TestFlight source of truth:
 - bundle identifier: `com.perfectppi.app`
 - Apple Developer team: `79P499H2M4`
 - Push Notifications and Associated Domains enabled
-- both `perfectppi.com` and canonical `www.perfectppi.com` associated domains
+- canonical `www.perfectppi.com` associated domains
 - app icon: `PerfectPPI-AppIcon.png`
 - marketing version and build number controlled by Xcode build settings
 
@@ -79,7 +79,7 @@ Fill `mobile-app/.env` with the real values. The iPhone app needs at least:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL="..."
 NEXT_PUBLIC_SUPABASE_ANON_KEY="..."
-NEXT_PUBLIC_SITE_URL="https://perfectppi.vercel.app"
+NEXT_PUBLIC_SITE_URL="https://www.perfectppi.com"
 ```
 
 If you also run the web/API app locally, create `.env.local` at the repo root with the server-side values too. Make sure the R2 public URL key is named:

@@ -96,8 +96,8 @@ These interpret or differ from the handoff:
    markers spread out within their panel. Entries without a marker use the
    panel's default position. The top view shows a side panel as a narrow
    strip, so a marker there gives position along the car, not height.
-5. **iOS review has no "report will flag" preview.** The web review screen
-   has it.
+5. **Web and iOS review show report flags.** The mobile preview uses the
+   server's report rules and binds its result to the reviewed revision.
 6. **The appendix is built by the output worker tick.** It also starts right
    away through `after()` when requested.
 7. **Certified originals follow the inspection retention lifecycle.** Submitted

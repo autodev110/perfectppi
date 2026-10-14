@@ -182,6 +182,17 @@ export async function uploadPrivateObject(params: {
   return { storageReference: privateStorageReference(key) };
 }
 
+/** Immutable control records survive database restore and owner-media cleanup. */
+export async function uploadImmutablePrivateObject(params: {
+  key: string; body: Uint8Array; contentType: string;
+}): Promise<void> {
+  if (!isPrivateR2Configured()) throw new Error("Private R2 storage is not configured");
+  await observeOperationalOperation("storage_put", () => getS3Client().send(new PutObjectCommand({
+    Bucket: process.env.R2_PRIVATE_BUCKET_NAME!, Key: params.key,
+    Body: params.body, ContentType: params.contentType, IfNoneMatch: "*",
+  })));
+}
+
 /** Copies an approved object into the public bucket. The caller deletes the source after its DB commit. */
 export async function promoteQuarantinedObject(params: {
   storageReference: string;

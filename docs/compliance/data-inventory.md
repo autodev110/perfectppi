@@ -25,6 +25,7 @@ Status: implemented as an engineering inventory pending business-owner and licen
 | AI inputs/outputs | Feature-selected VIN/vehicle/inspection/OBD/text/image | Gemini during processing; outputs/evidence in Supabase/R2 | Google Gemini | Vendor training/retention contractual settings require owner review |
 | DealerSpace IDs, snapshots, events, deliverables | Connected organization/partner; integration | Supabase and private/public artifacts by route | Connected DealerSpace tenant | Disconnect exists; downstream deletion/contract schedule open |
 | Privacy requests | Account user/support; exercise rights | `privacy_requests`; user read/service-role processing | Authorized staff/processes needed to fulfill | Completed request evidence expires after 24 months; account identifiers/details are minimized after deletion |
+| Backup deletion journal | Accepted deletion request; prevent deleted accounts returning after database restore | Signed records in private R2, accessible only to server/operator credentials; contains request/profile/Auth UUIDs and request timestamp | Cloudflare R2, restricted restoration operator | Written before Auth deletion; independent of database backup and owner-prefix cleanup; preserve effective signing key and retain beyond all recoverable backups; disposal period requires approval |
 
 ## Public exposure map
 

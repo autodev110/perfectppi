@@ -22,6 +22,7 @@ final class InspectionWorkflowModel: ObservableObject {
     @Published private(set) var catalogVersion: Int = 1
     /// Server revision the review screen showed; the certification binds to it.
     @Published private(set) var reviewedRevision: Int?
+    @Published private(set) var reportPreview: PpiAPI.InspectionPreview?
 
     private var submissionId: String?
     private let treadDepthPrompts: Set<String> = [
@@ -305,12 +306,23 @@ final class InspectionWorkflowModel: ObservableObject {
     /// to exactly what is stored.
     func prepareReview() async throws {
         guard let submissionId else { return }
+        reportPreview = nil
+        reviewedRevision = nil
         let submission = try await PpiAPI.getSubmission(id: submissionId)
-        reviewedRevision = submission.revision ?? 0
         let loadedAnswers = try await PpiAPI.answers(submissionId: submissionId)
         let byId = Dictionary(uniqueKeysWithValues: loadedAnswers.map { ($0.id, $0) })
         answers = answers.map { byId[$0.id] ?? $0 }
         allMedia = try await PpiAPI.media(submissionId: submissionId)
+        if (submission.catalogVersion ?? 1) >= 2 {
+            let preview = try await PpiAPI.preview(submissionId: submissionId)
+            guard preview.revision == (submission.revision ?? 0) else {
+                throw NSError(domain: "InspectionReview", code: 409, userInfo: [
+                    NSLocalizedDescriptionKey: String(localized: "The inspection changed while loading the review. Please review it again.")
+                ])
+            }
+            reportPreview = preview
+        }
+        reviewedRevision = submission.revision ?? 0
     }
 
     func addMedia(_ media: PpiMedia) {

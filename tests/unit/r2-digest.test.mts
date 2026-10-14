@@ -10,10 +10,28 @@ import type { AddressInfo } from "node:net";
 const objects = new Map<string, Buffer>();
 let server: Server;
 let digestStoredObject: typeof import("../../src/lib/storage/r2.ts").digestStoredObject;
+let uploadImmutablePrivateObject: typeof import("../../src/lib/storage/r2.ts").uploadImmutablePrivateObject;
+let getStoredObjectRange: typeof import("../../src/lib/storage/r2.ts").getStoredObjectRange;
 
 before(async () => {
   server = createServer((request, response) => {
     const key = decodeURIComponent((request.url ?? "").split("?")[0]).replace(/^\/test-bucket\//, "");
+    if (request.method === "PUT") {
+      if (request.headers["if-none-match"] !== "*" || objects.has(key)) {
+        request.resume();
+        response.writeHead(412, { "Content-Type": "application/xml" });
+        response.end("<Error><Code>PreconditionFailed</Code></Error>");
+        return;
+      }
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => chunks.push(chunk));
+      request.on("end", () => {
+        objects.set(key, Buffer.concat(chunks));
+        response.writeHead(200, { ETag: '"fixture"' });
+        response.end();
+      });
+      return;
+    }
     const body = objects.get(key);
     if (!body) {
       response.writeHead(404, { "Content-Type": "application/xml" });
@@ -34,16 +52,23 @@ before(async () => {
     };
     write();
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.removeListener("error", reject);
+      resolve();
+    });
+  });
   const { port } = server.address() as AddressInfo;
   process.env.R2_ENDPOINT = `http://127.0.0.1:${port}`;
   process.env.R2_ACCESS_KEY_ID = "test";
   process.env.R2_SECRET_ACCESS_KEY = "test";
   process.env.R2_PRIVATE_BUCKET_NAME = "test-bucket";
-  ({ digestStoredObject } = await import("../../src/lib/storage/r2.ts"));
+  ({ digestStoredObject, uploadImmutablePrivateObject, getStoredObjectRange } = await import("../../src/lib/storage/r2.ts"));
 });
 
 after(async () => {
+  if (!server?.listening) return;
   const closed = new Promise<void>((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
@@ -56,6 +81,18 @@ after(async () => {
 const sha = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 
 describe("streaming content digest", () => {
+  test("private deletion journals are create-only and remain readable on retry", async () => {
+    const key = "privacy_deletion_journal/fixture.json";
+    const body = Buffer.from('{"fixture":true}');
+    await uploadImmutablePrivateObject({ key, body, contentType: "application/json" });
+    await assert.rejects(
+      uploadImmutablePrivateObject({ key, body: Buffer.from("changed"), contentType: "application/json" }),
+      (error: unknown) => error instanceof Error && error.name === "PreconditionFailed",
+    );
+    const stored = await getStoredObjectRange(`r2-private:///${key}`, null, { maxBytes: 16_384 });
+    assert.deepEqual(Buffer.from(stored.bytes), body);
+  });
+
   test("hashes and keeps a photo-sized object", async () => {
     const photo = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(150_000, 7)]);
     objects.set("ppi_media/owner/sub/photo.jpg", photo);

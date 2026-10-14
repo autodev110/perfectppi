@@ -8,7 +8,10 @@ import { isManagedUploadUrl } from "@/features/uploads/url";
 import {
   deleteOwnerStoredObjects,
   isPrivateStorageReference,
+  uploadImmutablePrivateObject,
+  getStoredObjectRange,
 } from "@/lib/storage/r2";
+import { DELETION_JOURNAL_PREFIX, signedDeletionJournal, verifiedDeletionJournal } from "./deletion-journal";
 
 type DeletionMetadata = {
   profileId?: string;
@@ -103,6 +106,7 @@ async function fulfillDeletion(request: {
   auth_user_id: string | null;
   account_deleted_at: string | null;
   processing_attempts: number;
+  submitted_at: string;
   result_metadata: Json;
 }) {
   const admin = createAdminClient();
@@ -199,6 +203,21 @@ async function fulfillDeletion(request: {
     // request retries; an already-invalid token counts as revoked.
     appleRevocation = await revokeAppleTokenForProfile(profileId);
 
+    // Keep the deletion instruction outside the database before removing Auth.
+    // A database backup must not resurrect an account that was later deleted.
+    const journalKey = `${DELETION_JOURNAL_PREFIX}${request.id}.json`;
+    const journal = signedDeletionJournal({ version: 1, requestId: request.id, profileId,
+      authUserId: authUserId!, requestedAt: request.submitted_at });
+    try {
+      await uploadImmutablePrivateObject({ key: journalKey,
+        body: Buffer.from(JSON.stringify(journal)), contentType: "application/json" });
+    } catch (error) {
+      if (!(error instanceof Error) || !["PreconditionFailed", "ConditionalRequestConflict"].includes(error.name)) throw error;
+      const existing = await getStoredObjectRange(`r2-private:///${journalKey}`, null, { maxBytes: 16_384 });
+      const verified = verifiedDeletionJournal(JSON.parse(Buffer.from(existing.bytes).toString("utf8")));
+      if (JSON.stringify(verified) !== JSON.stringify(journal.entry)) throw new Error("Deletion journal identity mismatch");
+    }
+
     if (userData.user) {
       const { error: deleteError } = await admin.auth.admin.deleteUser(authUserId!, false);
       if (deleteError && !isMissingAuthUser(deleteError.message)) throw deleteError;
@@ -273,7 +292,7 @@ export async function runPrivacyFulfillment(limit = 10) {
         lock_expires_at: null,
         locked_by: null,
       }).eq("id", request.id);
-      console.error("privacy deletion fulfillment failed", fulfillmentError);
+      console.error("privacy deletion fulfillment failed", { code: "deletion_retry" });
     }
   }
 

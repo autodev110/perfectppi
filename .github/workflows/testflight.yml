@@ -59,7 +59,7 @@ jobs:
       IOS_BUNDLE_ID: com.perfectppi.app
       IOS_PROJECT: mobile-app/PerfectPPI.xcodeproj
       IOS_SCHEME: PerfectPPI
-      IOS_API_BASE_URL: ${{ vars.IOS_API_BASE_URL || 'https://perfectppi.com' }}
+      IOS_API_BASE_URL: ${{ vars.IOS_API_BASE_URL || 'https://www.perfectppi.com' }}
       IOS_SUPABASE_URL: ${{ secrets.IOS_SUPABASE_URL }}
       IOS_SUPABASE_ANON_KEY: ${{ secrets.IOS_SUPABASE_ANON_KEY }}
       ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -196,9 +196,7 @@ jobs:
             exit 1
           fi
           for domain in \
-            'applinks:perfectppi.com' \
             'applinks:www.perfectppi.com' \
-            'webcredentials:perfectppi.com' \
             'webcredentials:www.perfectppi.com'; do
             if [[ "$profile_associated_domains" != '*' ]] \
               && ! grep -Fxq '    *' <<< "$profile_associated_domains" \
@@ -405,9 +403,7 @@ jobs:
           fi
           signed_associated_domains="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.associated-domains' "$signed_entitlements" 2>/dev/null || true)"
           for domain in \
-            'applinks:perfectppi.com' \
             'applinks:www.perfectppi.com' \
-            'webcredentials:perfectppi.com' \
             'webcredentials:www.perfectppi.com'; do
             if ! grep -Fxq "    $domain" <<< "$signed_associated_domains"; then
               echo "::error::The signed archive is missing the Associated Domains value: $domain"

@@ -219,7 +219,7 @@ Content-Type: application/json
 {
   "inspectionId": "ppi-request-id",
   "status": "assigned",
-  "appUrl": "https://perfectppi.com/tech/ppi/ppi-request-id",
+  "appUrl": "https://www.perfectppi.com/tech/ppi/ppi-request-id",
   "assignedTechnician": { "profileId": "...", "displayName": "..." },
   "created": true
 }

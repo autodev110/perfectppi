@@ -6,6 +6,10 @@
 
 **Last updated:** September 18, 2026
 
+**October 14 engineering follow-up:** code-addressable release gaps and operator
+tools are recorded in [`docs/ops/release-gap-closure.md`](ops/release-gap-closure.md).
+The manual release approvals and previously deferred features remain open.
+
 **Primary audience:** Anzo and any PerfectPPI mobile, web, backend, database, moderation, or QA developer
 
 **Primary implementation surface:** Native iOS app, Next.js API/admin application, Supabase/Postgres, and R2 media storage

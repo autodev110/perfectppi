@@ -1,10 +1,12 @@
 # PerfectPPI `www.perfectppi.com` Migration Plan
 
-Status: **Deferred**
+Status: **Repository changes complete; external configuration verification pending (October 14, 2026)**
 
-PerfectPPI will continue using `https://perfectppi.vercel.app` as the web and
-iOS API base URL until this plan is intentionally implemented and verified.
-Do not partially switch production systems to `https://www.perfectppi.com`.
+Tracked web/iOS defaults now use `https://www.perfectppi.com`; release
+entitlements declare only the canonical host. Existing dashboard variables
+still take precedence and must be reviewed using the checklist below.
+`node tools/check-release.mts` checks the public site, direct AASA response,
+support/legal routes and unauthorized worker denial without changing settings.
 
 ## Objective
 
@@ -26,8 +28,8 @@ it serves its own Apple App Site Association file directly without a redirect.
 - `https://perfectppi.com/.well-known/apple-app-site-association` redirects to
   `www`. Apple does not support redirects when retrieving an AASA file.
 - Canonical metadata and legal constants already use `www.perfectppi.com`.
-- The active TestFlight API base URL should remain
-  `https://perfectppi.vercel.app` until this migration is started.
+- The TestFlight fallback now uses `https://www.perfectppi.com`. An explicit
+  GitHub `IOS_API_BASE_URL` still overrides it.
 
 ## Repository Changes
 
@@ -43,14 +45,13 @@ represents the public site/API:
    - Change `APIBaseURL` to `https://www.perfectppi.com`.
 4. `mobile-app/PerfectPPI/Features/Media/MediaPackagesView.swift`
    - Change the fallback URL to `https://www.perfectppi.com`.
-5. `mobile-app/PerfectPPI/Resources/PerfectPPI.entitlements`
+5. `mobile-app/PerfectPPI/Resources/PerfectPPI.entitlements` and `PerfectPPI-Release.entitlements`
    - Remove `applinks:perfectppi.com`.
    - Remove `webcredentials:perfectppi.com`.
    - Keep `applinks:www.perfectppi.com`.
    - Keep `webcredentials:www.perfectppi.com`.
-6. `mobile-app/project.yml`
-   - Make the same Associated Domains changes so regenerated Xcode projects do
-     not restore the apex entries.
+6. `mobile-app/project.yml` already points to these entitlement files, so
+   regenerated projects consume the canonical-only domains.
 
 Do not replace the localhost value in the root `.env.example`; it is the
 intentional local-development default.

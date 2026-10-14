@@ -21,8 +21,9 @@ Status: engineering-enforced periods and disposition rules are recorded below. C
 | Payments/receipts/refunds | Transaction date | Retain as tax/payment law requires | Tax/payment counsel | Provider dependent |
 | Contracts/signatures | Execution/termination | Preserve and deliver as E-SIGN/state law requires | Contract counsel | Provider dependent |
 | VSC/warranty/claims | Contract/claim close | State/product-specific schedule | VSC counsel/provider | Launch blocked |
-| Partner delivery/webhooks | Disconnect/delivery close | Delete/minimize under partner agreement | Partner counsel | Not complete |
-| Backups | Production deletion | Expire by verified provider cycle; prevent restore to active use | Security/privacy | Not verified |
+| Partner delivery/webhooks | Terminal delivery/expired linking attempt | Delete transport logs under approved `partner_delivery` / `partner_link_transactions` policies; preserve inspection records under their own lifecycle | Partner counsel | Daily bounded purge, hold checks, aggregate purge audit, and atomic revocation/secret minimization implemented; approved periods still required |
+| Backup deletion instructions | Authorized account deletion | Keep signed minimal instructions beyond every recoverable backup and restore window | Security/privacy | Private R2 journal plus signature-checked queue/replay/verification tooling implemented; actual backup expiry and restore drill still require verification |
+| Backups | Production deletion | Expire by verified provider cycle; replay deletion instructions before restored traffic opens | Security/privacy | Provider expiry not verified; restore tooling and operator procedure implemented in `docs/ops/release-gap-closure.md` |
 
 ## Enforcement requirements
 

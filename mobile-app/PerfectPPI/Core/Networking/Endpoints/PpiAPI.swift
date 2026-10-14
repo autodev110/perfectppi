@@ -63,6 +63,21 @@ enum PpiAPI {
         try await APIClient.shared.get("/api/ppi/submissions/\(id)")
     }
 
+    struct InspectionPreview: Decodable {
+        struct Finding: Decodable, Identifiable {
+            let id: String
+            let title: String
+            let nextStep: String
+            let action: String
+        }
+        let revision: Int
+        let findings: [Finding]
+    }
+
+    static func preview(submissionId: String) async throws -> InspectionPreview {
+        try await APIClient.shared.get("/api/ppi/submissions/\(submissionId)/preview")
+    }
+
     static func sections(submissionId: String) async throws -> [PpiSection] {
         try await APIClient.shared.get("/api/ppi/submissions/\(submissionId)/sections")
     }

@@ -25,6 +25,11 @@ do not paste `\set` directives there or run test fixtures against production.
 Use the iOS workflow/archive and simulator build instructions for native checks.
 This localization completion adds no database migration or provider credentials.
 
+October 14 follow-up: [`release-gap-closure.md`](release-gap-closure.md) records
+the later migration, restore/retention safeguards, mobile review parity and
+executable release/scanner/load checks. Its tooling prepares the evidence below;
+it does not mark the manual matrix approved.
+
 For an extraction-only review, `node tools/check-extracted-copy.mjs <base-ref>`
 compares English/protocol literals with a known pre-refactor revision. It is
 not a standing assertion that future product copy can never change. Terms

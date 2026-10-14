@@ -53,6 +53,26 @@ struct InspectionReviewView: View {
                 Text("Still needed")
             }
 
+            if let preview = model.reportPreview, !preview.findings.isEmpty {
+                Section {
+                    ForEach(preview.findings) { finding in
+                        Label {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(finding.title).font(.subheadline.weight(.semibold))
+                                Text(finding.nextStep).font(.footnote).foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: finding.action == "urgent" ? "exclamationmark.octagon.fill" : "wrench.and.screwdriver.fill")
+                                .foregroundStyle(finding.action == "urgent" ? Theme.Palette.danger : Theme.Palette.warning)
+                        }
+                    }
+                } header: {
+                    Text("The report will flag")
+                } footer: {
+                    Text("If anything here is wrong, continue editing and correct the observation before submitting.")
+                }
+            }
+
             Section {
                 Toggle(isOn: $certified) {
                     Text(PpiAPI.certificationText)
@@ -79,7 +99,7 @@ struct InspectionReviewView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(PrimaryButtonStyle(isLoading: submitting))
-                .disabled(!certified || !issues.isEmpty || submitting)
+                .disabled(!certified || !issues.isEmpty || submitting || model.reviewedRevision == nil)
                 .listRowBackground(Color.clear)
             }
         }
@@ -93,12 +113,13 @@ struct InspectionReviewView: View {
     }
 
     private func submit() async {
-        guard certified, issues.isEmpty, !submitting else { return }
+        guard certified, issues.isEmpty, !submitting,
+              let reviewedRevision = model.reviewedRevision else { return }
         submitting = true
         defer { submitting = false }
         errorMessage = nil
         do {
-            _ = try await PpiAPI.submit(submissionId: submissionId, expectedRevision: model.reviewedRevision ?? 0)
+            _ = try await PpiAPI.submit(submissionId: submissionId, expectedRevision: reviewedRevision)
             onSubmitted()
         } catch let error as APIError {
             if case .serverResponse(_, let code, _, _) = error, code == "stale_revision" {

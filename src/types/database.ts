@@ -3291,6 +3291,33 @@ export type Database = {
         }
         Relationships: []
       }
+      partner_retention_purge_runs: {
+        Row: {
+          id: string
+          delivery_days: number | null
+          link_days: number | null
+          deliveries_purged: number
+          link_transactions_purged: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          delivery_days?: number | null
+          link_days?: number | null
+          deliveries_purged: number
+          link_transactions_purged: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          delivery_days?: number | null
+          link_days?: number | null
+          deliveries_purged?: number
+          link_transactions_purged?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
       partner_user_link_transactions: {
         Row: {
           authorization_code_hash: string | null
@@ -7467,6 +7494,18 @@ export type Database = {
       get_my_is_developer: { Args: never; Returns: boolean }
       get_my_org_id: { Args: never; Returns: string }
       get_my_profile_id: { Args: never; Returns: string }
+      revoke_partner_connection: {
+        Args: { p_connection_id: string; p_organization_id: string; p_actor_id: string }
+        Returns: boolean
+      }
+      purge_partner_retention_records: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
+      requeue_restored_account_deletion: {
+        Args: { p_request_id: string; p_profile_id: string; p_auth_user_id: string; p_requested_at: string }
+        Returns: boolean
+      }
       get_my_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]

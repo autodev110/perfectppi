@@ -126,37 +126,14 @@ export async function revokeConnection(
   if (!context) return { error: "Not authorized" };
 
   const admin = createAdminClient();
-  const now = new Date().toISOString();
-
-  const { data, error } = await admin
-    .from("partner_connections")
-    .update({ status: "revoked", revoked_at: now, revoked_by: context.profileId })
-    .eq("id", connectionId)
-    .eq("organization_id", context.organizationId)
-    .eq("status", "active")
-    .select("id")
-    .maybeSingle();
+  const { data, error } = await admin.rpc("revoke_partner_connection", {
+    p_connection_id: connectionId,
+    p_organization_id: context.organizationId,
+    p_actor_id: context.profileId,
+  });
 
   if (error) return { error: error.message };
   if (!data) return { error: "Connection not found or already revoked" };
-
-  // Revoking the organization link also ends every individual account link it
-  // authorized: the technicians consented to a connection that no longer exists.
-  await admin
-    .from("partner_user_links")
-    .update({ status: "revoked", revoked_at: now, revoked_by: context.profileId })
-    .eq("partner_connection_id", connectionId)
-    .eq("status", "active");
-
-  // Pending outbound work would authenticate against a dead credential.
-  await admin
-    .from("outbound_events")
-    .update({
-      status: "failed",
-      last_error: { category: "configuration", message: "connection revoked" },
-    })
-    .eq("partner_connection_id", connectionId)
-    .in("status", ["pending", "delivering"]);
 
   revalidatePath("/org/settings");
   revalidatePath("/org/inspections");

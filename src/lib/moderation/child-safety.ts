@@ -47,6 +47,12 @@ export async function scanForKnownIllegalContent(
   if (scannerUrl.protocol !== "https:") {
     throw new Error("Specialist scanner URL must use HTTPS");
   }
+  if (scannerUrl.username || scannerUrl.password || scannerUrl.hash) {
+    throw new Error("Specialist scanner URL must not contain credentials or a fragment");
+  }
+  if (bytes.byteLength === 0 || bytes.byteLength > 50 * 1024 * 1024) {
+    return heldResult("specialist_scan_invalid_size", { sha256 });
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
@@ -63,13 +69,32 @@ export async function scanForKnownIllegalContent(
         sha256,
       }),
       cache: "no-store",
+      redirect: "error",
       signal: controller.signal,
     });
     if (!response.ok) {
       throw new Error(`Specialist scanner returned HTTP ${response.status}`);
     }
 
-    const parsed = responseSchema.parse(await response.json());
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("Specialist scanner returned an empty response");
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > 16 * 1024) {
+          await reader.cancel();
+          throw new Error("Specialist scanner response is too large");
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const parsed = responseSchema.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
     const rawResult = {
       verdict: parsed.verdict,
       provider: parsed.provider,

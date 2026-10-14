@@ -1,9 +1,28 @@
 # Child Safety Provider Integration Plan
 
-Status: Proposed implementation plan  
-Last updated: September 3, 2026  
+Status: Gateway implemented; provider approval/adapter configuration pending
+Last updated: October 15, 2026
 Scope: PerfectPPI community images and videos  
-Primary recommendation: Microsoft PhotoDNA Cloud for still images, Gemini as the second moderation layer, and Cloudflare CSAM scanning as defense in depth
+Primary recommendation: select an approved specialist provider for still images;
+PhotoDNA/Pathways remain candidates pending access and current provider terms.
+
+## Current Controlling Configuration
+
+The newer `PPI-social-media-update-plan.md` supersedes the original editorial
+and storage assumptions in this document. Ordinary text and eligible still
+photos do not wait for routine Gemini approval in launch mode. Required
+specialist image scanning remains enabled. Approved Community images are
+served from private R2 through authenticated audience/status checks; they do
+not acquire permanent public bucket URLs. New Community videos stay disabled.
+Cloudflare scanning of publicly cached files cannot be assumed to cover this
+private delivery path and is not required by the implemented gateway.
+
+`src/lib/moderation/child-safety.ts` implements the documented gateway contract,
+timeout, strict verdict validation, bounded response and redirect refusal.
+`tools/check-child-safety.mts` runs provider-authorized benign acceptance fixtures.
+A direct PhotoDNA driver requires the API contract Microsoft supplies after
+approval; there is no invented or always-clean provider implementation.
+See `docs/ops/release-gap-closure.md` for the code completion and external gates.
 
 This document is an engineering and operations plan. It is not legal advice and does not by itself authorize public user-generated media launch.
 
@@ -14,7 +33,7 @@ PerfectPPI should pursue the following path:
 1. Apply to Microsoft PhotoDNA Cloud and the Tech Coalition Pathways program in parallel.
 2. Use Microsoft PhotoDNA Cloud as the first production provider if PerfectPPI is approved and its transaction allowance is sufficient.
 3. Keep the existing fail-closed moderation behavior until a specialist provider passes production acceptance testing.
-4. Enable Cloudflare's CSAM Scanning Tool on the proxied public-media domain as an additional control, not as the primary pre-publication gate.
+4. Evaluate Cloudflare's cache scanning only if an eligible public-media path is introduced. The current authenticated private-media path does not rely on it.
 5. Launch public community images before public community videos. PhotoDNA Cloud currently supports still images, while videos need a video-capable provider or an approved self-hosted video hash source.
 6. Retain Meta's open-source Hasher-Matcher-Actioner (HMA), a PhotoDNA sublicense, and an approved hash exchange as the preferred self-hosted fallback.
 7. Do not purchase Thorn Safer Match at the current public price unless volume, risk, or video requirements justify it or Thorn offers an acceptable private startup price.
@@ -23,7 +42,7 @@ PerfectPPI should pursue the following path:
 
 - Prevent known illegal media from becoming publicly accessible.
 - Keep uncertain, failed, unsupported, and unscanned media private.
-- Use specialist known-content matching before general AI image classification.
+- Require specialist known-content matching before audience delivery; any future editorial classification is an additional policy layer.
 - Minimize disclosure of uploaded media and account information to providers.
 - Preserve an auditable decision trail without copying sensitive media into logs.
 - Support provider replacement without rewriting the community feature.
@@ -49,9 +68,9 @@ The following controls already exist:
 - Image uploads are limited to 10 MB and video uploads to 50 MB.
 - Media signatures are checked rather than trusting only the declared MIME type.
 - SHA-256 duplicate checks stop previously rejected or legal-hold content from being rescanned and promoted.
-- The specialist scanner executes before Gemini image moderation.
+- The specialist scanner executes before display is enabled. Routine Gemini editorial approval is off in the current launch configuration.
 - Missing configuration, provider errors, uncertain results, and unsupported formats remain private.
-- Only allowed media is promoted from private quarantine to public R2 storage.
+- Only allowed Community images receive private display variants and authenticated delivery.
 - Match results enter restricted legal hold.
 - Moderation decisions and events are recorded for auditability.
 - Manual approval cannot promote media unless a clean specialist scan is recorded.
@@ -71,7 +90,7 @@ Primary implementation references:
 |---|---|---|---|
 | Microsoft PhotoDNA Cloud | Free for qualified and vetted organizations, subject to limits | Known still images | Preferred launch provider |
 | Tech Coalition Pathways plus PhotoDNA and HMA | PhotoDNA sublicense and software can be free; hosting and operations remain | Depends on licensed algorithms and approved hash exchanges | Preferred self-hosted fallback |
-| Cloudflare CSAM Scanning Tool | Enabled at the Cloudflare zone; confirm account and plan availability | Images served through Cloudflare cache | Enable as defense in depth |
+| Cloudflare CSAM Scanning Tool | Confirm account and plan availability | Eligible publicly cached images, not the current private delivery path | Conditional future defense in depth |
 | Thorn Safer Match | Public AWS Marketplace minimum is approximately USD 30,720 annually | Known images and videos; review/reporting capabilities | Too expensive for the initial stage unless privately discounted |
 | Hive with Thorn | Enterprise sales process | Known-content matching and predictive classification | Obtain a quote only if PhotoDNA routes are unavailable |
 
@@ -92,7 +111,7 @@ Primary implementation references:
 
 ### 5.3 Role of Cloudflare
 
-Cloudflare can scan images as they enter the Cloudflare cache and can block known matches where possible. PerfectPPI should enable it on the custom domain that serves public R2 media after confirming that the hostname is proxied and eligible.
+Cloudflare can scan eligible images as they enter its public cache. Evaluate it only if a public-media domain is introduced and confirmed eligible; do not weaken authenticated private delivery to obtain cache-scanner coverage.
 
 Cloudflare is secondary because it does not return the synchronous `clean`, `match`, or `review` response required before PerfectPPI promotes quarantined media. It also does not replace PerfectPPI's review and reporting responsibilities.
 
@@ -104,14 +123,12 @@ flowchart TD
     B --> C[Size, type, and file-signature validation]
     C --> D[Local SHA-256 duplicate blocklist check]
     D --> E[Specialist known-content provider]
-    E -->|Clean image| F[Gemini image moderation]
+    E -->|Clean image| I[Private display variant]
     E -->|Match| G[Restricted legal hold]
     E -->|Review, error, timeout, unsupported| H[Private pending review]
-    F -->|Allow| I[Promote to public R2]
-    F -->|Review| H
-    F -->|Block| J[Reject and keep private or delete per policy]
-    F -->|Critical| G
-    I --> K[Cloudflare cache defense-in-depth scan]
+    I --> K[Authenticated audience and status check per request]
+    K -->|Authorized| L[Display image]
+    K -->|Not authorized| M[Deny delivery]
 ```
 
 ### 6.1 Production Image Path
@@ -120,10 +137,9 @@ flowchart TD
 2. PerfectPPI retrieves the exact reserved object and validates size, MIME type, and file signature.
 3. PerfectPPI checks its internal SHA-256 record for a prior rejected or legal-hold result.
 4. The server submits the image to the approved specialist provider.
-5. A known-content match enters restricted legal hold and short-circuits Gemini.
-6. An explicit clean result continues to Gemini 2.5 Flash image moderation.
-7. Only media allowed by both layers is copied to public R2 and exposed in the community feed.
-8. Review, outage, timeout, invalid response, or unsupported media remains in private quarantine.
+5. A known-content match enters restricted legal hold and cannot be published.
+6. In current launch mode, specialist-clean media receives a private display variant; authenticated delivery rechecks visibility. General Gemini editorial classification is not a routine publication gate.
+7. Review, outage, timeout, invalid response, or unsupported media remains in private quarantine.
 
 ### 6.2 Video Path
 
@@ -223,16 +239,15 @@ If a direct PhotoDNA driver replaces the HTTP gateway, the exact new environment
 
 ## 9. Decision and Storage Rules
 
-| Provider outcome | PerfectPPI decision | Storage state | Publicly visible | Next action |
+| Provider outcome | PerfectPPI decision | Storage state | Audience-visible | Next action |
 |---|---|---|---|---|
-| Explicit clean | Continue to Gemini | Private until Gemini allows | No, until both pass | Run Gemini moderation |
+| Explicit clean | Allow under current launch policy | Private display variant | Only to authorized signed-in viewers | Record specialist evidence; recheck audience on delivery |
 | Match | Legal hold | Restricted private evidence | Never | Notify authorized safety/legal owner |
 | Review or uncertain | Pending review | Private quarantine | No | Authorized manual process |
 | Timeout or network failure | Pending review | Private quarantine | No | Retry or investigate outage |
 | Invalid provider response | Pending review | Private quarantine | No | Alert engineering |
 | Unsupported image format | Pending review | Private quarantine | No | Convert through approved flow or review |
-| Gemini allow after clean scan | Allow | Promote to public bucket | Yes | Record provider/model evidence |
-| Gemini review or block | Review or reject | Private | No | Review, appeal, or deletion workflow |
+| Optional editorial review, if enabled later | Policy-dependent | Private | Only after all required gates pass | Separately approved configuration and disclosures |
 
 ### 9.1 HEIC and HEIF
 
@@ -292,13 +307,12 @@ Exit criterion: applications submitted and named owners accept responsibility.
 
 ### Phase 1: Immediate Defense in Depth
 
-- Confirm the public R2 custom domain is proxied through the intended Cloudflare zone.
-- Enable Cloudflare CSAM scanning and set a monitored notification address.
-- Test that normal public test images remain accessible through the custom domain.
-- Document Cloudflare notification and response handling.
+- Confirm private R2 objects have no anonymous public path.
+- Verify authenticated media delivery denies unauthorized viewers and non-active content.
+- Evaluate and document Cloudflare cache scanning only for an eligible future public path.
 - Keep specialist environment variables empty and retain fail-closed media behavior.
 
-Exit criterion: Cloudflare protection is enabled where applicable without representing it as pre-publication approval.
+Exit criterion: private-media denial tests pass; any optional cache protection is not represented as pre-publication approval.
 
 ### Phase 2: Provider Adapter
 
@@ -314,14 +328,14 @@ Exit criterion: the adapter passes unit and contract tests using provider-approv
 ### Phase 3: PerfectPPI Pipeline Integration
 
 - Connect the provider driver to `scanForKnownIllegalContent`.
-- Preserve specialist-first, Gemini-second ordering.
+- Require specialist approval before private display; routine Gemini editorial gating remains off under the current launch policy.
 - Store the clean specialist result inside the moderation audit result.
 - Preserve the manual-approval guard requiring a clean specialist scan.
 - Add an idempotent retry path for scanner outages and pending media.
 - Decide and implement HEIC/HEIF handling.
 - Prevent duplicate provider charges for already completed object hashes where policy permits reuse.
 
-Exit criterion: no media can reach the public bucket without both required approvals.
+Exit criterion: no Community image is audience-visible without the required specialist result and current audience/status checks; it never acquires a public bucket URL.
 
 ### Phase 4: Restricted Operations
 
@@ -349,7 +363,7 @@ Exit criterion: all launch-blocking tests and approvals are recorded.
 
 - Enable image posting for internal administrators.
 - Expand to a small invited cohort.
-- Monitor provider latency, failures, review queues, and R2 promotion/deletion behavior.
+- Monitor provider latency, failures, review queues, and private derivative/cleanup behavior.
 - Expand to all users only after the observation period meets acceptance thresholds.
 - Keep public video disabled until the video phase is independently approved.
 
@@ -374,9 +388,9 @@ Exit criterion: a provider-backed specialist video scan passes acceptance testin
 - Clean, match, and review responses map correctly.
 - Unknown verdicts and malformed JSON fail closed.
 - Timeout and network errors fail closed.
-- Match short-circuits Gemini.
-- Clean image proceeds to Gemini.
-- Gemini failure after a clean specialist scan remains private.
+- Match blocks publication and enters restricted hold.
+- Clean images receive private display variants under the current launch policy.
+- Optional editorial gating, if separately enabled, cannot bypass specialist failure.
 - HEIC/HEIF follows the approved policy.
 - Video cannot publish without approved video coverage.
 
@@ -384,9 +398,9 @@ Exit criterion: a provider-backed specialist video scan passes acceptance testin
 
 - Upload enters only the private bucket.
 - Incorrect size and MIME signatures are rejected.
-- Public R2 promotion happens only after an allow decision.
-- Source quarantine objects are removed after successful promotion.
-- Failed promotion is cleaned up or queued for retry.
+- Private display variants are available only after an allow decision.
+- Raw quarantine objects never become anonymous public media.
+- Failed derivative creation is cleaned up or queued for retry.
 - Legal-hold evidence survives ordinary account deletion.
 - Ordinary administrators cannot approve media lacking a clean specialist record.
 - Duplicate rejected and legal-hold hashes are stopped before provider submission.
@@ -419,7 +433,7 @@ Track the following without storing media content:
 Alert immediately on:
 
 - Any known-content match.
-- Any attempted public promotion without a recorded clean specialist scan.
+- Any attempted audience delivery without a recorded clean specialist scan.
 - Authentication failures that indicate expired or rotated credentials.
 - Sustained provider outages or review-queue growth.
 - Anonymous access to a private or quarantined object.
@@ -433,7 +447,7 @@ Alert immediately on:
 - PerfectPPI implementation: engineering and operational work only.
 - R2: existing private and public storage plus request/egress usage.
 - Cloudflare: confirm availability and any account-specific cost before enabling.
-- Gemini: existing image moderation usage continues after PhotoDNA returns clean.
+- Gemini: no routine Community editorial scan costs in the current launch configuration; inspection analysis is separate.
 
 ### Self-Hosted Fallback
 
@@ -464,8 +478,8 @@ Public community image launch is ready only when all of the following are true:
 - A specialist provider contract or approved program access is active.
 - Production credentials are stored server-side and pass authentication tests.
 - Clean, match, review, timeout, outage, and malformed-response paths pass testing.
-- Specialist matching always runs before Gemini for supported images.
-- No image can enter public R2 without an explicit clean specialist result and an allow decision from the remaining policy.
+- Specialist matching is required before supported images become audience-visible.
+- No Community image enters public R2; private delivery requires an explicit clean specialist result and current audience/status authorization.
 - Private R2 and legal-hold access tests pass anonymously and for ordinary users/admins.
 - HEIC/HEIF behavior is explicitly implemented and tested.
 - Monitoring, alerts, retry handling, and queue ownership are operational.
@@ -498,4 +512,3 @@ Public community video launch has a separate definition of done and remains bloc
 - [Thorn Safer Match](https://safer.io/resources/introducing-safer-essential-api-based-csam-detection/)
 - [Thorn AWS Marketplace pricing](https://aws.amazon.com/marketplace/pp/prodview-dfwekn4bx4ake)
 - [Hive CSAM Detection API](https://docs.thehive.ai/reference/csam-detection-combined-api-reference)
-

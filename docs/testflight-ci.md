@@ -158,7 +158,7 @@ Security remains responsible for protecting data.
 Under **Environment variables**, add:
 
 ```text
-IOS_API_BASE_URL=https://perfectppi.vercel.app
+IOS_API_BASE_URL=https://www.perfectppi.com
 ```
 
 Do not use `localhost`, a preview deployment, or the retired

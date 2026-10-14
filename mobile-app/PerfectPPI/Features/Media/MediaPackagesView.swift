@@ -86,7 +86,7 @@ private struct MediaPackageDetailView: View {
 
             Section("Items") {
                 ForEach(package.items) { item in
-                    Link(destination: URL(string: item.url) ?? URL(string: "https://perfectppi.com")!) {
+                    Link(destination: URL(string: item.url) ?? AppConfig.publicSiteURL) {
                         HStack {
                             Image(systemName: icon(for: item.type))
                             VStack(alignment: .leading) {

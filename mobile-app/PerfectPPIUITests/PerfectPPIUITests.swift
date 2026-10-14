@@ -5,6 +5,7 @@ final class PerfectPPIUITests: XCTestCase {
     /// Deliberately auth-state-agnostic — depending on a persisted session the
     /// app may open on the login screen or straight into a signed-in tab, so we
     /// assert the process is alive rather than looking for a specific screen.
+    @MainActor
     func testLaunch() {
         let app = XCUIApplication()
         app.launch()

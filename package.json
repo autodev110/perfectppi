@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json && tsc --noEmit -p tsconfig.tools.json",
     "i18n:check": "node tools/localize-web-copy.mjs --check",
     "test": "npm run test:unit",
     "test:unit": "node --test \"tests/unit/*.test.mts\"",

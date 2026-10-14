@@ -14,6 +14,7 @@ export type RetentionPurgeReport = {
   cases: { purged: number; skipped: Record<string, number>; failed: Array<{ id: string; error: string }> };
   archivedPosts: { purged: number; skipped: Record<string, number>; failed: Array<{ id: string; error: string }> };
   vehicleHandoffAttemptsPurged: number;
+  partnerRecords: Json | null;
   storage: unknown;
   status: Record<string, number>;
 };
@@ -47,6 +48,7 @@ export async function runRetentionPurge(limits = { cases: 25, archivedPosts: 25 
     cases: { purged: 0, skipped: {}, failed: [] },
     archivedPosts: { purged: 0, skipped: {}, failed: [] },
     vehicleHandoffAttemptsPurged: 0,
+    partnerRecords: null,
     storage: null,
     status: {},
   };
@@ -101,6 +103,10 @@ export async function runRetentionPurge(limits = { cases: 25, archivedPosts: 25 
     .lt("attempted_at", cutoff);
   if (handoffAttemptError) throw new Error(handoffAttemptError.message);
   report.vehicleHandoffAttemptsPurged = handoffAttemptCount ?? 0;
+
+  const { data: partnerRecords, error: partnerError } = await admin.rpc("purge_partner_retention_records", { p_limit: 100 });
+  if (partnerError) throw new Error(partnerError.message);
+  report.partnerRecords = partnerRecords;
 
   // Queued object deletions are processed by the existing retrying cleanup.
   try {

@@ -34,14 +34,14 @@ Then in Xcode:
 3. Enable capabilities (already declared in `project.yml`, but Xcode needs to
    provision them against your team):
    - **Push Notifications**
-   - **Associated Domains** (`applinks:perfectppi.com`, `webcredentials:perfectppi.com`)
+   - **Associated Domains** (`applinks:www.perfectppi.com`, `webcredentials:www.perfectppi.com`)
    - **Background Modes** → **Remote notifications**
 4. Update `applinks:` and `webcredentials:` in `project.yml` to match the
    domain that hosts the Next.js API (the one that serves
    `/.well-known/apple-app-site-association`).
 5. Set the runtime config in `Resources/AppConfig.plist` (created on first
    build from `AppConfig.example.plist`):
-   - `APIBaseURL` — e.g. `https://perfectppi.com`
+   - `APIBaseURL` — `https://www.perfectppi.com` for production
    - `SupabaseURL`, `SupabaseAnonKey`
 
 ## Server-side requirements
