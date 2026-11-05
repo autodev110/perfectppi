@@ -7,7 +7,8 @@ import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Car, User, Calendar, ChevronLeft, AlertCircle } from "lucide-react";
-import { DealerSpaceInspectionPanel } from "@/components/shared/dealerspace-inspection-panel";
+import { PartnerInspectionPanel } from "@/components/shared/partner-inspection-panel";
+import { partnerLabel } from "@/features/partner/systems";
 import { InspectionResultsPanel } from "@/components/shared/inspection-results-panel";
 import { SourceBadge } from "@/components/shared/source-badge";
 import Link from "next/link";
@@ -170,7 +171,9 @@ export default function TechInspectionDetailPage() {
         <CardContent className="text-sm">
           <p className="font-medium">
             {request.requester?.display_name ??
-              (request.source_system === "dealerspace" ? uiText("ui.dealership_a761f63f29") : uiText("ui.consumer_3fdb185870"))}
+              (request.source_system && request.source_system !== "perfectppi"
+                ? partnerLabel(request.source_system)
+                : uiText("ui.consumer_3fdb185870"))}
           </p>
           <p className="text-muted-foreground flex items-center gap-1 mt-1">
             <Calendar className="h-3.5 w-3.5" />{uiText("ui.requested_2d9e28289f")}{" "}
@@ -183,7 +186,7 @@ export default function TechInspectionDetailPage() {
         </CardContent>
       </Card>
 
-      <DealerSpaceInspectionPanel requestId={id} />
+      <PartnerInspectionPanel requestId={id} />
 
       {/* Actions */}
       {canAccept && (

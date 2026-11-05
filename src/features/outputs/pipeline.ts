@@ -17,6 +17,7 @@ import {
   type ArtifactType,
 } from "@/features/partner/constants";
 import { setIntegrationStatus } from "@/features/partner/events";
+import { requestPartnerAutoDelivery } from "@/features/partner/auto-delivery";
 import type { Json } from "@/types/database";
 import type { StandardizedContent, VscCoverageData } from "@/types/api";
 import type { InspectionScope, SectionType } from "@/types/enums";
@@ -661,6 +662,10 @@ export async function runOutputGenerationJob(params: {
   // Only now — with every required artifact stored and checksummed — is the
   // inspection advertised as deliverable.
   await setIntegrationStatus(request.id, "deliverables_ready");
+
+  // Partners without a Send button receive the finished set from here on. This
+  // never fails the job: the delivery worker's sweep covers a missed request.
+  await requestPartnerAutoDelivery(request.id, submissionId, outputVersion);
 
   return {
     submissionId,

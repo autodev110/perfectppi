@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 // ============================================================================
 // Partner API error vocabulary.
 //
-// DealerSpace branches on `error`, so these strings are part of the contract.
+// Partners branch on `error`, so these strings are part of the contract.
 // `message` is for humans reading logs and must never disclose whether a
 // resource belongs to another organization — unknown and forbidden both come
 // back as `inspection_not_found`.
@@ -82,7 +82,7 @@ function defaultMessage(code: PartnerErrorCode): string {
     case "missing_idempotency_key":
       return "An Idempotency-Key header is required.";
     case "user_link_required":
-      return "The DealerSpace user has not linked a Perfect PPI account yet.";
+      return "This staff member has not linked a Perfect PPI account yet.";
     case "invalid_user_link":
       return "The linked Perfect PPI account is not an active technician in the connected organization.";
     case "link_callback_not_configured":
@@ -92,7 +92,7 @@ function defaultMessage(code: PartnerErrorCode): string {
     case "deliverables_not_ready":
       return "The inspection does not yet have every required artifact.";
     case "delivery_not_requested":
-      return "This report version has not been sent to DealerSpace.";
+      return "This report version has not been sent to the partner.";
     case "inspection_not_found":
       return "No such inspection for this connection.";
     case "artifact_not_found":

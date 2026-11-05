@@ -3189,6 +3189,7 @@ export type Database = {
       }
       partner_installation_codes: {
         Row: {
+          code_challenge: string | null
           code_hash: string
           code_prefix: string
           consumed_at: string | null
@@ -3206,6 +3207,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          code_challenge?: string | null
           code_hash: string
           code_prefix: string
           consumed_at?: string | null
@@ -3223,6 +3225,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          code_challenge?: string | null
           code_hash?: string
           code_prefix?: string
           consumed_at?: string | null

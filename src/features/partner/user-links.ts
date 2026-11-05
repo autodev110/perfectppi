@@ -8,6 +8,7 @@ import {
   USER_LINK_CODE_TTL_MS,
   USER_LINK_TRANSACTION_TTL_MS,
 } from "./constants";
+import { partnerLabel } from "./systems";
 import type { PartnerConnection } from "./auth";
 
 // ============================================================================
@@ -31,7 +32,7 @@ export type LinkEligibilityFailure =
  * Roles that can be assigned an inspection and carry it through to submission.
  *
  * Managers are included deliberately: at a small dealership the person who
- * connected DealerSpace is often the person who inspects the car. They already
+ * connected the partner is often the person who inspects the car. They already
  * hold a technician_profiles row with an organization_id — that is how org
  * membership is modelled — and every RLS policy on the performer path keys on
  * profile id rather than role, so nothing had to be loosened to allow it.
@@ -94,7 +95,7 @@ export async function checkLinkEligibility(
 }
 
 // ============================================================================
-// Step 1 — DealerSpace initiates, using its connection credential
+// Step 1 — the partner initiates, using its connection credential
 // ============================================================================
 
 export interface InitiatedLinkTransaction {
@@ -133,7 +134,7 @@ export async function initiateUserLinkTransaction(
   return {
     data: {
       state,
-      authorizationUrl: `${siteConfig.url.replace(/\/$/, "")}/link/dealerspace/${state}`,
+      authorizationUrl: `${siteConfig.url.replace(/\/$/, "")}/link/${connection.source_system}/${state}`,
       expiresAt,
     },
   };
@@ -149,7 +150,9 @@ export interface ConsentContext {
   connectionId: string;
   organizationId: string;
   organizationName: string;
+  sourceSystem: string;
   partnerLabel: string;
+  partnerAccountName: string | null;
   expiresAt: string;
 }
 
@@ -189,6 +192,7 @@ export async function loadConsentContext(
     organization_id: string;
     display_name: string | null;
     status: string;
+    source_system: string;
   } | null;
 
   if (!connection || connection.status !== "active") {
@@ -208,7 +212,9 @@ export async function loadConsentContext(
       connectionId: connection.id,
       organizationId: connection.organization_id,
       organizationName: organization?.name ?? "your organization",
-      partnerLabel: connection.display_name ?? "DealerSpace",
+      sourceSystem: connection.source_system,
+      partnerLabel: partnerLabel(connection.source_system),
+      partnerAccountName: connection.display_name,
       expiresAt: transaction.expires_at,
     },
   };
@@ -302,7 +308,7 @@ function buildCallbackUrl(redirectUri: string, params: Record<string, string>): 
 }
 
 // ============================================================================
-// Step 3 — DealerSpace exchanges the code, using its connection credential
+// Step 3 — the partner exchanges the code, using its connection credential
 // ============================================================================
 
 export interface ExchangedUserLink {
@@ -382,6 +388,60 @@ export async function exchangeUserLinkCode(
 }
 
 // ============================================================================
+// The person who connected — linked during the connection exchange
+// ============================================================================
+
+/**
+ * Browser connect only. The manager who authorized the connection is signed in
+ * to both products and approved this partner a moment ago, so a second consent
+ * screen would add nothing. Best-effort: a null result only means they use the
+ * normal link flow, and an existing link to a different person is left alone.
+ */
+export async function linkConnectingUser(params: {
+  connectionId: string;
+  organizationId: string;
+  externalUserId: string;
+  profileId: string;
+}): Promise<ExchangedUserLink | null> {
+  const eligibility = await checkLinkEligibility(params.profileId, params.organizationId);
+  if (!eligibility.eligible) return null;
+
+  const admin = createAdminClient();
+
+  const { error } = await admin.from("partner_user_links").insert({
+    partner_connection_id: params.connectionId,
+    external_user_id: params.externalUserId,
+    profile_id: params.profileId,
+    last_verified_at: new Date().toISOString(),
+  });
+
+  // 23505: already linked, which is the expected case on a reconnect.
+  if (error && error.code !== "23505") {
+    console.error("partner: connecting user link failed", error.message);
+    return null;
+  }
+
+  const { data: link } = await admin
+    .from("partner_user_links")
+    .select("external_user_id, profile_id, status, linked_at")
+    .eq("partner_connection_id", params.connectionId)
+    .eq("external_user_id", params.externalUserId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (!link || link.profile_id !== params.profileId) return null;
+
+  return {
+    externalUserId: link.external_user_id,
+    perfectppiProfileId: link.profile_id,
+    displayName: eligibility.profile?.displayName ?? null,
+    username: eligibility.profile?.username ?? null,
+    status: link.status,
+    linkedAt: link.linked_at,
+  };
+}
+
+// ============================================================================
 // Resolution — used by inspection creation
 // ============================================================================
 
@@ -394,8 +454,8 @@ export interface ResolvedTechnician {
 export type ResolveFailure = "user_link_required" | "invalid_user_link";
 
 /**
- * Turns a DealerSpace staff id into a Perfect PPI profile. A Perfect PPI
- * profile id supplied directly by DealerSpace is never accepted — this lookup
+ * Turns a partner staff id into a Perfect PPI profile. A Perfect PPI
+ * profile id supplied directly by the partner is never accepted — this lookup
  * is the only path, and it re-verifies technician status and organization
  * membership every time.
  */

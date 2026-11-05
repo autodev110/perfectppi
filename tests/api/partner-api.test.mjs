@@ -74,6 +74,7 @@ before(async () => {
       // Lets the tests register a loopback webhook receiver. Off in production,
       // where the SSRF guard rejects every private address.
       PARTNER_ALLOW_INSECURE_CALLBACKS: "true",
+      PARTNER_SHOPOWL_APP_URL: "http://localhost:4010",
       WORKER_SECRET,
       CRON_SECRET: WORKER_SECRET,
       NEXT_PUBLIC_SITE_URL: `http://127.0.0.1:${PORT}`,
@@ -724,13 +725,14 @@ describe("inspection creation", () => {
     assert.equal(body.error, "missing_idempotency_key");
   });
 
-  test("rejects a VIN that fails its check digit", async () => {
+  test("rejects a VIN that is not a valid 17-character format", async () => {
     const { status, body } = await apiRequest(baseUrl, "/api/v1/partner/inspections", {
       method: "POST",
       token: alphaConn.token,
       idempotencyKey: "bad-vin",
-      // Position 9 is the check digit; 1HGCM82633A004352 requires "3" there.
-      body: { ...payload, vehicle: { ...payload.vehicle, vin: "1HGCM82613A004352" } },
+      // The letter I never appears in a VIN. The check digit is deliberately not
+      // enforced: see lib/utils/vin.ts.
+      body: { ...payload, vehicle: { ...payload.vehicle, vin: "IHGCM82613A004352" } },
     });
 
     assert.equal(status, 400);
@@ -1287,6 +1289,368 @@ describe("worker endpoints", () => {
       });
       assert.equal(wrong.status, 401);
     }
+  });
+});
+
+describe("ShopOwl browser connect", () => {
+  const VERIFIER = "shopowl-test-verifier-0123456789-abcdefghijklmnop";
+  const CHALLENGE = createHash("sha256").update(VERIFIER).digest("base64url");
+  const SHOPOWL = "http://localhost:4010";
+  const urls = {
+    webhookUrl: `${SHOPOWL}/api/webhooks/perfectppi`,
+    userLinkRedirectUri: `${SHOPOWL}/api/integrations/perfectppi/user-link/callback`,
+  };
+  const shop = {};
+
+  async function browserCode(overrides = {}) {
+    const { code, codeHash, codePrefix } = makeInstallationCode();
+    const { error } = await admin().from("partner_installation_codes").insert({
+      organization_id: alpha.org.id,
+      source_system: "shopowl",
+      code_hash: codeHash,
+      code_prefix: codePrefix,
+      code_challenge: CHALLENGE,
+      scopes: ["inspections:create", "inspections:read", "artifacts:read"],
+      created_by: alpha.profileId,
+      expires_at: new Date(Date.now() + 300_000).toISOString(),
+      ...overrides,
+    });
+    assert.equal(error, null);
+    return code;
+  }
+
+  // Its own client address: the suite above already used this minute's exchange
+  // budget, which is counted per address.
+  const exchange = (body) =>
+    apiRequest(baseUrl, "/api/v1/partner/connections/exchange", {
+      method: "POST",
+      body,
+      headers: { "x-forwarded-for": "203.0.113.10" },
+    });
+
+  test("a browser code is useless without the verifier", async () => {
+    const code = await browserCode();
+    const base = { code, externalOrganizationId: "shop-1", ...urls };
+
+    const missing = await exchange(base);
+    assert.equal(missing.status, 400);
+    assert.equal(missing.body.error, "invalid_installation_code");
+
+    const wrong = await exchange({ ...base, codeVerifier: "x".repeat(50) });
+    assert.equal(wrong.status, 400);
+    assert.equal(wrong.body.error, "invalid_installation_code");
+  });
+
+  test("a browser partner can only register its own addresses", async () => {
+    const code = await browserCode();
+    const { status, body } = await exchange({
+      code,
+      codeVerifier: VERIFIER,
+      externalOrganizationId: "shop-1",
+      webhookUrl: webhook.url,
+      userLinkRedirectUri: urls.userLinkRedirectUri,
+    });
+    assert.equal(status, 400);
+    assert.equal(body.error, "invalid_callback_url");
+    assert.equal(body.field, "webhookUrl");
+  });
+
+  test("connects with the verifier and links the person who connected", async () => {
+    const code = await browserCode();
+    const { status, body } = await exchange({
+      code,
+      codeVerifier: VERIFIER,
+      externalOrganizationId: "shop-1",
+      displayName: "Alpha ShopOwl",
+      connectingExternalUserId: "shop-owner-1",
+      ...urls,
+    });
+
+    assert.equal(status, 201);
+    assert.ok(body.token.startsWith("ppi_"));
+    assert.ok(body.webhookSecret.startsWith("whsec_"));
+    assert.equal(body.connectingUser.externalUserId, "shop-owner-1");
+    assert.equal(body.connectingUser.perfectppiProfileId, alpha.profileId);
+    Object.assign(shop, { id: body.connectionId, token: body.token, profileId: alpha.profileId });
+
+    const { data: stored } = await admin()
+      .from("partner_connections")
+      .select("source_system, connected_by")
+      .eq("id", body.connectionId)
+      .single();
+    assert.equal(stored.source_system, "shopowl");
+    assert.equal(stored.connected_by, alpha.profileId);
+  });
+
+  test("the same organization keeps its DealerSpace connection alongside it", async () => {
+    const self = await apiRequest(baseUrl, "/api/v1/partner/connections/self", { token: alphaConn.token });
+    assert.equal(self.status, 200);
+    assert.equal(self.body.sourceSystem, "dealerspace");
+  });
+
+  test("reconnecting the same shop rotates its credentials in place", async () => {
+    const code = await browserCode();
+    const { status, body } = await exchange({
+      code,
+      codeVerifier: VERIFIER,
+      externalOrganizationId: "shop-1",
+      connectingExternalUserId: "shop-owner-1",
+      ...urls,
+    });
+
+    assert.equal(status, 200);
+    assert.equal(body.reconnected, true);
+    assert.equal(body.connectionId, shop.id);
+    assert.equal(body.connectingUser.perfectppiProfileId, alpha.profileId, "the existing link survives");
+
+    const stale = await apiRequest(baseUrl, "/api/v1/partner/connections/self", { token: shop.token });
+    assert.equal(stale.status, 401);
+    shop.token = body.token;
+  });
+
+  test("a different shop cannot take over a connected organization", async () => {
+    const code = await browserCode();
+    const { status, body } = await exchange({
+      code,
+      codeVerifier: VERIFIER,
+      externalOrganizationId: "shop-2",
+      ...urls,
+    });
+    assert.equal(status, 409);
+    assert.equal(body.error, "connection_already_exists");
+  });
+
+  test("a manual code cannot rotate an existing connection", async () => {
+    const { code, codeHash, codePrefix } = makeInstallationCode();
+    await insertInstallationCode({
+      organizationId: alpha.org.id,
+      codeHash,
+      codePrefix,
+      createdBy: alpha.profileId,
+      expiresAt: new Date(Date.now() + 600_000).toISOString(),
+    });
+    const { status, body } = await exchange({
+      code,
+      externalOrganizationId: "dms-alpha",
+      webhookUrl: webhook.url,
+      userLinkRedirectUri: webhook.url,
+    });
+    assert.equal(status, 409);
+    assert.equal(body.error, "connection_already_exists");
+  });
+
+  test("creates a ShopOwl inspection, and a payload cannot claim another system", async () => {
+    const payload = {
+      externalOrganizationId: "shop-1",
+      externalActorId: "shop-owner-1",
+      externalInspectionPhaseId: "shop-inspection-1",
+      vehicle: { vin: VALID_VIN, year: 2020, make: "Honda", model: "Civic" },
+    };
+
+    const wrongSystem = await apiRequest(baseUrl, "/api/v1/partner/inspections", {
+      method: "POST",
+      token: shop.token,
+      idempotencyKey: "shopowl:wrong-system",
+      body: { ...payload, source: { system: "dealerspace" } },
+    });
+    assert.equal(wrongSystem.status, 400);
+    assert.equal(wrongSystem.body.error, "unsupported_source_system");
+
+    const created = await apiRequest(baseUrl, "/api/v1/partner/inspections", {
+      method: "POST",
+      token: shop.token,
+      idempotencyKey: "shopowl:inspection-1",
+      body: { ...payload, source: { system: "shopowl", label: "ShopOwl Inspection" } },
+    });
+    assert.equal(created.status, 201);
+    shop.inspectionId = created.body.inspectionId;
+
+    const { data: request } = await admin()
+      .from("ppi_requests")
+      .select("source_system, requesting_organization_id")
+      .eq("id", shop.inspectionId)
+      .single();
+    assert.equal(request.source_system, "shopowl");
+    assert.equal(request.requesting_organization_id, alpha.org.id);
+
+    const { data: ref } = await admin()
+      .from("external_inspection_refs")
+      .select("source_system, vehicle_snapshot")
+      .eq("ppi_request_id", shop.inspectionId)
+      .single();
+    assert.equal(ref.source_system, "shopowl");
+    assert.equal(ref.vehicle_snapshot.sourceSystem, "shopowl");
+  });
+
+  test("the delivery worker sends a finished report with no Send button", async () => {
+    const db = admin();
+    // Point the connection at the local receiver, as the configured app would be.
+    await db.from("partner_connections").update({ webhook_url: webhook.url }).eq("id", shop.id);
+
+    const { data: ref } = await db
+      .from("external_inspection_refs")
+      .select("id")
+      .eq("ppi_request_id", shop.inspectionId)
+      .single();
+    const { data: submission } = await db
+      .from("ppi_submissions")
+      .insert({
+        ppi_request_id: shop.inspectionId,
+        performer_id: alpha.profileId,
+        version: 1,
+        status: "submitted",
+        submitted_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    await db
+      .from("external_inspection_refs")
+      .update({ current_submission_id: submission.id, integration_status: "deliverables_ready" })
+      .eq("id", ref.id);
+
+    const bodies = [
+      ["inspection_report_json", "application/json", "{}"],
+      ["inspection_report_pdf", "application/pdf", "%PDF-1.4 report"],
+      ["vsc_determination_json", "application/json", "{}"],
+      ["vsc_determination_pdf", "application/pdf", "%PDF-1.4 vsc"],
+    ];
+    const { error } = await db.from("integration_artifacts").insert(
+      bodies.map(([type, contentType, text]) => ({
+        external_inspection_ref_id: ref.id,
+        ppi_submission_id: submission.id,
+        output_version: 1,
+        artifact_type: type,
+        content_type: contentType,
+        size_bytes: Buffer.byteLength(text),
+        sha256: sha256Hex(Buffer.from(text)),
+        storage_key: `test/${submission.id}/v1/${type}`,
+      })),
+    );
+    assert.equal(error, null);
+
+    webhook.received.length = 0;
+    const tick = await fetch(`${baseUrl}/api/internal/workers/deliveries`, {
+      method: "POST",
+      headers: { "x-worker-secret": WORKER_SECRET },
+    });
+    assert.equal(tick.status, 200);
+
+    const delivered = webhook.received
+      .map((item) => JSON.parse(item.rawBody))
+      .find((event) => event.type === "inspection.deliverables_ready" && event.inspectionId === shop.inspectionId);
+    assert.ok(delivered, "the partner was notified without anyone pressing Send");
+    assert.equal(delivered.submissionId, submission.id);
+    assert.equal(delivered.outputVersion, 1);
+
+    const manifest = await apiRequest(
+      baseUrl,
+      `/api/v1/partner/inspections/${shop.inspectionId}/deliverables?submissionId=${submission.id}&outputVersion=1`,
+      { token: shop.token },
+    );
+    assert.equal(manifest.status, 200);
+    assert.equal(manifest.body.artifacts.length, 4);
+
+    // A second tick does not request or send it again.
+    webhook.received.length = 0;
+    await fetch(`${baseUrl}/api/internal/workers/deliveries`, {
+      method: "POST",
+      headers: { "x-worker-secret": WORKER_SECRET },
+    });
+    assert.equal(
+      webhook.received.filter((item) => JSON.parse(item.rawBody).type === "inspection.deliverables_ready").length,
+      0,
+    );
+  });
+
+  test("the sweep leaves DealerSpace on its Send button", async () => {
+    const db = admin();
+    const created = await apiRequest(baseUrl, "/api/v1/partner/inspections", {
+      method: "POST",
+      token: alphaConn.token,
+      idempotencyKey: "dms-alpha:manual-send-only",
+      body: {
+        externalOrganizationId: "dms-alpha",
+        externalActorId: "alpha-staff-1",
+        externalInspectionPhaseId: "manual-send-only",
+        vehicle: { vin: VALID_VIN },
+      },
+    });
+    assert.equal(created.status, 201);
+
+    const { data: ref } = await db
+      .from("external_inspection_refs")
+      .select("id")
+      .eq("ppi_request_id", created.body.inspectionId)
+      .single();
+    const { data: submission } = await db
+      .from("ppi_submissions")
+      .insert({
+        ppi_request_id: created.body.inspectionId,
+        performer_id: alpha.profileId,
+        version: 1,
+        status: "submitted",
+        submitted_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    await db
+      .from("external_inspection_refs")
+      .update({ current_submission_id: submission.id, integration_status: "deliverables_ready" })
+      .eq("id", ref.id);
+    await db.from("integration_artifacts").insert(
+      [
+        ["inspection_report_json", "application/json"],
+        ["inspection_report_pdf", "application/pdf"],
+        ["vsc_determination_json", "application/json"],
+        ["vsc_determination_pdf", "application/pdf"],
+      ].map(([type, contentType]) => ({
+        external_inspection_ref_id: ref.id,
+        ppi_submission_id: submission.id,
+        output_version: 1,
+        artifact_type: type,
+        content_type: contentType,
+        size_bytes: 1,
+        sha256: sha256Hex(type),
+        storage_key: `test/${submission.id}/v1/${type}`,
+      })),
+    );
+
+    const tick = await fetch(`${baseUrl}/api/internal/workers/deliveries`, {
+      method: "POST",
+      headers: { "x-worker-secret": WORKER_SECRET },
+    });
+    assert.equal(tick.status, 200);
+
+    const { data: untouched } = await db
+      .from("external_inspection_refs")
+      .select("delivery_status")
+      .eq("id", ref.id)
+      .single();
+    assert.equal(untouched.delivery_status, "not_requested");
+
+    const manifest = await apiRequest(
+      baseUrl,
+      `/api/v1/partner/inspections/${created.body.inspectionId}/deliverables?submissionId=${submission.id}&outputVersion=1`,
+      { token: alphaConn.token },
+    );
+    assert.equal(manifest.status, 409);
+    assert.equal(manifest.body.error, "delivery_not_requested");
+  });
+
+  test("the partner can disconnect itself", async () => {
+    const revoked = await apiRequest(baseUrl, "/api/v1/partner/connections/self", {
+      method: "DELETE",
+      token: shop.token,
+    });
+    assert.equal(revoked.status, 200);
+    assert.equal(revoked.body.revoked, true);
+
+    const gone = await apiRequest(baseUrl, "/api/v1/partner/connections/self", { token: shop.token });
+    assert.equal(gone.status, 401);
+    assert.equal(gone.body.error, "connection_revoked");
+
+    const dealerSpace = await apiRequest(baseUrl, "/api/v1/partner/connections/self", { token: alphaConn.token });
+    assert.equal(dealerSpace.status, 200, "another partner's connection is unaffected");
   });
 });
 

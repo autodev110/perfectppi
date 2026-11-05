@@ -1455,6 +1455,7 @@ struct PpiRequest: Codable, Identifiable, Hashable {
     var sourceLabel: String? {
         switch sourceSystem {
         case "dealerspace": return "DealerSpace"
+        case "shopowl": return "ShopOwl"
         case "perfectppi", nil: return nil
         default: return sourceSystem?.capitalized
         }
@@ -1902,7 +1903,7 @@ struct AttachMediaRequest: Codable {
 }
 
 
-// MARK: - DealerSpace partner context
+// MARK: - Partner context
 
 /// Partner context for one inspection, from GET /api/ppi/requests/:id/dealerspace.
 /// Nil for ordinary consumer inspections — the endpoint returns `data: null`.
@@ -1910,6 +1911,10 @@ struct PerfectPpiPartnerContext: Codable, Hashable {
     let refId: String
     let sourceLabel: String?
     let partnerName: String
+    /// The partner system's own name. Optional only for older server responses.
+    let partnerLabel: String?
+    /// Reports go out on their own; the button only appears to retry a failure.
+    let autoDelivery: Bool?
     let connectionActive: Bool
     let integrationStatus: String
     let deliveryStatus: String
@@ -1924,6 +1929,9 @@ struct PerfectPpiPartnerContext: Codable, Hashable {
         let exteriorColor: String?
         let engine: String?
     }
+
+    var systemName: String { partnerLabel ?? "DealerSpace" }
+    var deliversAutomatically: Bool { autoDelivery ?? false }
 
     /// True while a delivery is queued or in flight, so the button can rest.
     var deliveryInFlight: Bool {

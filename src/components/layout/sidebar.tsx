@@ -82,7 +82,7 @@ export function Sidebar({ items, title }: SidebarProps) {
 
   // Exactly one item highlights: the most specific href that covers the current
   // path. A bare prefix test lit up both "Inspections" (/org/inspections) and
-  // "DealerSpace" (/org/inspections/dealerspace) at once.
+  // "Integrations" (/org/inspections/dealerspace) at once.
   //
   // Two rules do the work:
   //   * matching is on a segment boundary, so /org/inspections-archive is not

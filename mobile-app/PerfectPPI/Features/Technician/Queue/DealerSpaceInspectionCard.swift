@@ -1,7 +1,8 @@
 import SwiftUI
 
 // ============================================================================
-// The DealerSpace panel on a technician's inspection, mirroring the web one.
+// The partner panel on a technician's inspection, mirroring the web one. Named
+// for the first partner; it serves every partner system.
 //
 // Without this the round trip breaks in the middle: a technician can perform the
 // whole inspection on the phone, walking around the car, and then has to find a
@@ -85,20 +86,26 @@ struct DealerSpaceInspectionCard: View {
     @ViewBuilder
     private func actions(_ context: PerfectPpiPartnerContext) -> some View {
         if !context.connectionActive {
-            Text("This DealerSpace connection has been revoked. Ask your organization manager to reconnect it.")
+            Text("This \(context.systemName) connection has been revoked. Ask your organization manager to reconnect it.")
                 .font(.caption)
                 .foregroundStyle(Theme.Palette.danger)
         } else if context.deliveryStatus == "delivered" {
-            Label("Delivered to DealerSpace", systemImage: "checkmark.seal.fill")
+            Label("Delivered to \(context.systemName)", systemImage: "checkmark.seal.fill")
                 .font(.subheadline)
                 .foregroundStyle(Theme.Palette.success)
+        } else if context.deliversAutomatically && context.deliveryStatus != "failed" {
+            Text(context.deliveryInFlight
+                 ? "Sending to \(context.systemName)."
+                 : "Reports are sent to \(context.systemName) automatically once they are generated.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         } else if context.canSend {
             Button {
                 Task { await send() }
             } label: {
                 Text(sending ? "Sending…"
                      : context.deliveryStatus == "failed" ? "Retry delivery"
-                     : "Send to DealerSpace")
+                     : "Send to \(context.systemName)")
             }
             .buttonStyle(PrimaryButtonStyle(isLoading: sending))
             .disabled(sending || !context.deliverablesReady || context.deliveryInFlight)
@@ -130,7 +137,7 @@ struct DealerSpaceInspectionCard: View {
             let result = try await PpiAPI.sendToDealerSpace(requestId: requestId)
             message = result.alreadyQueued
                 ? "This delivery is already in progress."
-                : "Queued for delivery to DealerSpace."
+                : "Queued for delivery to \(context?.systemName ?? "the partner")."
             // Re-read so the badges reflect the queued state.
             loaded = false
             await load()

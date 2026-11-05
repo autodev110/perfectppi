@@ -8,6 +8,7 @@ import { inspectionDisplayName } from "@/features/ppi/presentation";
 import { INSPECTION_SCOPE_LABELS } from "@/features/ppi/constants";
 import { t as uiText } from "@/lib/i18n";
 import { getRequestTranslator } from "@/lib/i18n/server";
+import { partnerLabel } from "@/features/partner/systems";
 
 const QUEUE_TABS: { label: string; value: PpiRequestStatus | "active" }[] = [
   { label: uiText("ui.active_9234069589"), value: "active" },
@@ -74,7 +75,9 @@ export default async function InspectionQueuePage({ searchParams }: PageProps) {
             const requester = req.requester as { display_name: string | null } | null;
             // Organization-requested inspections have no consumer requester.
             const sourceLabel =
-              req.source_system === "dealerspace" ? "DealerSpace" : uiText("ui.consumer_3fdb185870");
+              req.source_system && req.source_system !== "perfectppi"
+                ? partnerLabel(req.source_system)
+                : uiText("ui.consumer_3fdb185870");
 
             const canAction = ["assigned", "accepted"].includes(req.status);
             const actionLabel =

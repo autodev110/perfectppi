@@ -1002,6 +1002,101 @@ BEGIN
   PERFORM pg_temp.act_as_service();
 END $$;
 
+-- ---------------------------------------------------------------------------
+-- A second partner system. The source system follows the connection, and a
+-- browser-delivered code must carry a well-formed proof.
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+  tech_a uuid := (SELECT id FROM public.profiles WHERE display_name = 'tech-a@example.com');
+  shop_connection uuid := 'c0000000-0000-4000-8000-0000000000b1';
+  result record;
+  request_source text;
+  ref_source text;
+BEGIN
+  INSERT INTO public.partner_connections (
+    id, organization_id, source_system, external_organization_id, status, scopes,
+    token_prefix, token_hash, token_last_four, webhook_secret_ciphertext
+  ) VALUES (
+    shop_connection, '0a000000-0000-4000-8000-000000000001', 'shopowl', 'shop-account-1', 'active',
+    ARRAY['inspections:create', 'inspections:read', 'artifacts:read'],
+    'shopprefix', 'shop-token-hash', 'abcd', 'not-a-real-envelope'
+  );
+  PERFORM pg_temp.ok(true, 'one organization can hold a DealerSpace and a ShopOwl connection');
+
+  BEGIN
+    INSERT INTO public.partner_connections (
+      organization_id, source_system, external_organization_id, status, scopes,
+      token_prefix, token_hash, token_last_four, webhook_secret_ciphertext
+    ) VALUES (
+      '0a000000-0000-4000-8000-000000000001', 'shopowl', 'shop-account-2', 'active',
+      ARRAY['inspections:read'], 'shopprefix2', 'shop-token-hash-2', 'abcd', 'not-a-real-envelope'
+    );
+    PERFORM pg_temp.ok(false, 'one organization has one live connection per partner');
+  EXCEPTION WHEN unique_violation THEN
+    PERFORM pg_temp.ok(true, 'one organization has one live connection per partner');
+  END;
+
+  BEGIN
+    INSERT INTO public.partner_connections (
+      organization_id, source_system, external_organization_id, status, scopes,
+      token_prefix, token_hash, token_last_four, webhook_secret_ciphertext
+    ) VALUES (
+      '0a000000-0000-4000-8000-000000000001', 'unknown', 'x', 'active',
+      ARRAY['inspections:read'], 'p', 'h', 'abcd', 'e'
+    );
+    PERFORM pg_temp.ok(false, 'an unknown partner system is rejected');
+  EXCEPTION WHEN check_violation THEN
+    PERFORM pg_temp.ok(true, 'an unknown partner system is rejected');
+  END;
+
+  SELECT * INTO result FROM public.partner_create_inspection(
+    p_connection_id => shop_connection,
+    p_organization_id => '0a000000-0000-4000-8000-000000000001',
+    p_assigned_profile_id => tech_a,
+    p_ppi_type => 'general_tech',
+    p_external_organization_id => 'shop-account-1',
+    p_external_actor_id => 'shop-staff-1',
+    p_idempotency_key => 'shopowl:shop-account-1:inspection-1',
+    p_request_fingerprint => 'shop-fingerprint',
+    p_vehicle_snapshot => '{"vin":"2HGCM82633A004352"}'::jsonb,
+    p_vin => '2HGCM82633A004352'
+  );
+  SELECT source_system INTO request_source FROM public.ppi_requests WHERE id = result.request_id;
+  SELECT source_system INTO ref_source FROM public.external_inspection_refs WHERE id = result.ref_id;
+  PERFORM pg_temp.eq(request_source, 'shopowl', 'the request records the connection''s partner');
+  PERFORM pg_temp.eq(ref_source, 'shopowl', 'the reference records the connection''s partner');
+
+  BEGIN
+    PERFORM public.partner_create_inspection(
+      p_connection_id => 'c0000000-0000-4000-8000-0000000000ff',
+      p_organization_id => '0a000000-0000-4000-8000-000000000001',
+      p_assigned_profile_id => tech_a,
+      p_ppi_type => 'general_tech',
+      p_external_organization_id => 'nobody',
+      p_external_actor_id => 'nobody',
+      p_idempotency_key => 'nobody',
+      p_request_fingerprint => 'nobody',
+      p_vehicle_snapshot => '{}'::jsonb,
+      p_vin => '2HGCM82633A004352'
+    );
+    PERFORM pg_temp.ok(false, 'an unknown connection creates nothing');
+  EXCEPTION WHEN raise_exception THEN
+    PERFORM pg_temp.ok(SQLERRM = 'partner_connection_not_found', 'an unknown connection creates nothing');
+  END;
+
+  BEGIN
+    INSERT INTO public.partner_installation_codes (
+      organization_id, source_system, code_hash, code_prefix, code_challenge, created_by, expires_at
+    ) VALUES (
+      '0a000000-0000-4000-8000-000000000001', 'shopowl', 'hash-malformed', 'PPI', 'too-short', tech_a, now() + interval '5 minutes'
+    );
+    PERFORM pg_temp.ok(false, 'a malformed code challenge is rejected');
+  EXCEPTION WHEN check_violation THEN
+    PERFORM pg_temp.ok(true, 'a malformed code challenge is rejected');
+  END;
+END $$;
+
 DO $$ BEGIN RAISE NOTICE '';
   RAISE NOTICE '================================================';
   RAISE NOTICE ' All partner integration database tests passed.';

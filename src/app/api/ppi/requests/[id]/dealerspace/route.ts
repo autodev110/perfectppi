@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getReadySubmissionVersions } from "@/features/partner/queries";
+import { partnerLabel, partnerSystem } from "@/features/partner/systems";
 import { isUuid } from "@/features/partner/inspections";
 
 export const runtime = "nodejs";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 // GET /api/ppi/requests/:id/dealerspace
 //
 // Partner context for the technician's inspection screen and for iOS: source
-// label, the vehicle snapshot DealerSpace sent, and whether the deliverables
+// label, the vehicle snapshot the partner sent, and whether the deliverables
 // are complete enough to send back.
 //
 // Returns `{ data: null }` for ordinary inspections, so callers can render the
@@ -48,7 +49,7 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (request.source_system !== "dealerspace") {
+  if (request.source_system === "perfectppi") {
     return NextResponse.json({ data: null });
   }
 
@@ -85,9 +86,11 @@ export async function GET(
   return NextResponse.json({
     data: {
       refId: ref.id,
-      sourceSystem: "dealerspace",
+      sourceSystem: request.source_system,
       sourceLabel: ref.source_label,
-      partnerName: connection?.display_name ?? "DealerSpace",
+      partnerLabel: partnerLabel(request.source_system),
+      partnerName: connection?.display_name ?? partnerLabel(request.source_system),
+      autoDelivery: partnerSystem(request.source_system)?.autoDeliver ?? false,
       connectionActive: connection?.status === "active",
       integrationStatus: ref.integration_status,
       deliveryStatus: ref.delivery_status,

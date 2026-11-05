@@ -1,6 +1,7 @@
 import { getMyOrg, getOrgTechnicians } from "@/features/organizations/queries";
 import { requireRole } from "@/features/auth/guards";
 import { getOrgPartnerConnections } from "@/features/partner/queries";
+import { partnerLabel } from "@/features/partner/systems";
 import { RoleSwitcher } from "@/components/dev/role-switcher";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +26,7 @@ export default async function OrgSettingsPage() {
   const techCount = technicians.length;
 
   const connections = await getOrgPartnerConnections(org.id);
-  const activeConnection = connections.find((c) => c.status === "active");
+  const activeConnections = connections.filter((c) => c.status === "active");
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -122,38 +123,40 @@ export default async function OrgSettingsPage() {
       </Card>
 
       {/* Status only. Connecting, rotating and revoking all live on the
-          DealerSpace page, so there is one place to act and no second copy of
+          Integrations page, so there is one place to act and no second copy of
           the controls to keep in sync. */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Plug className="h-4 w-4" />{uiText("ui.dealerspace_integration_d9a02ce966")}</CardTitle>
+            <Plug className="h-4 w-4" />{uiText("ui.partner_integrations_cd6b83e038")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">
-                {activeConnection
-                  ? (activeConnection.displayName ?? uiText("ui.dealerspace_7d7288383a"))
-                  : uiText("ui.not_connected_0303e18246")}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {activeConnection
-                  ? uiText("ui.dealership_connected_8401b47b77", { arg0: String(activeConnection.externalOrganizationId), arg1: String(formatDate(activeConnection.connectedAt)) })
-                  : uiText("ui.connect_a_dealership_management_system_to_re_ef6aeab435")}
-              </p>
+          {activeConnections.length === 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">{uiText("ui.connect_a_partner_system_to_receive_inspecti_0900ff625d")}</p>
+              <Badge variant="secondary">{uiText("ui.not_connected_0303e18246")}</Badge>
             </div>
-            <Badge variant={activeConnection ? "default" : "secondary"}>
-              {activeConnection ? uiText("ui.connected_22965568d2") : uiText("ui.not_connected_0303e18246")}
-            </Badge>
-          </div>
+          )}
+          {activeConnections.map((connection) => (
+            <div key={connection.id} className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">
+                  {connection.displayName ?? partnerLabel(connection.sourceSystem)}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {`${partnerLabel(connection.sourceSystem)} · connected ${formatDate(connection.connectedAt)}`}
+                </p>
+              </div>
+              <Badge>{uiText("ui.connected_22965568d2")}</Badge>
+            </div>
+          ))}
 
           <Separator />
 
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{uiText("ui.installation_codes_credentials_and_linked_te_7d54ceca51")}</p>
             <Button variant="outline" size="sm" asChild>
-              <Link href="/org/inspections/dealerspace">{uiText("ui.manage_dealerspace_16f342bc1e")}</Link>
+              <Link href="/org/inspections/dealerspace">{uiText("ui.manage_integrations_b2a63b82e2")}</Link>
             </Button>
           </div>
         </CardContent>

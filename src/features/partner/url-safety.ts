@@ -200,3 +200,23 @@ function parseIpv6Words(address: string): number[] | null {
 
   return rawWords.map((word) => parseInt(word, 16));
 }
+
+type LookupCallback = (
+  error: NodeJS.ErrnoException | null,
+  address: string | Array<{ address: string; family: number }>,
+  family?: number,
+) => void;
+
+/**
+ * A DNS lookup that can only answer with one already-validated address, so a
+ * webhook cannot be rebound to somewhere else after the check. Node 20+ connects
+ * with autoSelectFamily, which asks for a list: a single address there fails every
+ * request with "Invalid IP address: undefined".
+ */
+export function pinnedLookup(address: string) {
+  const family = isIP(address);
+  return (_hostname: string, options: { all?: boolean }, callback: LookupCallback) => {
+    if (options.all) callback(null, [{ address, family }]);
+    else callback(null, address, family);
+  };
+}

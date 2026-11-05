@@ -46,10 +46,13 @@ export async function createInstallationCode(): Promise<
 
   const admin = createAdminClient();
 
+  // Manual codes are the DealerSpace path. A browser-connect partner mints its
+  // own, scoped code from its consent screen (see connect-actions.ts).
   const { data: existing } = await admin
     .from("partner_connections")
     .select("id")
     .eq("organization_id", context.organizationId)
+    .eq("source_system", "dealerspace")
     .eq("status", "active")
     .maybeSingle();
 
@@ -66,6 +69,7 @@ export async function createInstallationCode(): Promise<
     .from("partner_installation_codes")
     .update({ status: "revoked", revoked_at: new Date().toISOString(), revoked_by: context.profileId })
     .eq("organization_id", context.organizationId)
+    .eq("source_system", "dealerspace")
     .eq("status", "pending");
 
   const { code, codeHash, codePrefix } = generateInstallationCode();
@@ -73,6 +77,7 @@ export async function createInstallationCode(): Promise<
 
   const { error } = await admin.from("partner_installation_codes").insert({
     organization_id: context.organizationId,
+    source_system: "dealerspace",
     code_hash: codeHash,
     code_prefix: codePrefix,
     scopes: DEFAULT_PARTNER_SCOPES,
@@ -149,7 +154,7 @@ export interface RotatedCredentials {
  * Mints a fresh token and signing secret for an existing connection. The old
  * credentials stop working the instant this returns — there is no overlap
  * window, so this is a deliberate, disruptive action the manager coordinates
- * with the DealerSpace administrator.
+ * with the partner's administrator.
  */
 export async function rotateConnectionCredentials(
   connectionId: string,

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { signUp, signInWithGoogle } from "@/features/auth/actions";
 import { Mail, Lock, User } from "lucide-react";
 import { UsernameInput } from "@/components/shared/username-input";
@@ -9,7 +10,17 @@ import { UsernameInput } from "@/components/shared/username-input";
 import { useTranslator } from "@/lib/i18n/client";
 
 export default function SignUpPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignUpForm />
+    </Suspense>
+  );
+}
+
+function SignUpForm() {
   const uiText = useTranslator();
+  // A deep link that wants the new member back after creating their account.
+  const returnTo = useSearchParams().get("redirect") ?? "";
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState("");
@@ -56,6 +67,7 @@ export default function SignUpPage() {
 
         {/* Form */}
         <form action={handleSubmit} className="space-y-5">
+          <input type="hidden" name="redirect" value={returnTo} />
           <div className="space-y-1.5">
             <label htmlFor="username" className="ml-1 text-xs font-bold uppercase tracking-widest text-on-surface-variant">{uiText("ui.username_e3b89e9d33")}</label>
             <UsernameInput value={username} onChange={setUsername} />
@@ -140,7 +152,7 @@ export default function SignUpPage() {
       <footer className="mt-12 text-center">
         <p className="text-on-secondary-container font-medium">{uiText("ui.already_have_an_account_e77fea936d")}{" "}
           <Link
-            href="/login"
+            href={returnTo ? `/login?redirect=${encodeURIComponent(returnTo)}` : "/login"}
             className="text-on-tertiary-container font-bold hover:underline"
           >{uiText("ui.sign_in_bcc0bcc914")}</Link>
         </p>

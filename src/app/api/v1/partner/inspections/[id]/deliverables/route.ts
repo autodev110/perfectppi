@@ -15,10 +15,10 @@ export const dynamic = "force-dynamic";
 // GET /api/v1/partner/inspections/:id/deliverables
 //
 // The immutable manifest for the newest *complete* output version. A version
-// missing any of the four required artifacts is never offered, so DealerSpace
+// missing any of the four required artifacts is never offered, so a partner
 // cannot import a partial set and close its Recon phase on it.
 //
-// Checksums are over the exact stored bytes, so DealerSpace can verify each
+// Checksums are over the exact stored bytes, so a partner can verify each
 // download before accepting it.
 // ============================================================================
 
@@ -55,7 +55,7 @@ export async function GET(
   if (!requested) {
     return partnerError(
       "delivery_not_requested",
-      "This report version has not been sent to DealerSpace.",
+      "This report version has not been sent to the partner.",
     );
   }
 

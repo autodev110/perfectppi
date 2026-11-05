@@ -9,13 +9,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { runDeliveryWorkerTick } from "./delivery";
 import { getReadySubmissionVersions } from "./queries";
 import { enqueuePartnerEvent } from "./events";
+import { partnerLabel } from "./systems";
 
 // ============================================================================
-// "Send to DealerSpace".
+// "Send to <partner>".
 //
 // The click enqueues and returns. It never performs the HTTP delivery inside
 // the browser request — that is the delivery worker's job, with retries, so a
-// slow or briefly-down DealerSpace does not surface as a failed button press.
+// slow or briefly-down partner does not surface as a failed button press.
+//
+// A partner with automatic delivery never needs the click. The same action stays
+// available to it as the manual retry after a delivery has failed.
 //
 // Repeated clicks collapse onto one logical delivery per output version.
 // ============================================================================
@@ -29,7 +33,7 @@ export interface SendResult {
   alreadyQueued: boolean;
 }
 
-export async function sendInspectionToDealerSpace(
+export async function sendInspectionToPartner(
   requestId: string,
 ): Promise<{ data: SendResult } | { error: string }> {
   if (!uuidSchema.safeParse(requestId).success) {
@@ -89,19 +93,19 @@ export async function sendInspectionToDealerSpace(
     .eq("ppi_request_id", requestId)
     .maybeSingle();
 
-  if (!ref) return { error: "This inspection did not come from DealerSpace" };
+  if (!ref) return { error: "This inspection did not come from a partner system" };
 
   const { data: connection } = await admin
     .from("partner_connections")
-    .select("id, status, webhook_url")
+    .select("id, status, webhook_url, source_system")
     .eq("id", ref.partner_connection_id)
     .maybeSingle();
 
   if (!connection || connection.status !== "active") {
-    return { error: "The DealerSpace connection has been revoked" };
+    return { error: `The ${partnerLabel(connection?.source_system)} connection has been revoked` };
   }
   if (!connection.webhook_url) {
-    return { error: "The DealerSpace connection has no webhook URL registered" };
+    return { error: `The ${partnerLabel(connection.source_system)} connection has no webhook URL registered` };
   }
 
   if (!ref.current_submission_id) {
@@ -168,10 +172,10 @@ export async function sendInspectionToDealerSpace(
 
 /**
  * Re-arms an exhausted delivery. Uses the same dedupe key, so a replay is the
- * *same* logical delivery being retried — DealerSpace still sees one eventId.
+ * *same* logical delivery being retried — the partner still sees one eventId.
  */
 export async function retryInspectionDelivery(
   requestId: string,
 ): Promise<{ data: SendResult } | { error: string }> {
-  return sendInspectionToDealerSpace(requestId);
+  return sendInspectionToPartner(requestId);
 }

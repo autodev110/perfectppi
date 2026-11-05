@@ -124,7 +124,7 @@ function LoginForm() {
       <footer className="mt-12 text-center">
         <p className="text-on-secondary-container font-medium">{uiText("ui.don_t_have_an_account_1b545b23fa")}{" "}
           <Link
-            href="/signup"
+            href={returnTo ? `/signup?redirect=${encodeURIComponent(returnTo)}` : "/signup"}
             className="text-on-tertiary-container font-bold hover:underline"
           >{uiText("ui.create_account_0dffe234b4")}</Link>
         </p>

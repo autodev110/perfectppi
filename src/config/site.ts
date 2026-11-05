@@ -40,7 +40,7 @@ export const navConfig = {
     { label: uiText("ui.dashboard_67b6964686"), href: "/org", icon: "LayoutDashboard" },
     { label: uiText("ui.technicians_8bb7fac529"), href: "/org/technicians", icon: "Users" },
     { label: uiText("ui.inspections_20cbe85cdd"), href: "/org/inspections", icon: "ClipboardCheck" },
-    { label: uiText("ui.dealerspace_7d7288383a"), href: "/org/inspections/dealerspace", icon: "Plug" },
+    { label: uiText("ui.integrations_090512d93f"), href: "/org/inspections/dealerspace", icon: "Plug" },
     // Managers can be assigned inspections themselves; this is their own queue,
     // not the organization-wide list above.
     { label: uiText("ui.my_inspections_944292ab1e"), href: "/tech/ppi", icon: "Wrench" },

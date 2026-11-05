@@ -13,6 +13,8 @@ import { enqueuePartnerEvent } from "@/features/partner/events";
 import { isValidVin } from "@/lib/utils/vin";
 import type { Json } from "@/types/database";
 import { hasActiveCertifiedCredential } from "@/features/technicians/credentials";
+import { PARTNER_SOURCE_SYSTEMS } from "@/features/partner/constants";
+import { partnerSystem } from "@/features/partner/systems";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +22,7 @@ export const dynamic = "force-dynamic";
 // ============================================================================
 // POST /api/v1/partner/inspections
 //
-// DealerSpace pushes one explicitly selected vehicle. Perfect PPI creates an
+// A partner pushes one explicitly selected vehicle. Perfect PPI creates an
 // organization-owned inspection, assigns it to the technician the sending staff
 // member is linked to, and stores an immutable snapshot of the vehicle data as
 // it stood at this moment.
@@ -49,7 +51,7 @@ const vehicleSchema = z
 
 const sourceSchema = z
   .object({
-    system: z.literal("dealerspace"),
+    system: z.enum(PARTNER_SOURCE_SYSTEMS),
     label: z.string().trim().max(120).optional(),
   })
   .strict();
@@ -106,6 +108,11 @@ export async function POST(request: Request) {
   );
   if (orgMismatch) return orgMismatch;
 
+  // The connection decides which system this is. A payload can only agree.
+  if (body.source && body.source.system !== connection.source_system) {
+    return partnerError("unsupported_source_system");
+  }
+
   const vin = body.vehicle.vin.toUpperCase().replace(/\s/g, "");
   if (!isValidVin(vin)) {
     return partnerError(
@@ -115,7 +122,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // The DealerSpace staff id is resolved through the user link — a Perfect PPI
+  // The partner staff id is resolved through the user link — a Perfect PPI
   // profile id is never accepted from the payload.
   const technician = await resolveLinkedTechnician(connection, body.externalActorId);
   if ("error" in technician) {
@@ -128,7 +135,7 @@ export async function POST(request: Request) {
     ...body.vehicle,
     vin,
     capturedAt: new Date().toISOString(),
-    sourceSystem: "dealerspace",
+    sourceSystem: connection.source_system,
   };
 
   // The fingerprint covers the data that defines the inspection. It excludes
@@ -161,7 +168,10 @@ export async function POST(request: Request) {
     p_external_actor_id: body.externalActorId,
     p_idempotency_key: idempotencyKey,
     p_request_fingerprint: fingerprint,
-    p_source_label: body.source?.label ?? "DealerSpace Inspection",
+    p_source_label:
+      body.source?.label ??
+      partnerSystem(connection.source_system)?.inspectionLabel ??
+      "Partner Inspection",
     p_vehicle_snapshot: snapshot as unknown as Json,
     p_vin: vin,
     p_year: body.vehicle.year ?? undefined,

@@ -7,19 +7,21 @@ import {
   DeliveryStatusBadge,
   IntegrationStatusBadge,
 } from "@/components/shared/source-badge";
-import { SendToDealerSpaceButton } from "@/components/shared/send-to-dealerspace-button";
+import { SendToPartnerButton } from "@/components/shared/send-to-partner-button";
 
 import { useTranslator } from "@/lib/i18n/client";
 
 // ============================================================================
-// The DealerSpace card on a technician's inspection screen: where the vehicle
-// came from, what DealerSpace sent, and the control that returns the finished
+// The partner card on a technician's inspection screen: where the vehicle came
+// from, what the partner sent, and the control that returns the finished
 // reports. Renders nothing at all for ordinary consumer inspections.
 // ============================================================================
 
 interface PartnerContext {
   refId: string;
   sourceLabel: string | null;
+  partnerLabel: string;
+  autoDelivery: boolean;
   partnerName: string;
   connectionActive: boolean;
   integrationStatus: string;
@@ -30,7 +32,7 @@ interface PartnerContext {
   canSend: boolean;
 }
 
-export function DealerSpaceInspectionPanel({ requestId }: { requestId: string }) {
+export function PartnerInspectionPanel({ requestId }: { requestId: string }) {
   const uiText = useTranslator();
   const [context, setContext] = useState<PartnerContext | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -91,12 +93,14 @@ export function DealerSpaceInspectionPanel({ requestId }: { requestId: string })
         </dl>
 
         {!context.connectionActive && (
-          <p className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{uiText("ui.this_dealerspace_connection_has_been_revoked_babd5e31ad")}</p>
+          <p className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{uiText("ui.this_connection_has_been_revoked_reports_can_e683b36599", { arg0: String(context.partnerLabel) })}</p>
         )}
 
         {context.canSend && context.connectionActive && (
-          <SendToDealerSpaceButton
+          <SendToPartnerButton
             requestId={requestId}
+            partnerLabel={context.partnerLabel}
+            autoDelivery={context.autoDelivery}
             deliveryStatus={context.deliveryStatus}
             deliverablesReady={context.deliverablesReady}
           />

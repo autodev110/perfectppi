@@ -4,7 +4,7 @@ import { REQUIRED_ARTIFACT_TYPES } from "./constants";
 
 // ============================================================================
 // Server-side reads for the organization settings panel and the incoming
-// DealerSpace queue.
+// partner inspection queue.
 //
 // partner_connections holds a token hash and an encrypted signing secret, so
 // the table has no RLS policies at all — nothing reads it from a browser
@@ -120,6 +120,8 @@ export async function getOrgInstallationCodes(
     .from("partner_installation_codes")
     .select("id, code_prefix, status, scopes, expires_at, created_at, consumed_at, revoked_at")
     .eq("organization_id", organizationId)
+    // Browser-connect codes are never shown: they live for one redirect.
+    .is("code_challenge", null)
     .order("created_at", { ascending: false })
     .limit(10);
 
@@ -140,6 +142,7 @@ export async function getOrgInstallationCodes(
 
 export interface UserLinkView {
   id: string;
+  connectionId: string;
   externalUserId: string;
   profileId: string;
   displayName: string | null;
@@ -158,7 +161,7 @@ export async function getConnectionUserLinks(
   const { data } = await admin
     .from("partner_user_links")
     .select(
-      `id, external_user_id, profile_id, status, linked_at, revoked_at,
+      `id, partner_connection_id, external_user_id, profile_id, status, linked_at, revoked_at,
        profile:profiles!partner_user_links_profile_id_fkey(display_name, username)`,
     )
     .in("partner_connection_id", connectionIds)
@@ -172,6 +175,7 @@ export async function getConnectionUserLinks(
 
     return {
       id: row.id,
+      connectionId: row.partner_connection_id,
       externalUserId: row.external_user_id,
       profileId: row.profile_id,
       displayName: profile?.display_name ?? null,
@@ -184,7 +188,7 @@ export async function getConnectionUserLinks(
 }
 
 // ============================================================================
-// Incoming DealerSpace queue
+// Incoming partner queue
 // ============================================================================
 
 export interface IncomingInspectionRow {
@@ -193,6 +197,7 @@ export interface IncomingInspectionRow {
   status: string;
   integrationStatus: string;
   deliveryStatus: string;
+  sourceSystem: string;
   sourceLabel: string | null;
   receivedAt: string;
   externalReconCaseId: string | null;
@@ -251,7 +256,7 @@ export async function getIncomingPartnerInspections(
     .select(
       `
       id, ppi_request_id, current_submission_id, integration_status, delivery_status,
-      source_label, vehicle_snapshot, created_at,
+      source_system, source_label, vehicle_snapshot, created_at,
       external_recon_case_id, external_inspection_phase_id,
       request:ppi_requests!external_inspection_refs_ppi_request_id_fkey(
         id, status, requesting_organization_id,
@@ -307,6 +312,7 @@ export async function getIncomingPartnerInspections(
         status: request.status,
         integrationStatus: row.integration_status,
         deliveryStatus: row.delivery_status,
+        sourceSystem: row.source_system,
         sourceLabel: row.source_label,
         receivedAt: row.created_at,
         externalReconCaseId: row.external_recon_case_id,

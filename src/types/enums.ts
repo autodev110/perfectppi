@@ -36,7 +36,7 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
 export const USER_ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   consumer: uiText("ui.vehicles_listings_inspection_requests_warran_37b9348016"),
   technician: uiText("ui.assigned_inspection_queue_submissions_review_120633d424"),
-  org_manager: uiText("ui.organization_roster_inspections_dealerspace_17ee364020"),
+  org_manager: uiText("ui.organization_roster_inspections_partner_inte_90300baafc"),
   admin: uiText("ui.platform_wide_moderation_outputs_contracts_a_fc93692c0a"),
   developer: uiText("ui.this_switcher_no_portal_data_of_its_own_a5cd5d08fd"),
 };

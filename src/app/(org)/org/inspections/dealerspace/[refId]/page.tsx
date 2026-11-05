@@ -10,7 +10,8 @@ import {
   SourceBadge,
 } from "@/components/shared/source-badge";
 import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
-import { SendToDealerSpaceButton } from "@/components/shared/send-to-dealerspace-button";
+import { SendToPartnerButton } from "@/components/shared/send-to-partner-button";
+import { partnerLabel, partnerSystem } from "@/features/partner/systems";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -33,7 +34,7 @@ const ARTIFACT_LABELS: Record<string, string> = {
   vsc_determination_pdf: uiText("ui.vsc_determination_pdf_72497aae88"),
 };
 
-export default async function DealerSpaceInspectionDetailPage({ params }: PageProps) {
+export default async function PartnerInspectionDetailPage({ params }: PageProps) {
   const uiText = await getRequestTranslator();
   await requireRole(["org_manager"]);
 
@@ -91,6 +92,7 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
     ? ready.get(ref.current_submission_id)
     : undefined;
 
+  const partnerName = partnerLabel(ref.source_system);
   const snapshot = (ref.vehicle_snapshot ?? {}) as Record<string, unknown>;
   const vehicleName =
     [snapshot.year, snapshot.make, snapshot.model, snapshot.trim]
@@ -109,13 +111,13 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
         href="/org/inspections/dealerspace"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" />{uiText("ui.incoming_dealerspace_inspections_018188f6e3")}</Link>
+        <ArrowLeft className="h-4 w-4" />{uiText("ui.partner_integrations_cd6b83e038")}</Link>
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="font-heading text-2xl font-bold">{vehicleName}</h1>
-            <SourceBadge sourceSystem="dealerspace" label={ref.source_label} />
+            <SourceBadge sourceSystem={ref.source_system} label={ref.source_label} />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <PpiStatusBadge status={request.status as PpiRequestStatus} />
@@ -133,8 +135,10 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
             </Link>
           </Button>
 
-          <SendToDealerSpaceButton
+          <SendToPartnerButton
             requestId={request.id}
+            partnerLabel={partnerName}
+            autoDelivery={partnerSystem(ref.source_system)?.autoDeliver ?? false}
             deliveryStatus={ref.delivery_status}
             deliverablesReady={readyVersion !== undefined}
           />
@@ -146,7 +150,7 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
           <CardTitle className="text-base">{uiText("ui.vehicle_snapshot_764ce90825")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="mb-4 text-xs text-muted-foreground">{uiText("ui.captured_when_dealerspace_sent_this_vehicle__7de6ea0c8e")}</p>
+          <p className="mb-4 text-xs text-muted-foreground">{uiText("ui.captured_when_sent_this_vehicle_later_edits__090f28cbf2", { arg0: String(partnerName), arg1: String(partnerName) })}</p>
           <dl className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
             {[
               [uiText("ui.vin_5e0211b12d"), snapshot.vin],
@@ -180,16 +184,18 @@ export default async function DealerSpaceInspectionDetailPage({ params }: PagePr
               <dt className="text-muted-foreground">{uiText("ui.received_49f19beeec")}</dt>
               <dd className="mt-0.5 font-medium">{formatDateTime(ref.created_at)}</dd>
             </div>
-            <div>
-              <dt className="text-muted-foreground">{uiText("ui.dealerspace_recon_case_3434e76d42")}</dt>
-              <dd className="mt-0.5 font-mono">{ref.external_recon_case_id ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">{uiText("ui.dealerspace_inspection_phase_8451b47b0b")}</dt>
-              <dd className="mt-0.5 font-mono">
-                {ref.external_inspection_phase_id ?? "—"}
-              </dd>
-            </div>
+            {ref.external_recon_case_id && (
+              <div>
+                <dt className="text-muted-foreground">{uiText("ui.recon_case_004dd796c0", { arg0: String(partnerName) })}</dt>
+                <dd className="mt-0.5 font-mono">{ref.external_recon_case_id}</dd>
+              </div>
+            )}
+            {ref.external_inspection_phase_id && (
+              <div>
+                <dt className="text-muted-foreground">{uiText("ui.inspection_reference_59cf17ac3d", { arg0: String(partnerName) })}</dt>
+                <dd className="mt-0.5 font-mono">{ref.external_inspection_phase_id}</dd>
+              </div>
+            )}
           </dl>
         </CardContent>
       </Card>

@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
-import { isIP } from "node:net";
 import { decryptSecret, signWebhookPayload } from "./crypto";
 import { enqueuePartnerEvent } from "./events";
-import { checkUrlIsSafeDestination } from "./url-safety";
+import { sweepPartnerAutoDeliveries } from "./auto-delivery";
+import { checkUrlIsSafeDestination, pinnedLookup } from "./url-safety";
 import {
   WEBHOOK_LEASE_SECONDS,
   WEBHOOK_TIMEOUT_MS,
@@ -16,11 +16,11 @@ import type { Json } from "@/types/database";
 // ============================================================================
 // Outbound webhook delivery.
 //
-// Perfect PPI only *notifies*. The body is event metadata; DealerSpace then
+// Perfect PPI only *notifies*. The body is event metadata; the partner then
 // pulls the manifest and artifact bytes over the authenticated partner API. No
 // PDF ever travels through a webhook.
 //
-// Delivery is at-least-once: DealerSpace must deduplicate on eventId.
+// Delivery is at-least-once: the partner must deduplicate on eventId.
 // ============================================================================
 
 export type DeliveryErrorCategory =
@@ -53,6 +53,9 @@ export async function runDeliveryWorkerTick(options?: {
   const workerId = options?.workerId ?? `deliver-${randomUUID().slice(0, 8)}`;
 
   await pruneExpiredRows(admin);
+
+  // Before claiming, so a request recovered here is delivered in this same tick.
+  await sweepPartnerAutoDeliveries();
 
   const { data: claimed, error } = await admin.rpc("claim_outbound_events", {
     p_worker_id: workerId,
@@ -184,7 +187,7 @@ async function deliverEvent(event: OutboundEventRow): Promise<DeliveryOutcome> {
   }
 
   // Serialize once. The bytes we sign must be byte-identical to the bytes we
-  // send, because DealerSpace verifies against its own raw request body.
+  // send, because the partner verifies against its own raw request body.
   const rawBody = JSON.stringify(event.payload);
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signature = signWebhookPayload({ secret, timestamp, rawBody });
@@ -288,9 +291,10 @@ function postValidatedWebhook(input: {
       method: "POST",
       headers: { ...input.headers, "Content-Length": Buffer.byteLength(input.body) },
       servername: input.url.hostname,
-      lookup: (_hostname, _options, callback) => {
-        callback(null, input.address, isIP(input.address));
-      },
+      // Pinned to the address the SSRF guard validated. Node 20+ connects with
+      // autoSelectFamily, which asks for a list: answering with a single address
+      // there fails every delivery with "Invalid IP address: undefined".
+      lookup: pinnedLookup(input.address),
     }, (response) => {
       const status = response.statusCode ?? 0;
       response.destroy();

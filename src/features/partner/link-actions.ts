@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { authorizeUserLink, denyUserLink } from "./user-links";
+import { PARTNER_SOURCE_SYSTEMS } from "./constants";
 
 // ============================================================================
 // The two buttons on the consent screen.
@@ -14,6 +15,7 @@ import { authorizeUserLink, denyUserLink } from "./user-links";
 // capability: possessing it authorizes nothing on its own.
 // ============================================================================
 
+const partnerSchema = z.enum(PARTNER_SOURCE_SYSTEMS);
 const stateSchema = z.string().min(16).max(256);
 
 async function getSessionProfileId(): Promise<string | null> {
@@ -32,16 +34,23 @@ async function getSessionProfileId(): Promise<string | null> {
   return profile?.id ?? null;
 }
 
+/** Only a known system becomes part of a redirect target. */
+function linkPath(formData: FormData): string {
+  const partner = partnerSchema.safeParse(formData.get("partner"));
+  return `/link/${partner.success ? partner.data : "dealerspace"}`;
+}
+
 export async function approveAccountLink(formData: FormData) {
+  const partner = linkPath(formData);
   const state = stateSchema.safeParse(formData.get("state"));
-  if (!state.success) redirect("/link/dealerspace/invalid");
+  if (!state.success) redirect(`${partner}/invalid`);
 
   const profileId = await getSessionProfileId();
-  if (!profileId) redirect(`/login?redirect=/link/dealerspace/${state.data}`);
+  if (!profileId) redirect(`/login?redirect=${partner}/${state.data}`);
 
   const result = await authorizeUserLink(state.data, profileId);
   if ("error" in result) {
-    redirect(`/link/dealerspace/${state.data}?error=${result.error}`);
+    redirect(`${partner}/${state.data}?error=${result.error}`);
   }
 
   // The destination is the callback registered on the connection — never a
@@ -50,15 +59,16 @@ export async function approveAccountLink(formData: FormData) {
 }
 
 export async function declineAccountLink(formData: FormData) {
+  const partner = linkPath(formData);
   const state = stateSchema.safeParse(formData.get("state"));
-  if (!state.success) redirect("/link/dealerspace/invalid");
+  if (!state.success) redirect(`${partner}/invalid`);
 
   const profileId = await getSessionProfileId();
-  if (!profileId) redirect(`/login?redirect=/link/dealerspace/${state.data}`);
+  if (!profileId) redirect(`/login?redirect=${partner}/${state.data}`);
 
   const result = await denyUserLink(state.data);
   if ("error" in result) {
-    redirect(`/link/dealerspace/${state.data}?error=${result.error}`);
+    redirect(`${partner}/${state.data}?error=${result.error}`);
   }
 
   redirect(result.data.redirectUrl);

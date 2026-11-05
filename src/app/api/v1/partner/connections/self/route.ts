@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { authenticatePartnerRequest } from "@/features/partner/auth";
 import { decryptSecret, signWebhookPayload } from "@/features/partner/crypto";
+import { partnerError } from "@/features/partner/errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,9 +10,12 @@ export const dynamic = "force-dynamic";
 // ============================================================================
 // GET /api/v1/partner/connections/self
 //
-// "Test connection" for the DealerSpace settings screen. Confirms the token is
-// live, reports the bound organization and scopes, and stamps last_verified_at.
+// "Test connection" for a partner's settings screen. Confirms the token is live,
+// reports the bound organization and scopes, and stamps last_verified_at.
 // Returns no secrets.
+//
+// DELETE disconnects from the partner's side, so an administrator there does not
+// also need a Perfect PPI login to undo a connection they made.
 // ============================================================================
 
 export async function GET(request: Request) {
@@ -71,6 +75,32 @@ export async function GET(request: Request) {
       verifiedAt,
       webhookSecretProof,
     },
+    { headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+export async function DELETE(request: Request) {
+  const auth = await authenticatePartnerRequest(request, {
+    scope: "inspections:create",
+    limit: "write",
+  });
+  if ("response" in auth) return auth.response;
+
+  const { data: revoked, error } = await createAdminClient().rpc("revoke_partner_connection", {
+    p_connection_id: auth.connection.id,
+    p_organization_id: auth.connection.organization_id,
+    // The partner's administrator has no Perfect PPI profile of their own, so
+    // the revocation is attributed to whoever authorized the connection.
+    p_actor_id: auth.connection.connected_by as string,
+  });
+
+  if (error) {
+    console.error("partner: connection revoke failed", error.message);
+    return partnerError("internal_error");
+  }
+
+  return NextResponse.json(
+    { connectionId: auth.connection.id, revoked: Boolean(revoked) },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

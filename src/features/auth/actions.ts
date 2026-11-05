@@ -104,7 +104,7 @@ export async function signUp(formData: FormData) {
     .eq("auth_user_id", user?.id ?? "")
     .single();
 
-  redirect(getRoleHomePath(profile?.role ?? createdProfile.role));
+  redirect(safeReturnPath(formData.get("redirect")) ?? getRoleHomePath(profile?.role ?? createdProfile.role));
 }
 
 /** Local path a share/deep link asked to return to after sign-in (plan 5.x). */

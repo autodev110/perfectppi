@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { AlertCircle, Building2, Check, Link2, ShieldCheck, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
@@ -13,18 +13,19 @@ import {
   approveAccountLink,
   declineAccountLink,
 } from "@/features/partner/link-actions";
+import { isPartnerSystem, partnerLabel } from "@/features/partner/systems";
 import { t as uiText } from "@/lib/i18n";
 import { getRequestTranslator } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  params: Promise<{ state: string }>;
+  params: Promise<{ partner: string; state: string }>;
   searchParams: Promise<{ error?: string }>;
 }
 
 // ============================================================================
-// The consent screen. Reached from DealerSpace, but authenticated entirely by
+// The consent screen. Reached from a partner, but authenticated entirely by
 // Perfect PPI: the technician signs in here with their existing Perfect PPI
 // account, and the link is created only when they press Authorize.
 //
@@ -32,47 +33,52 @@ interface PageProps {
 // never pre-approves or silently creates the link.
 // ============================================================================
 
-const FAILURE_COPY: Record<string, { title: string; detail: string }> = {
-  unknown_transaction: {
-    title: uiText("ui.this_link_request_is_not_recognized_ff5ca3ce02"),
-    detail: uiText("ui.start_the_connection_again_from_dealerspace__c498e0ecd9"),
-  },
-  expired: {
-    title: uiText("ui.this_link_request_has_expired_5d284ae345"),
-    detail: uiText("ui.link_requests_are_valid_for_15_minutes_start_5ab0e4bc9f"),
-  },
-  already_used: {
-    title: uiText("ui.this_link_request_has_already_been_used_d1d5f4e1c8"),
-    detail: uiText("ui.each_request_works_once_start_again_from_dea_959f8e2a01"),
-  },
-  connection_revoked: {
-    title: uiText("ui.this_dealerspace_connection_is_no_longer_act_c5177c31e8"),
-    detail: uiText("ui.ask_your_organization_manager_to_reconnect_d_538da1ed62"),
-  },
-  no_inspection_access: {
-    title: uiText("ui.this_account_cannot_be_assigned_inspections_fc5ce52406"),
-    detail:
-      uiText("ui.dealerspace_inspections_are_assigned_to_tech_ab077cd0d6"),
-  },
-  not_org_member: {
-    title: uiText("ui.this_account_is_not_part_of_the_connected_or_9b39170552"),
-    detail:
-      uiText("ui.you_can_only_link_an_account_that_belongs_to_90c88a8211"),
-  },
-  profile_missing: {
-    title: uiText("ui.we_could_not_find_your_perfect_ppi_profile_0763a3417f"),
-    detail: uiText("ui.contact_support_so_we_can_look_into_it_aaaa007351"),
-  },
-  internal_error: {
-    title: uiText("ui.something_went_wrong_ab827e3fe1"),
-    detail: uiText("ui.please_try_again_in_a_moment_7ba353b04a"),
-  },
-};
+function failureCopy(partner: string): Record<string, { title: string; detail: string }> {
+  return {
+    unknown_transaction: {
+      title: uiText("ui.this_link_request_is_not_recognized_ff5ca3ce02"),
+      detail: uiText("ui.start_the_connection_again_from_to_get_a_fre_868c8196dd", { arg0: String(partner) }),
+    },
+    expired: {
+      title: uiText("ui.this_link_request_has_expired_5d284ae345"),
+      detail: uiText("ui.link_requests_are_valid_for_15_minutes_start_93314137e0", { arg0: String(partner) }),
+    },
+    already_used: {
+      title: uiText("ui.this_link_request_has_already_been_used_d1d5f4e1c8"),
+      detail: uiText("ui.each_request_works_once_start_again_from_if__4f03961e64", { arg0: String(partner) }),
+    },
+    connection_revoked: {
+      title: uiText("ui.this_connection_is_no_longer_active_35fd5e1e6e", { arg0: String(partner) }),
+      detail: uiText("ui.ask_your_organization_manager_to_reconnect_i_7b4b0f7c2b", { arg0: String(partner) }),
+    },
+    no_inspection_access: {
+      title: uiText("ui.this_account_cannot_be_assigned_inspections_fc5ce52406"),
+      detail: uiText("ui.inspections_are_assigned_to_technicians_and__ee7da4205e", { arg0: String(partner) }),
+    },
+    not_org_member: {
+      title: uiText("ui.this_account_is_not_part_of_the_connected_or_9b39170552"),
+      detail: uiText("ui.you_can_only_link_an_account_that_belongs_to_3284c26d39", { arg0: String(partner) }),
+    },
+    profile_missing: {
+      title: uiText("ui.we_could_not_find_your_perfect_ppi_profile_0763a3417f"),
+      detail: uiText("ui.contact_support_so_we_can_look_into_it_aaaa007351"),
+    },
+    internal_error: {
+      title: uiText("ui.something_went_wrong_ab827e3fe1"),
+      detail: uiText("ui.please_try_again_in_a_moment_7ba353b04a"),
+    },
+  };
+}
 
-export default async function DealerSpaceLinkPage({ params, searchParams }: PageProps) {
+export default async function PartnerLinkPage({ params, searchParams }: PageProps) {
   const uiText = await getRequestTranslator();
-  const { state } = await params;
+  const { partner, state } = await params;
   const { error: errorParam } = await searchParams;
+
+  // Only reachable through a partner this deployment knows about. The path never
+  // decides the partner shown below: that always comes from the transaction.
+  if (!isPartnerSystem(partner)) notFound();
+  const linkPath = `/link/${partner}/${state}`;
 
   const supabase = await createClient();
   const {
@@ -80,16 +86,18 @@ export default async function DealerSpaceLinkPage({ params, searchParams }: Page
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect(`/login?redirect=${encodeURIComponent(`/link/dealerspace/${state}`)}`);
+    redirect(`/login?redirect=${encodeURIComponent(linkPath)}`);
   }
 
   const context = await loadConsentContext(state);
   if ("error" in context) {
-    return <LinkFailure code={context.error} />;
+    return <LinkFailure code={context.error} partner={partnerLabel(partner)} />;
   }
 
-  if (errorParam && FAILURE_COPY[errorParam]) {
-    return <LinkFailure code={errorParam} />;
+  const partnerName = context.data.partnerLabel;
+
+  if (errorParam && failureCopy(partnerName)[errorParam]) {
+    return <LinkFailure code={errorParam} partner={partnerName} />;
   }
 
   const { data: profile } = await supabase
@@ -99,7 +107,7 @@ export default async function DealerSpaceLinkPage({ params, searchParams }: Page
     .maybeSingle();
 
   if (!profile) {
-    return <LinkFailure code="profile_missing" />;
+    return <LinkFailure code="profile_missing" partner={partnerName} />;
   }
 
   const eligibility = await checkLinkEligibility(
@@ -111,6 +119,7 @@ export default async function DealerSpaceLinkPage({ params, searchParams }: Page
     return (
       <LinkFailure
         code={eligibility.reason ?? "internal_error"}
+        partner={partnerName}
         signedInAs={profile.display_name ?? user.email ?? null}
       />
     );
@@ -134,7 +143,7 @@ export default async function DealerSpaceLinkPage({ params, searchParams }: Page
               <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <div>
                 <p className="font-medium">{context.data.organizationName}</p>
-                <p className="text-muted-foreground">{uiText("ui.dealerspace_user_fb704b40fc")}{" "}
+                <p className="text-muted-foreground">{`${partnerName} user `}
                   <span className="font-mono text-xs">{context.data.externalUserId}</span>
                 </p>
               </div>
@@ -154,7 +163,7 @@ export default async function DealerSpaceLinkPage({ params, searchParams }: Page
             </div>
             <p className="text-xs text-muted-foreground">{uiText("ui.not_you_5b978f5d00")}{" "}
               <Link
-                href={`/login?redirect=${encodeURIComponent(`/link/dealerspace/${state}`)}`}
+                href={`/login?redirect=${encodeURIComponent(linkPath)}`}
                 className="underline"
               >{uiText("ui.sign_in_with_a_different_account_f558d6a3b9")}</Link>
               .
@@ -166,11 +175,11 @@ export default async function DealerSpaceLinkPage({ params, searchParams }: Page
           <div className="space-y-2 text-sm">
             <p className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              <span>{uiText("ui.inspections_this_dealerspace_user_sends_will_e71c95ac9f")}</span>
+              <span>{uiText("ui.inspections_this_user_sends_will_be_assigned_1ccf5854b7", { arg0: String(partnerName) })}</span>
             </p>
             <p className="flex items-start gap-2">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              <span>{uiText("ui.the_two_accounts_stay_separate_dealerspace_n_b4e8809065")}</span>
+              <span>{uiText("ui.the_two_accounts_stay_separate_never_receive_5cb1223213", { arg0: String(partnerName) })}</span>
             </p>
             <p className="flex items-start gap-2">
               <X className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -180,10 +189,12 @@ export default async function DealerSpaceLinkPage({ params, searchParams }: Page
 
           <div className="flex gap-3">
             <form action={approveAccountLink} className="flex-1">
+              <input type="hidden" name="partner" value={partner} />
               <input type="hidden" name="state" value={state} />
               <Button type="submit" className="w-full">{uiText("ui.authorize_b6741b4ccf")}</Button>
             </form>
             <form action={declineAccountLink} className="flex-1">
+              <input type="hidden" name="partner" value={partner} />
               <input type="hidden" name="state" value={state} />
               <Button type="submit" variant="outline" className="w-full">{uiText("ui.cancel_19766ed6cc")}</Button>
             </form>
@@ -196,12 +207,15 @@ export default async function DealerSpaceLinkPage({ params, searchParams }: Page
 
 function LinkFailure({
   code,
+  partner,
   signedInAs,
 }: {
   code: string;
+  partner: string;
   signedInAs?: string | null;
 }) {
-  const copy = FAILURE_COPY[code] ?? FAILURE_COPY.internal_error;
+  const copies = failureCopy(partner);
+  const copy = copies[code] ?? copies.internal_error;
 
   return (
     <div className="mx-auto flex min-h-screen max-w-lg items-center px-4 py-12">

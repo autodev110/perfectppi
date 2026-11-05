@@ -180,7 +180,9 @@ export async function middleware(request: NextRequest) {
   // Protected routes — redirect to login if not authenticated
   if (!user) {
     const redirectUrl = new URL("/login", request.url);
-    redirectUrl.searchParams.set("redirect", pathname);
+    // With its query: a deep link such as a partner's connect request is useless
+    // without it. The return value is validated again by safeReturnPath at sign-in.
+    redirectUrl.searchParams.set("redirect", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(redirectUrl);
   }
 

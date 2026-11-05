@@ -10,6 +10,8 @@ import {
   getOrgPartnerConnections,
 } from "@/features/partner/queries";
 import { DealerSpaceConnectionPanel } from "./connection-panel";
+import { BrowserPartnerPanel } from "./browser-partner-panel";
+import { PARTNER_SYSTEMS } from "@/features/partner/systems";
 import { PpiStatusBadge } from "@/components/shared/ppi-status-badge";
 import {
   DeliveryStatusBadge,
@@ -23,10 +25,10 @@ import { getRequestTranslator } from "@/lib/i18n/server";
 export const dynamic = "force-dynamic";
 
 // ============================================================================
-// The DealerSpace integration home: connection management on top, incoming
+// The partner integrations home: connection management on top, incoming
 // queue below.
 //
-// Everything a manager does with DealerSpace lives here, so the nav item is a
+// Everything a manager does with a partner lives here, so the nav item is a
 // destination rather than a signpost pointing at Settings.
 //
 // The queue is driven by the integration records rather than by submissions, so
@@ -34,7 +36,7 @@ export const dynamic = "force-dynamic";
 // appears — those are exactly the ones a manager needs to chase.
 // ============================================================================
 
-export default async function IncomingDealerSpaceInspectionsPage() {
+export default async function PartnerIntegrationsPage() {
   const uiText = await getRequestTranslator();
   await requireRole(["org_manager"]);
 
@@ -48,33 +50,55 @@ export default async function IncomingDealerSpaceInspectionsPage() {
   ]);
   const userLinks = await getConnectionUserLinks(connections.map((c) => c.id));
 
-  const activeConnection = connections.find((c) => c.status === "active");
+  const anyActive = connections.some((c) => c.status === "active");
+  const dealerSpaceConnections = connections.filter((c) => c.sourceSystem === "dealerspace");
+  const dealerSpaceIds = new Set(dealerSpaceConnections.map((c) => c.id));
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-bold">{uiText("ui.dealerspace_7d7288383a")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{uiText("ui.connect_a_dealership_management_system_and_t_3fd4b22def")}</p>
+        <h1 className="font-heading text-2xl font-bold">{uiText("ui.partner_integrations_cd6b83e038")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{uiText("ui.connect_the_systems_your_shops_work_in_and_t_06bce57acc")}</p>
       </div>
 
       <DealerSpaceConnectionPanel
-        connections={connections}
+        connections={dealerSpaceConnections}
         codes={codes}
-        userLinks={userLinks}
+        userLinks={userLinks.filter((link) => dealerSpaceIds.has(link.connectionId))}
       />
 
-      {activeConnection && (
+      {Object.values(PARTNER_SYSTEMS)
+        .filter((system) => system.browserConnect)
+        .map((system) => {
+          const connection = connections.find(
+            (c) => c.sourceSystem === system.id && c.status === "active",
+          );
+          return (
+            <BrowserPartnerPanel
+              key={system.id}
+              partnerName={system.label}
+              connection={connection ?? null}
+              userLinks={
+                connection
+                  ? userLinks.filter((link) => link.connectionId === connection.id)
+                  : []
+              }
+            />
+          );
+        })}
+
+      {anyActive && (
         <div>
           <h2 className="font-heading text-lg font-bold">{uiText("ui.incoming_inspections_4614232169")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{uiText("ui.vehicles_sent_to_your_organization_from_the__bbb34f6c8f")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{uiText("ui.vehicles_sent_to_your_organization_from_your_b7d0786342")}</p>
         </div>
       )}
 
-      {activeConnection && inspections.length === 0 && (
+      {anyActive && inspections.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
           <Inbox className="h-10 w-10 text-muted-foreground" />
           <h3 className="mt-4 font-semibold">{uiText("ui.nothing_received_yet_28053acc50")}</h3>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">{uiText("ui.when_a_dealerspace_technician_clicks_273da1adaa")}<strong>{uiText("ui.send_to_perfect_ppi_0d68606570")}</strong>{uiText("ui.the_vehicle_appears_here_b89b0c8280")}</p>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">{uiText("ui.when_staff_at_a_connected_partner_send_a_veh_3f6fd7e647")}</p>
         </div>
       )}
 
@@ -92,7 +116,7 @@ export default async function IncomingDealerSpaceInspectionsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-semibold">{vehicleName}</p>
-                      <SourceBadge sourceSystem="dealerspace" label={row.sourceLabel} />
+                      <SourceBadge sourceSystem={row.sourceSystem} label={row.sourceLabel} />
                     </div>
 
                     <div className="mt-2 grid gap-x-6 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">

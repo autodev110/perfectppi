@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 // ============================================================================
 // PATCH /api/v1/partner/inspections/:id/vehicle
 //
-// The explicit correction path. Ordinary DealerSpace edits must not reach an
+// The explicit correction path. Ordinary partner edits must not reach an
 // inspection already underway — this endpoint exists so that changing the
 // snapshot is a deliberate act, and it is refused outright once the technician
 // has submitted. A material change after submission needs a new submission
@@ -82,7 +82,7 @@ export async function PATCH(
     ),
     ...(vin ? { vin } : {}),
     capturedAt: new Date().toISOString(),
-    sourceSystem: "dealerspace",
+    sourceSystem: auth.connection.source_system,
     correction: {
       correctedAt: new Date().toISOString(),
       reason: reason ?? null,

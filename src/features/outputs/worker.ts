@@ -5,6 +5,7 @@ import {
   backoffDelayMs,
 } from "@/features/partner/constants";
 import { setIntegrationStatus } from "@/features/partner/events";
+import { runDeliveryWorkerTick } from "@/features/partner/delivery";
 import { OutputJobError, runOutputGenerationJob } from "./pipeline";
 import { runEvidenceAppendixTick } from "./evidence-appendix";
 import type { Json } from "@/types/database";
@@ -155,6 +156,16 @@ export async function runOutputWorkerTick(options?: {
         outcome: exhausted ? "failed" : "retrying",
         error: jobError.message,
       });
+    }
+  }
+
+  // A partner on automatic delivery should not wait for the next delivery cron
+  // to hear about a report that just finished. The cron remains the guarantee.
+  if (result.completed > 0) {
+    try {
+      await runDeliveryWorkerTick({ limit: 5 });
+    } catch (error) {
+      console.error("outputs: inline delivery tick failed", error);
     }
   }
 

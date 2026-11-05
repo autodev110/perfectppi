@@ -3,7 +3,7 @@
 // the organization settings UI.
 // ============================================================================
 
-export const PARTNER_SOURCE_SYSTEMS = ["dealerspace"] as const;
+export const PARTNER_SOURCE_SYSTEMS = ["dealerspace", "shopowl"] as const;
 export type PartnerSourceSystem = (typeof PARTNER_SOURCE_SYSTEMS)[number];
 
 export const PARTNER_SCOPES = [
@@ -15,7 +15,7 @@ export type PartnerScope = (typeof PARTNER_SCOPES)[number];
 
 export const DEFAULT_PARTNER_SCOPES: PartnerScope[] = [...PARTNER_SCOPES];
 
-/** The four artifacts DealerSpace must have before its Recon phase may close. */
+/** The four artifacts a partner must have before it treats an inspection as finished. */
 export const REQUIRED_ARTIFACT_TYPES = [
   "inspection_report_json",
   "inspection_report_pdf",
@@ -81,6 +81,8 @@ export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
 
 /** Installation codes are typed by a human into another app, so minutes, not days. */
 export const INSTALLATION_CODE_TTL_MS = 30 * 60 * 1000;
+/** A browser-connect code is redeemed by the partner's callback immediately. */
+export const CONNECT_CODE_TTL_MS = 5 * 60 * 1000;
 /** A technician has this long to finish signing in and consenting. */
 export const USER_LINK_TRANSACTION_TTL_MS = 15 * 60 * 1000;
 /** The authorization code is exchanged machine-to-machine, immediately. */

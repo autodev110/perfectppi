@@ -1,4 +1,5 @@
 import { Building2 } from "lucide-react";
+import { partnerLabel } from "@/features/partner/systems";
 import { t as uiText } from "@/lib/i18n";
 
 // ============================================================================
@@ -6,10 +7,6 @@ import { t as uiText } from "@/lib/i18n";
 // Perfect PPI consumer. Renders nothing for ordinary inspections, so it can be
 // dropped into any list without an enclosing conditional.
 // ============================================================================
-
-const SOURCE_LABELS: Record<string, string> = {
-  dealerspace: "DealerSpace",
-};
 
 export function SourceBadge({
   sourceSystem,
@@ -22,7 +19,7 @@ export function SourceBadge({
 }) {
   if (!sourceSystem || sourceSystem === "perfectppi") return null;
 
-  const text = label ?? SOURCE_LABELS[sourceSystem] ?? sourceSystem;
+  const text = label ?? partnerLabel(sourceSystem);
 
   return (
     <span

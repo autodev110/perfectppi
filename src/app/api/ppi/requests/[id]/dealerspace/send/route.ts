@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
-import { sendInspectionToDealerSpace } from "@/features/partner/send-actions";
+import { sendInspectionToPartner } from "@/features/partner/send-actions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // ============================================================================
 // POST /api/ppi/requests/:id/dealerspace/send
 //
-// HTTP entry point for "Send to DealerSpace", so iOS can trigger the same
+// HTTP entry point for "Send to <partner>", so iOS can trigger the same
 // delivery the web button does. Authorization, the four-artifact gate and
 // idempotency all live in the shared action — this route only adapts it to a
 // request/response pair.
@@ -22,7 +22,7 @@ export async function POST(
   if ("response" in auth) return auth.response;
 
   const { id } = await params;
-  const result = await sendInspectionToDealerSpace(id);
+  const result = await sendInspectionToPartner(id);
 
   if ("error" in result) {
     const status = result.error.includes("Not authenticated")

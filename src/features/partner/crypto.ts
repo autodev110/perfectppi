@@ -250,3 +250,24 @@ function canonicalize(value: unknown): string {
   }
   return JSON.stringify(value);
 }
+
+// --- Browser-connect proof (PKCE S256) ---------------------------------------
+
+const PKCE_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
+const PKCE_VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
+
+export function isPkceChallenge(value: unknown): value is string {
+  return typeof value === "string" && PKCE_CHALLENGE.test(value);
+}
+
+/**
+ * A browser-connect code travels through a URL, so possession of it proves
+ * nothing. Redeeming it also requires the verifier, which only the backend that
+ * started the flow ever held.
+ */
+export function pkceVerifierMatches(verifier: unknown, challenge: string): boolean {
+  if (typeof verifier !== "string" || !PKCE_VERIFIER.test(verifier)) return false;
+  if (!PKCE_CHALLENGE.test(challenge)) return false;
+  const actual = createHash("sha256").update(verifier).digest("base64url");
+  return timingSafeEqual(Buffer.from(actual), Buffer.from(challenge));
+}

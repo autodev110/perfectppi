@@ -237,7 +237,8 @@ Notes:
   `409 invalid_user_link`.
 - The payload schema is strict. Unknown fields are rejected, so customer, lead,
   deal, pricing, and finance data cannot be stored by accident.
-- VINs are validated including the check digit.
+- VINs are validated as 17 characters excluding I, O and Q. The check digit is
+  not enforced, because it is only mandatory in North America.
 - The vehicle data becomes an **immutable snapshot** on the reference. Later
   DealerSpace edits do not reach an inspection already underway. The database
   enforces this with a trigger; the only sanctioned change is
