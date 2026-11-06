@@ -44,7 +44,7 @@ function SignUpForm() {
 
       <div className="space-y-6">
         {/* Google OAuth */}
-        <form action={async () => { await signInWithGoogle(); }}>
+        <form action={async () => { await signInWithGoogle(returnTo); }}>
           <button
             type="submit"
             className="w-full flex items-center justify-center gap-3 h-14 bg-surface-container-low hover:bg-surface-container-high transition-all rounded-xl border border-outline-variant/10 text-on-surface font-semibold text-sm"

@@ -116,3 +116,8 @@ export function backoffDelayMs(attempt: number): number {
   const jitter = Math.floor(Math.random() * Math.min(base * 0.2, 60_000));
   return base + jitter;
 }
+
+/** A sent-back, reopened or cancelled inspection has no report to hand over. */
+export function isLiveRequestStatus(status: string | null | undefined): boolean {
+  return status === "submitted" || status === "completed";
+}

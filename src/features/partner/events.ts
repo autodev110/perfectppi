@@ -121,13 +121,12 @@ export async function syncPartnerLifecycle(
     const eventType = STATUS_TO_EVENT[status];
     if (!eventType) return;
 
-    // A resubmission legitimately produces a second inspection.submitted, so
-    // the submission id joins the dedupe key for those.
+    // A resubmission legitimately repeats these: started, submitted and sent back
+    // again. The submission id joins the dedupe key, so only a true repeat collapses.
     const submissionId = options?.submissionId ?? ref.current_submission_id;
-    const dedupeKey =
-      status === "submitted" && submissionId
-        ? `${eventType}:${ref.id}:${submissionId}`
-        : `${eventType}:${ref.id}`;
+    const dedupeKey = submissionId
+      ? `${eventType}:${ref.id}:${submissionId}`
+      : `${eventType}:${ref.id}`;
 
     await enqueuePartnerEvent({
       connectionId: ref.partner_connection_id,
@@ -149,7 +148,7 @@ export async function syncPartnerLifecycle(
 export async function setIntegrationStatus(
   requestId: string,
   integrationStatus: IntegrationStatus,
-  options?: { event?: PartnerEventType; data?: Record<string, unknown> },
+  options?: { event?: PartnerEventType; data?: Record<string, unknown>; dedupeScope?: string },
 ): Promise<void> {
   try {
     const admin = createAdminClient();
@@ -174,7 +173,8 @@ export async function setIntegrationStatus(
         requestId,
         type: options.event,
         data: options.data,
-        dedupeKey: `${options.event}:${ref.id}:${integrationStatus}`,
+        // A resubmission generates again, which is a new event.
+        dedupeKey: [options.event, ref.id, integrationStatus, options.dedupeScope].filter(Boolean).join(":"),
       });
     }
   } catch (error) {

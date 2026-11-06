@@ -143,6 +143,9 @@ export default async function PartnerLinkPage({ params, searchParams }: PageProp
               <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <div>
                 <p className="font-medium">{context.data.organizationName}</p>
+                {context.data.partnerAccountName && (
+                  <p className="text-muted-foreground">{`${partnerName} account: ${context.data.partnerAccountName}`}</p>
+                )}
                 <p className="text-muted-foreground">{`${partnerName} user `}
                   <span className="font-mono text-xs">{context.data.externalUserId}</span>
                 </p>

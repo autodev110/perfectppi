@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { createOrganizationWorkspace } from "@/features/profiles/actions";
 import { getManagerContext } from "./queries";
 import {
@@ -118,6 +119,20 @@ export async function declinePartnerConnect(formData: FormData) {
   destination.searchParams.set("error", "access_denied");
   destination.searchParams.set("state", params.state);
   redirect(destination.href);
+}
+
+/**
+ * The login page sends anyone already signed in to their dashboard, so choosing a
+ * different account has to end this session first.
+ */
+export async function signInWithDifferentAccount(formData: FormData) {
+  const params = parseConnect(formData);
+  if (!params) redirect("/");
+
+  const supabase = await createClient();
+  // Only this browser: their other devices are not the ones switching accounts.
+  await supabase.auth.signOut({ scope: "local" });
+  redirect(`/login?redirect=${encodeURIComponent(consentPath(params))}`);
 }
 
 /**

@@ -6,7 +6,7 @@ import {
 } from "@/features/partner/constants";
 import { setIntegrationStatus } from "@/features/partner/events";
 import { runDeliveryWorkerTick } from "@/features/partner/delivery";
-import { OutputJobError, runOutputGenerationJob } from "./pipeline";
+import { OutputJobError, runOutputGenerationJob, isLiveSubmission } from "./pipeline";
 import { runEvidenceAppendixTick } from "./evidence-appendix";
 import type { Json } from "@/types/database";
 
@@ -79,14 +79,17 @@ export async function runOutputWorkerTick(options?: {
     jobs: [],
   };
 
+  let deliveryRequested = false;
+
   for (const job of jobs) {
     try {
       await setIntegrationStatusForSubmission(job.ppi_submission_id, "outputs_generating");
 
-      await runOutputGenerationJob({
+      const generated = await runOutputGenerationJob({
         submissionId: job.ppi_submission_id,
         outputVersion: job.output_version,
       });
+      if (generated.autoDeliveryRequested) deliveryRequested = true;
 
       await admin
         .from("output_generation_jobs")
@@ -161,7 +164,7 @@ export async function runOutputWorkerTick(options?: {
 
   // A partner on automatic delivery should not wait for the next delivery cron
   // to hear about a report that just finished. The cron remains the guarantee.
-  if (result.completed > 0) {
+  if (deliveryRequested) {
     try {
       await runDeliveryWorkerTick({ limit: 5 });
     } catch (error) {
@@ -192,12 +195,21 @@ async function setIntegrationStatusForSubmission(
     .maybeSingle();
 
   if (!submission) return;
+  // A job for a superseded version says nothing about where the inspection is now.
+  // This only keeps the partner's view current, so it never fails the job itself.
+  let live = false;
+  try {
+    live = await isLiveSubmission(submission.ppi_request_id, submissionId);
+  } catch (error) {
+    console.error("outputs: could not check the submission", error);
+  }
+  if (!live) return;
 
   await setIntegrationStatus(
     submission.ppi_request_id,
     status,
     status === "outputs_generating"
-      ? { event: "inspection.outputs_generating" }
+      ? { event: "inspection.outputs_generating", data: { submissionId }, dedupeScope: submissionId }
       : undefined,
   );
 }

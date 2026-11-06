@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireApiRole } from "@/features/auth/api";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getReadySubmissionVersions } from "@/features/partner/queries";
+import { currentDeliveryStatus, getReadySubmissionVersions } from "@/features/partner/queries";
+import { isLiveRequestStatus } from "@/features/partner/constants";
 import { partnerLabel, partnerSystem } from "@/features/partner/systems";
 import { isUuid } from "@/features/partner/inspections";
 
@@ -59,7 +60,7 @@ export async function GET(
     .select(
       `
       id, source_label, integration_status, delivery_status, delivery_version,
-      current_submission_id, vehicle_snapshot, external_recon_case_id,
+      current_submission_id, delivered_submission_id, delivered_output_version, vehicle_snapshot, external_recon_case_id,
       external_inspection_phase_id, created_at, last_delivered_at,
       connection:partner_connections!external_inspection_refs_partner_connection_id_fkey(
         display_name, status
@@ -93,9 +94,9 @@ export async function GET(
       autoDelivery: partnerSystem(request.source_system)?.autoDeliver ?? false,
       connectionActive: connection?.status === "active",
       integrationStatus: ref.integration_status,
-      deliveryStatus: ref.delivery_status,
+      deliveryStatus: currentDeliveryStatus(ref, readyVersion),
       deliveryVersion: ref.delivery_version,
-      deliverablesReady: readyVersion !== undefined,
+      deliverablesReady: readyVersion !== undefined && isLiveRequestStatus(request.status),
       readyOutputVersion: readyVersion ?? null,
       vehicleSnapshot: ref.vehicle_snapshot,
       externalReconCaseId: ref.external_recon_case_id,

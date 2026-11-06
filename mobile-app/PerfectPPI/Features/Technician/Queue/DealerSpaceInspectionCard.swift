@@ -93,7 +93,8 @@ struct DealerSpaceInspectionCard: View {
             Label("Delivered to \(context.systemName)", systemImage: "checkmark.seal.fill")
                 .font(.subheadline)
                 .foregroundStyle(Theme.Palette.success)
-        } else if context.deliversAutomatically && context.deliveryStatus != "failed" {
+        } else if context.deliversAutomatically && context.deliveryStatus != "failed"
+                    && !(context.deliveryStatus == "not_requested" && context.deliverablesReady) {
             Text(context.deliveryInFlight
                  ? "Sending to \(context.systemName)."
                  : "Reports are sent to \(context.systemName) automatically once they are generated.")

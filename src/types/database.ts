@@ -7607,6 +7607,14 @@ export type Database = {
           status: string
         }[]
       }
+      partner_auto_delivery_candidates: {
+        Args: { p_limit: number; p_since: string; p_systems: string[] }
+        Returns: {
+          output_version: number
+          ppi_request_id: string
+          submission_id: string
+        }[]
+      }
       partner_rate_limit_hit: {
         Args: { p_bucket_key: string; p_window_start: string }
         Returns: number

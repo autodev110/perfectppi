@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enqueuePartnerEvent } from "./events";
-import { getReadySubmissionVersions } from "./queries";
 import { autoDeliverySystems, partnerSystem } from "./systems";
 
 // ============================================================================
@@ -12,7 +11,8 @@ import { autoDeliverySystems, partnerSystem } from "./systems";
 // itself stays with the delivery worker, which owns retries and signing.
 //
 // The sweep is the guarantee. If the pipeline's call fails after the artifacts
-// were stored, the next delivery tick finds the gap and requests it again.
+// were stored, the next delivery tick finds the gap and requests it again. After
+// the sweep's window, the Send button on the inspection remains.
 // ============================================================================
 
 const SWEEP_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -73,47 +73,30 @@ export async function requestPartnerAutoDelivery(
 }
 
 /**
- * Requests any complete output an automatic partner has not been sent. Only a
- * version that was never requested qualifies: an exhausted delivery stays failed
- * until someone retries it, rather than being re-armed here on every tick.
+ * Requests any complete output an automatic partner has not been sent, oldest
+ * first. The database picks them, so reports already delivered and revoked
+ * connections never use up a slot. Only a version that was never requested
+ * qualifies: an exhausted delivery stays failed until someone retries it, rather
+ * than being re-armed here on every tick.
  */
 export async function sweepPartnerAutoDeliveries(limit = 25): Promise<number> {
   const systems = autoDeliverySystems();
   if (systems.length === 0) return 0;
 
-  const admin = createAdminClient();
-  const { data: refs, error } = await admin
-    .from("external_inspection_refs")
-    .select("ppi_request_id, current_submission_id, delivered_submission_id, delivered_output_version")
-    .in("source_system", systems)
-    .eq("integration_status", "deliverables_ready")
-    .not("current_submission_id", "is", null)
-    .gte("updated_at", new Date(Date.now() - SWEEP_LOOKBACK_MS).toISOString())
-    .order("updated_at", { ascending: false })
-    .limit(limit);
+  const { data, error } = await createAdminClient().rpc("partner_auto_delivery_candidates", {
+    p_systems: systems,
+    p_since: new Date(Date.now() - SWEEP_LOOKBACK_MS).toISOString(),
+    p_limit: limit,
+  });
 
   if (error) {
     console.error("partner: automatic delivery sweep failed", error.message);
     return 0;
   }
 
-  const rows = refs ?? [];
-  const ready = await getReadySubmissionVersions(
-    rows.map((row) => row.current_submission_id).filter((id): id is string => Boolean(id)),
-  );
-
   let requested = 0;
-  for (const row of rows) {
-    const submissionId = row.current_submission_id;
-    const outputVersion = submissionId ? ready.get(submissionId) : undefined;
-    if (!submissionId || outputVersion === undefined) continue;
-    if (
-      row.delivered_submission_id === submissionId &&
-      row.delivered_output_version === outputVersion
-    ) {
-      continue;
-    }
-    if (await requestPartnerAutoDelivery(row.ppi_request_id, submissionId, outputVersion)) {
+  for (const row of data ?? []) {
+    if (await requestPartnerAutoDelivery(row.ppi_request_id, row.submission_id, row.output_version)) {
       requested += 1;
     }
   }

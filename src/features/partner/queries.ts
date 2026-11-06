@@ -380,6 +380,24 @@ export async function getReadySubmissionVersions(
   return ready;
 }
 
+/**
+ * The delivery state of the report on offer now. The stored status describes the last
+ * version requested, so a newer submission or version has not been requested yet.
+ */
+export function currentDeliveryStatus(
+  ref: {
+    delivery_status: string;
+    current_submission_id: string | null;
+    delivered_submission_id: string | null;
+    delivered_output_version: number | null;
+  },
+  readyVersion: number | undefined,
+): string {
+  if (ref.delivered_submission_id !== ref.current_submission_id) return "not_requested";
+  if (readyVersion !== undefined && ref.delivered_output_version !== readyVersion) return "not_requested";
+  return ref.delivery_status;
+}
+
 /** The single ref behind one PPI request, or null when it is not a partner inspection. */
 export async function getExternalRefForRequest(requestId: string) {
   const admin = createAdminClient();

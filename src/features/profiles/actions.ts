@@ -289,7 +289,8 @@ export async function createOrganizationWorkspace(formData: FormData) {
     return { error: organizationError?.message ?? "Failed to create organization" };
   }
 
-  const specialties = normalizeSpecialties(parsed.data.specialties);
+  // A form that doesn't ask for specialties must not erase the ones already saved.
+  const keepSpecialties = existingTechProfile && !formData.has("specialties");
 
   const { data: techProfile, error: techProfileError } = await supabase
     .from("technician_profiles")
@@ -297,7 +298,7 @@ export async function createOrganizationWorkspace(formData: FormData) {
       {
         profile_id: profile.id,
         organization_id: organization.id,
-        specialties,
+        ...(keepSpecialties ? {} : { specialties: normalizeSpecialties(parsed.data.specialties) }),
         is_independent: false,
       },
       { onConflict: "profile_id" }

@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { runDeliveryWorkerTick } from "./delivery";
 import { getReadySubmissionVersions } from "./queries";
 import { enqueuePartnerEvent } from "./events";
+import { isLiveRequestStatus } from "./constants";
 import { partnerLabel } from "./systems";
 
 // ============================================================================
@@ -83,6 +84,10 @@ export async function sendInspectionToPartner(
 
   if (!isAssignedTech && !isOrgManager) {
     return { error: "Only the assigned technician or an organization manager can send this inspection" };
+  }
+
+  if (!isLiveRequestStatus(request.status)) {
+    return { error: "This inspection was sent back or cancelled, so its reports can't be sent." };
   }
 
   const admin = createAdminClient();

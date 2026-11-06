@@ -1254,11 +1254,16 @@ describe("signed outbound webhooks", () => {
       "the retry is scheduled with backoff",
     );
 
-    // A 4xx, by contrast, is permanent.
+    // A 4xx, by contrast, is permanent. Due well in the past, because this clock and
+    // the database's can disagree, and a future time would not be claimed at all.
     webhook.setStatus(404);
     await db
       .from("outbound_events")
-      .update({ status: "pending", next_attempt_at: new Date().toISOString(), attempt_count: 0 })
+      .update({
+        status: "pending",
+        next_attempt_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        attempt_count: 0,
+      })
       .eq("id", queued.id);
 
     await apiRequest(baseUrl, "/api/internal/workers/deliveries", {
@@ -1651,6 +1656,18 @@ describe("ShopOwl browser connect", () => {
 
     const dealerSpace = await apiRequest(baseUrl, "/api/v1/partner/connections/self", { token: alphaConn.token });
     assert.equal(dealerSpace.status, 200, "another partner's connection is unaffected");
+  });
+
+  test("a partner without its own connect screen disconnects in Perfect PPI", async () => {
+    const refused = await apiRequest(baseUrl, "/api/v1/partner/connections/self", {
+      method: "DELETE",
+      token: alphaConn.token,
+    });
+    assert.equal(refused.status, 403);
+    assert.equal(refused.body.error, "insufficient_scope");
+
+    const live = await apiRequest(baseUrl, "/api/v1/partner/connections/self", { token: alphaConn.token });
+    assert.equal(live.status, 200, "the connection is still live");
   });
 });
 

@@ -14,6 +14,7 @@ import {
 import {
   ARTIFACT_CONTENT_TYPES,
   REQUIRED_ARTIFACT_TYPES,
+  isLiveRequestStatus,
   type ArtifactType,
 } from "@/features/partner/constants";
 import { setIntegrationStatus } from "@/features/partner/events";
@@ -68,6 +69,8 @@ export interface OutputJobResult {
   vscOutputId: string;
   artifactIds: string[];
   reusedArtifacts: number;
+  /** True when this version was just queued for a partner on automatic delivery. */
+  autoDeliveryRequested: boolean;
 }
 
 /**
@@ -81,6 +84,29 @@ function canonicalJsonBytes(value: unknown): Buffer {
 
 function sha256OfBytes(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+/**
+ * Whether this submission is still the one the inspection is waiting on. A failed
+ * read throws, so a job retries rather than treating an outage as "superseded", which
+ * would finish it with the report never advertised and nothing left to recover it.
+ */
+export async function isLiveSubmission(requestId: string, submissionId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const [latest, request] = await Promise.all([
+    admin
+      .from("ppi_submissions")
+      .select("id")
+      .eq("ppi_request_id", requestId)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    admin.from("ppi_requests").select("status").eq("id", requestId).maybeSingle(),
+  ]);
+  if (latest.error || request.error) {
+    throw new OutputJobError("database", latest.error?.message ?? request.error?.message ?? "Could not read the inspection");
+  }
+  return latest.data?.id === submissionId && isLiveRequestStatus(request.data?.status);
 }
 
 export async function runOutputGenerationJob(params: {
@@ -654,18 +680,26 @@ export async function runOutputGenerationJob(params: {
     );
   }
 
-  await admin
-    .from("external_inspection_refs")
-    .update({ current_submission_id: submissionId })
-    .eq("ppi_request_id", request.id);
+  // The inspection can move on while this version generates: sent back for
+  // revision, reopened with a newer submission, or cancelled. The artifacts stay
+  // stored, but only the live submission of a live inspection is advertised.
+  const stillCurrent = await isLiveSubmission(request.id, submissionId);
 
-  // Only now — with every required artifact stored and checksummed — is the
-  // inspection advertised as deliverable.
-  await setIntegrationStatus(request.id, "deliverables_ready");
+  let autoDeliveryRequested = false;
+  if (stillCurrent) {
+    await admin
+      .from("external_inspection_refs")
+      .update({ current_submission_id: submissionId })
+      .eq("ppi_request_id", request.id);
 
-  // Partners without a Send button receive the finished set from here on. This
-  // never fails the job: the delivery worker's sweep covers a missed request.
-  await requestPartnerAutoDelivery(request.id, submissionId, outputVersion);
+    // Only now — with every required artifact stored and checksummed — is the
+    // inspection advertised as deliverable.
+    await setIntegrationStatus(request.id, "deliverables_ready");
+
+    // Partners without a Send button receive the finished set from here on. This
+    // never fails the job: the delivery worker's sweep covers a missed request.
+    autoDeliveryRequested = await requestPartnerAutoDelivery(request.id, submissionId, outputVersion);
+  }
 
   return {
     submissionId,
@@ -674,6 +708,7 @@ export async function runOutputGenerationJob(params: {
     vscOutputId,
     artifactIds,
     reusedArtifacts,
+    autoDeliveryRequested,
   };
 }
 

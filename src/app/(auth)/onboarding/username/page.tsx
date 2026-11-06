@@ -2,13 +2,12 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { UsernameForm } from "./username-form";
 import { signOut } from "@/features/auth/actions";
+import { legalAcceptPath, safeReturnPath } from "@/features/auth/routing";
 
 import { getRequestTranslator } from "@/lib/i18n/server";
 
 function safeNextPath(value: string | undefined) {
-  return value?.startsWith("/") && !value.startsWith("//")
-    ? value
-    : "/legal/accept";
+  return legalAcceptPath(safeReturnPath(value));
 }
 
 export default async function UsernameOnboardingPage({
@@ -27,9 +26,9 @@ export default async function UsernameOnboardingPage({
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (!profile) redirect("/account-unavailable");
-  if (profile.username_state === "claimed") redirect("/legal/accept");
-
   const params = await searchParams;
+  if (profile.username_state === "claimed") redirect(safeNextPath(params.next));
+
   return (
     <div>
       <p className="text-xs font-bold uppercase tracking-[0.2em] text-on-tertiary-container">{uiText("ui.one_last_step_be98b10d2d")}</p>

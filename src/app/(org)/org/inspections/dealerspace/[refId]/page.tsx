@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, ExternalLink, FileJson, FileText } from "lucide-react";
 import { requireRole } from "@/features/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getManagerContext, getReadySubmissionVersions } from "@/features/partner/queries";
+import { getManagerContext, currentDeliveryStatus, getReadySubmissionVersions } from "@/features/partner/queries";
+import { isLiveRequestStatus } from "@/features/partner/constants";
 import {
   DeliveryStatusBadge,
   IntegrationStatusBadge,
@@ -49,6 +50,7 @@ export default async function PartnerInspectionDetailPage({ params }: PageProps)
     .select(
       `
       *,
+      connection:partner_connections!external_inspection_refs_partner_connection_id_fkey(status),
       request:ppi_requests!external_inspection_refs_ppi_request_id_fkey(
         id, status, requesting_organization_id,
         assigned_tech:profiles!ppi_requests_assigned_tech_id_fkey(id, display_name, username)
@@ -122,7 +124,7 @@ export default async function PartnerInspectionDetailPage({ params }: PageProps)
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <PpiStatusBadge status={request.status as PpiRequestStatus} />
             <IntegrationStatusBadge status={ref.integration_status} />
-            <DeliveryStatusBadge status={ref.delivery_status} />
+            <DeliveryStatusBadge status={currentDeliveryStatus(ref, readyVersion)} />
           </div>
         </div>
 
@@ -139,8 +141,9 @@ export default async function PartnerInspectionDetailPage({ params }: PageProps)
             requestId={request.id}
             partnerLabel={partnerName}
             autoDelivery={partnerSystem(ref.source_system)?.autoDeliver ?? false}
-            deliveryStatus={ref.delivery_status}
-            deliverablesReady={readyVersion !== undefined}
+            connectionActive={(ref.connection as { status: string } | null)?.status === "active"}
+            deliveryStatus={currentDeliveryStatus(ref, readyVersion)}
+            deliverablesReady={readyVersion !== undefined && isLiveRequestStatus(request.status)}
           />
         </div>
       </div>

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { authenticatePartnerRequest } from "@/features/partner/auth";
 import { decryptSecret, signWebhookPayload } from "@/features/partner/crypto";
 import { partnerError } from "@/features/partner/errors";
+import { partnerSystem } from "@/features/partner/systems";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +16,8 @@ export const dynamic = "force-dynamic";
 // Returns no secrets.
 //
 // DELETE disconnects from the partner's side, so an administrator there does not
-// also need a Perfect PPI login to undo a connection they made.
+// also need a Perfect PPI login to undo a connection they made. Only a partner that
+// connects from its own application has that screen. Others disconnect in Perfect PPI.
 // ============================================================================
 
 export async function GET(request: Request) {
@@ -86,12 +88,16 @@ export async function DELETE(request: Request) {
   });
   if ("response" in auth) return auth.response;
 
+  if (!partnerSystem(auth.connection.source_system)?.browserConnect) {
+    return partnerError("insufficient_scope", "Disconnect this connection in Perfect PPI.");
+  }
+
   const { data: revoked, error } = await createAdminClient().rpc("revoke_partner_connection", {
     p_connection_id: auth.connection.id,
     p_organization_id: auth.connection.organization_id,
-    // The partner's administrator has no Perfect PPI profile of their own, so
-    // the revocation is attributed to whoever authorized the connection.
-    p_actor_id: auth.connection.connected_by as string,
+    // Nobody at Perfect PPI did this: the partner's administrator has no profile
+    // here. Naming the manager who connected it would record something untrue.
+    p_actor_id: null as unknown as string,
   });
 
   if (error) {

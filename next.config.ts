@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { PARTNER_SYSTEMS, browserConnectOrigin } from "./src/features/partner/systems";
 
 const nextConfig: NextConfig = {
   // The inspection report renderer reads its versioned layout spec and the
@@ -33,6 +34,10 @@ const nextConfig: NextConfig = {
       "frame-ancestors 'none'",
       "upgrade-insecure-requests",
     ].join("; ");
+    // Consent screens end in a redirect to the partner's own application, and browsers
+    // apply form-action to it when the form posts before the page has hydrated.
+    const partnerOrigins = Object.values(PARTNER_SYSTEMS).map(browserConnectOrigin).filter(Boolean);
+    const partnerFlowCsp = csp.replace("form-action 'self'", ["form-action 'self'", ...partnerOrigins].join(" "));
     return [{
       source: "/:path*",
       headers: [
@@ -43,7 +48,10 @@ const nextConfig: NextConfig = {
         { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self)" },
         { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
       ],
-    }];
+    }, ...["/connect/:path*", "/link/:path*"].map((source) => ({
+      source,
+      headers: [{ key: "Content-Security-Policy", value: partnerFlowCsp }],
+    }))];
   },
   images: {
     remotePatterns: [

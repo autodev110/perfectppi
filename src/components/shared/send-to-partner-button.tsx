@@ -12,8 +12,10 @@ import { useTranslator } from "@/lib/i18n/client";
 interface SendToPartnerButtonProps {
   requestId: string;
   partnerLabel: string;
-  /** No button unless a delivery has failed: the reports go out on their own. */
+  /** No button unless a delivery failed or was missed: the reports go out on their own. */
   autoDelivery?: boolean;
+  /** A revoked connection cannot deliver, whatever the last delivery status says. */
+  connectionActive?: boolean;
   deliveryStatus: string;
   /** False while any of the four required artifacts is still missing. */
   deliverablesReady: boolean;
@@ -23,13 +25,15 @@ interface SendToPartnerButtonProps {
 // ============================================================================
 // The button enqueues a delivery and returns immediately. It is disabled — and
 // says why — until all four artifacts exist, so a partial set can never be
-// pushed to a partner. An automatic partner only ever sees the retry.
+// pushed to a partner. An automatic partner only sees it to retry a failure, or
+// for finished reports that were never requested.
 // ============================================================================
 
 export function SendToPartnerButton({
   requestId,
   partnerLabel,
   autoDelivery = false,
+  connectionActive = true,
   deliveryStatus,
   deliverablesReady,
   className,
@@ -67,8 +71,15 @@ export function SendToPartnerButton({
 
   const isRetry = status === "failed";
   const inFlight = status === "queued" || status === "delivering";
+  const missedAutoDelivery = status === "not_requested" && deliverablesReady;
 
-  if (autoDelivery && !isRetry) {
+  if (!connectionActive) {
+    return (
+      <p className={`text-xs text-muted-foreground ${className ?? ""}`}>{uiText("ui.this_connection_was_revoked_so_reports_can_n_22cf641e1f", { arg0: String(partnerLabel) })}</p>
+    );
+  }
+
+  if (autoDelivery && !isRetry && !missedAutoDelivery) {
     return (
       <p className={`text-xs text-muted-foreground ${className ?? ""}`}>
         {inFlight

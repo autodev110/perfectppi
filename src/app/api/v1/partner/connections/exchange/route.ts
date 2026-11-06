@@ -254,12 +254,18 @@ export async function POST(request: Request) {
   if (codeRow.code_challenge) {
     const { data: live } = await admin
       .from("partner_connections")
-      .select("id")
+      .select("id, installation_code_id")
       .eq("organization_id", codeRow.organization_id)
       .eq("source_system", codeRow.source_system)
       .eq("external_organization_id", externalOrganizationId)
       .eq("status", "active")
       .maybeSingle();
+
+    // A doubled request can see the connection its twin just inserted with this
+    // same code. That twin may still delete it, so this is not a reconnect.
+    if (live?.installation_code_id === codeRow.id) {
+      return partnerError("installation_code_already_used");
+    }
 
     if (live) {
       const { data: claimedForReconnect } = await admin

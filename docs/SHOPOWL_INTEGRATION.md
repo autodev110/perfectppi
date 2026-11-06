@@ -12,7 +12,7 @@ one table, `src/features/partner/systems.ts`.
 | Who is linked first | Nobody; each person links separately | The person who connected, in the same step |
 | Reconnecting | Rotate, then paste both new values | Connect again, which rotates in place |
 | Delivering reports | The technician presses Send | Automatic when all four artifacts exist |
-| Disconnecting | Revoke in Perfect PPI | Either side, including `DELETE /connections/self` |
+| Disconnecting | Revoke in Perfect PPI | Either side, including `DELETE /connections/self`, which DealerSpace can't use |
 
 ## Browser connect
 
@@ -48,16 +48,26 @@ the manifest gate are unchanged. A report held for admin review has no artifacts
 it cannot be sent early.
 
 `sweepPartnerAutoDeliveries` runs on each delivery tick and requests any complete
-version that was never requested, in case the pipeline's own call failed. It never
-re-arms a failed delivery. That needs the retry button, which an automatic partner
-still shows. DealerSpace is unaffected.
+version that was never requested, oldest first, for seven days, in case the pipeline's
+own call failed. It never re-arms a failed delivery. That needs the retry button, which
+an automatic partner still shows. The same button appears for finished reports that were
+never requested once the sweep's window has passed. DealerSpace is unaffected.
+
+Only the live submission of a live inspection is advertised. A version that finishes
+after the inspection was sent back, reopened or cancelled stays stored, and nothing is
+delivered or offered for it.
+
+A webhook answered with 401 is retried rather than failed, because that is what a partner
+returns during a reconnect, between Perfect PPI rotating the signing secret and the
+partner saving the new one.
 
 ## Configuration
 
 `PARTNER_SHOPOWL_APP_URL` is optional and only for staging or local use, defaulting to
 `https://my.shopowl.io`. Loopback HTTP also needs `PARTNER_ALLOW_INSECURE_CALLBACKS=true`.
 
-Apply `20261105120000_partner_shopowl_browser_connect.sql` before deploying. It is
+Apply `20261105120000_partner_shopowl_browser_connect.sql` and
+`20261106100000_partner_auto_delivery_candidates.sql` before deploying. It is
 additive, and DealerSpace behaviour is unchanged.
 
 ShopOwl's side is documented in its repository at `docs/perfectppi-integration.md`.

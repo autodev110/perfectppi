@@ -55,7 +55,12 @@ export async function runDeliveryWorkerTick(options?: {
   await pruneExpiredRows(admin);
 
   // Before claiming, so a request recovered here is delivered in this same tick.
-  await sweepPartnerAutoDeliveries();
+  // Recovering a missed request must never stop what is already queued.
+  try {
+    await sweepPartnerAutoDeliveries();
+  } catch (error) {
+    console.error("delivery: automatic delivery sweep failed", asMessage(error));
+  }
 
   const { data: claimed, error } = await admin.rpc("claim_outbound_events", {
     p_worker_id: workerId,
@@ -231,8 +236,12 @@ async function deliverEvent(event: OutboundEventRow): Promise<DeliveryOutcome> {
       errorCategory = "configuration";
       errorMessage = `webhook endpoint redirected (${response.status}); register the final URL instead`;
     } else if (response.status >= 400 && response.status < 500) {
-      // 408 and 429 are the two 4xx that mean "later", not "never".
-      errorCategory = response.status === 408 || response.status === 429 ? "http_5xx" : "http_4xx";
+      // These mean "later", not "never". A 401 is what a partner returns during a
+      // reconnect, between our rotating the signing secret and its saving the new one.
+      errorCategory =
+        response.status === 401 || response.status === 408 || response.status === 429
+          ? "http_5xx"
+          : "http_4xx";
       errorMessage = `endpoint returned ${response.status}`;
     } else {
       errorCategory = "http_5xx";

@@ -137,4 +137,12 @@ union all
   select '20260923124446', '20260923124446_database_advisor_cleanup.sql', exists (select 1 from pg_proc where oid=to_regprocedure('public.handle_updated_at()') and proconfig @> array['search_path=""']) and to_regclass('public.community_post_saves_profile_cursor_idx') is null and to_regclass('public.marketplace_listing_saves_profile_cursor_idx') is null
 union all
   select '20260923130000', '20260923130000_ppi_media_content_hashes.sql', exists (select 1 from information_schema.columns where table_schema='public' and table_name='ppi_media' and column_name='content_sha256') and coalesce(pg_get_functiondef(to_regprocedure('public.submit_ppi_certified(uuid, integer, text, boolean, text)')), '') like '%media_unverified%'
+union all
+  select '20260926100000', '20260926100000_combined_tire_readings.sql', coalesce(pg_get_functiondef(to_regprocedure('public.ppi_certification_source_guard()')), '') like '%extraction_ids%'
+union all
+  select '20261014194447', '20261014194447_release_retention_and_restore_replay.sql', to_regprocedure('public.purge_partner_retention_records(integer)') is not null
+union all
+  select '20261105120000', '20261105120000_partner_shopowl_browser_connect.sql', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'partner_installation_codes' and column_name = 'code_challenge')
+union all
+  select '20261106100000', '20261106100000_partner_auto_delivery_candidates.sql', to_regprocedure('public.partner_auto_delivery_candidates(text[],timestamp with time zone,integer)') is not null
 ) m order by version;

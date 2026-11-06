@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeReturnPath } from "@/features/auth/routing";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -11,8 +12,7 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      const requestedPath =
-        next && next.startsWith("/") && !next.startsWith("//") ? next : undefined;
+      const requestedPath = safeReturnPath(next) ?? undefined;
 
       const { data: { user } } = await supabase.auth.getUser();
       const { data: profile } = await supabase

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { AlertCircle, Building2, Check, Plug, Send, X } from "lucide-react";
+import { AlertCircle, Building2, Check, Link2, Plug, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import {
   approvePartnerConnect,
   createOrganizationForConnect,
   declinePartnerConnect,
+  signInWithDifferentAccount,
 } from "@/features/partner/connect-actions";
 import { isPkceChallenge } from "@/features/partner/crypto";
 import { browserConnectCallback, partnerSystem } from "@/features/partner/systems";
@@ -22,12 +23,7 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ partner: string }>;
-  searchParams: Promise<{
-    state?: string;
-    code_challenge?: string;
-    shop?: string;
-    error?: string;
-  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 // ============================================================================
@@ -40,6 +36,9 @@ interface PageProps {
 
 const STATE_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 
+/** A repeated parameter arrives as an array, and no value here is ever one. */
+const single = (value: string | string[] | undefined) => (typeof value === "string" ? value : "");
+
 export default async function PartnerConnectPage({ params, searchParams }: PageProps) {
   const uiText = await getRequestTranslator();
   const { partner } = await params;
@@ -48,9 +47,10 @@ export default async function PartnerConnectPage({ params, searchParams }: PageP
   const system = partnerSystem(partner);
   if (!system?.browserConnect) notFound();
 
-  const state = query.state ?? "";
-  const challenge = query.code_challenge ?? "";
-  const shop = (query.shop ?? "").trim().slice(0, 120);
+  const state = single(query.state);
+  const challenge = single(query.code_challenge);
+  const shop = single(query.shop).trim().slice(0, 120);
+  const errorCode = single(query.error);
 
   if (!STATE_PATTERN.test(state) || !isPkceChallenge(challenge)) {
     return (
@@ -108,7 +108,7 @@ export default async function PartnerConnectPage({ params, searchParams }: PageP
       <ConnectFailure
         title={uiText("ui.this_account_cannot_connect_an_organization_93eac3e944")}
         detail="Sign in with the account that manages your Perfect PPI organization."
-        signInPath={`/login?redirect=${encodeURIComponent(returnPath)}`}
+        switchAccountFields={hidden}
       />
     );
   }
@@ -119,7 +119,7 @@ export default async function PartnerConnectPage({ params, searchParams }: PageP
       <ConnectFailure
         title={uiText("ui.only_your_organization_manager_can_connect_e2c30c7f0e")}
         detail={`Ask them to choose Connect Perfect PPI in ${system.label}. Once it is connected you can link your own account from there.`}
-        signInPath={`/login?redirect=${encodeURIComponent(returnPath)}`}
+        switchAccountFields={hidden}
       />
     );
   }
@@ -129,7 +129,7 @@ export default async function PartnerConnectPage({ params, searchParams }: PageP
     return (
       <ConnectShell title={uiText("ui.set_up_your_shop_to_connect_003b1aba4a", { arg0: String(system.label) })}>
         <p className="text-sm text-muted-foreground">{uiText("ui.perfect_ppi_connects_to_an_organization_crea_3c5435166e")}</p>
-        {query.error === "organization_failed" && (
+        {errorCode === "organization_failed" && (
           <p className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{uiText("ui.the_organization_could_not_be_created_check__3c974488a0")}</p>
         )}
         <form action={createOrganizationForConnect} className="space-y-4">
@@ -161,7 +161,7 @@ export default async function PartnerConnectPage({ params, searchParams }: PageP
       <ConnectFailure
         title={uiText("ui.this_account_is_not_attached_to_an_organizat_984d882c93")}
         detail="Contact support so we can look into it."
-        signInPath={`/login?redirect=${encodeURIComponent(returnPath)}`}
+        switchAccountFields={hidden}
       />
     );
   }
@@ -179,7 +179,7 @@ export default async function PartnerConnectPage({ params, searchParams }: PageP
 
   return (
     <ConnectShell title={uiText("ui.connect_to_perfect_ppi_9ff996438a", { arg0: String(system.label) })}>
-      {query.error && (
+      {errorCode && (
         <p className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{uiText("ui.something_went_wrong_and_nothing_was_connect_c8f18972dc")}</p>
       )}
 
@@ -198,9 +198,7 @@ export default async function PartnerConnectPage({ params, searchParams }: PageP
       </div>
 
       {existing && (
-        <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-muted-foreground">
-          {uiText("ui.this_organization_is_already_connected_to_co_3fa4412af1", { arg0: String(system.label) })}
-        </p>
+        <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-muted-foreground">{uiText("ui.this_organization_is_already_connected_to_co_4b09618ee3", { arg0: String(system.label) })}</p>
       )}
 
       <div className="space-y-2 text-sm">
@@ -211,6 +209,10 @@ export default async function PartnerConnectPage({ params, searchParams }: PageP
         <p className="flex items-start gap-2">
           <Send className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
           <span>{uiText("ui.each_finished_report_and_vsc_determination_i_4808991695", { arg0: String(system.label) })}</span>
+        </p>
+        <p className="flex items-start gap-2">
+          <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+          <span>{uiText("ui.your_perfect_ppi_account_is_linked_to_the_us_930377a621", { arg0: String(system.label) })}</span>
         </p>
         <p className="flex items-start gap-2">
           <X className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -254,11 +256,12 @@ function ConnectShell({ title, children }: { title: string; children: React.Reac
 function ConnectFailure({
   title,
   detail,
-  signInPath,
+  switchAccountFields,
 }: {
   title: string;
   detail: string;
-  signInPath?: string;
+  /** The flow's own fields, so signing in as someone else comes back to it. */
+  switchAccountFields?: React.ReactNode;
 }) {
   return (
     <div className="mx-auto flex min-h-screen max-w-lg items-center px-4 py-12">
@@ -273,10 +276,11 @@ function ConnectFailure({
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">{detail}</p>
           <div className="flex flex-wrap gap-2">
-            {signInPath && (
-              <Button asChild>
-                <Link href={signInPath}>{uiText("ui.sign_in_with_a_different_account_f558d6a3b9")}</Link>
-              </Button>
+            {switchAccountFields && (
+              <form action={signInWithDifferentAccount}>
+                {switchAccountFields}
+                <Button type="submit">{uiText("ui.sign_in_with_a_different_account_f558d6a3b9")}</Button>
+              </form>
             )}
             <Button variant="outline" asChild>
               <Link href="/">{uiText("ui.back_to_perfect_ppi_61369874b6")}</Link>

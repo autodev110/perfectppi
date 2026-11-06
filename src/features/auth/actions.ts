@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { getRoleHomePath } from "@/features/auth/routing";
+import { getRoleHomePath, legalAcceptPath, safeReturnPath } from "@/features/auth/routing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordTermsAcceptance } from "@/lib/legal/server";
 import { headers } from "next/headers";
@@ -107,12 +107,6 @@ export async function signUp(formData: FormData) {
   redirect(safeReturnPath(formData.get("redirect")) ?? getRoleHomePath(profile?.role ?? createdProfile.role));
 }
 
-/** Local path a share/deep link asked to return to after sign-in (plan 5.x). */
-function safeReturnPath(value: FormDataEntryValue | null): string | null {
-  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return null;
-  return value.length <= 500 ? value : null;
-}
-
 export async function signIn(formData: FormData) {
   const raw = {
     email: formData.get("email") as string,
@@ -142,7 +136,11 @@ export async function signIn(formData: FormData) {
     .single();
 
   if (profile) {
-    if (profile.username_state !== "claimed") redirect("/onboarding/username");
+    // A deep link survives the two steps a returning member may still owe.
+    const acceptTerms = legalAcceptPath(returnTo);
+    if (profile.username_state !== "claimed") {
+      redirect(returnTo ? `/onboarding/username?next=${encodeURIComponent(acceptTerms)}` : "/onboarding/username");
+    }
     const { data: acceptance } = await supabase
       .from("legal_acceptances")
       .select("id")
@@ -150,7 +148,7 @@ export async function signIn(formData: FormData) {
       .eq("document_type", "terms")
       .eq("document_version", TERMS_VERSION)
       .maybeSingle();
-    if (!acceptance) redirect("/legal/accept");
+    if (!acceptance) redirect(acceptTerms);
   }
 
   redirect(returnTo ?? getRoleHomePath(profile?.role));
@@ -158,7 +156,8 @@ export async function signIn(formData: FormData) {
 
 export async function signInWithGoogle(requestedReturnTo?: string) {
   const supabase = await createClient();
-  const returnTo = safeReturnPath(requestedReturnTo ?? null) ?? "/legal/accept";
+  // A new Google account has accepted nothing yet, so terms stay on the way back.
+  const returnTo = legalAcceptPath(safeReturnPath(requestedReturnTo ?? null));
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {

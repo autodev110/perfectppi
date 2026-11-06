@@ -629,6 +629,58 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
+-- 9b. The automatic delivery sweep sees only what still needs sending
+-- ---------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  submission uuid := 'd0000000-0000-4000-8000-000000000001';
+  original public.external_inspection_refs;
+  candidate integer;
+BEGIN
+  SELECT * INTO original FROM public.external_inspection_refs
+  WHERE idempotency_key = 'dms-alpha:case-1:phase-1';
+
+  UPDATE public.external_inspection_refs
+  SET integration_status = 'deliverables_ready', current_submission_id = submission,
+      delivered_submission_id = NULL, delivered_output_version = NULL
+  WHERE id = original.id;
+
+  SELECT output_version INTO candidate
+  FROM public.partner_auto_delivery_candidates(ARRAY['dealerspace'], now() - interval '7 days', 25)
+  WHERE ppi_request_id = original.ppi_request_id;
+  PERFORM pg_temp.eq(candidate, 1, 'a finished report never requested is a candidate');
+
+  candidate := NULL;
+  SELECT output_version INTO candidate
+  FROM public.partner_auto_delivery_candidates(ARRAY['shopowl'], now() - interval '7 days', 25)
+  WHERE ppi_request_id = original.ppi_request_id;
+  PERFORM pg_temp.eq(candidate, NULL::integer, 'another partner system is not a candidate');
+
+  INSERT INTO public.outbound_events (partner_connection_id, external_inspection_ref_id, event_type, payload, dedupe_key, status)
+  VALUES (original.partner_connection_id, original.id, 'inspection.deliverables_ready', '{}'::jsonb,
+    'deliverables_ready:' || original.id::text || ':submission:' || submission::text || ':v1', 'failed');
+  SELECT output_version INTO candidate
+  FROM public.partner_auto_delivery_candidates(ARRAY['dealerspace'], now() - interval '7 days', 25)
+  WHERE ppi_request_id = original.ppi_request_id;
+  PERFORM pg_temp.eq(candidate, NULL::integer, 'a version already requested is not a candidate, even after failing');
+  DELETE FROM public.outbound_events
+  WHERE dedupe_key = 'deliverables_ready:' || original.id::text || ':submission:' || submission::text || ':v1';
+
+  PERFORM pg_temp.ok(
+    NOT has_function_privilege('authenticated', 'public.partner_auto_delivery_candidates(text[],timestamptz,integer)', 'EXECUTE'),
+    'only the service can list delivery candidates'
+  );
+
+  UPDATE public.external_inspection_refs
+  SET integration_status = original.integration_status,
+      current_submission_id = original.current_submission_id,
+      delivered_submission_id = original.delivered_submission_id,
+      delivered_output_version = original.delivered_output_version
+  WHERE id = original.id;
+END $$;
+
+-- ---------------------------------------------------------------------------
 -- 10. Delivery requests are idempotent (acceptance test 18)
 -- ---------------------------------------------------------------------------
 
